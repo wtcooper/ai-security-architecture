@@ -1110,16 +1110,16 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 
 Each first-party cloud architecture as built on each cloud (data/clouds/): the services bound to its blocks and the settings rows that cover its pinned capabilities. *Code rows* are capabilities no cloud setting provides, which the organisation builds itself.
 
-| Architecture | AWS | Azure | Google Cloud |
-| --- | --- | --- | --- |
-| Single agent workflow | 24 rows (1 code), 11 blocks bound | 20 rows (1 code), 11 blocks bound | 24 rows (2 code), 11 blocks bound |
-| Agent-to-agent federation across platforms | 18 rows (2 code), 12 blocks bound | 20 rows (1 code), 12 blocks bound | 12 rows (4 code), 12 blocks bound |
-| Agent sandbox for RL & evaluation | 16 rows (1 code), 12 blocks bound | 13 rows (1 code), 12 blocks bound | 14 rows (2 code), 12 blocks bound |
-| Multi-agent workflow | 27 rows (0 code), 13 blocks bound | 27 rows (1 code), 13 blocks bound | 27 rows (2 code), 13 blocks bound |
-| Chat agent with tools | 30 rows (2 code), 12 blocks bound | 24 rows (2 code), 12 blocks bound | 29 rows (3 code), 12 blocks bound |
-| Remote MCP server you publish | 20 rows (2 code), 6 blocks bound | 18 rows (3 code), 6 blocks bound | 17 rows (4 code), 6 blocks bound |
-| Self-hosted model inference | 19 rows (2 code), 7 blocks bound | 14 rows (2 code), 7 blocks bound | 15 rows (2 code), 7 blocks bound |
-| Model training & release pipeline | 15 rows (1 code), 9 blocks bound | 14 rows (1 code), 9 blocks bound | 15 rows (1 code), 9 blocks bound |
+| Architecture | AWS | Azure | Google Cloud | On-premises |
+| --- | --- | --- | --- | --- |
+| Single agent workflow | 24 rows (1 code), 11 blocks bound | 20 rows (1 code), 11 blocks bound | 24 rows (2 code), 11 blocks bound | 29 rows (2 code), 11 blocks bound |
+| Agent-to-agent federation across platforms | 18 rows (2 code), 12 blocks bound | 20 rows (1 code), 12 blocks bound | 12 rows (4 code), 12 blocks bound | 25 rows (4 code), 12 blocks bound |
+| Agent sandbox for RL & evaluation | 16 rows (1 code), 12 blocks bound | 13 rows (1 code), 12 blocks bound | 14 rows (2 code), 12 blocks bound | 30 rows (2 code), 12 blocks bound |
+| Multi-agent workflow | 27 rows (0 code), 13 blocks bound | 27 rows (1 code), 13 blocks bound | 27 rows (2 code), 13 blocks bound | 30 rows (3 code), 13 blocks bound |
+| Chat agent with tools | 30 rows (2 code), 12 blocks bound | 24 rows (2 code), 12 blocks bound | 29 rows (3 code), 12 blocks bound | 31 rows (4 code), 12 blocks bound |
+| Remote MCP server you publish | 20 rows (2 code), 6 blocks bound | 18 rows (3 code), 6 blocks bound | 17 rows (4 code), 6 blocks bound | 28 rows (2 code), 6 blocks bound |
+| Self-hosted model inference | 19 rows (2 code), 7 blocks bound | 14 rows (2 code), 7 blocks bound | 15 rows (2 code), 7 blocks bound | 30 rows (2 code), 7 blocks bound |
+| Model training & release pipeline | 15 rows (1 code), 9 blocks bound | 14 rows (1 code), 9 blocks bound | 15 rows (1 code), 9 blocks bound | 26 rows (4 code), 9 blocks bound |
 
 ## 6. MITRE mitigation provenance and CoSAI gaps
 

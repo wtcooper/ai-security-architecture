@@ -290,6 +290,92 @@ relying on that part of the mapping.
 - *Model training & release pipeline:* The --allow-vulnerability-scanning flag in arPackageScanning: the linked overview does not mention it; a second page confirmed only that Python and npm scanning is off by default and virtual repositories are not scanned.
 - *Model training & release pipeline:* Page titles: the fetch tool returned page text without titles; quickstart titles come from the brief and from search results for the same addresses.
 
+## On-premises (`data/clouds/onprem.yaml`)
+
+The on-premises mapping is the same eight patterns run in the organisation's own data centre, where
+the organisation deploys and operates everything. It was authored on 18 November 2026 from each
+project's own documentation. The reference stack is this catalogue's choice for each role, not the
+only one: Kubernetes on your own servers with the NVIDIA GPU Operator, LiteLLM Proxy as the AI
+gateway, vLLM for inference, Keycloak, HashiCorp Vault or OpenBao, Cilium and a Squid outbound
+proxy, Envoy Gateway, Harbor, a package mirror (Pulp or Nexus), Ceph Object Gateway, MLflow,
+Kubeflow, Temporal, PostgreSQL with pgvector, gVisor or Kata Containers, Presidio, Trivy, ModelScan,
+Sigstore and OpenSSF Model Signing, and an OpenTelemetry, Loki and Langfuse logging stack.
+
+| Pattern | Components | Settings | Differences recorded | Also yours to run |
+| --- | ---: | ---: | ---: | ---: |
+| Chat agent with tools | 12 | 31 | 7 | 11 |
+| Single agent workflow | 11 | 29 | 7 | 12 |
+| Multi-agent workflow | 13 | 30 | 7 | 12 |
+| Remote MCP server you publish | 6 | 28 | 6 | 11 |
+| Self-hosted model inference | 7 | 30 | 7 | 12 |
+| Model training & release pipeline | 9 | 26 | 6 | 11 |
+| Agent sandbox for RL & evaluation | 12 | 30 | 7 | 11 |
+| Agent-to-agent federation across platforms | 12 | 25 | 7 | 11 |
+
+98 settings in all, 20 of them controls the organisation builds itself because no product setting provides them.
+
+### What the documentation showed that the stack table did not assume
+
+- **LiteLLM Proxy.** Several gateway controls need the Enterprise licence: JWT or OIDC sign-in of callers against an identity provider, the built-in Vault secret manager, key regeneration and scheduled rotation, route restrictions, audit logs and per-key guardrails. The rows that depend on one say so under *Requires*, and the mapping uses virtual keys, secrets synced from the vault and checks at the ingress where the open-source build has no equivalent. Out of the box the proxy also makes outbound requests (cost map, release lookup, tokeniser downloads) until offline mode is set.
+- **vLLM.** No authentication unless `--api-key` is set, and the key covers only some paths; anonymous usage statistics are on by default; given a Hub model id it downloads weights at start. Network policy is the control, the key a second lock.
+- **Ingress NGINX** was retired in March 2026, so incoming traffic is bound to Envoy Gateway.
+- **MinIO's** community repository was archived on 25 April 2026, so object storage is bound to Ceph Object Gateway.
+- **Sonatype Nexus Community Edition** is capped at 40,000 components and 100,000 requests a day, and malware detection is a separate paid product; Pulp is named beside it.
+- **HashiCorp Vault:** the PKCS#11 hardware security module seal is Enterprise-only; OpenBao offers it as a plugin.
+- **Kyverno:** `verifyImages` in a ClusterPolicy is deprecated in favour of `ImageValidatingPolicy`.
+- **Presidio** is no longer a Microsoft project; its documentation moved.
+- **Langfuse:** audit logs and retention policies are Enterprise features.
+- **Temporal:** the default authoriser allows every request until one is configured.
+- **Keycloak:** resource indicators, client ID metadata documents and identity assertion grants are experimental.
+
+### Could not be confirmed from a project's page
+
+- *Chat agent with tools:* Whether LiteLLM's MCP OBO token exchange works when the caller presents a virtual key: the page describes the caller's bearer token as the token that is exchanged, and checking a Keycloak token at the gateway (JWT auth) is an Enterprise feature. If it does not, the agent must do the Keycloak token exchange itself and pass the narrowed token in a per-server header.
+- *Chat agent with tools:* LLM Guard's maintenance status: its documentation was last updated in May 2025 and the GitHub repository could not be opened from here (403 through the proxy).
+- *Chat agent with tools:* Whether Sonatype Nexus Community Edition includes routing rules: the routing rules page does not state an edition. The Community Edition page gives the caps (40,000 components, 100,000 requests a day) and names high availability, SAML and SSO as Pro only.
+- *Chat agent with tools:* Physical security of the data centre and a named SIEM product: no single authoritative page applies, so neither has a documentation link.
+- *Chat agent with tools:* A LiteLLM guardrail page for Llama Guard was not found in the current documentation; the input guardrail row therefore names a custom guardrail or detect_prompt_injection with llm_api_check pointed at a classifier model you serve.
+- *Single agent workflow:* Whether LiteLLM's MCP OBO token exchange works when the caller presents a virtual key: the page describes the caller's bearer token as the token that is exchanged, and checking a Keycloak token at the gateway (JWT auth) is an Enterprise feature. If it does not, the agent must do the Keycloak token exchange itself and pass the narrowed token in a per-server header.
+- *Single agent workflow:* LLM Guard's maintenance status: its documentation was last updated in May 2025 and the GitHub repository could not be opened from here (403 through the proxy).
+- *Single agent workflow:* Whether Sonatype Nexus Community Edition includes routing rules: the routing rules page does not state an edition. The Community Edition page gives the caps (40,000 components, 100,000 requests a day) and names high availability, SAML and SSO as Pro only.
+- *Single agent workflow:* Physical security of the data centre and a named SIEM product: no single authoritative page applies, so neither has a documentation link.
+- *Single agent workflow:* A LiteLLM guardrail page for Llama Guard was not found in the current documentation; the input guardrail row therefore names a custom guardrail or detect_prompt_injection with llm_api_check pointed at a classifier model you serve.
+- *Multi-agent workflow:* Whether LiteLLM MCP OBO token exchange can be used when the caller is admitted with a virtual key: the page says the caller's bearer token becomes the subject_token, and JWT-based auth at the gateway is Enterprise only.
+- *Multi-agent workflow:* Llama Guard and LLM Guard are not listed on LiteLLM's guardrail providers page; the row therefore reaches a self-hosted classifier through the Generic Guardrail API or a custom guardrail, which was not tested.
+- *Multi-agent workflow:* The LiteLLM tool permission guardrail page gives MCP-style tool names but does not state that calls routed through the MCP gateway are covered; allowed_tools and mcp_tool_permissions are the documented MCP controls.
+- *Multi-agent workflow:* Temporal Worker Versioning (ramping a new Worker Deployment Version) was read but not bound: the page gives minimum versions (Server v1.29.1) and not the commands.
+- *Multi-agent workflow:* The default value of Keycloak's Access Token Lifespan and the minimum expirationSeconds of a projected service account token were not found on the pages read, so the rows give no number for them.
+- *Multi-agent workflow:* Pulp as the alternative package mirror was not opened; only Sonatype Nexus Repository pages were read.
+- *Remote MCP server you publish:* LiteLLM: no page was found that states whether the full arguments of an MCP tool call are written by the logging callbacks; the OpenTelemetry page only lists metadata.mcp_tool_call_metadata as an attribute. The MCP service should log inputs itself.
+- *Remote MCP server you publish:* Keycloak: the guide does not say that Keycloak refuses private or internal addresses when it fetches a client ID metadata document or a JWKS URL; the block is therefore mapped to network policy and the outbound proxy.
+- *Remote MCP server you publish:* Keycloak: the default value of Access Token Lifespan is not stated on the page read, so no default is given.
+- *Remote MCP server you publish:* Keycloak: the console tab that holds the Standard token exchange switch is not named on the token exchange page.
+- *Remote MCP server you publish:* Kyverno: the examples read show validationActions: [Audit]; the enforcing value was not seen on the page, so the row says 'enforced' without quoting it.
+- *Self-hosted model inference:* LiteLLM: what the proxy does when no master key is set. The Virtual Keys page does not say, so the default is described only as 'not available until a master key and database are configured'.
+- *Self-hosted model inference:* LiteLLM usage telemetry: the settings reference lists LITELLM_TELEMETRY_DISABLED and related variables, but the telemetry page (docs.litellm.ai/docs/observability/telemetry) returned no content, so what is sent by default is not stated here.
+- *Self-hosted model inference:* LiteLLM: /key/block and key expiry are not labelled Enterprise on the Virtual Keys page, but the page does not say outright that they are open source.
+- *Self-hosted model inference:* vLLM: the absence of any signature or digest check at load is my reading of the serve reference and the security guide, not a statement the documentation makes.
+- *Self-hosted model inference:* Ceph Object Gateway STS: Ceph documents Keycloak as the tested OpenID Connect provider. Whether it accepts Kubernetes service account tokens from the cluster's own issuer directly was not confirmed, so the row names Keycloak.
+- *Self-hosted model inference:* Ceph Object Lock: the Bucket Operations page documents bucket-level Object Lock configuration (mode, days or years); per-object retention and legal hold operations are not listed on that page.
+- *Model training & release pipeline:* Ceph Object Gateway STS: Ceph documents Keycloak as the tested OpenID Connect provider. Whether it accepts Kubernetes service account tokens from the cluster's own issuer directly was not confirmed, so the row names Keycloak.
+- *Model training & release pipeline:* Ceph Object Gateway encryption: the Encryption page describes SSE-KMS and the bucket encryption API for SSE-S3 but states no default, and calls 'rgw crypt default encryption key' a testing-only option, so no default is given and that option is not recommended.
+- *Model training & release pipeline:* Nexus Repository: the Routing Rules page does not say which editions include routing rules; the edition table does not list them either.
+- *Model training & release pipeline:* Nexus Repository: how clients are pointed at a Hugging Face proxy repository is on a separate 'Configure Hugging Face with Nexus' page that was not opened.
+- *Model training & release pipeline:* ModelScan: the README lists H5, Pickle and SavedModel formats and does not mention safetensors or GGUF, so the row refuses pickle formats for serving instead of relying on the scan.
+- *Model training & release pipeline:* garak: the probe families suited to backdoor and memorisation testing are not named on the pages opened, so the row names no probe and adds the organisation's own tests.
+- *Agent sandbox for RL & evaluation:* Tetragon: the pages read do not say what Tetragon sees of processes inside a Kata guest or a gVisor sandbox. The row therefore claims monitoring of the host under the sandboxes only, not of activity inside a guest kernel.
+- *Agent sandbox for RL & evaluation:* Kata Containers: katacontainers.io/docs returned 404 and the project's GitHub documentation could not be opened, so the RuntimeClass set-up is cited from the Kubernetes and agent-sandbox pages, not from Kata's own installation guide.
+- *Agent sandbox for RL & evaluation:* Pulp: that rollouts cannot write to a repository through the distribution's content URL is inferred from the content guard and sync pages; no page read states it as a rule.
+- *Agent sandbox for RL & evaluation:* Nexus Repository: the name of the Blocked option was confirmed only through the repository state 'Online - Remote Manually Blocked'; the form field itself was not seen.
+- *Agent sandbox for RL & evaluation:* PyRIT: azure.github.io/PyRIT now redirects to microsoft.github.io/PyRIT and its documentation is a script-rendered page that could not be read, so no PyRIT setting is cited for the containment red team.
+- *Agent sandbox for RL & evaluation:* Ceph Object Gateway: object lock and versioning for checkpoints were not checked, so no such setting is listed.
+- *Agent-to-agent federation across platforms:* How guardrails are configured for A2A traffic in LiteLLM: the Agent Gateway page says message/send and message/stream go through the A2A client that handles guardrails, with no configuration detail, so screening is also done with /guardrails/apply_guardrail in the agent.
+- *Agent-to-agent federation across platforms:* Whether a peer can be admitted to LiteLLM with its Keycloak token in the open-source edition: JWT-based auth is Enterprise only, so the mapping gives each peer a virtual key and keeps Keycloak tokens for the agent and tool side.
+- *Agent-to-agent federation across platforms:* How LiteLLM enforces the Agent Card securitySchemes it lists as supported, and how it authenticates to a peer with an OAuth client credential: the headers page documents static, forwarded and convention headers, and minted credentials only for Databricks and Microsoft Entra.
+- *Agent-to-agent federation across platforms:* Keycloak external-to-internal exchange with the JWT Authorization Grant was read only in the comparison table of the token exchange page; its configuration steps were not opened.
+- *Agent-to-agent federation across platforms:* Whether LiteLLM's agent features need an Enterprise licence: the pages do not label them, except that the kill switch audit log does.
+- *Agent-to-agent federation across platforms:* The default value of Keycloak's Access Token Lifespan was not found in the section read, so the row gives no number.
+
 ## Keeping it current
 
 A mapping is only as good as its last check. `verified` on each mapping and each setting says

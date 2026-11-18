@@ -63,7 +63,7 @@ export function checkSettings(
   }
 }
 
-/** The three clouds under data/clouds/, each with its settings and its first-party implementations. */
+/** The platforms under data/clouds/ (three clouds and the organisation's own data centre), each with its settings and its implementations. */
 export async function loadClouds(
   root: string,
   ctx: { archetypes: Archetype[]; mitigationIds: Set<string>; fail: (msg: string) => void },

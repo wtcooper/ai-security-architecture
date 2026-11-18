@@ -1098,7 +1098,7 @@ export interface Dataset {
   status: Record<string, CapabilityCustomisation>;
   /** Tool or cloud id -> the organisation's adoption status and per-setting status, from data/status.yaml. */
   productStatus: Record<string, ProductStatusEntry>;
-  /** The three clouds and how each first-party cloud architecture is built on them, from data/clouds/. */
+  /** The clouds and the on-premises data centre, and how each hosted pattern is built on them, from data/clouds/. */
   clouds: CloudPlatform[];
   enablement: Enablement;
 }

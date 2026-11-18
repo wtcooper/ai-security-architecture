@@ -224,7 +224,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               className="w-full"
             />
           </div>
-          <DrawingLegend className="mt-3 px-1" risks={tab === "risks"} cloud={cloudProduct?.cloud.short} differs={Boolean(differs?.size)} />
+          <DrawingLegend className="mt-3 px-1" risks={tab === "risks"} cloud={cloudProduct?.cloud.short} differs={Boolean(differs?.size)} own={Boolean(cloudProduct?.cloud.selfManaged)} />
         </>
       )}
 

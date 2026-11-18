@@ -324,6 +324,7 @@ export function DrawingLegend({
   risks = false,
   cloud,
   differs = false,
+  own = false,
 }: {
   className?: string;
   /** True where the coded risk tags are showing instead of the controls. */
@@ -332,6 +333,8 @@ export function DrawingLegend({
   cloud?: string;
   /** True when the chosen cloud differs from the drawing somewhere, so the mark is explained. */
   differs?: boolean;
+  /** True when the chosen platform is the organisation's own data centre: it runs software, not a provider's services. */
+  own?: boolean;
 }) {
   const swatch = (tone: keyof typeof BOUNDARY_TONE) => {
     const t = BOUNDARY_TONE[tone];
@@ -394,13 +397,13 @@ export function DrawingLegend({
           <span aria-hidden className="inline-flex h-[15px] w-[16px] items-center justify-center rounded-[4px] border text-[11px] font-bold" style={{ background: "#FFF4D6", borderColor: "#B7791F", color: "#8A5A0B" }}>
             ≠
           </span>
-          Differs on {cloud} · hover for how
+          {own ? "Differs when run on-premises" : `Differs on ${cloud}`} · hover for how
         </span>
       )}
       {cloud && (
         <span className="flex items-center gap-1.5" data-legend-cloud>
-          <span aria-hidden className="text-[11px] font-semibold text-ink">Service name</span>
-          The {cloud} service that plays the box · <span className="text-[9.5px] font-bold tracking-[0.06em] text-ink-3">YOU BUILD THIS</span> where none does
+          <span aria-hidden className="text-[11px] font-semibold text-ink">{own ? "Software name" : "Service name"}</span>
+          {own ? "The software that plays the box in your data centre" : `The ${cloud} service that plays the box`} · <span className="text-[9.5px] font-bold tracking-[0.06em] text-ink-3">YOU BUILD THIS</span> where none does
         </span>
       )}
       <span className="text-ink-3">Hover anything for detail</span>

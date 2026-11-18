@@ -7,7 +7,7 @@ beside this page; a real file teaches the voice better than a schema does.
 Contents: [header](#header) · [zones](#zones-the-trust-boundaries) · [blocks](#blocks-the-boxes) ·
 [edges](#edges-the-flows) · [pins](#pins-risks-and-controls) · [walks](#walks) ·
 [deviations and sources](#deviations-and-sources) · [the finder entry](#the-finder-entry) ·
-[the guidance file](#the-guidance-file) · [wording](#wording)
+[the guidance file](#the-guidance-file) · [platform mappings](#platform-mappings) · [wording](#wording)
 
 ## Header
 
@@ -270,6 +270,49 @@ sources:
 
 Item titles are actions a team can take. Guidance cannot recommend a control the drawing does
 not show; if it needs to, the fix is a pin.
+
+## Platform mappings
+
+For a hosted pattern (`surfaceCloud`), each file under `data/clouds/` (`aws.yaml`, `azure.yaml`,
+`gcp.yaml`, and `onprem.yaml` for the organisation's own data centre) carries one entry under
+`implementations:`. Open an existing entry beside this; the build names anything missing.
+
+```yaml
+  - architecture: archShortName
+    asOf: "2026-11"                 # the month the mapping was written
+    verified: "2026-11-18"          # the day it was last checked against the vendor's pages
+    reference:                      # the vendor's own reference architecture for this kind of build
+      - { title: "The page's own title", url: https://… }
+    summary:
+      - One paragraph: what runs where and what makes it safe.
+    bindings:                       # one per box that is not an actor or a control-plane box
+      - { block: gateway, service: "The service that plays it", note: "What a builder must know." }
+      - { block: tools, service: "Your tool servers", build: true }     # nothing managed fills it
+    sources:                        # block id -> the vendor page that service was checked on
+      gateway: https://…
+    differences:                    # where this platform does not follow the drawing
+      - at: harness->gateway        # a flow or a block of the pattern; the drawing marks it ≠
+        text: "Plain words: what happens here instead, and what the builder does about it."
+        url: https://…              # the page that shows it
+    alsoNeeded:                     # services that are not boxes on the drawing
+      - { service: "…", role: network, why: "…", url: https://… }
+        # role: identity | network | ingress | keys | secrets | registry | logging | other
+    quickstart:                     # the vendor's own starting point
+      - { title: "…", url: https://… }
+    settings: [settingIdOne, settingIdTwo]   # rows of the file's settings library
+```
+
+- Every pinned control needs at least one listed setting whose `mitigations` names it; where no
+  product setting provides the control, the row is `setVia: [code]` and says what to build.
+- Test each flow against the vendor's documentation before you accept the drawing for that
+  platform: is the gateway really in the path, or does the default call direct; is search a
+  feature of the model platform; does the sandbox have a network. What does not hold is a
+  `differences` entry, not a quiet omission.
+- A setting row may carry a `check` (`command`, `expect`, `url`): one read-only command from the
+  vendor's command reference. Never a command that creates or changes anything.
+- An on-premises entry names software the organisation runs, says under `requires` when a
+  feature needs a paid edition, and lists under `alsoNeeded` what a cloud provider would
+  otherwise have run.
 
 ## Wording
 
