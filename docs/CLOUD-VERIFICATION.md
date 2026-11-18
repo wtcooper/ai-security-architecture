@@ -405,7 +405,8 @@ to what the page says, with the page recorded as a source.
 | Google Cloud, four agent patterns | 104 | 100 | 4 | 0 | 0 |
 | On-premises, four agent patterns | 90 | 85 | 5 | 0 | 0 |
 | Microsoft Foundry Agent Service, as a catalogued product | 68 | 51 | 17 | 0 | 0 |
-| **Total** | **524** | **464** | **59** | **0** | **1** |
+| Who may start a sandbox run: one setting each on AWS, Azure and Google Cloud | 3 | 0 | 3 | 0 | 0 |
+| **Total** | **527** | **464** | **62** | **0** | **1** |
 
 The one claim that could not be checked is a statement about this catalogue's own mapping, not
 about a vendor. What the second check changed, in the terms a builder would feel:
@@ -433,6 +434,12 @@ about a vendor. What the second check changed, in the terms a builder would feel
   hostname, so network policy can only limit who reaches that gateway. Temporal's serverless
   workers are preview and cloud-only. The single agent workflow and the multi-agent workflow
   offer no Knative variant, because it would replace the durable workflow that holds approvals.
+- **Who may start a sandbox run.** All three rows named the right setting but claimed too
+  much: none of them, alone, limits run access to the named groups. Each now says what else
+  can grant the same access and must be closed: on AWS other access entries, the cluster
+  creator's admin entry and the older config-map mappings; on Azure local accounts, in-cluster
+  bindings and inherited assignments, and that the built-in writer role also reads Secrets; on
+  Google Cloud project-level IAM roles, which bypass in-cluster bindings.
 - **Foundry Agent Service as a product.** Two settings are set by CLI, REST or SDK and not in
   the portal; a tracing flag was only for early enablement and has been replaced; a running
   prompt agent can be cancelled. No coverage grade changed: 7 controls native, 8 partial, 1
