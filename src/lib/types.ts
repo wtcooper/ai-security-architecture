@@ -989,6 +989,11 @@ export interface CloudPlatform {
    * provider runs any part, so a component is played by software the organisation deploys.
    */
   selfManaged?: boolean;
+  /**
+   * Hosted patterns this platform cannot be the place for, each with the reason and the pattern
+   * to use there instead (a provider-run service has no equivalent in your own data centre).
+   */
+  notOffered?: { architecture: string; why: string; instead?: string }[];
   /** How the organisation's own boundary is titled on the drawing when this platform is chosen. */
   boundary?: string;
   settings: ProductSetting[];
@@ -1031,6 +1036,12 @@ export interface Tool {
    * it runs" (a cloud or the organisation's own data centre): the two are chosen independently.
    */
   fills?: string[];
+  /**
+   * Set when the product is a service of one platform (a cloud's managed agent service): the
+   * platform's id. Choosing that platform then implies this product, so it is not offered as a
+   * separate choice, and its settings count towards the platform's coverage of the pattern.
+   */
+  platform?: string;
   status?: ToolStatus;
   /** When these facts were verified against the vendor's docs, e.g. "2026-09". */
   asOf: string;

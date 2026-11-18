@@ -325,7 +325,26 @@ async function main() {
   // --- AI tooling registry -------------------------------------------------------
   const toolingLoaded = await loadTooling();
   const tools = checkTooling(toolingLoaded, { archetypes, riskIds, mitigationIds });
-  const clouds = await loadClouds(ROOT, { archetypes, mitigationIds, fail, toolIds: new Set(tools.map((t) => t.id)) });
+  const clouds = await loadClouds(ROOT, {
+    archetypes,
+    mitigationIds,
+    fail,
+    toolIds: new Set(tools.map((t) => t.id)),
+    services: tools.filter((t) => t.platform).map((t) => ({ id: t.id, platform: t.platform!, architecture: t.architecture, mitigations: (t.settings ?? []).flatMap((s) => s.mitigations) })),
+  });
+  // A product that is a service of one platform: that platform exists and hosts the pattern.
+  for (const t of tools.filter((x) => x.platform)) {
+    const cloud = clouds.find((c) => c.id === t.platform);
+    if (!cloud) fail(`tooling ${t.id}: platform "${t.platform}" is not a platform in data/clouds`);
+    else if (!cloud.implementations.some((i) => i.architecture === t.architecture)) fail(`tooling ${t.id}: ${t.platform} has no mapping of ${t.architecture}, the pattern this service is catalogued on`);
+    if (!t.fills?.length) fail(`tooling ${t.id}: a platform's service needs fills: the box it is`);
+  }
+  // Every hosted pattern is mapped onto every platform, or the platform says why it cannot be.
+  for (const a of archetypes.filter((x) => x.surface === "surfaceCloud")) {
+    for (const c of clouds) {
+      if (!c.implementations.some((i) => i.architecture === a.id) && !c.notOffered?.some((n) => n.architecture === a.id)) fail(`clouds ${c.id}: ${a.id} is neither mapped nor listed under notOffered with a reason`);
+    }
+  }
 
   // --- Controls guidance ---------------------------------------------------------
   const guidanceLoaded = await loadGuidance();

@@ -16,7 +16,7 @@
  */
 import Link from "next/link";
 
-import { HOSTING_KIND_LABEL, hostingInEffect, hostingOptionsFor, hostingRows, hostingWords, type CloudProduct, type HostingWords } from "@/components/cloud/model";
+import { HOSTING_KIND_LABEL, cloudSlug, hostingInEffect, hostingOptionsFor, hostingRows, hostingWords, isManagedTarget, notOfferedFor, selfRunPatternsFor, type CloudProduct, type HostingWords } from "@/components/cloud/model";
 import { archetypeById, hostingAdoptionFor, type Product } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
 import type { Archetype, HostingOption } from "@/lib/types";
@@ -65,7 +65,7 @@ function HostingCards({
           <div key={o.id} className={frame} data-hosting-option={o.id} data-hosting-kind={o.kind}>
             {body}
             {other && (
-              <Link href={patternHref(other.id, o.tool ? { tool: o.tool } : {})} className="mt-2 block text-[12px] font-semibold text-introduced hover:underline" data-hosting-pattern={other.id}>
+              <Link href={patternHref(other.id, { cloud: cloudSlug(platform.id) })} className="mt-2 block text-[12px] font-semibold text-introduced hover:underline" data-hosting-pattern={other.id}>
                 Open the pattern for it: {other.title} →
               </Link>
             )}
@@ -174,7 +174,10 @@ export function ChooseBuild({
   onPickFramework: (id: string | null) => void;
 }) {
   const platforms = products.filter((p) => p.kind === "cloud");
-  const frameworks = products.filter((p) => p.kind === "tool");
+  // A service of one platform comes with that platform, so it is not a choice of its own.
+  const frameworks = products.filter((p) => p.kind === "tool" && !p.tool.platform);
+  const absent = notOfferedFor(archetype.id);
+  const selfRun = platform && isManagedTarget(archetype.id) ? selfRunPatternsFor(archetype.id, platform.id) : [];
   const titles = new Map(archetype.blocks.map((b) => [b.id, b.title]));
   // The boxes the catalogued frameworks fill, as the reader sees them on the drawing.
   const filled = [...new Set(frameworks.flatMap((p) => (p.kind === "tool" ? p.tool.fills ?? [] : [])).map((id) => titles.get(id) ?? id))];
@@ -186,11 +189,43 @@ export function ChooseBuild({
     <div className="space-y-4" data-choose-build>
       <ChoiceRow n="a" label="Where it runs" hint="a cloud, or your own data centre">
         <ProductPills products={platforms} selected={platform?.id ?? ""} onPick={onPickPlatform} label="Where it runs" />
+        {absent.map((n) => (
+          <p key={n.cloud.id} className="mt-1.5 max-w-3xl text-[12px] leading-snug text-ink-3" data-not-offered={n.cloud.id}>
+            Not {n.cloud.selfManaged ? "on-premises" : `on ${n.cloud.short}`}: {n.why}
+            {n.instead && (
+              <>
+                {" "}
+                <Link href={patternHref(n.instead.id, { cloud: cloudSlug(n.cloud.id) })} className="font-semibold text-introduced hover:underline">
+                  {n.instead.title} →
+                </Link>
+              </>
+            )}
+          </p>
+        ))}
       </ChoiceRow>
 
       <ChoiceRow n="b" label="How it is hosted there" hint={`who runs ${words.thing}: you, the platform, or the vendor`}>
         {!platform ? (
           <p className="pt-1 text-[12.5px] leading-snug text-ink-3" data-hosting-wait>Pick where it runs first; that platform&rsquo;s ways of hosting it appear here.</p>
+        ) : isManagedTarget(archetype.id) ? (
+          <div className="pt-1 text-[12.5px] leading-snug text-ink-2" data-hosting-managed>
+            <p className="max-w-3xl">
+              This pattern is the managed way of hosting an agent on {platform.cloud.short}: {platform.cloud.short} runs the agent loop and you configure it. There is no further hosting choice to make here.
+            </p>
+            {selfRun.length > 0 && (
+              <p className="mt-1.5 max-w-3xl text-ink-3">
+                To run the agent loop yourself on {platform.cloud.short}, on its own runtime or your own cluster, use:{" "}
+                {selfRun.map((a, i) => (
+                  <span key={a.id}>
+                    {i > 0 && " · "}
+                    <Link href={patternHref(a.id, { cloud: cloudSlug(platform.id) })} className="font-semibold text-introduced hover:underline" data-self-run={a.id}>
+                      {a.title}
+                    </Link>
+                  </span>
+                ))}
+              </p>
+            )}
+          </div>
         ) : options.length ? (
           <>
             <HostingCards platform={platform} host={host} onPickHost={onPickHost} words={words} />

@@ -9,7 +9,7 @@ import { SURFACE_SITUATION } from "../src/components/patterns/labels";
 import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { OnCloud } from "../src/components/cloud/CloudViews";
 import { IncidentWalkthrough } from "../src/components/incidents/IncidentWalkthrough";
-import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor, hostedAs, hostingOptionsFor, hostingWords } from "../src/components/cloud/model";
+import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor, hostedAs, hostingOptionsFor, hostingWords, isManagedTarget } from "../src/components/cloud/model";
 import { SettingCheck } from "../src/components/enable/SettingCheck";
 import { ControlTable } from "../src/components/enable/ControlTable";
 import { controlGroups } from "../src/components/enable/model";
@@ -40,7 +40,8 @@ test("every hosted pattern is mapped onto each cloud and onto the organisation's
   assert.deepEqual(own.map((c) => c.id), ["cloudOnPrem"], "one platform is run by the organisation itself");
   assert.ok(own[0].boundary, "it names the organisation's boundary for the drawing");
   for (const cloud of dataset.clouds) {
-    for (const a of hosted) assert.ok(cloud.implementations.some((i) => i.architecture === a.id), `${a.id} is mapped onto ${cloud.id}`);
+    // Mapped, or the platform says why it cannot be the place for it (a provider-run service has no on-premises form).
+    for (const a of hosted) assert.ok(cloud.implementations.some((i) => i.architecture === a.id) || cloud.notOffered?.some((n) => n.architecture === a.id && n.why), `${a.id} is mapped onto ${cloud.id}`);
   }
   assert.equal(SURFACE_SITUATION.surfaceCloud, "AI you host yourself", "the category is named for hosting, not for applications");
 });
@@ -241,7 +242,17 @@ test("a platform's hosting options are compared on the same rows; a variant keep
     for (const product of cloudProductsFor(a.id)) {
       const options = hostingOptionsFor(product);
       const where = `${a.id} on ${product.cloud.short}`;
-      // Every hosted pattern says how it can be hosted on every platform.
+      // Every hosted pattern says how it can be hosted on every platform. The one that is itself
+      // the managed way of hosting the others has no further choice, and says so.
+      if (isManagedTarget(a.id)) {
+        assert.equal(options.length, 0, `${where}: the managed pattern has no hosting options of its own`);
+        const note = renderToStaticMarkup(
+          <ChooseBuild archetype={a} products={productsForArchetype(a.id)} platform={product} framework={null} host={null} onPickPlatform={() => {}} onPickHost={() => {}} onPickFramework={() => {}} />,
+        );
+        assert.match(note, /data-hosting-managed/, `${where}: says it is the managed way of hosting`);
+        assert.match(note, /data-self-run="/, `${where}: links to the patterns where you run the agent yourself`);
+        continue;
+      }
       assert.ok(options.length, `${where}: lists its hosting options`);
       assert.equal(options.filter((o) => o.mapped).length, 1, `${where}: one option is the mapping itself`);
       for (const o of options) {

@@ -30,7 +30,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
   const linkedProduct = linkedTool && productsForArchetype(archetype.id).some((p) => p.id === linkedTool) ? linkedTool : null;
   const linkedTab = params.get("tab") as PatternTab | null;
   // The cloud the pattern is shown as built on: `?cloud=aws`, or an older link that opened the cloud as a product.
-  const linkedCloud = cloudProductFor(archetype.id, cloudFromSlug(params.get("cloud") ?? (linkedProduct && cloudById.has(linkedProduct) ? linkedProduct : null))?.id ?? null)?.id ?? null;
+  const linkedCloud = cloudProductFor(archetype.id, cloudFromSlug(params.get("cloud") ?? (linkedProduct && cloudById.has(linkedProduct) ? linkedProduct : (linkedProduct && tool0?.platform) || null))?.id ?? null)?.id ?? null;
   // A product named in the address opens the settings step on it, whether a tool or a cloud.
   const linkedToolOnly = linkedProduct;
 

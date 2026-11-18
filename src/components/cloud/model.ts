@@ -27,6 +27,33 @@ export const cloudProductFor = (archetypeId: string, cloudId: string | null): Cl
 /** The ways a platform can host a pattern, if more than one has been compared. */
 export const hostingOptionsFor = (product: CloudProduct): HostingOption[] => product.implementation.hosting ?? [];
 
+/**
+ * The product a platform implies on a pattern: a service that exists only on that platform (a
+ * cloud's managed agent service). It is not a separate choice, so it never appears as a pill.
+ */
+export const serviceFor = (products: Product[], platformId: string | null | undefined): Extract<Product, { kind: "tool" }> | null =>
+  (platformId && products.find((p): p is Extract<Product, { kind: "tool" }> => p.kind === "tool" && p.tool.platform === platformId)) || null;
+
+/** The patterns that name this one as their managed way of hosting on a platform: where you run it yourself. */
+export const selfRunPatternsFor = (patternId: string, cloudId: string): Archetype[] =>
+  archetypesInOrder.filter((a) =>
+    clouds
+      .find((c) => c.id === cloudId)
+      ?.implementations.some((i) => i.architecture === a.id && i.hosting?.some((o) => o.kind === "managed" && o.pattern === patternId)),
+  );
+
+/** True when the pattern is itself the managed way of hosting others: it has no hosting choice of its own. */
+export const isManagedTarget = (patternId: string): boolean =>
+  clouds.some((c) => c.implementations.some((i) => i.hosting?.some((o) => o.kind === "managed" && o.pattern === patternId)));
+
+/** Platforms that cannot be the place for a hosted pattern, with the reason and what to use there. */
+export const notOfferedFor = (patternId: string): { cloud: CloudPlatform; why: string; instead?: Archetype }[] =>
+  clouds.flatMap((c) =>
+    (c.notOffered ?? [])
+      .filter((n) => n.architecture === patternId)
+      .map((n) => ({ cloud: c, why: n.why, instead: n.instead ? archetypesInOrder.find((a) => a.id === n.instead) : undefined })),
+  );
+
 /** The option the mapping's own components and settings describe. */
 export const mappedHosting = (product: CloudProduct): HostingOption | undefined => hostingOptionsFor(product).find((o) => o.mapped);
 

@@ -14,6 +14,7 @@
  * vendor's page. Background on the product is one line and an "About" fold. The status column
  * appears only once the organisation has recorded a status for that product.
  */
+import { serviceFor } from "@/components/cloud/model";
 import Link from "next/link";
 import { Fragment, useState, type ReactNode } from "react";
 
@@ -370,7 +371,8 @@ export function ProductSettings({
   if (products.some((p) => p.kind === "cloud")) {
     const picked = products.find((p) => p.id === selected);
     const where = platform ?? (picked?.kind === "cloud" ? picked : null);
-    const framework = picked?.kind === "tool" ? picked : null;
+    // A service of the chosen platform comes with the platform; any other tool is a separate choice.
+    const framework = picked?.kind === "tool" && !picked.tool.platform ? picked : serviceFor(products, where?.id);
     const chosen = [where, framework].filter((p): p is Product => Boolean(p));
     if (!chosen.length) {
       return (

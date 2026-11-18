@@ -69,7 +69,14 @@ export function checkSettings(
 /** The platforms under data/clouds/ (three clouds and the organisation's own data centre), each with its settings and its implementations. */
 export async function loadClouds(
   root: string,
-  ctx: { archetypes: Archetype[]; mitigationIds: Set<string>; fail: (msg: string) => void; toolIds?: Set<string> },
+  ctx: {
+    archetypes: Archetype[];
+    mitigationIds: Set<string>;
+    fail: (msg: string) => void;
+    toolIds?: Set<string>;
+    /** Products that are a service of one platform: their settings count towards that platform's coverage. */
+    services?: { id: string; platform: string; architecture: string; mitigations: string[] }[];
+  },
 ): Promise<CloudPlatform[]> {
   const dir = join(root, "data", "clouds");
   let files: string[] = [];
@@ -223,10 +230,19 @@ export async function loadClouds(
           ctx.fail(`${at}: setting ${id} delivers nothing pinned here (${off.join(", ")})`);
       }
       // Every pinned control has at least one row: a cloud setting or a line of our own code.
+      // Where the pattern is a service of this platform, the service's own settings count too.
       const delivered = new Set((impl.settings ?? []).flatMap((id) => settingById.get(id)?.mitigations ?? []));
+      for (const sv of ctx.services ?? []) if (sv.platform === cloud.id && sv.architecture === arch.id) for (const id of sv.mitigations) delivered.add(id);
       for (const id of arch.mitigations) if (!delivered.has(id)) ctx.fail(`${at}: pinned control ${id} has no setting or code row`);
     }
     for (const s of cloud.settings) if (!used.has(s.id)) ctx.fail(`${where}: setting ${s.id} is used by no implementation`);
+    for (const n of cloud.notOffered ?? []) {
+      const arch = archById.get(n.architecture);
+      if (!arch || arch.surface !== "surfaceCloud") ctx.fail(`${where}: notOffered names ${n.architecture}, which is not a hosted pattern`);
+      if (cloud.implementations.some((i) => i.architecture === n.architecture)) ctx.fail(`${where}: ${n.architecture} is both mapped and listed under notOffered`);
+      if (!n.why?.trim()) ctx.fail(`${where}: notOffered ${n.architecture} needs a why`);
+      if (n.instead && !archById.has(n.instead)) ctx.fail(`${where}: notOffered ${n.architecture}: unknown pattern ${n.instead}`);
+    }
     clouds.push(cloud);
   }
   return clouds;

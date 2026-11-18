@@ -19,7 +19,7 @@ import { useState, type ReactNode } from "react";
 
 import { controlName, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
-import { hostingInEffect, productShort, type CloudProduct } from "@/components/cloud/model";
+import { hostingInEffect, productShort, serviceFor, type CloudProduct } from "@/components/cloud/model";
 import { BASELINE_HELP, ControlTable } from "./ControlTable";
 import { baselineNotPinned, controlGroups } from "./model";
 import { ChooseBuild } from "./ChooseBuild";
@@ -127,11 +127,12 @@ export function EnablePanel({
   // organisation's own data centre) and the framework or server its own boxes are built with.
   const built = products.some((p) => p.kind === "cloud");
   const platform = cloud ?? (picked?.kind === "cloud" ? picked : null);
-  const framework = built && picked?.kind === "tool" ? picked : null;
+  // A service of the chosen platform (a cloud's managed agent service) comes with the platform.
+  const framework = built ? (picked?.kind === "tool" && !picked.tool.platform ? picked : serviceFor(products, platform?.id)) : null;
   // What the control rows name settings for: both choices on a hosted pattern, else the one product open.
   const chosen = built ? [platform, framework].filter((p): p is NonNullable<typeof p> => Boolean(p)) : picked ? [picked] : [];
   const platformCount = products.filter((p) => p.kind === "cloud").length;
-  const frameworkCount = products.length - platformCount;
+  const frameworkCount = products.filter((p) => p.kind === "tool" && !p.tool.platform).length;
   // How it is hosted on the chosen platform, where its options have been compared.
   const inEffect = platform ? hostingInEffect(platform, host) : undefined;
 
