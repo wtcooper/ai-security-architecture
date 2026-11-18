@@ -1114,6 +1114,234 @@ settings:
     url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-authenticate-users.html
     verified: "2026-11-18"
   # <<< hosting rows
+  # >>> more hosting rows (settings used only by a hosting variant of the server, inference, training and sandbox patterns)
+  - id: eksSandboxNodes
+    name: "Nitro Enclaves enabled on sandbox nodes (EnclaveOptions.Enabled)"
+    where: "Amazon EC2 › node group launch template › EnclaveOptions.Enabled=true, a Nitro Sandbox AMI and a supported instance type; or an EKS Auto Mode NodePool for the sandbox pods"
+    setVia: [apiCli, configFile]
+    area: tools
+    default: "Off; nodes advertise no sandbox capacity unless Auto Mode provisions them"
+    requires: "Kubernetes 1.36 or later and an instance type that supports Nitro Sandboxes"
+    recommended: "Run rollouts only on a dedicated, tainted node pool that advertises sandbox capacity. On your own node groups set EnclaveOptions.Enabled=true and build the Nitro Sandbox AMI; on Auto Mode keep the NodePool off FIPS, GPU and Neuron AMIs."
+    why: "A node that does not advertise sandbox capacity cannot run an isolated pod. Dedicated sandbox nodes keep every rollout behind the Nitro hypervisor and away from other workloads."
+    mitigations: [D3-HBPI]
+    url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-isolated-setup.html
+    verified: "2026-11-18"
+  - id: eksSandboxNetworkIsolated
+    name: "sandbox.amazonaws.com/network-isolated annotation"
+    where: "Amazon EKS › rollout pod template › metadata.annotations (with runtimeClassName isolated-sandbox)"
+    setVia: [configFile]
+    area: network
+    default: "Not set; the pod has a network device, a limited metadata service and Pod Identity credentials"
+    recommended: "Set the annotation to \"true\" on every rollout that only runs code and needs no network. Use exec probes, and collect results over exec or logs, which still work."
+    why: "The sandbox boots with no network interface, DNS, metadata service or Pod Identity credentials, so there is no route to filter and no credential to steal."
+    mitigations: [D3-NI, cap-agent-egress-control]
+    url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-network-isolation.html
+    verified: "2026-11-18"
+  - id: eksSandboxPodSpecRbac
+    name: "RBAC and admission control on sandbox pod specs"
+    where: "Kubernetes › Role and RoleBinding in the run namespace; ValidatingAdmissionPolicy on pods and SandboxClaims that use the isolated-sandbox runtime class"
+    setVia: [clusterPolicy]
+    area: identity
+    default: "Anyone with pod create permission in the namespace can author a sandbox pod"
+    recommended: "Only the orchestrator's identity may create or change pods and SandboxClaims in the run namespace; an admission policy fixes the runtime class, image registry, mounts and service account and rejects anything else."
+    why: "AWS treats the pod spec as trusted input: whoever writes it chooses the image and the mounts. A rollout must never be able to submit or edit one."
+    mitigations: [D3-APA]
+    url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-security-model.html
+    verified: "2026-11-18"
+  - id: microVmPerRollout
+    name: "One MicroVM per rollout (run-microvm, maximum duration)"
+    where: "AWS Lambda MicroVMs › run-microvm --maximum-duration-in-seconds and --idle-policy; one MicroVM per rollout, never reused"
+    setVia: [apiCli, code]
+    area: tools
+    default: "Maximum duration up to 8 hours; snapshot content is shared by every MicroVM run from one image version"
+    recommended: "Call run-microvm for every rollout with the maximum duration set to the task budget, and terminate it when the episode ends. Generate IDs and secrets in the /run hook, not at image build."
+    why: "Each rollout gets its own Firecracker microVM, so nothing one episode does reaches another. The duration cap ends a run that never stops by itself."
+    mitigations: [D3-EI, D3-HBPI]
+    url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-launching.html
+    verified: "2026-11-18"
+  - id: microVmVpcEgress
+    name: "Egress network connector (VpcEgressConfiguration)"
+    where: "AWS Lambda › create-network-connector (SubnetIds, SecurityGroupIds, operator role); referenced by ARN on run-microvm"
+    setVia: [apiCli]
+    area: network
+    default: "Public internet access on the egress path"
+    requires: "An IAM operator role that lets Lambda create network interfaces in the VPC"
+    recommended: "Create one connector on the sandbox subnets and security groups, behind Network Firewall and DNS Firewall, and pass it on every run-microvm call; let only the orchestrator role call run-microvm."
+    why: "A MicroVM has public internet access unless a VPC egress connector is attached. With it, outbound traffic is subject to your security groups, routes and firewalls."
+    mitigations: [cap-agent-egress-control, D3-NI]
+    url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-networking.html
+    verified: "2026-11-18"
+  - id: microVmExecutionRole
+    name: "Execution role (MicroVM runtime)"
+    where: "AWS Lambda MicroVMs › execution role (an IAM role trusted by lambda.amazonaws.com), separate from the build role"
+    setVia: [cloudPolicy, apiCli]
+    area: identity
+    default: "None; the MicroVM cannot call AWS services or write logs"
+    recommended: "A role separate from the build role, allowed only to write the rollout log group and call the one inference endpoint and package repository the episode needs."
+    why: "Code in the MicroVM acts with this role, so it is the whole of what a rollout can do in AWS. Lambda runs the runtime lifecycle hooks under the same role."
+    mitigations: [D3-AA]
+    url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-security.html
+    verified: "2026-11-18"
+  - id: microVmIngressTokens
+    name: "Ingress connector and port-scoped auth tokens"
+    where: "AWS Lambda MicroVMs › run-microvm --ingress-network-connectors (HTTP_INGRESS or NO_INGRESS); create-microvm-auth-token --allowed-ports --expiration-in-minutes"
+    setVia: [apiCli, cloudPolicy]
+    area: identity
+    default: "Requests need a valid token; you choose its ports and expiry"
+    recommended: "Use NO_INGRESS where the episode starts from the /run hook; otherwise HTTP_INGRESS with tokens of 15 to 30 minutes scoped to the harness port, minted only by the orchestrator role. Never attach SHELL_INGRESS."
+    why: "A token is the only gate on a MicroVM endpoint, and a token for the hook port can call the lifecycle hooks. Short, port-scoped tokens keep that with the orchestrator."
+    mitigations: [D3-APA]
+    url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-networking.html
+    verified: "2026-11-18"
+  - id: microVmTerminate
+    name: "terminate-microvm"
+    where: "AWS Lambda MicroVMs API, called from your incident runbook for every MicroVM listed by list-microvms for the image"
+    setVia: [apiCli]
+    area: tools
+    default: "MicroVMs run until terminated, suspended past their limit or past the maximum duration"
+    recommended: "Runbook order: stop the orchestrator queue, list MicroVMs for the image version, terminate each, then revoke the execution role sessions in IAM."
+    why: "Suspended MicroVMs keep memory and disk and can resume on traffic, so a stop must terminate them, not wait for them to idle out."
+    mitigations: [cap-agent-kill-switch]
+    url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-launching.html
+    verified: "2026-11-18"
+  - id: albJwtValidation
+    name: "jwt-validation action (Verify JWTs)"
+    where: "Application Load Balancer › HTTPS listener › rule actions (jwt-validation before the forward action)"
+    setVia: [apiCli, adminConsole]
+    area: identity
+    default: "No token check; the listener forwards every request"
+    requires: "An HTTPS listener; RS256-signed tokens; a publicly accessible JWKS endpoint whose response is at most 150 KB and 10 keys"
+    recommended: "Add a jwt-validation action on the internal load balancer's HTTPS listener with your issuer and JWKS endpoint, and required claims for audience and scope; validate again in the server if handlers read the tenant."
+    why: "Runtime's inbound authoriser no longer checks tokens before your code runs. The load balancer rejects a call whose token is not from your issuer or not meant for this server."
+    mitigations: [D3-APA, D3-CTS]
+    url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-verify-jwt.html
+    verified: "2026-11-18"
+  - id: gatewayMcpPrivateEndpoint
+    name: "Private endpoint (privateEndpoint) on the MCP server target"
+    where: "AgentCore Gateway › MCP server target › privateEndpoint (managedVpcResource: VPC, subnets, security groups)"
+    setVia: [apiCli]
+    area: network
+    default: "Targets are reached at a public address"
+    requires: "An internal load balancer with a certificate the gateway trusts"
+    recommended: "Give the MCP server target a privateEndpoint in the cluster VPC and allow inbound traffic to the internal load balancer only from that endpoint's security group."
+    why: "The server no longer sits behind Runtime's endpoint. A private target keeps the load balancer off the internet, so callers reach the server only through the gateway."
+    mitigations: []
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+    verified: "2026-11-18"
+  - id: apiGatewayJwtAuthorizer
+    name: "JWT authorizer (HTTP API)"
+    where: "Amazon API Gateway › HTTP API › Authorization › JWT authorizer (Issuer, Audience) attached to the /mcp route with authorizationScopes"
+    setVia: [apiCli, adminConsole]
+    area: identity
+    default: "Routes are open until an authoriser is attached"
+    requires: "RSA-signed tokens from an issuer with a JWKS endpoint"
+    recommended: "Attach a JWT authoriser to the /mcp route with your user pool as issuer, this server's resource as audience and the tool scopes as authorizationScopes. Where the gateway signs with SigV4, use IAM authorisation instead."
+    why: "Runtime's inbound authoriser no longer checks tokens before your code runs. API Gateway rejects a call whose token is from another issuer, for another audience or without the scope."
+    mitigations: [D3-APA, D3-CTS]
+    url: https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html
+    verified: "2026-11-18"
+  - id: smModelExecutionRole
+    name: "Execution role (ExecutionRoleArn) per model"
+    where: "SageMaker AI › CreateModel ExecutionRoleArn; one IAM role per endpoint"
+    setVia: [cloudPolicy, apiCli]
+    area: identity
+    default: "Whatever role the model is given"
+    recommended: "One role per served model, allowed to read only that release prefix in the artifact bucket, pull its image from ECR and write its logs; passed only by the deployment pipeline."
+    why: "SageMaker reads the weights with this role in place of a pod's role, so an endpoint can load its own release and nothing else."
+    mitigations: [D3-AA, AML.M0005]
+    url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-roles.html
+    verified: "2026-11-18"
+  - id: smInvokeEndpointPolicy
+    name: "sagemaker:InvokeEndpoint and sagemaker:CallWithBearerToken permissions"
+    where: "IAM › identity policies and service control policies on sagemaker:InvokeEndpoint and sagemaker:InvokeEndpointWithResponseStream scoped to the endpoint ARN, plus sagemaker:CallWithBearerToken, which only accepts Resource \"*\""
+    setVia: [cloudPolicy]
+    area: identity
+    default: "Any identity in the account whose policies allow the actions can invoke"
+    recommended: "Allow these actions on the serving endpoints to the gateway's role only, conditioned on your SageMaker Runtime interface endpoint; deny them to every application role. Keep bearer tokens to minutes, not the 12-hour default."
+    why: "The endpoint has no API key of its own. IAM on the invoke actions is what stops an application calling the model directly and skipping the gateway."
+    mitigations: [D3-AA, D3-ACH]
+    url: https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-openai-compatible.html
+    verified: "2026-11-18"
+  - id: smEndpointPerTier
+    name: "One endpoint per sensitivity tier (ProductionVariants)"
+    where: "SageMaker AI › CreateEndpointConfig ProductionVariants (InstanceType, InitialInstanceCount); one endpoint configuration per tier"
+    setVia: [apiCli]
+    area: network
+    default: "You choose what each endpoint hosts"
+    recommended: "Deploy each sensitivity tier to its own endpoint and endpoint configuration; do not co-host tiers as inference components or containers on one endpoint."
+    why: "Models sharing an endpoint share its instances and GPUs. A separate endpoint gives each tier its own instances, as a tainted node pool did on EKS."
+    mitigations: [D3-HBPI]
+    url: https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-deploy-models.html
+    verified: "2026-11-18"
+  - id: smModelPackageDeploy
+    name: "Deploy from the approved model package (ModelPackageName)"
+    where: "SageMaker AI › CreateModel Containers.ModelPackageName (the approved version ARN in Model Registry); digest check in the deployment pipeline"
+    setVia: [apiCli, code]
+    area: data
+    default: "A model can point at any S3 location"
+    recommended: "Create the model from the approved model package ARN, never from a bare S3 path, after the pipeline has checked the artifact's SHA-256 and signature against the registry record."
+    why: "There is no init container to hash the weights: SageMaker copies them in itself. Deploying by package ARN ties the endpoint to the approved version, and the pipeline does the check."
+    mitigations: [AML.M0014]
+    url: https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry-deploy.html
+    verified: "2026-11-18"
+  - id: smDeploymentGuardrails
+    name: "Deployment guardrails (blue/green with canary or linear traffic shifting)"
+    where: "SageMaker AI › UpdateEndpoint DeploymentConfig › BlueGreenUpdatePolicy and AutoRollbackConfiguration (CloudWatch alarms)"
+    setVia: [apiCli]
+    area: tools
+    default: "Updates use a blue/green deployment; the traffic shifting mode and alarms are yours to set"
+    recommended: "Update endpoints with canary traffic shifting, a baking period and auto-rollback alarms on error rate and latency."
+    why: "A new release takes a small share of traffic first and rolls back by itself if its alarms trip, on top of the weighted route at the gateway."
+    mitigations: [cap-staged-rollout-gate]
+    url: https://docs.aws.amazon.com/sagemaker/latest/dg/deployment-guardrails-blue-green.html
+    verified: "2026-11-18"
+  - id: smEndpointKms
+    name: "KmsKeyId on the endpoint configuration"
+    where: "SageMaker AI › CreateEndpointConfig KmsKeyId (storage volume of the ML instances)"
+    setVia: [cloudPolicy, apiCli]
+    area: data
+    default: "No customer managed key on the volume"
+    recommended: "Your customer managed key, with a key policy that lets only the endpoint's execution role and SageMaker use it."
+    why: "The copy of the weights on the EBS storage volume is encrypted under a key you control and can revoke. On Nitro instance types with local NVMe storage, a hardware module encrypts that storage and the KMS key does not apply."
+    mitigations: [AML.M0005]
+    url: https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_CreateEndpointConfig.html
+    verified: "2026-11-18"
+  - id: s3DefaultSseKms
+    name: "Default encryption (SSE-KMS) on the bucket"
+    where: "Amazon S3 › (dataset, candidate and checkpoint buckets) › Properties › Default encryption (PutBucketEncryption); the same key on the EBS or FSx volumes the job mounts"
+    setVia: [cloudPolicy, apiCli]
+    area: data
+    default: "SSE-S3 (Amazon S3 managed keys)"
+    recommended: "Set default encryption to SSE-KMS with your customer managed key and an S3 Bucket Key; grant kms:Decrypt and kms:GenerateDataKey to the training role only, and encrypt the job's volumes with the same key."
+    why: "No job parameter encrypts volumes and output here as CreateTrainingJob did. Bucket default encryption puts checkpoints and candidates under your key unless a request names other encryption; deny that in the bucket policy."
+    mitigations: [AML.M0012]
+    url: https://docs.aws.amazon.com/AmazonS3/latest/userguide/default-bucket-encryption.html
+    verified: "2026-11-18"
+  - id: hyperPodVpcConfig
+    name: "VpcConfig (cluster) and OverrideVpcConfig (instance group)"
+    where: "SageMaker AI › CreateCluster VpcConfig (subnets, security groups); ClusterInstanceGroupSpecification OverrideVpcConfig"
+    setVia: [apiCli, cloudPolicy]
+    area: network
+    default: "Mandatory for Amazon EKS orchestration; optional for Slurm"
+    requires: "Enough network interface quota for the cluster"
+    recommended: "Private subnets with no NAT or internet gateway route, an S3 gateway endpoint and interface endpoints for the AWS services jobs call, and security groups that allow traffic only within the cluster."
+    why: "A HyperPod node has no network isolation flag. What a training job can reach is whatever the cluster subnets route to, so the VPC is the wall."
+    mitigations: [D3-NI]
+    url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-prerequisites.html
+    verified: "2026-11-18"
+  - id: hyperPodVolumeKms
+    name: "VolumeKmsKeyId (ClusterEbsVolumeConfig)"
+    where: "SageMaker AI › CreateCluster instance group storage configuration › ClusterEbsVolumeConfig (RootVolume, VolumeKmsKeyId)"
+    setVia: [apiCli]
+    area: data
+    default: "Root volume encrypted with an AWS owned key"
+    recommended: "Your customer managed key on the secondary volume and, with RootVolume set to True, on the root volume of every instance group that runs training."
+    why: "Datasets and checkpoints staged on cluster nodes are encrypted under a key you control; by default the root volume uses an AWS owned key."
+    mitigations: [AML.M0012]
+    url: https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ClusterEbsVolumeConfig.html
+    verified: "2026-11-18"
+  # <<< more hosting rows
 
 implementations:
   - architecture: archChatAgent
@@ -2264,6 +2492,248 @@ implementations:
       - { block: service, service: Your MCP server on AgentCore Runtime, note: "Stateless streamable HTTP at /mcp. Amazon ECS or Lambda behind the load balancer is the guidance's alternative." }
       - { block: toolDefs, service: Versioned tool definitions in your repository, build: true, note: "Published as an approved MCP record in AWS Agent Registry." }
       - { block: orgData, service: Your systems of record, build: true, note: "Each reached on its own vaulted credential or an exchanged downstream token." }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: agentCoreRuntime
+        kind: runtime
+        name: "Amazon Bedrock AgentCore Runtime"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "AWS runs your MCP server in a dedicated microVM per session, started from your container image or code package."
+          patching: "AWS patches the OS kernel, and language runtimes for direct code deployments; you rebuild container images from a patched base image."
+          data: "Requests and tool results are processed in session microVMs in the Region; memory is sanitised at session end and logs go to CloudWatch in your account."
+          network: "PUBLIC or VPC network mode; in VPC mode AWS places network interfaces in your subnets and your security groups control what the server reaches."
+          identity: "An IAM execution role that AgentCore Runtime assumes, plus a workload identity from AgentCore Identity for outbound OAuth and API keys."
+          accepts: "Streamable HTTP at 0.0.0.0:8000/mcp, stateless or stateful, built with any MCP SDK, as an ARM64 container image or a direct code package."
+          workload: "Requests with one session ID reach one microVM; a request may run 15 minutes, a stream 60 minutes, and a session 8 hours or 15 idle minutes."
+          portability: "The server is a standard Streamable HTTP MCP server in a container; the invocation address, inbound authoriser and session headers are AgentCore-specific."
+          effort: "Your team owns the server code, image rebuilds, execution role and authoriser settings; AWS operates capacity, scaling and session isolation."
+          fits: "AWS's MCP guidance says to use Runtime when the solution needs a custom MCP server or a target that AgentCore Gateway does not support."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-mcp.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-mcp-protocol-contract.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-how-it-works.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-security-best-practices.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-1-amazon-bedrock-agent-core.html
+      - id: eks
+        kind: cluster
+        name: "Amazon EKS"
+        url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-4-amazon-elastic-kubernetes-service.html
+        asOf: "2026-11"
+        compare:
+          runs: "You run the MCP server as pods on worker nodes in your EKS cluster; AWS runs the Kubernetes control plane."
+          patching: "AWS patches the control plane; you patch node operating systems and images, unless EKS Auto Mode patches nodes and replaces them within 21 days."
+          data: "Requests and tool results are processed in pods on EC2 instances in your account and VPC; state lives in the data stores you attach."
+          network: "Pods sit in your VPC subnets behind an internal Application Load Balancer; Kubernetes network policies and security groups filter traffic."
+          identity: "A Kubernetes service account mapped to an IAM role through EKS Pod Identity."
+          accepts: "Any container that serves Streamable HTTP; AWS's sample runs a Python MCP server at /mcp behind an HTTPS internal load balancer."
+          workload: "Stateless servers scale as replicas behind the load balancer; an API Gateway HTTP API in front limits calls to 30 seconds and 10 MB."
+          portability: "The server is a standard container with Kubernetes manifests; the load balancer controller, Pod Identity and IAM wiring are AWS-specific."
+          effort: "Your team operates the cluster, node groups, add-ons, ingress, autoscaling, upgrades and the server's deployment pipeline."
+          fits: "AWS's guidance places this pattern with organisations that already have Kubernetes expertise, noting its higher complexity and cost."
+        sources:
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-4-amazon-elastic-kubernetes-service.html
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/resources.html
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/next-steps.html
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/best-practices-for-mcp-deployments.html
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/conclusion.html
+          - https://github.com/aws-samples/sample-mcp-deployment-patterns/tree/main/deploy-eks
+          - https://docs.aws.amazon.com/eks/latest/userguide/security.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/automode.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
+          - https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-verify-jwt.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html
+        summary: "Your MCP server runs as a Deployment on Amazon EKS behind an internal Application Load Balancer; AgentCore Gateway reaches it as an MCP server target through a VPC Lattice private endpoint. You now carry what Runtime did: nodes and their patching, scaling, the load balancer, token checks at the server's edge, per-pod IAM roles, network policy and log collection. Runtime's per-session microVM is gone; pods share nodes unless you add isolation."
+        bindings:
+          - { block: service, service: "Your MCP server on Amazon EKS", build: true, note: "A Deployment serving stateless Streamable HTTP at /mcp behind an HTTPS internal Application Load Balancer, registered with the gateway as an MCP server target on a private endpoint.", url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-4-amazon-elastic-kubernetes-service.html }
+        dropSettings: [runtimeInboundJwt]
+        addSettings: [eksPodIdentity, eksNetworkPolicy, eksPrivateEndpoint, eksClusterAccessEntries, eksControlPlaneLogs, eksImdsHopLimit, albJwtValidation, gatewayMcpPrivateEndpoint]
+        differences:
+          - at: gateway->service
+            text: "The gateway cannot sign calls to this server with SigV4: AWS lists Application Load Balancer as unable to verify SigV4 signatures. Use OAuth client credentials or an API key as the target's outbound authorisation, and check that token at the load balancer or in the server."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
+          - at: gateway->service
+            text: "AWS's EKS pattern puts an API Gateway HTTP API with IAM (SigV4) authorisation in front of the internal load balancer, not AgentCore Gateway. That front door limits each call to 30 seconds and 10 MB, and most MCP clients cannot sign SigV4 without a proxy. AgentCore Gateway as the front door takes OAuth tokens and allows 15 minutes, but caps payloads at 6 MB by default."
+            url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-4-amazon-elastic-kubernetes-service.html
+          - at: service
+            text: "Pods on a node share its Linux kernel, where Runtime gave each session its own microVM. Tenants are separated only by your code, namespaces and network policy unless you run the pods as isolated pods, which need Kubernetes 1.36 or later and supported instance types."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+          - at: service->orgData
+            text: "Unless access to the node's instance metadata service is restricted, a pod's containers can also retrieve the node role's credentials. Give the server its own role through EKS Pod Identity and set the node metadata hop limit to 1."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - at: service
+            text: "Kubernetes applies no network policy by default, so any pod in the cluster can call the MCP server directly and skip the gateway. Add a default-deny policy that admits only the load balancer."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+        alsoNeeded:
+          - service: "Application Load Balancer (AWS Load Balancer Controller or EKS Auto Mode)"
+            role: ingress
+            why: "Runtime gave the server an HTTPS address; on EKS an internal load balancer and its certificate do that."
+            url: https://github.com/aws-samples/sample-mcp-deployment-patterns/tree/main/deploy-eks
+          - service: "AWS Certificate Manager"
+            role: keys
+            why: "The internal load balancer needs a certificate for the name the gateway's private endpoint calls."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+          - service: "EKS Pod Identity"
+            role: identity
+            why: "Replaces Runtime's execution role with an IAM role per service account."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - service: "Amazon ECR"
+            role: registry
+            why: "Holds the server image the Deployment pulls; AWS builds and pushes it there in its sample."
+            url: https://github.com/aws-samples/sample-mcp-deployment-patterns/tree/main/deploy-eks
+          - service: "Amazon CloudWatch with OpenTelemetry instrumentation"
+            role: logging
+            why: "AWS's guidance asks for OpenTelemetry-compatible instrumentation with CloudWatch on patterns outside AgentCore."
+            url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/best-practices-for-mcp-deployments.html
+        quickstart:
+          - title: "Deployment Pattern 4 - Amazon Elastic Kubernetes Service"
+            url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-4-amazon-elastic-kubernetes-service.html
+          - title: "Sample implementation: Amazon EKS MCP server deployment"
+            url: https://github.com/aws-samples/sample-mcp-deployment-patterns/tree/main/deploy-eks
+          - title: "Configure AgentCore Gateway VPC egress for gateway targets"
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+      - id: lambda
+        kind: runtime
+        name: "AWS Lambda with Amazon API Gateway"
+        url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-2-aws-lambda-amazon-api-gateway.html
+        asOf: "2026-11"
+        compare:
+          runs: "AWS Lambda runs your server code in execution environments it creates per concurrent request; API Gateway receives the HTTP calls."
+          patching: "Lambda applies runtime patches to functions in Auto update mode; you update your code, dependencies and any container image you deploy."
+          data: "Requests and tool results are processed in Lambda execution environments in the Region; durable state must sit in a store such as DynamoDB."
+          network: "Functions have public internet access by default; attached to your VPC they reach only what its subnets, routes and security groups allow."
+          identity: "The function's IAM execution role, whose temporary credentials Lambda supplies to the code."
+          accepts: "Managed runtimes or container images; AWS's sample handles MCP JSON-RPC POSTs at /mcp in a Python function behind API Gateway."
+          workload: "Each environment handles one request at a time; an invocation runs at most 15 minutes, capacity scales from zero and new environments cold start."
+          portability: "Tool logic is ordinary code; the Lambda handler, API Gateway event format and authoriser configuration are AWS-specific and are rewritten elsewhere."
+          effort: "Your team owns the function code, API Gateway and authoriser configuration and the external state store; there are no servers to operate."
+          fits: "AWS's guidance places it with variable workloads and teams that put rapid development ahead of operational control."
+        sources:
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-2-aws-lambda-amazon-api-gateway.html
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/resources.html
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/next-steps.html
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/conclusion.html
+          - https://github.com/aws-samples/sample-mcp-deployment-patterns/tree/main/deploy-serverless
+          - https://docs.aws.amazon.com/lambda/latest/dg/runtime-management-shared.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
+          - https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html
+          - https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-quotas.html
+          - https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
+        summary: "Your MCP server runs as a Lambda function that answers each MCP POST, with Amazon API Gateway giving it an HTTPS address that AgentCore Gateway calls as an MCP server target. Lambda still patches, scales and isolates each request for you. What you now carry: an API front door and its authoriser, an external store for anything that must outlive one request, and the 15-minute and API Gateway time limits in place of Runtime's sessions."
+        bindings:
+          - { block: service, service: "Your MCP server on AWS Lambda behind API Gateway", build: true, note: "A function handling MCP JSON-RPC at /mcp, stateless, with API Gateway as its HTTPS endpoint; registered with AgentCore Gateway as an MCP server target.", url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-2-aws-lambda-amazon-api-gateway.html }
+        dropSettings: [runtimeInboundJwt]
+        addSettings: [lambdaVpcConfig, apiGatewayJwtAuthorizer]
+        differences:
+          - at: gateway->service
+            text: "A function has no HTTPS address of its own in AWS's pattern; API Gateway supplies it. HTTP APIs end a call at 30 seconds and 10 MB. REST APIs default to 29 seconds unless you set the integration's response transfer mode to STREAM. Long tool calls must be made asynchronous or streamed."
+            url: https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode.html
+          - at: gateway->service
+            text: "AWS lists Amazon API Gateway and Lambda function URLs as able to verify SigV4, so the gateway can sign calls to this target with its service role. Its sample instead takes Cognito ID tokens at API Gateway, with a health route that needs no token. Use access tokens and scopes if you keep OAuth."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
+          - at: service
+            text: "AWS's sample is a lightweight JSON-RPC handler written for Lambda with no MCP SDK dependency. Lambda keeps no state between requests, and AWS's guidance reserves stateful Streamable HTTP for servers that need elicitation, sampling or progress notifications, so plan those on another host or use the MCP Tasks extension."
+            url: https://github.com/aws-samples/sample-mcp-deployment-patterns/tree/main/deploy-serverless
+          - at: service->orgData
+            text: "A function has public internet access by default. Attach it to private subnets to reach systems of record; it then reaches only what the VPC allows, and you add endpoints or a NAT route for the AWS services it calls."
+            url: https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
+        alsoNeeded:
+          - service: "Amazon API Gateway"
+            role: ingress
+            why: "Gives the function an HTTPS endpoint and checks the token or signature before invoking it."
+            url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-2-aws-lambda-amazon-api-gateway.html
+          - service: "Amazon DynamoDB or Amazon Aurora"
+            role: other
+            why: "AWS's guidance stores durable application state outside the Lambda execution environment."
+            url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-2-aws-lambda-amazon-api-gateway.html
+          - service: "AWS Secrets Manager"
+            role: secrets
+            why: "AWS's guidance retrieves database, internal service and API credentials from it at run time."
+            url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-2-aws-lambda-amazon-api-gateway.html
+          - service: "Amazon CloudWatch with OpenTelemetry instrumentation"
+            role: logging
+            why: "AWS's guidance asks for OpenTelemetry-compatible instrumentation with CloudWatch on patterns outside AgentCore."
+            url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/best-practices-for-mcp-deployments.html
+        quickstart:
+          - title: "Deployment Pattern 2 - AWS Lambda + Amazon API Gateway"
+            url: https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-2-aws-lambda-amazon-api-gateway.html
+          - title: "Sample implementation: Maths MCP Server - Serverless Deployment"
+            url: https://github.com/aws-samples/sample-mcp-deployment-patterns/tree/main/deploy-serverless
+          - title: "MCP servers as AgentCore Gateway targets"
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
+      - id: agentCoreGateway
+        kind: managed
+        name: "Amazon Bedrock AgentCore Gateway"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html
+        asOf: "2026-11"
+        compare:
+          runs: "AWS runs the MCP endpoint; the gateway translates tool calls into Lambda invocations or API requests, so you run no MCP server."
+          patching: "AWS patches the gateway; you still patch and operate the Lambda functions and APIs behind it."
+          data: "Requests and results pass through the AWS-run gateway to your targets; gateway data at rest is encrypted with a service key or your KMS key."
+          network: "The endpoint is AWS-hosted and reachable through an AgentCore VPC endpoint; VPC egress carries calls to Lambda, API Gateway and private targets."
+          identity: "The gateway's IAM service role invokes Lambda and Smithy targets; OpenAPI targets use stored API keys, OAuth credentials or SigV4 signing."
+          accepts: "Lambda functions with a tool schema, OpenAPI 3.0 and 3.1 specifications, Smithy models, API Gateway REST API stages and built-in connectors."
+          workload: "A gateway invocation times out at 15 minutes by default; optional MCP sessions last 15 minutes to 8 hours and responses can stream as SSE."
+          portability: "Tool schemas, OpenAPI files and Lambda code stay yours; the endpoint, authoriser, policies and published tool names are gateway configuration."
+          effort: "Your team maintains tool schemas, target credentials and the backing functions and APIs; AWS operates the MCP endpoint and its scaling."
+          fits: "AWS's guidance calls it the preferred starting point when existing Lambda functions or APIs already provide the business logic."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-core-concepts.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-supported-targets.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-add-target-lambda.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-schema-openapi.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-building-smithy-targets.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-api-gateway.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connectors.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-features.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-sessions.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-mcp-streaming.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-encryption.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-inbound-auth.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/deployment-pattern-1-amazon-bedrock-agent-core.html
+          - https://docs.aws.amazon.com/prescriptive-guidance/latest/mcp-deployment-patterns-on-aws/conclusion.html
+        offers:
+          - name: "AWS Lambda function targets"
+            what: "Connects the gateway to Lambda functions that implement your tools, described by a tool schema supplied inline or from Amazon S3."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-add-target-lambda.html
+          - name: "OpenAPI schema targets"
+            what: "Translates incoming MCP requests into HTTP requests to REST APIs defined by OpenAPI 3.0 or 3.1 specifications, using each operationId as the tool name."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-schema-openapi.html
+          - name: "Smithy model targets"
+            what: "Translates incoming MCP requests into API calls to services defined by Smithy models of up to 10 MB that use the RestJson protocol."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-building-smithy-targets.html
+          - name: "Amazon API Gateway REST API stages as targets"
+            what: "Exposes operations of a public REST API stage in the same account and Region as tools, selected with tool filters and renamed with tool overrides."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-api-gateway.html
+          - name: "Built-in connectors as targets"
+            what: "Adds Amazon Bedrock Managed Knowledge Bases, Web Search Tool, Web Answer and AWS Step Functions as gateway targets."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connectors.html
+          - name: "Inbound authorization"
+            what: "Each gateway takes a JWT authoriser, IAM (SigV4) authorisation or an offloaded authorisation type to control which clients may call it."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-inbound-auth.html
+          - name: "Semantic search of tools"
+            what: "When enabled at creation, clients call the x_amz_bedrock_agentcore_search tool to find tools with a natural language query."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-features.html
+          - name: "MCP sessions, response streaming and tasks"
+            what: "Optional sessions, SSE response streaming, elicitation, sampling and tasks, several of which apply only to MCP server targets."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-features.html
+    # <<< hosting options
     settings:
       - idcAppAssignment
       - cognitoResourceBinding
@@ -2403,6 +2873,156 @@ implementations:
       - { block: storage, service: Amazon S3 model artifact bucket }
       - { block: sources, service: Hugging Face Hub }
       - { block: registry, service: Amazon SageMaker Model Registry }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: eks
+        kind: cluster
+        name: "Amazon EKS"
+        url: https://docs.aws.amazon.com/eks/latest/userguide/ml-inference.html
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "You run the model server as Kubernetes Deployments on GPU nodes in your cluster; AWS runs the Kubernetes control plane."
+          patching: "You patch GPU node images, drivers and the server image; with EKS Auto Mode, AWS patches nodes and replaces them within 21 days."
+          data: "Prompts and completions are processed on EC2 GPU nodes in your account and VPC; weights sit in your S3 bucket and stream into GPU memory."
+          network: "Pods run in your VPC subnets; Kubernetes network policies, security groups and an internal load balancer control traffic in and out."
+          identity: "A Kubernetes service account mapped to an IAM role through EKS Pod Identity."
+          accepts: "Any containerised model server; AWS's guide names vLLM, SGLang, Triton Inference Server and Text Generation Inference."
+          workload: "You choose GPU instance types and node pools and scale pods with HPA or KEDA on model server metrics; nodes are yours while they run."
+          portability: "Workloads use standard Kubernetes APIs and open source model servers, which AWS's guide describes as portable across environments."
+          effort: "Your team operates the cluster, GPU node pools, drivers, model server, autoscaling, monitoring stack and upgrades."
+          fits: "AWS's guide presents EKS for self-hosting models that need low-latency responses, with full control of cluster and GPU configuration."
+        sources:
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-inference.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-on-eks.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-autoscaling.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-fast-model-loading.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/automode.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-workload-taints.html
+      - id: sageMakerEndpoints
+        kind: runtime
+        name: "Amazon SageMaker AI real-time inference"
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints.html
+        asOf: "2026-11"
+        compare:
+          runs: "SageMaker AI runs your serving container on ML instances it provisions and replaces; you supply the container image and the weights."
+          patching: "SageMaker AI launches new inference containers when it applies security patches to endpoints; you keep the serving image current."
+          data: "Prompts and completions are processed on SageMaker-managed instances in the Region; SageMaker copies weights there from your S3 bucket."
+          network: "Containers have internet access by default; VpcConfig attaches them to your subnets and EnableNetworkIsolation blocks all outbound calls."
+          identity: "An IAM execution role that SageMaker AI assumes for the model; with network isolation the container receives no AWS credentials."
+          accepts: "Any container answering /ping and /invocations on port 8080; AWS provides vLLM and Large Model Inference deep learning containers."
+          workload: "You choose GPU instance types and counts; auto scaling adjusts them, and endpoints that host inference components can scale to zero instances."
+          portability: "The container and weights stay yours; callers use the SageMaker Runtime API or its OpenAI-compatible path, and endpoint configuration is SageMaker-specific."
+          effort: "Your team owns the serving image, endpoint configuration, scaling policies and alarms; AWS operates instances, health checks and deployments."
+          fits: "AWS describes real-time inference as suited to interactive, low-latency workloads on fully managed endpoints that support auto scaling."
+        sources:
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/deploy-model.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-deploy-models.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-roles.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-openai-compatible.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/your-algorithms-inference-code.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/host-vpc.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/mkt-algo-model-internet-free.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/endpoint-auto-scaling-zero-instances.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/large-model-inference.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/large-model-inference-hosting.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-privatelink.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/deployment-guardrails.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/deployment-guardrails-blue-green.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry-deploy.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-test-endpoints.html
+          - https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_CreateEndpointConfig.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-inference-provider.html
+        summary: "vLLM runs in AWS's vLLM container, or your own, on a SageMaker AI real-time endpoint. SageMaker provisions and patches the instances, copies the weights from S3, health-checks the container and shifts traffic on updates. The model API becomes the regional SageMaker Runtime address, guarded by IAM in place of a load balancer and network policy you own. You give up node-level control: no taints, init containers or pod policies, and the gateway's route to it must be proven."
+        bindings:
+          - { block: api, service: "SageMaker Runtime endpoint (OpenAI-compatible path)", note: "The path /endpoints/<name>/openai/v1 on runtime.sagemaker.<region>.amazonaws.com, called with a short-lived bearer token; reached privately through a SageMaker Runtime interface endpoint.", url: https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-openai-compatible.html }
+          - { block: runtime, service: "vLLM container on a SageMaker AI real-time endpoint", builtWith: "vLLM", note: "AWS's SageMaker vLLM Deep Learning Container on GPU ML instances, configured through SM_VLLM_ environment variables; the Large Model Inference container is the alternative.", url: https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-openai-compatible.html }
+        dropSettings: [eksPodIdentity, eksGpuTaints, eksNetworkPolicy, vllmApiKey, releaseDigestCheck]
+        addSettings: [smNetworkIsolation, smModelExecutionRole, smInvokeEndpointPolicy, smEndpointPerTier, smModelPackageDeploy, smDeploymentGuardrails, smEndpointKms]
+        differences:
+          - at: gateway->api
+            text: "The model API is the AWS-hosted SageMaker Runtime address, not a load balancer in your VPC. AgentCore Gateway documents IAM outbound authorisation for providers such as Amazon Bedrock and API keys for others; a SageMaker endpoint is not listed. Test the inference provider target against the OpenAI-compatible path before relying on it."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-inference-provider.html
+          - at: consumers->gateway
+            text: "Any identity allowed sagemaker:InvokeEndpoint, or holding a bearer token made from one, can call the endpoint directly and skip the gateway. Tokens last up to 12 hours by default. Restrict the invoke actions to the gateway role and your interface endpoint."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-openai-compatible.html
+          - at: runtime
+            text: "SageMaker AI inference containers are internet-enabled by default. Set EnableNetworkIsolation, or a VpcConfig with no internet route, when you create the model; with network isolation the container can make no outbound call and gets no AWS credentials."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/mkt-algo-model-internet-free.html
+          - at: storage->runtime
+            text: "SageMaker downloads the weights from S3 to the instance with the model's execution role before the container starts. You cannot run an init container, so the digest and signature check moves into the deployment pipeline. Raise the model download and health check timeouts for weights above 40 GB."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/large-model-inference-hosting.html
+          - at: api->runtime
+            text: "A container must answer each /invocations request within 60 seconds, and must pass /ping health checks within 8 minutes of starting or the launch fails. Stream long completions with InvokeEndpointWithResponseStream or the OpenAI-compatible path."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/your-algorithms-inference-code.html
+        alsoNeeded:
+          - service: "SageMaker Runtime interface VPC endpoint (AWS PrivateLink)"
+            role: network
+            why: "Keeps inference traffic inside your VPC now that the model API is a regional AWS address."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-privatelink.html
+          - service: "Application Auto Scaling"
+            role: other
+            why: "Scaling policies and the CloudWatch alarm that brings an endpoint back from zero instances are yours to define."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/endpoint-auto-scaling-zero-instances.html
+        quickstart:
+          - title: "Invoke endpoints with OpenAI-compatible APIs"
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-openai-compatible.html
+          - title: "Deploy models for real-time inference"
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints-deploy-models.html
+          - title: "Model parallelism and large model inference"
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/large-model-inference.html
+      - id: bedrockCustomModelImport
+        kind: managed
+        name: "Amazon Bedrock Custom Model Import"
+        url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-customization-import-model.html
+        asOf: "2026-11"
+        compare:
+          runs: "AWS runs the model server; you import weights from Amazon S3 and call the model through the Amazon Bedrock runtime APIs."
+          patching: "AWS operates and patches the whole serving stack; you have no image, node or endpoint to maintain."
+          data: "Imported models are stored and managed by AWS, encrypted with an AWS owned key or your KMS key; prompts are processed by Amazon Bedrock in the Region."
+          network: "Callers use the Amazon Bedrock runtime endpoint, privately through an interface VPC endpoint; import jobs can read S3 through your VPC."
+          identity: "An IAM service role lets Amazon Bedrock read the model files during import; callers are authorised by IAM on the imported model."
+          accepts: "Hugging Face safetensors weights for Mistral, Mixtral, Flan, Llama, GPTBigCode, Qwen and GPT-OSS architectures, up to 200 GB for text models."
+          workload: "Bedrock adds and removes model copies with demand and removes inactive models; a first call can return ModelNotReadyException while one restores."
+          portability: "Weights stay in your S3 bucket in an open format; callers use InvokeModel, Converse or OpenAI-compatible request formats."
+          effort: "Your team prepares weights in a supported format and handles restore retries; AWS operates capacity, scaling and the serving stack."
+          fits: "AWS describes it for models you customised elsewhere, such as in SageMaker AI, and want to serve with on-demand throughput through Bedrock."
+        sources:
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/model-customization-import-model.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/custom-model-import-prereq.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/model-customization-import-model-job.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/invoke-imported-model.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/import-model-calculate-cost.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/encryption-import-model.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/data-protection.html
+        offers:
+          - name: "Model import job from Amazon S3"
+            what: "An import job reads Hugging Face format files (safetensors weights, config.json and tokenizer files) from an S3 URI and detects the model architecture."
+            url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-customization-import-model.html
+          - name: "Supported architectures"
+            what: "Mistral, Mixtral, Flan, Llama 2 to 3.3 and Mllama, GPTBigCode, Qwen2 to Qwen3 and GPT-OSS, with weights under 200 GB for text and 100 GB for multimodal models; embedding models are not supported."
+            url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-customization-import-model.html
+          - name: "On-demand inference"
+            what: "Imported models are invoked with InvokeModel or InvokeModelWithResponseStream, and with Converse for architectures that support it, using on-demand throughput."
+            url: https://docs.aws.amazon.com/bedrock/latest/userguide/invoke-imported-model.html
+          - name: "OpenAI-compatible API formats"
+            what: "Models imported after 11 November 2025 accept OpenAI Completions and Chat Completions request formats, including structured outputs."
+            url: https://docs.aws.amazon.com/bedrock/latest/userguide/invoke-imported-model.html
+          - name: "Customer managed key encryption"
+            what: "A customer managed KMS key can add a second layer of encryption over the AWS owned key that protects the imported model."
+            url: https://docs.aws.amazon.com/bedrock/latest/userguide/encryption-import-model.html
+          - name: "Custom Model Units and model copies"
+            what: "Bedrock sizes each model copy in Custom Model Units at import, changes the number of running copies with demand and bills them in 5-minute windows."
+            url: https://docs.aws.amazon.com/bedrock/latest/userguide/import-model-calculate-cost.html
+          - name: "Regions and exclusions"
+            what: "Available in eu-central-1, us-east-1, us-east-2 and us-west-2; batch inference and CloudFormation cannot be used with it."
+            url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-customization-import-model.html
+    # <<< hosting options
     settings:
       - gatewayInboundJwt
       - eksPodIdentity
@@ -2519,6 +3139,250 @@ implementations:
       - { block: storage, service: Amazon S3 candidate bucket }
       - { block: evaluation, service: SageMaker Pipelines evaluation step, note: "SageMaker Clarify foundation model evaluations plus your own backdoor and memorisation probes, on a read-only role." }
       - { block: registry, service: Amazon SageMaker Model Registry }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: sageMakerTraining
+        kind: runtime
+        name: "Amazon SageMaker AI training jobs"
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/train-model.html
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "SageMaker AI provisions instances for each job, runs your training container on them and releases them when the job ends."
+          patching: "SageMaker AI manages the training instances and publishes pre-built framework images; you maintain any image and packages you bring."
+          data: "SageMaker copies data from your S3 bucket to the job instances and uploads artefacts back; volumes and output can use your KMS key."
+          network: "Containers have internet access by default; VpcConfig attaches jobs to your subnets and EnableNetworkIsolation blocks all outbound calls."
+          identity: "An IAM execution role passed to each job as RoleArn; with network isolation the container itself receives no AWS credentials."
+          accepts: "Built-in algorithms, pre-built PyTorch and TensorFlow containers that run your script, or your own training container."
+          workload: "A job runs for one day by default and 28 days at most; checkpoints sync to S3 and managed Spot training restarts interrupted jobs from them."
+          portability: "Training code runs in a standard container; job definitions, input channels and pipeline steps are SageMaker APIs to re-create elsewhere."
+          effort: "Your team owns training code, images, job configuration and quotas; AWS provisions, monitors and tears down the instances."
+          fits: "AWS presents training jobs as the fully managed route for ephemeral jobs where you choose the instance type and count."
+        sources:
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/train-model.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/how-it-works-training.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/docker-containers.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/mkt-algo-model-internet-free.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/train-vpc.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/model-checkpoints.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/model-managed-spot-training.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-roles.html
+          - https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_StoppingCondition.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-infrastructure.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-training-jobs.html
+      - id: eks
+        kind: cluster
+        name: "Amazon EKS"
+        url: https://docs.aws.amazon.com/eks/latest/userguide/ml-on-eks.html
+        asOf: "2026-11"
+        compare:
+          runs: "You run training as Kubernetes jobs on GPU nodes in your cluster, through an operator such as the Kubeflow Training Operator or KubeRay."
+          patching: "AWS patches the control plane and, on EKS Auto Mode, the nodes; on your own node groups you update GPU AMIs and drivers. Operators and training images are yours."
+          data: "Data, checkpoints and weights stay in your account on S3, FSx for Lustre or EBS volumes that you mount into the training pods."
+          network: "Pods run in your VPC subnets; Kubernetes network policies, security groups and a private cluster endpoint limit traffic."
+          identity: "A Kubernetes service account mapped to an IAM role through EKS Pod Identity."
+          accepts: "Any training container; AWS's guides use AWS Deep Learning Containers with Kubeflow PyTorchJob resources, and Ray Train on KubeRay."
+          workload: "No session limit, but Auto Mode replaces nodes within 21 days; a node holds at most 5 sandboxes per vCPU, and AWS's blueprint reports a pod Ready in about 5 seconds."
+          portability: "Jobs are container images and Kubernetes resources from open source operators; storage drivers and IAM mapping are AWS-specific."
+          effort: "Your team operates the cluster, GPU nodes, device plugins, training operator, storage drivers, job queues and upgrades."
+          fits: "AWS presents EKS for teams with Kubernetes expertise that want full cluster control and one orchestrator across training pipelines."
+        sources:
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-on-eks.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-resources.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-cluster-setup.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/automode.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-limitations.html
+          - https://aws.amazon.com/blogs/machine-learning/configure-and-verify-a-distributed-training-cluster-with-aws-deep-learning-containers-on-amazon-eks/
+          - https://awslabs.github.io/ai-on-eks/docs/infra/training/jark
+          - https://awslabs.github.io/ai-on-eks/docs/category/training-on-eks
+          - https://docs.aws.amazon.com/AmazonS3/latest/userguide/default-bucket-encryption.html
+          - https://awslabs.github.io/ai-on-eks/docs/blueprints/training/GPUs/bionemo
+        summary: "The training job becomes a Kubernetes job, a Kubeflow PyTorchJob in AWS's guide, on GPU nodes in an EKS cluster you run. You now carry what SageMaker did for each job: GPU nodes and drivers, the operator, copying data and checkpoints, encryption of volumes, per-job IAM roles and the network wall that EnableNetworkIsolation gave in one flag. Curation, evaluation, registry and signing can stay on SageMaker AI, but something you choose must start the job and collect its output."
+        bindings:
+          - { block: trainJob, service: "Kubeflow PyTorchJob on Amazon EKS GPU nodes", build: true, builtWith: "Kubeflow Training Operator", note: "AWS Deep Learning Containers run as PyTorchJob workers, with the EFA and NVIDIA device plugins, etcd, and FSx for Lustre or EBS volumes for data and checkpoints.", url: https://aws.amazon.com/blogs/machine-learning/configure-and-verify-a-distributed-training-cluster-with-aws-deep-learning-containers-on-amazon-eks/ }
+        dropSettings: [smTrainingRole, smTrainingKms, smNetworkIsolation]
+        addSettings: [eksPodIdentity, eksNetworkPolicy, eksPrivateEndpoint, eksGpuTaints, eksClusterAccessEntries, eksControlPlaneLogs, eksImdsHopLimit, s3DefaultSseKms]
+        differences:
+          - at: trainJob
+            text: "The Kubeflow Training Operator that AWS's guide installs is the legacy v1 project (PyTorchJob); the guide notes its successor, Kubeflow Trainer v2, was in alpha. AWS's AI on EKS JARK stack trains with Ray on KubeRay, though its BioNeMo blueprint still uses PyTorchJob. Pin the operator version you validate."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - at: corpus->trainJob
+            text: "SageMaker no longer copies the dataset in under a role the code never holds. The pod reads the bucket itself with its own Pod Identity role, so the training code holds live credentials. Scope that role to read the corpus prefix and write the candidate prefix only."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - at: trainJob
+            text: "The Kubeflow Training Operator that AWS's guide installs is the legacy v1 project (PyTorchJob); the guide notes its successor, Kubeflow Trainer v2, was in alpha. AWS's AI on EKS stack trains with Ray on KubeRay instead. Pin the operator version you validate."
+            url: https://aws.amazon.com/blogs/machine-learning/configure-and-verify-a-distributed-training-cluster-with-aws-deep-learning-containers-on-amazon-eks/
+          - at: trainJob
+            text: "Training pods share the node kernel with every other pod on the node. Isolated pods cannot be used for GPU jobs: GPU and device passthrough are not supported in Nitro Sandboxes. Keep training nodes dedicated and tainted, one pool per sensitivity tier."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-limitations.html
+          - at: trainJob->storage
+            text: "The mapping's pipeline starts SageMaker jobs and records their output. A Kubernetes job is started and watched by whatever you put in that place; AWS's EKS stack uses Argo Workflows. The step must also write the candidate to the bucket and hand its location to the evaluation step."
+            url: https://awslabs.github.io/ai-on-eks/docs/infra/training/jark
+        alsoNeeded:
+          - service: "Kubeflow Training Operator (or KubeRay)"
+            role: other
+            why: "Creates and restarts the worker pods of a distributed job, which SageMaker did per training job."
+            url: https://aws.amazon.com/blogs/machine-learning/configure-and-verify-a-distributed-training-cluster-with-aws-deep-learning-containers-on-amazon-eks/
+          - service: "NVIDIA and EFA device plugins on GPU nodes"
+            role: other
+            why: "Expose GPUs and the fast interconnect to pods; SageMaker supplied both on its training instances."
+            url: https://aws.amazon.com/blogs/machine-learning/configure-and-verify-a-distributed-training-cluster-with-aws-deep-learning-containers-on-amazon-eks/
+          - service: "Amazon FSx for Lustre and EBS CSI drivers"
+            role: other
+            why: "Provide storage for datasets, checkpoints and logs in place of SageMaker input channels and checkpoint sync."
+            url: https://aws.amazon.com/blogs/machine-learning/configure-and-verify-a-distributed-training-cluster-with-aws-deep-learning-containers-on-amazon-eks/
+          - service: "EKS Pod Identity"
+            role: identity
+            why: "Replaces the job's execution role with an IAM role per training service account."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - service: "Argo Workflows (or your own job launcher)"
+            role: other
+            why: "Starts the job and passes its output on; AWS includes Argo Workflows in its JARK stack for automating model pipelines."
+            url: https://awslabs.github.io/ai-on-eks/docs/infra/training/jark
+        quickstart:
+          - title: "Overview of Artificial Intelligence and Machine Learning on Amazon EKS"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/ml-on-eks.html
+          - title: "Configure and verify a distributed training cluster with AWS Deep Learning Containers on Amazon EKS"
+            url: https://aws.amazon.com/blogs/machine-learning/configure-and-verify-a-distributed-training-cluster-with-aws-deep-learning-containers-on-amazon-eks/
+          - title: "AI on EKS: JARK on EKS"
+            url: https://awslabs.github.io/ai-on-eks/docs/infra/training/jark
+      - id: sageMakerHyperPod
+        kind: cluster
+        name: "Amazon SageMaker HyperPod"
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html
+        asOf: "2026-11"
+        compare:
+          runs: "You submit jobs through Slurm or Amazon EKS to a persistent cluster whose instances SageMaker AI provisions, monitors and replaces."
+          patching: "AWS publishes HyperPod AMIs; you apply them with UpdateClusterSoftware or opt in to automatic security patching of idle nodes."
+          data: "Data, checkpoints and weights stay in your account on S3, FSx for Lustre or the EBS volumes attached to cluster instances."
+          network: "Cluster instances attach to your VPC subnets and security groups; AWS's guide leaves securing network egress from the cluster to you."
+          identity: "An IAM execution role for the cluster instance groups; with EKS orchestration, pods can take their own roles through EKS Pod Identity."
+          accepts: "Containerised jobs such as Kubeflow PyTorchJob on EKS, Slurm jobs, and SageMaker recipes for fine-tuning foundation models."
+          workload: "Built for jobs lasting weeks or months; health checks replace faulty nodes and auto-resume restarts PyTorch jobs from their checkpoints."
+          portability: "Jobs use Slurm or Kubernetes interfaces and standard containers; the resiliency features, recipes and cluster APIs are HyperPod-specific."
+          effort: "Your team operates the long-lived cluster, its scheduler, add-ons, quotas, storage and software updates; AWS replaces failed instances."
+          fits: "AWS presents HyperPod for large-scale, long-running and multi-job training that needs a persistent cluster with fault recovery."
+        sources:
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-eks.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-slurm.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-prerequisites.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-prerequisites-iam.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-ami-auto-patching.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-release-ami.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-eks-run-jobs-kubectl.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-eks-operator.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-eks-resiliency.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-hyperpod.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-infrastructure.html
+          - https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ClusterEbsVolumeConfig.html
+          - https://docs.aws.amazon.com/AmazonS3/latest/userguide/default-bucket-encryption.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-release-ami-update.html
+        summary: "Training runs as jobs on a persistent SageMaker HyperPod cluster, here orchestrated by Amazon EKS, whose GPU instances SageMaker AI provisions, health-checks and replaces. Unlike a training job, the cluster outlives each run, so you carry its software updates, scheduler, access entries, storage and network egress, and the per-job role, encryption and isolation that CreateTrainingJob set for you. In return multi-node jobs can run for weeks and resume after hardware faults."
+        bindings:
+          - { block: trainJob, service: "PyTorchJob on SageMaker HyperPod (Amazon EKS)", build: true, builtWith: "Kubeflow Training Operator", note: "Submitted with kubectl or the HyperPod CLI to the Kubeflow Training Operator installed by Helm chart, or to the HyperPod training operator; Slurm orchestration is the alternative.", url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-eks-run-jobs-kubectl.html }
+        dropSettings: [smTrainingRole, smTrainingKms, smNetworkIsolation]
+        addSettings: [eksPodIdentity, eksRunAccessEntry, eksControlPlaneLogs, eksNetworkPolicy, s3DefaultSseKms, hyperPodVpcConfig, hyperPodVolumeKms]
+        differences:
+          - at: trainJob
+            text: "Node software is not refreshed per job. AMI security patches reach nodes only when you call UpdateClusterSoftware, set an update schedule, or enable auto-patching per instance group (EKS clusters created from 2026), which patches idle nodes on a date set 21 days after each release and deferrable to 60 days."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-hyperpod.html
+          - at: trainJob
+            text: "AWS's HyperPod on EKS page states that orchestration is user-managed and asks you to keep access to the Kubernetes API server endpoint least-privilege and to secure network egress from the cluster. Neither is set for you as VpcConfig and EnableNetworkIsolation were per job."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-eks.html
+          - at: corpus->trainJob
+            text: "The cluster has one IAM execution role per instance group, not one per job. Give each training job its own role through EKS Pod Identity, which needs the eks-auth:AssumeRoleForPodIdentity permission on the HyperPod role, and keep the instance group role minimal."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-prerequisites-iam.html
+          - at: trainJob->storage
+            text: "Job auto-resume works only for Kubeflow PyTorchJob with Training Operator release 1.7.0, 1.8.0 or 1.8.1 installed from the Helm chart. The job, not the service, writes checkpoints and the candidate, so your code must save them to shared storage or S3."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-eks-run-jobs-kubectl.html
+          - at: trainJob
+            text: "Node software is not refreshed per job. AMI security patches reach nodes only when you call UpdateClusterSoftware or enable auto-patching per instance group, which patches idle nodes on a date set 21 days after each release and deferrable to 60 days."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-ami-auto-patching.html
+        alsoNeeded:
+          - service: "Amazon EKS cluster (control plane for the HyperPod cluster)"
+            role: other
+            why: "A HyperPod cluster maps one-to-one to an EKS cluster, whose control plane settings, access and upgrades you manage."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html
+          - service: "Kubeflow Training Operator or HyperPod training operator"
+            role: other
+            why: "Runs and recovers distributed jobs; SageMaker training jobs did this without an operator."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-eks-operator.html
+          - service: "EKS access entries and Kubernetes RBAC"
+            role: identity
+            why: "Decide which scientists may submit jobs to which namespace; IAM on CreateTrainingJob did this before."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-prerequisites-iam.html
+          - service: "Amazon FSx for Lustre"
+            role: other
+            why: "Optional shared file system for datasets and checkpoints across cluster nodes."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-prerequisites.html
+        quickstart:
+          - title: "Orchestrating SageMaker HyperPod clusters with Amazon EKS"
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-eks.html
+          - title: "Running jobs using kubectl"
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-eks-run-jobs-kubectl.html
+          - title: "Model customization on HyperPod"
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-hyperpod.html
+      - id: sageMakerServerlessCustomization
+        kind: managed
+        name: "Amazon SageMaker AI serverless model customization"
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/customize-model.html
+        asOf: "2026-11"
+        compare:
+          runs: "SageMaker AI runs the training on GPU capacity it provisions and releases; you choose a base model, technique, dataset and settings."
+          patching: "AWS operates and patches the whole training stack; you have no image, instance or cluster to maintain."
+          data: "Datasets are read from your S3 bucket; the output is written to your S3 path and logged in a model package group in your account."
+          network: "Jobs accept your subnets and security groups; training sessions place a proxy network interface in your VPC for S3 traffic."
+          identity: "Your SageMaker AI execution role, carrying the AmazonSageMakerModelCustomizationCoreAccess managed policy or equivalent permissions."
+          accepts: "Listed open-weight and Amazon Nova base models; supervised, preference and reinforcement fine-tuning with LoRA or full fine-tuning."
+          workload: "There is no instance selection; SageMaker picks GPU instances, runs its own recipes, shows live metrics and logs a checkpoint if a job fails."
+          portability: "Open-weight results are artefacts in your S3 bucket that deploy to SageMaker AI endpoints or Amazon Bedrock; recipes and job APIs are SageMaker-specific."
+          effort: "Your team prepares datasets, reward functions and evaluations and reviews the results; AWS operates all training infrastructure."
+          fits: "AWS presents it for quick experimentation and production fine-tuning jobs without operations overhead or instance selection."
+        sources:
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/customize-model.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-infrastructure.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/model-customize-open-weight.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/model-customize-open-weight-prereq.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/model-customize-open-weight-job.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/model-customize-open-weight-deployment.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-deployment.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-training-sessions.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/training-sessions-vpc.html
+          - https://docs.aws.amazon.com/sagemaker/latest/dg/model-customize-mtrl.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/custom-models.html
+          - https://docs.aws.amazon.com/nova/latest/nova2-userguide/nova-model-sagemaker-inference.html
+        offers:
+          - name: "Serverless training"
+            what: "Fully managed jobs that provision GPU instances (P5, P4de, P4d, G5) by model size, run pre-optimised training recipes and clean up resources when training completes."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/customize-model.html
+          - name: "Customization techniques"
+            what: "Supervised fine-tuning (SFT), direct preference optimization (DPO), reinforcement learning with verifiable rewards (RLVR) or AI feedback (RLAIF), and multi-turn reinforcement learning."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models.html
+          - name: "Training types"
+            what: "LoRA, which trains a small set of adapter weights, or full fine-tuning (FFT), which updates all model weights; support varies by model and technique."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/model-customize-open-weight.html
+          - name: "Supported base models"
+            what: "Open-weight models from Alibaba (Qwen), DeepSeek, Google (Gemma), Meta (Llama, Muse), Mistral AI, NVIDIA (Nemotron) and OpenAI (GPT OSS), and Amazon Nova models."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models.html
+          - name: "Training session APIs"
+            what: "Stateful serverless GPU sessions in which your Python code calls operations such as forward_backward, optim_step and sample to drive a custom training loop."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-training-sessions.html
+          - name: "Evaluation and reward assets"
+            what: "Datasets and evaluators (reward functions in code, or reward prompts for an LLM judge) are managed as assets and used for training and for model evaluation jobs."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/customize-model.html
+          - name: "Logged models, registration and lineage"
+            what: "Each job logs its output to a model package group, and lineage between training jobs, datasets, models, evaluations and deployments is captured automatically."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/customize-model.html
+          - name: "Deployment"
+            what: "A custom model deploys to SageMaker AI Inference endpoints or to Amazon Bedrock; customised Amazon Nova models deploy to Amazon Bedrock or, if full-rank or LoRA-merged, to SageMaker inference."
+            url: https://docs.aws.amazon.com/sagemaker/latest/dg/customizing-models-deployment.html
+    # <<< hosting options
     settings:
       - smTrainingRole
       - kmsReleaseSigning
@@ -2641,6 +3505,226 @@ implementations:
       - { block: registry, service: AWS CodeArtifact repository }
       - { block: openWeb, service: The public internet (crawl source only) }
       - { block: sources, service: "Public registries (PyPI, npm)" }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: agentCoreRuntime
+        kind: runtime
+        name: "Amazon Bedrock AgentCore Runtime"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "AWS creates a dedicated microVM for each session and terminates it when the session ends; the microVM isolates one run from another."
+          patching: "AWS patches the OS kernel, and language runtimes for direct code deployments; you rebuild container images from a patched base image."
+          data: "Code, files and results live in the session microVM in the Region and are destroyed with it unless a persistent file system is configured."
+          network: "PUBLIC or VPC network mode; in VPC mode outbound traffic leaves through network interfaces in your subnets under your security groups."
+          identity: "The runtime's IAM execution role, whose credentials code in a session obtains from the microVM metadata service."
+          accepts: "ARM64 container images up to 2 GB, or 10 GB on platform version V2, or direct code packages; shell commands run through the API."
+          workload: "Sessions last up to 8 hours and end after 15 idle minutes by default; 5,000 active sessions per account in two US Regions, 2,500 elsewhere."
+          portability: "The sandbox image is a standard container; session creation, command execution and stop calls are AgentCore APIs."
+          effort: "Your team owns the sandbox image, execution role, VPC egress controls and quota requests; AWS operates microVM capacity and isolation."
+          fits: "AWS presents Runtime for hosting agents and tools that need session isolation, with each session in its own microVM."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-how-it-works.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-security-best-practices.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-shell-execution.html
+      - id: eks
+        kind: cluster
+        name: "Amazon EKS isolated pods (Nitro Sandboxes)"
+        url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+        asOf: "2026-11"
+        compare:
+          runs: "You create and delete a pod per run through the Kubernetes API; with runtimeClassName isolated-sandbox each pod runs in its own Firecracker microVM."
+          patching: "AWS patches the control plane and, on EKS Auto Mode, the nodes; on your own node groups you update GPU AMIs and drivers. Operators and training images are yours."
+          data: "Code, files and results stay in the pod's sandbox on EC2 nodes in your account, on scratch disk or on EBS and EFS volumes you attach."
+          network: "Network policies and security groups are enforced on the node, outside the sandbox; an annotation removes the pod's network device entirely."
+          identity: "A Kubernetes service account mapped to an IAM role through EKS Pod Identity, served inside the sandbox; IMDS returns no IAM credentials."
+          accepts: "Standard container images with no code changes; GPU and device passthrough, host networking and user namespaces are not supported."
+          workload: "No session limit, but Auto Mode replaces nodes within 21 days; a node holds at most 5 sandboxes per vCPU, and AWS's blueprint reports a pod Ready in about 5 seconds."
+          portability: "Pods are standard Kubernetes resources and images; the isolated-sandbox runtime class and its annotations exist only on Amazon EKS."
+          effort: "Your team operates the cluster, sandbox lifecycle controller, warm pools, egress policy and enough node capacity for peak parallel runs."
+          fits: "AWS presents isolated pods for running untrusted container images where the node and other pods must be protected from a compromised pod."
+        sources:
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-isolated-setup.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-limitations.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-network-isolation.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-metadata-credentials.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-security-model.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-storage.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-observability.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-resource-isolation.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/automode.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security.html
+          - https://awslabs.github.io/ai-on-eks/docs/infra/agents/agent-sandbox
+        summary: "Each rollout runs in its own pod on Amazon EKS with runtimeClassName isolated-sandbox, so the pod gets a Nitro Sandbox, a Firecracker microVM with its own kernel. AWS's blueprint manages the pods with the kubernetes-sigs agent-sandbox controller and warm pools. You now carry what Runtime sessions did: creating and deleting sandboxes, time budgets, node capacity, egress filtering on the node, per-run identity and who may write a pod spec. The default pod runtime still shares the node kernel."
+        bindings:
+          - { block: sandbox, service: "Isolated pod on Amazon EKS (Nitro Sandbox)", builtWith: "kubernetes-sigs/agent-sandbox", note: "One pod per rollout with runtimeClassName isolated-sandbox, on EKS Auto Mode or node groups with the Nitro Sandbox AMI; created from a SandboxTemplate and warm pool in AWS's blueprint.", url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html }
+          - { block: harness, service: "Your episode loop in the pod", build: true, note: "The orchestrator starts it by creating the pod or a SandboxClaim and reads the trajectory over the pod network, kubectl exec or logs.", url: https://awslabs.github.io/ai-on-eks/docs/infra/agents/agent-sandbox }
+          - { block: localTools, service: "Pod shell and files; AgentCore Browser", note: "Shell and files are inside the sandboxed pod. The browser stays a separate AgentCore Browser session in VPC mode, driven through the AgentCore API with the pod's role.", url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-isolated-setup.html }
+        dropSettings: [runtimeExecutionRole, runtimeIsolatedSessions, runtimeVpcMode, runtimeStopSession]
+        addSettings: [eksIsolatedPods, eksAppNetworkPolicy, eksNetworkPolicy, eksAgentQuarantine, eksControlPlaneLogs, eksPrivateEndpoint, eksImdsHopLimit, eksClusterAccessEntries, eksSandboxNodes, eksSandboxNetworkIsolated, eksSandboxPodSpecRbac]
+        differences:
+          - at: sandbox
+            text: "Isolation is opt-in per pod. A pod without runtimeClassName isolated-sandbox uses the default runtime and shares the node kernel. Isolated pods need Kubernetes 1.36 or later and supported instance types, cannot use GPUs or passed-through devices, and have no snapshot and restore, so fast starts come from warm pools you size."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-limitations.html
+          - at: orchestrator->harness
+            text: "There is no session API or lifetime setting. The orchestrator creates and deletes pods through the Kubernetes API and must end each run itself. AWS's security model treats the pod spec as trusted and calls submitting one a privileged operation, so restrict it with RBAC and admission control."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-security-model.html
+          - at: localTools->platform
+            text: "In isolated mode the sandbox serves Pod Identity credentials at 169.254.170.23, so code the model writes can read the pod role as it could read the Runtime role. The metadata service returns only Region and placement paths. With the network-isolated annotation neither is present."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-metadata-credentials.html
+          - at: localTools->offlineWeb
+            text: "Network policies and security groups are enforced on the node, outside the sandbox, so a compromised rollout cannot switch them off. DNS-name egress rules need EKS Auto Mode; AWS's blueprint chains Cilium for FQDN filtering on standard clusters. Each pod defaults to 100 Mbps, 1,500 packets and 100 DNS queries a second."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-resource-isolation.html
+          - at: harness
+            text: "The Amazon GuardDuty runtime agent cannot observe activity inside a Nitro Sandbox. The CloudWatch Observability agent still collects container logs and metrics, and kubectl exec and logs work in isolated mode. Record trajectories from the orchestrator side."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-observability.html
+        alsoNeeded:
+          - service: "kubernetes-sigs agent-sandbox controller"
+            role: other
+            why: "Manages Sandbox, SandboxTemplate, SandboxWarmPool and SandboxClaim resources in AWS's blueprint, in place of Runtime's session lifecycle."
+            url: https://awslabs.github.io/ai-on-eks/docs/infra/agents/agent-sandbox
+          - service: "EKS Auto Mode or Karpenter node pools"
+            role: other
+            why: "Supply and scale the sandbox-capable nodes; Runtime supplied microVM capacity on demand."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-isolated-setup.html
+          - service: "ApplicationNetworkPolicy (Auto Mode) or Cilium FQDN filtering"
+            role: network
+            why: "Limits each rollout's egress to approved destinations; AWS's blueprint ships egress enforcement as a separate example."
+            url: https://awslabs.github.io/ai-on-eks/docs/infra/agents/agent-sandbox
+          - service: "Amazon CloudWatch Observability agent"
+            role: logging
+            why: "Collects container logs and metrics from sandboxed pods through the standard kubelet location."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-observability.html
+        quickstart:
+          - title: "Sandboxing on Amazon EKS with isolated and confidential pods"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+          - title: "Run a pod in isolated mode"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-isolated-setup.html
+          - title: "AI on EKS: Agent Sandbox on EKS"
+            url: https://awslabs.github.io/ai-on-eks/docs/infra/agents/agent-sandbox
+      - id: lambdaMicroVms
+        kind: runtime
+        name: "AWS Lambda MicroVMs"
+        url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html
+        asOf: "2026-11"
+        compare:
+          runs: "Your orchestrator calls run-microvm and terminate-microvm; Lambda runs each sandbox as its own Firecracker microVM restored from a snapshot."
+          patching: "Lambda publishes patched base images on a deprecation schedule; you rebuild your MicroVM images on each new base version."
+          data: "Code, files and results live in the MicroVM's memory and disk in the Region, are kept across suspension and released on termination."
+          network: "Outbound traffic has public internet access by default or goes through a VPC egress connector; inbound is token-authenticated HTTPS or none."
+          identity: "An optional IAM execution role that Lambda uses at run time; without one the MicroVM cannot reach other AWS services or write logs."
+          accepts: "A Dockerfile built on a Lambda-managed Amazon Linux 2023 base image, for ARM64 or x86_64, with full operating system capabilities."
+          workload: "A MicroVM lives at most 8 hours, starts from a snapshot and can suspend when idle keeping memory and disk; an account memory quota caps parallel runs."
+          portability: "Images are built from a standard Dockerfile; the lifecycle hooks, network connectors, auth tokens and run API are Lambda-specific."
+          effort: "Your team owns image builds, lifecycle hooks, the VPC egress connector and quota requests; AWS operates capacity and isolation."
+          fits: "AWS lists AI code execution sandboxes and reinforcement learning environments, with a fresh environment per run, among its typical use cases."
+        sources:
+          - https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/microvms-how-it-works.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/microvms-images.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/microvms-launching.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/microvms-networking.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/microvms-security.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/microvms-best-practices.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+        summary: "Each rollout runs in its own AWS Lambda MicroVM, a Firecracker microVM that Lambda restores from a snapshot of your image when the orchestrator calls run-microvm and releases on terminate-microvm. Lambda still operates capacity and isolation. What changes: you build the image from a Dockerfile, egress is the public internet until you attach a VPC egress connector, access is by port-scoped tokens instead of the AgentCore API, and idle sandboxes suspend with their state rather than end."
+        bindings:
+          - { block: sandbox, service: "AWS Lambda MicroVM (one per rollout)", note: "Run from a versioned MicroVM image with a VPC egress network connector on the sandbox subnets and --maximum-duration-in-seconds set to the task budget.", url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html }
+          - { block: harness, service: "Your episode loop in the MicroVM", build: true, note: "Started by the /run lifecycle hook with a payload of up to 16 KB, or called on the MicroVM's HTTPS endpoint with a port-scoped auth token.", url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-launching.html }
+          - { block: localTools, service: "MicroVM shell and files; AgentCore Browser", note: "Shell and files are inside the MicroVM, which has full operating system capabilities. The browser stays a separate AgentCore Browser session in VPC mode.", url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-how-it-works.html }
+        dropSettings: [runtimeExecutionRole, runtimeIsolatedSessions, runtimeVpcMode, runtimeStopSession]
+        addSettings: [microVmPerRollout, microVmVpcEgress, microVmExecutionRole, microVmIngressTokens, microVmTerminate]
+        differences:
+          - at: sandbox
+            text: "A MicroVM has public internet access on its egress path by default. Only a customer-managed VPC egress connector, named on run-microvm, puts traffic under your security groups and firewalls, and connectors cannot be changed while the MicroVM runs. Make the orchestrator the only caller of run-microvm and have it always pass the connector."
+            url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-networking.html
+          - at: sandbox
+            text: "Every MicroVM run from one image version resumes the same snapshot of memory and disk. Anything generated while the image was built, such as IDs, secrets, random seeds or open connections, is shared by all rollouts. Generate them in the /run hook."
+            url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-how-it-works.html
+          - at: orchestrator->harness
+            text: "The orchestrator reaches a rollout on its own HTTPS endpoint with a JWE token in the X-aws-proxy-auth header, scoped to ports and an expiry. Lambda routes by port, not path, so a token for the hook port can also call the lifecycle hooks. Host hooks on a dedicated port."
+            url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-networking.html
+          - at: graders->harness
+            text: "With an idle policy a MicroVM that receives no endpoint traffic is suspended, keeping memory and disk, and is terminated only after its suspended duration. Rollouts that work without inbound traffic need automatic suspension off. Read the end state before terminate-microvm releases it."
+            url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-launching.html
+          - at: orchestrator->harness
+            text: "Parallel rollouts are capped by memory allocated across all MicroVMs in an account and Region: 800 GB by default, 2,048 GB in some Regions, or 400 MicroVMs at 2 GB each. A MicroVM lasts at most 8 hours including suspended time. Check the quota for your Region against the run size before launch."
+            url: https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+        alsoNeeded:
+          - service: "Amazon S3 bucket for MicroVM image sources"
+            role: registry
+            why: "Lambda builds each image from a zip of your Dockerfile and artefacts uploaded to S3, in place of an ECR image."
+            url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-how-it-works.html
+          - service: "Lambda network connector and its operator role"
+            role: network
+            why: "Routes MicroVM egress through your VPC; Runtime's VPC mode did this from the runtime's own configuration."
+            url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-networking.html
+          - service: "Build role and execution role"
+            role: identity
+            why: "Without them Lambda writes no build or runtime logs to CloudWatch and the MicroVM cannot reach AWS services."
+            url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-security.html
+        quickstart:
+          - title: "AWS Lambda MicroVMs"
+            url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html
+          - title: "Running and using MicroVMs"
+            url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-launching.html
+          - title: "Networking"
+            url: https://docs.aws.amazon.com/lambda/latest/dg/microvms-networking.html
+      - id: agentCoreCodeInterpreter
+        kind: managed
+        name: "Amazon Bedrock AgentCore Code Interpreter"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html
+        asOf: "2026-11"
+        compare:
+          runs: "AWS creates and tears down each session and supplies its runtime; each session runs in a dedicated microVM."
+          patching: "AWS maintains the pre-built runtimes and their pre-installed libraries; you have no image to build or patch."
+          data: "Code and files live in the session and are cleaned up when it ends; session data has a 30-day retention policy."
+          network: "Sandbox mode allows limited access to AWS services such as Amazon S3; Public mode reaches the internet; VPC mode connects to your VPC."
+          identity: "A custom code interpreter takes an IAM execution role that defines which AWS resources code in its sessions can reach."
+          accepts: "Pre-built runtimes for Python, JavaScript and TypeScript with common libraries; inline files up to 100 MB and S3 files up to 5 GB."
+          workload: "Sessions default to 15 minutes and extend to 8 hours, with 2 vCPU, 8 GB memory and 10 GB disk; 1,000 concurrent sessions per account by default."
+          portability: "Code runs as ordinary Python, JavaScript or TypeScript; session start, code execution and stop calls are AgentCore APIs."
+          effort: "Your team configures the network mode, execution role and session timeouts; AWS operates the runtimes, capacity and isolation."
+          fits: "AWS presents it for agents that must execute generated code and analyse data in a sandbox with pre-built runtimes."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-session-characteristics.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-management.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-session-management.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-s3-integration.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+        offers:
+          - name: "Pre-built code runtimes"
+            what: "A fully managed default mode with pre-built runtimes for Python, JavaScript and TypeScript and common libraries pre-installed."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html
+          - name: "Isolated sessions"
+            what: "Each tool session runs in a dedicated microVM with isolated CPU, memory and file system; the microVM is terminated and its memory sanitised when the session completes."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-session-characteristics.html
+          - name: "Network settings"
+            what: "Custom code interpreters choose Sandbox mode (limited access to AWS services such as Amazon S3), Public network mode or VPC mode."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-management.html
+          - name: "Session timeout"
+            what: "Sessions end after 900 seconds by default; the timeout is set when a session starts and can be up to 8 hours."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-session-characteristics.html
+          - name: "File operations and Amazon S3"
+            what: "Files up to 100 MB are uploaded inline, and terminal commands under an execution role move files of up to 5 GB to and from Amazon S3."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html
+          - name: "Session resources and quotas"
+            what: "Each session has 2 vCPU, 8 GB of memory and 10 GB of disk; an account has 1,000 concurrent active sessions by default, adjustable by support request."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html
+          - name: "Logging"
+            what: "The overview lists CloudTrail logging capabilities, and an observability page covers tracking and troubleshooting code execution."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html
+    # <<< hosting options
     settings:
       - eksRunAccessEntry
       - runtimeExecutionRole
