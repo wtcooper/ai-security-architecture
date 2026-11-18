@@ -376,6 +376,73 @@ Sigstore and OpenSSF Model Signing, and an OpenTelemetry, Loki and Langfuse logg
 - *Agent-to-agent federation across platforms:* Whether LiteLLM's agent features need an Enterprise licence: the pages do not label them, except that the kill switch audit log does.
 - *Agent-to-agent federation across platforms:* The default value of Keycloak's Access Token Lifespan was not found in the section read, so the row gives no number.
 
+## Hosting options, and how they were validated
+
+On 18 November 2026 each of the four agent patterns (single agent workflow, chat agent with
+tools, multi-agent workflow, agent-to-agent federation) gained its hosting options on every
+platform: your own cluster, the platform's container runtime, and the managed agent service.
+The options are compared on the same ten rows and not ranked; a variant on the same pattern
+states only the components and settings that change.
+
+| Platform | Mapped option | Variants | Managed agent service (another pattern) |
+| --- | --- | --- | --- |
+| AWS | Amazon Bedrock AgentCore Runtime; AWS Lambda durable functions for the multi-agent workflow | Amazon EKS; AgentCore Runtime for the multi-agent workflow | Amazon Bedrock AgentCore harness |
+| Azure | Azure Container Apps | Azure Kubernetes Service | Microsoft Foundry Agent Service |
+| Google Cloud | Cloud Run | Google Kubernetes Engine | Agent Runtime on Gemini Enterprise Agent Platform |
+| On-premises | Kubernetes on your own servers | Knative Serving, for the chat agent and federation only | None: a managed service is by definition a vendor's |
+
+**Two people, one claim.** Every claim was written by one researcher from the vendor's current
+pages and then re-checked by a second, who was given the claims without the first one's
+sources and had to find their own evidence. A claim the second could not support was corrected
+to what the page says, with the page recorded as a source.
+
+| What was checked | Claims | Confirmed | Tightened | Wrong | Could not be checked |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Azure, single agent workflow (three options compared, AKS variant) | 65 | 59 | 6 | 0 | 0 |
+| Azure, other three agent patterns (AKS variants) | 60 | 46 | 13 | 0 | 1 |
+| AWS, single agent workflow and chat agent | 75 | 69 | 6 | 0 | 0 |
+| AWS, multi-agent workflow and federation | 62 | 54 | 8 | 0 | 0 |
+| Google Cloud, four agent patterns | 104 | 100 | 4 | 0 | 0 |
+| On-premises, four agent patterns | 90 | 85 | 5 | 0 | 0 |
+| Microsoft Foundry Agent Service, as a catalogued product | 68 | 51 | 17 | 0 | 0 |
+| **Total** | **524** | **464** | **59** | **0** | **1** |
+
+The one claim that could not be checked is a statement about this catalogue's own mapping, not
+about a vendor. What the second check changed, in the terms a builder would feel:
+
+- **Azure.** Statements true only of AKS Standard (outbound through a load balancer by
+  default, local accounts on, upgrades and add-ons yours to run) now say so; AKS Automatic
+  preconfigures most of them. The Agent Framework self-hosting, A2A hosting and durable
+  workflow packages are prerelease and marked so. Filtering outbound traffic by name with
+  Cilium needs a paid networking add-on. On Foundry Agent Service a hosted agent's session
+  files stay in Microsoft-managed storage even with your own storage configured, and a private
+  endpoint can be added later while the outbound network cannot.
+- **AWS.** The default metadata hop limit depends on how nodes are created. Moving off
+  AgentCore Runtime does not mean replacing the other AgentCore services. A runtime request
+  still times out at 15 minutes; only asynchronous jobs run for hours. A run started straight
+  from an SQS queue is capped at 15 minutes on Lambda durable functions too. With the
+  supervisor's steps on Step Functions, the permission that resumes an approval cannot be
+  scoped to one resource and the agents' roles need it as well, so the approval rests on
+  keeping the task token from the agents.
+- **Google Cloud.** Automatic base image updates on Cloud Run cover services, not jobs or
+  worker pools. `adk deploy gke` uses the default namespace and ServiceAccount, so a dedicated
+  identity needs your own manifests. Eventarc's GKE destinations are Preview and need a public
+  endpoint.
+- **On-premises.** Knative behind Envoy Gateway needs the request-timeout feature listed, or
+  every request ends at 15 seconds. Knative's cluster-local address is shared and routes by
+  hostname, so network policy can only limit who reaches that gateway. Temporal's serverless
+  workers are preview and cloud-only. The single agent workflow and the multi-agent workflow
+  offer no Knative variant, because it would replace the durable workflow that holds approvals.
+- **Foundry Agent Service as a product.** Two settings are set by CLI, REST or SDK and not in
+  the portal; a tracing flag was only for early enablement and has been replaced; a running
+  prompt agent can be cancelled. No coverage grade changed: 7 controls native, 8 partial, 1
+  external.
+
+**What this does not cover.** The comparison is for the four agent patterns. The other four
+hosted patterns (remote MCP server, self-hosted inference, training pipeline, agent sandbox)
+ask a different question ("who runs the server or the job") and are not yet compared. Nothing
+here was deployed or run: every statement rests on a vendor's or a project's documentation.
+
 ## Keeping it current
 
 A mapping is only as good as its last check. `verified` on each mapping and each setting says

@@ -386,8 +386,11 @@ comparison rows are fixed (who runs the loop, who patches, where prompts and sta
 networking, identity, frameworks accepted, long-running work, portability, what your team
 operates, when the vendor says it fits) and carry no ranking, because the right answer depends
 on what an organisation has approved. That is recorded in `data/status.yaml` under
-`products.<platform>.hosting`, and shown on each option. The pilot is the single agent workflow
-on Azure: Container Apps, AKS and Foundry Agent Service.
+`products.<platform>.hosting`, and shown on each option. The four agent patterns list their
+options on every platform (for example, on Azure: Container Apps, AKS and Foundry Agent
+Service). Each claim was written by one researcher and re-checked by a second who was not shown
+the first one's sources; [`docs/CLOUD-VERIFICATION.md`](docs/CLOUD-VERIFICATION.md) has the
+counts and what the second check changed. The other four hosted patterns are not yet compared.
 
 *On-premises* is the pattern run on infrastructure the organisation owns and operates, where no
 provider runs any part: Kubernetes on its own servers, LiteLLM Proxy as the AI gateway, vLLM
