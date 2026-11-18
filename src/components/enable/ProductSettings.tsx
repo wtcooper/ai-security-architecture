@@ -14,7 +14,6 @@
  * vendor's page. Background on the product is one line and an "About" fold. The status column
  * appears only once the organisation has recorded a status for that product.
  */
-import { serviceFor } from "@/components/cloud/model";
 import Link from "next/link";
 import { Fragment, useState, type ReactNode } from "react";
 
@@ -371,8 +370,9 @@ export function ProductSettings({
   if (products.some((p) => p.kind === "cloud")) {
     const picked = products.find((p) => p.id === selected);
     const where = platform ?? (picked?.kind === "cloud" ? picked : null);
-    // A service of the chosen platform comes with the platform; any other tool is a separate choice.
-    const framework = picked?.kind === "tool" && !picked.tool.platform ? picked : serviceFor(products, where?.id);
+    const framework = picked?.kind === "tool" ? picked : null;
+    // A platform's own service comes with the platform: its settings are in the table, its record below.
+    const service = where?.kind === "cloud" ? where.service : undefined;
     const chosen = [where, framework].filter((p): p is Product => Boolean(p));
     if (!chosen.length) {
       return (
@@ -392,6 +392,14 @@ export function ProductSettings({
           <div className="mt-3">
             <SettingsTable key={chosen.map((p) => `${p.id}:${p.settings.length}`).join("+")} products={chosen.filter((p) => p.settings.length)} archetype={archetype} lit={lit} onLight={onLight} />
           </div>
+        )}
+        {service && (
+          <details className="mt-4 rounded-lg border border-line bg-paper" data-platform-service={service.id}>
+            <summary className="cursor-pointer px-3 py-2 text-[12.5px] font-semibold text-ink">About {service.name}: what it is, and how far it covers each control by itself</summary>
+            <div className="border-t border-line px-3 pb-3 pt-2">
+              <ToolRecord tool={service} />
+            </div>
+          </details>
         )}
         {framework?.kind === "tool" && !framework.settings.length && (
           <div className="mt-4">

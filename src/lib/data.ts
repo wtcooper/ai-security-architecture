@@ -300,7 +300,17 @@ export const cloudById = index(clouds);
  */
 export type Product =
   | { kind: "tool"; id: string; name: string; tool: Tool; settings: ProductSetting[] }
-  | { kind: "cloud"; id: string; name: string; cloud: CloudPlatform; implementation: CloudImplementation; settings: ProductSetting[] };
+  | {
+      kind: "cloud";
+      id: string;
+      name: string;
+      cloud: CloudPlatform;
+      implementation: CloudImplementation;
+      /** The platform's own rows for the pattern, then those of its service where the pattern is one. */
+      settings: ProductSetting[];
+      /** The platform's own managed service the pattern is about, where there is one: its record and its settings come with the platform. */
+      service?: Tool;
+    };
 
 /** The products on one architecture: its clouds first (where the architecture is built, not bought), then its tools. */
 export function productsForArchetype(archetypeId: string): Product[] {
@@ -308,9 +318,11 @@ export function productsForArchetype(archetypeId: string): Product[] {
     const implementation = cloud.implementations.find((i) => i.architecture === archetypeId);
     if (!implementation) return [];
     const byId = new Map(cloud.settings.map((st) => [st.id, st]));
-    return [{ kind: "cloud" as const, id: cloud.id, name: cloud.name, cloud, implementation, settings: implementation.settings.map((id) => byId.get(id)!) }];
+    // A service of this platform (a cloud's managed agent service) is not a second choice: it comes with the platform.
+    const service = toolsForArchetype(archetypeId).find((t) => t.platform === cloud.id);
+    return [{ kind: "cloud" as const, id: cloud.id, name: cloud.name, cloud, implementation, service, settings: [...implementation.settings.map((id) => byId.get(id)!), ...(service?.settings ?? [])] }];
   });
-  const toolProducts: Product[] = toolsForArchetype(archetypeId).map((tool) => ({ kind: "tool" as const, id: tool.id, name: tool.name, tool, settings: tool.settings ?? [] }));
+  const toolProducts: Product[] = toolsForArchetype(archetypeId).filter((tool) => !tool.platform).map((tool) => ({ kind: "tool" as const, id: tool.id, name: tool.name, tool, settings: tool.settings ?? [] }));
   return [...cloudProducts, ...toolProducts];
 }
 
@@ -320,9 +332,14 @@ export const adoptionFor = (productId: string): { status: AdoptionStatus; set: b
   return { status: entry?.status ?? "notEnabled", set: Boolean(entry?.status), note: entry?.note };
 };
 
+/** What the organisation recorded for one setting: under the product, or under a platform's own service whose rows are shown with it. */
+const settingEntry = (productId: string, settingId: string) =>
+  productStatus[productId]?.settings?.[settingId] ??
+  tools.filter((t) => t.platform === productId).map((t) => productStatus[t.id]?.settings?.[settingId]).find(Boolean);
+
 /** One setting's adoption on one product. */
 export const settingAdoptionFor = (productId: string, settingId: string): { status: AdoptionStatus; set: boolean; value?: string; note?: string } => {
-  const entry = productStatus[productId]?.settings?.[settingId];
+  const entry = settingEntry(productId, settingId);
   return { status: entry?.status ?? "notEnabled", set: Boolean(entry?.status), value: entry?.value, note: entry?.note };
 };
 
@@ -343,7 +360,7 @@ export const hostingAdoptionFor = (platformId: string, optionId: string): { stat
 };
 
 /** The organisation's own module, policy or runbook for one setting. */
-export const settingLinkFor = (productId: string, settingId: string): string | undefined => productStatus[productId]?.settings?.[settingId]?.link;
+export const settingLinkFor = (productId: string, settingId: string): string | undefined => settingEntry(productId, settingId)?.link;
 
 /** The architectures a vendor's products instantiate, in catalogue order. */
 export const archetypesForVendor = (vendorId: string) =>

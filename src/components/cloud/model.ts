@@ -5,9 +5,9 @@
  * names and to the control-plane box that owns those controls.
  */
 import { ownedControls } from "@/components/drawing/layout";
-import { archetypesInOrder, clouds, productsForArchetype, type Product } from "@/lib/data";
+import { archetypesInOrder, clouds, productsForArchetype, tools, type Product } from "@/lib/data";
 import { cloudSlug } from "@/lib/routes";
-import { HOSTING_COMPARE, type Archetype, type ArchBlock, type CloudBinding, type CloudPlatform, type HostingCompareKey, type HostingOption, type ProductSetting } from "@/lib/types";
+import { HOSTING_COMPARE, type Archetype, type ArchBlock, type CloudBinding, type CloudPlatform, type HostingCompareKey, type HostingOption, type ProductSetting, type Tool } from "@/lib/types";
 
 export type CloudProduct = Extract<Product, { kind: "cloud" }>;
 
@@ -26,13 +26,6 @@ export const cloudProductFor = (archetypeId: string, cloudId: string | null): Cl
 
 /** The ways a platform can host a pattern, if more than one has been compared. */
 export const hostingOptionsFor = (product: CloudProduct): HostingOption[] => product.implementation.hosting ?? [];
-
-/**
- * The product a platform implies on a pattern: a service that exists only on that platform (a
- * cloud's managed agent service). It is not a separate choice, so it never appears as a pill.
- */
-export const serviceFor = (products: Product[], platformId: string | null | undefined): Extract<Product, { kind: "tool" }> | null =>
-  (platformId && products.find((p): p is Extract<Product, { kind: "tool" }> => p.kind === "tool" && p.tool.platform === platformId)) || null;
 
 /** The patterns that name this one as their managed way of hosting on a platform: where you run it yourself. */
 export const selfRunPatternsFor = (patternId: string, cloudId: string): Archetype[] =>
@@ -92,7 +85,7 @@ export function hostedAs(product: CloudProduct, optionId: string | null): CloudP
       alsoNeeded: [...(impl.alsoNeeded ?? []), ...(option.alsoNeeded ?? [])],
       quickstart: option.quickstart?.length ? option.quickstart : impl.quickstart,
     },
-    settings: ids.map((id) => byId.get(id)!).filter(Boolean),
+    settings: [...ids.map((id) => byId.get(id)!).filter(Boolean), ...(product.service?.settings ?? [])],
   };
   resolved.set(key, next);
   return next;
@@ -236,19 +229,31 @@ export function cloudOptionsForControl(controlId: string): { cloud: CloudPlatfor
   return clouds
     .map((cloud) => ({
       cloud,
-      options: cloud.settings
-        .filter((s) => s.mitigations.includes(controlId))
-        .map((setting) => ({
-          setting,
-          patterns: archetypesInOrder.filter((a) => {
-            const impl = cloud.implementations.find((i) => i.architecture === a.id);
-            return Boolean(impl?.settings.includes(setting.id) && a.mitigations.includes(controlId));
-          }),
-        }))
-        .filter((o) => o.patterns.length),
+      options: [
+        ...cloud.settings
+          .filter((s) => s.mitigations.includes(controlId))
+          .map((setting) => ({
+            setting,
+            patterns: archetypesInOrder.filter((a) => {
+              const impl = cloud.implementations.find((i) => i.architecture === a.id);
+              return Boolean(impl?.settings.includes(setting.id) && a.mitigations.includes(controlId));
+            }),
+          })),
+        // The settings of the platform's own service, on the pattern that service is.
+        ...servicesOn(cloud.id).flatMap(({ tool, pattern }) =>
+          (tool.settings ?? []).filter((s) => s.mitigations.includes(controlId) && pattern.mitigations.includes(controlId)).map((setting) => ({ setting, patterns: [pattern] })),
+        ),
+      ].filter((o) => o.patterns.length),
     }))
     .filter((c) => c.options.length);
 }
+
+/** A platform's own managed services that are a pattern in themselves, each with that pattern. */
+export const servicesOn = (cloudId: string): { tool: Tool; pattern: Archetype }[] =>
+  tools.flatMap((tool) => {
+    const pattern = tool.platform === cloudId ? archetypesInOrder.find((a) => a.id === tool.architecture) : undefined;
+    return pattern ? [{ tool, pattern }] : [];
+  });
 
 /** The patterns a cloud has a mapping for. */
 export const patternsOn = (cloud: CloudPlatform): Archetype[] =>

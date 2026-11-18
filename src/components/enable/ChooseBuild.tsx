@@ -174,8 +174,7 @@ export function ChooseBuild({
   onPickFramework: (id: string | null) => void;
 }) {
   const platforms = products.filter((p) => p.kind === "cloud");
-  // A service of one platform comes with that platform, so it is not a choice of its own.
-  const frameworks = products.filter((p) => p.kind === "tool" && !p.tool.platform);
+  const frameworks = products.filter((p) => p.kind === "tool");
   const absent = notOfferedFor(archetype.id);
   const selfRun = platform && isManagedTarget(archetype.id) ? selfRunPatternsFor(archetype.id, platform.id) : [];
   const titles = new Map(archetype.blocks.map((b) => [b.id, b.title]));

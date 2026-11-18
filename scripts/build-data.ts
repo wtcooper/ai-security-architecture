@@ -338,6 +338,9 @@ async function main() {
     if (!cloud) fail(`tooling ${t.id}: platform "${t.platform}" is not a platform in data/clouds`);
     else if (!cloud.implementations.some((i) => i.architecture === t.architecture)) fail(`tooling ${t.id}: ${t.platform} has no mapping of ${t.architecture}, the pattern this service is catalogued on`);
     if (!t.fills?.length) fail(`tooling ${t.id}: a platform's service needs fills: the box it is`);
+    // Its rows are listed with the platform's, so no id may be used twice.
+    const own = new Set(cloud?.implementations.find((i) => i.architecture === t.architecture)?.settings ?? []);
+    for (const st of t.settings ?? []) if (own.has(st.id)) fail(`tooling ${t.id}: setting ${st.id} has the same id as a ${t.platform} row on ${t.architecture}`);
   }
   // Every hosted pattern is mapped onto every platform, or the platform says why it cannot be.
   for (const a of archetypes.filter((x) => x.surface === "surfaceCloud")) {
