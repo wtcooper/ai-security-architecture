@@ -76,6 +76,7 @@ tools:
           resource to create, update or delete in Foundry, so no harness and no prompt-agent optimizer.
     architecture: archCloudManagedAgent
     fills: [managedRuntime]
+    platform: cloudAzure
     status: ga
     asOf: "2026-11"
     summary:
@@ -893,6 +894,113 @@ tools:
           deployment filter lists only GPT model deployments. Token limits by Azure API Management apply only to
           model traffic routed through it and are no longer edited in Foundry.
         verified: "2026-11-18"
+      # >>> cloud controls (added when the service moved to the hosted pattern)
+      - mitigation: D3-AA
+        coverage: partial
+        mechanism: "Agent Service creates a Microsoft Entra agent identity and blueprint for every new agent, with no secret and no permissions, and tool connections can authenticate as it. The standard-setup stores and any connection set to project managed identity still use one identity that all agents in the project share."
+        steps:
+          - title: "Authenticate tool connections as the agent"
+            body:
+              - "Create each MCP or A2A connection with agent identity authentication and the audience of your gateway or API."
+              - "Do not use project managed identity for a tool unless every agent in the project should have the same access."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/mcp-authentication
+          - title: "Grant roles to the agent identity only"
+            body:
+              - "Use the agent identity's object ID as the assignee, at resource or resource group scope."
+              - "Role assignments do not transfer when a legacy agent is migrated to its own identity."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+          - title: "Separate projects where state must be separate"
+            body:
+              - "All agents in a project share file storage, conversation storage and search indexes, reached as the project's managed identity."
+              - "Use one project, or one Foundry resource, per trust group."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/environment-setup
+          - title: "Govern the identities in Microsoft Entra"
+            body:
+              - "Target agent identities or blueprints with Conditional Access and review agent sign-in logs."
+              - "These features need Microsoft Agent 365 licences."
+            url: https://learn.microsoft.com/en-us/entra/identity/conditional-access/agent-id
+        verified: "2026-11-18"
+      - mitigation: D3-NI
+        coverage: native
+        mechanism: "Public network access set to Disabled with a private endpoint on the Foundry resource closes the inbound side; network injection into a subnet delegated to Microsoft.App/environments, or a managed virtual network, confines the outbound side. Both are set per Foundry resource, and injection only at creation."
+        steps:
+          - title: "Close the endpoint"
+            body:
+              - "On the Network tab select Disabled for public access and add a private endpoint to the account sub-resource."
+              - "Link the three privatelink DNS zones to the virtual network."
+            url: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+          - title: "Inject agent traffic into your subnet at creation"
+            body:
+              - "Select a dedicated subnet delegated to Microsoft.App/environments, /27 or larger, in the same region as the Foundry resource."
+              - "It cannot be added, resized or changed afterwards."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+          - title: "Check each tool's path"
+            body:
+              - "MCP, OpenAPI, A2A and Azure Functions tools go through your subnet; Foundry IQ and file search use private endpoints."
+              - "Web search, Bing and SharePoint grounding use public endpoints, and memory stores have no virtual network support."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/toolbox-network-isolation
+        verified: "2026-11-18"
+      - mitigation: AML.M0012
+        coverage: partial
+        mechanism: "Customer-managed keys from Key Vault or Managed HSM on the Foundry resource cover state it stores itself. Prompt agent conversations, files and vectors are covered only in standard setup, with your key set separately on Azure Cosmos DB, Storage and Foundry IQ (Azure AI Search). A hosted agent's session volume is not covered."
+        steps:
+          - title: "Choose standard setup before the project exists"
+            body:
+              - "Name your Cosmos DB, Storage and Azure AI Search resources in the capability settings."
+              - "The settings cannot be updated on an existing project; changing stores means recreating it."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+          - title: "Set your key on the Foundry resource and on each store"
+            body:
+              - "Enable Customer-Managed Keys under Encryption on the Foundry resource, then configure the key on each store with that service's own procedure."
+              - "Each connected resource follows its own key lifecycle."
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/encryption-keys-portal
+          - title: "Record what the key does not cover"
+            body:
+              - "A hosted agent's $HOME volume is on platform storage, kept for 30 days and not encrypted with your key."
+              - "Runtime compute, caches and temporary files are protected by Microsoft's platform encryption only."
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
+        verified: "2026-11-18"
+      - mitigation: cap-data-access-governance
+        coverage: partial
+        mechanism: "With on-behalf-of-user access Agent Service passes the signed-in user's token to Foundry IQ in x-ms-query-source-authorization, so the knowledge base applies source permissions, and user delegation does the same for supported MCP servers. File search vector stores are shared across the project. Conversations get no per-user check unless a hosted agent call carries the end user's identity."
+        steps:
+          - title: "Carry the user to the agent"
+            body:
+              - "Call the agent with the end user's Microsoft Entra context; a call on the application's identity alone looks like one caller to the service."
+              - "Agent identity acting on behalf of the user is preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/user-delegation
+          - title: "Ground on Foundry IQ where entitlements differ"
+            body:
+              - "Include permission metadata fields in the index so results are filtered by the user's identity at query time."
+              - "Remote SharePoint knowledge sources apply SharePoint permissions directly."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/foundry-iq-connect
+          - title: "Enforce conversation ownership in your application"
+            body:
+              - "Agent Service does not enforce per-user authorisation on conversations."
+              - "Check that the signed-in user owns the conversation ID before forwarding a request."
+            url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
+        verified: "2026-11-18"
+      - mitigation: D3-ACH
+        coverage: native
+        mechanism: "Microsoft ships built-in Azure Policy definitions with a Deny effect for the Foundry resource (network access, key access, customer-managed keys), for model deployments (approved models, eligibility) and, in preview, for agent tools. No built-in was found that requires your own stores or network injection."
+        steps:
+          - title: "Assign the resource baseline with Deny"
+            body:
+              - "Assign the Azure AI Services definitions for restricted network access, disabled key access and customer-managed keys, plus Allowed locations."
+              - "Assign above the subscription so a project team cannot remove them."
+            url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
+          - title: "Limit models"
+            body:
+              - "Assign Foundry model deployments should only use approved models and the eligibility definition with effect Deny."
+              - "Both are evaluated at deployment time."
+            url: https://learn.microsoft.com/en-us/azure/foundry/how-to/model-deployment-policy
+          - title: "Limit tools (preview)"
+            body:
+              - "Assign the approved-tools and denied-tools definitions for agents and toolboxes."
+              - "They are version 1.0.0-preview; test in Audit before Deny."
+            url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
+        verified: "2026-11-18"
+      # <<< cloud controls
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # Rows are fields of the agent, toolbox, project or Foundry resource set over the Foundry data-plane or Azure
     # Resource Manager APIs (apiCli), Foundry portal pages (adminConsole), Azure RBAC role assignments and Azure
@@ -1230,7 +1338,7 @@ tools:
         default: Reachable from the public internet
         recommended: Disabled, with a private endpoint in the firm's virtual network
         why: Only callers on the firm's network can present a token to the project and its agent endpoints.
-        mitigations: []
+        mitigations: [D3-NI]
         url: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
         verified: "2026-11-18"
       - id: memoryScope
@@ -1263,7 +1371,7 @@ tools:
         default: Basic setup (Microsoft-managed, logically separated storage)
         recommended: Standard setup for projects that hold client-confidential conversations and files
         why: Conversation history, files and vector stores sit in the firm's own resources, where its retention, network rules and keys apply.
-        mitigations: []
+        mitigations: [AML.M0031, cap-data-access-governance]
         url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
         verified: "2026-11-18"
       - id: customerManagedKeys
@@ -1274,7 +1382,7 @@ tools:
         default: Microsoft-managed keys
         recommended: Microsoft-managed keys; customer-managed keys on the standard-setup resources where a client contract asks for key custody
         why: Key custody is available where it is owed, knowing a hosted session's $HOME, basic setup and routines are never covered.
-        mitigations: []
+        mitigations: [AML.M0012]
         url: https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
         verified: "2026-11-18"
       - id: traceContentProtection
@@ -1339,6 +1447,98 @@ tools:
         mitigations: [cap-agent-kill-switch]
         url: https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-agent-infrastructure-entra-admin
         verified: "2026-11-18"
+      # >>> cloud settings (the service's own settings for the cloud controls)
+      - id: agentIdentityPerAgent
+        name: "Agent identity and agent identity blueprint (Microsoft Entra Agent ID, one per agent)"
+        where: "Created by Agent Service with each agent; listed in the Microsoft Entra admin center agent inventory. Roles are assigned to the agent identity's object ID at each downstream resource."
+        setVia: [identityProvider, apiCli]
+        area: identity
+        default: "Created for every new agent; legacy agents share a project identity"
+        requires: "Conditional Access and ID Protection for agents need Microsoft Agent 365 licences"
+        recommended: "Set tool connections to agent identity authentication, and grant each agent identity only the roles it needs at resource or resource group scope. Migrate legacy agents that still use the shared project identity."
+        why: "A new agent identity starts with no permissions, so access is whatever you grant. Per-agent identities let you scope, audit and disable one agent without touching the others."
+        mitigations: [D3-AA]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+        verified: "2026-11-18"
+      - id: foundryPrivateEndpoint
+        name: "Private endpoint on the Foundry resource (target sub-resource: account)"
+        where: "Azure portal › Foundry resource › Resource Management › Networking › Private endpoint connections › + Private endpoint; or the Network tab at creation, with public access Disabled"
+        setVia: [adminConsole, apiCli]
+        area: network
+        default: "No private endpoint; endpoint reachable from the internet"
+        requires: "Private DNS zones privatelink.cognitiveservices.azure.com, privatelink.openai.azure.com and privatelink.services.ai.azure.com"
+        recommended: "Create the private endpoint in the same region and subscription as your virtual network and disable public access. Add the trusted-services exception only if a named Azure service needs it."
+        why: "The endpoint is public by default, so a stolen token works from anywhere. One private endpoint serves every project in the resource, so separate network exposure needs a separate Foundry resource."
+        mitigations: [D3-NI]
+        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+        verified: "2026-11-18"
+      - id: foundryIqSourceAuthorization
+        name: "Foundry IQ source authorization (x-ms-query-source-authorization)"
+        where: "Foundry IQ knowledge base tool on the agent; Agent Service sets the header with the signed-in user's token when the request carries that user's Microsoft Entra context"
+        setVia: [code, identityProvider]
+        area: data
+        requires: "Permission metadata in the index; some query-time enforcement features are preview"
+        recommended: "Call the agent with the end user's Entra context, not the application identity alone, and index permission metadata with permissionFilterOption enabled. Do not use file search for content that only some users may see."
+        why: "The index then returns only what the signed-in user may read. File search vector stores are shared by every agent in the project, and conversations carry no per-user check."
+        mitigations: [cap-data-access-governance]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/user-delegation
+        verified: "2026-11-18"
+      - id: approvedModelsPolicy
+        name: "Foundry model deployments should only use approved models"
+        where: "Azure Policy › Definitions › built-in (Cognitive Services) › assign with effect Deny (allowedPublishers, allowedAssetIds)"
+        setVia: [cloudPolicy]
+        area: tools
+        default: "Not assigned"
+        recommended: "Assign with effect Deny and list approved models by full asset ID. End an ID with a slash, or include the version, because each ID is matched as a prefix and would otherwise admit later models with a longer name."
+        why: "An agent can only name a model that is deployed in its Foundry resource. Denying unapproved deployments is how model choice is limited when inference never passes your gateway."
+        mitigations: [D3-ACH]
+        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/model-deployment-policy
+        verified: "2026-11-18"
+      - id: modelEligibilityPolicy
+        name: "Foundry model deployments should meet eligibility requirements"
+        where: "Azure Policy › Definitions › built-in (Cognitive Services) › assign with effect Deny (model source and lifecycle status)"
+        setVia: [cloudPolicy]
+        area: tools
+        default: "Not assigned"
+        recommended: "Assign with effect Deny so that preview models, and models not sold directly by Azure, cannot be deployed in production subscriptions."
+        why: "Preview models and models from other publishers come under different terms from the ones you reviewed. This refuses them at deployment time."
+        mitigations: [D3-ACH, cap-ai-vendor-assessment]
+        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/model-deployment-policy
+        verified: "2026-11-18"
+      - id: deniedToolsPolicy
+        name: "[Preview]: Microsoft Foundry agents and toolboxes should not use denied tools"
+        where: "Azure Policy › Definitions › built-in (Cognitive Services) › assign with effect Deny (denied tool types, MCP endpoints and MCP connectors)"
+        setVia: [cloudPolicy]
+        area: tools
+        default: "Not assigned"
+        recommended: "Assign with effect Deny and list the tool types that use public endpoints, such as web search, Bing grounding and SharePoint grounding, wherever all traffic must stay on your network."
+        why: "Microsoft's network guidance says to block the public-endpoint tools with Azure Policy if they do not meet your requirements. This is the definition that refuses them by type."
+        mitigations: [D3-ACH, cap-agent-egress-control]
+        url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
+        verified: "2026-11-18"
+      - id: modelDeploymentType
+        name: "Deployment type (Standard, Data Zone Standard, Global Standard and the provisioned equivalents)"
+        where: "Foundry resource › model deployment › deployment type (the deployment's SKU name)"
+        setVia: [adminConsole, apiCli]
+        area: data
+        default: "GlobalStandard in the quickstart templates; Microsoft suggests starting with Global Standard"
+        recommended: "Use Standard or Regional Provisioned where prompts must be processed in one Azure geography, or a Data Zone type for the US, EU or Asia Pacific zone. Treat Global Standard, the suggested starting point, as processing in any Azure region."
+        why: "Data at rest stays in the resource's geography for every type, but a Global type may process prompts in any region. This is the setting that decides where inference happens."
+        mitigations: [cap-ai-vendor-assessment]
+        url: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/deployment-types
+        verified: "2026-11-18"
+      - id: a365LoggingEnabled
+        name: "a365LoggingEnabled"
+        where: "Foundry resource (Microsoft.CognitiveServices/accounts) › properties.a365LoggingEnabled; applies to every project and agent in the resource"
+        setVia: [apiCli, cloudPolicy]
+        area: audit
+        default: "true when Agent 365 is enabled for the tenant"
+        recommended: "Decide per Foundry resource. Set it to false where agent activity data must stay in your own workspace, and enforce the choice with Azure Policy across the subscription."
+        why: "Once Agent 365 is enabled for the tenant, Foundry resources send agent activity data to the Agent 365 control plane by default. That flow leaves your account without anyone choosing it."
+        mitigations: [cap-ai-vendor-assessment]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-agent-365-data-collection
+        verified: "2026-11-18"
+      # <<< cloud settings
     advisories:
       - title: "CVE-2026-85889 — Azure AI Foundry elevation of privilege (missing authentication, CVSS 10.0); mitigated by Microsoft, no customer action; the record names Azure AI Foundry, not Agent Service"
         url: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-85889

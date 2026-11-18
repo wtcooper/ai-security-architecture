@@ -11,9 +11,6 @@ id: cloudAzure
 name: Microsoft Azure
 short: Azure
 
-notOffered:
-  - architecture: archCloudManagedAgent
-    why: "The mapping is being researched and checked."
 settings:
   # --- Identity & access ---------------------------------------------------------------
   - id: entraAssignmentRequired
@@ -1257,6 +1254,152 @@ settings:
     url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-to-workspace
     verified: "2026-11-18"
   # <<< more hosting rows
+  # >>> managed agent service rows (the cloud controls around the provider's agent service)
+  - id: storePrivateEndpoints
+    name: "Private endpoints on the standard-setup stores (Azure Cosmos DB, Azure Storage, Foundry IQ (Azure AI Search))"
+    where: "Azure Cosmos DB (sub-resource Sql), Storage account (blob) and Azure AI Search (searchService) › Networking › private endpoint; Public network access: Disabled"
+    setVia: [apiCli, adminConsole]
+    area: network
+    default: "Not created with the Foundry resource"
+    requires: "Private DNS zones privatelink.documents.azure.com, privatelink.blob.core.windows.net and privatelink.search.windows.net linked to the virtual network"
+    recommended: "Create a private endpoint for each store in your private endpoint subnet and set Public network access to Disabled on all three. Confirm from inside the virtual network that each name resolves to a private address."
+    why: "Agent Service reads and writes these stores directly. Their private endpoints are not created with the Foundry resource, so each store stays reachable from the internet until you close it."
+    mitigations: [D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+    verified: "2026-11-18"
+  - id: apimInternalVnet
+    name: "Virtual network: Internal (API Management)"
+    where: "API Management › Network › Virtual network › Internal access type (classic Developer and Premium tiers); virtual network injection on Premium v2; an inbound private endpoint on Basic, Standard and Standard v2 (not available on Basic v2)"
+    setVia: [adminConsole, apiCli]
+    area: network
+    default: "Public endpoint"
+    recommended: "Give the gateway a private address only, and allow inbound traffic from the delegated agent subnet and the front end's subnet alone. A gateway created from the Foundry portal is public until you change it in the Azure portal."
+    why: "The agent's tool calls leave your delegated subnet and must find the gateway inside your network. A public gateway would accept a valid token from anywhere."
+    mitigations: [D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/api-management/virtual-network-concepts
+    verified: "2026-11-18"
+  - id: cosmosCmk
+    name: "Customer-managed key (Azure Cosmos DB)"
+    where: "Azure Cosmos DB account › Encryption step at creation › Customer-managed key › Key URI; keyVaultKeyUri in Bicep or ARM"
+    setVia: [apiCli, adminConsole]
+    area: data
+    default: "Service-managed keys"
+    requires: "Key Vault with soft delete and purge protection, reachable publicly or through the trusted Microsoft services bypass"
+    recommended: "Create the account that holds conversations with a key from your Key Vault before you name it in the project's capability settings. An existing account follows a separate procedure to add a key."
+    why: "Conversation history and agent definitions are written here. Your key adds a second layer of encryption that you hold, rotate and can withdraw; the account needs the key to stay reachable."
+    mitigations: [AML.M0012]
+    url: https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-setup-customer-managed-keys
+    verified: "2026-11-18"
+  - id: searchCmk
+    name: "Customer-managed keys for Foundry IQ (Azure AI Search): service-level key (preview) or encryptionKey per object"
+    where: "Azure AI Search service › service-level customer-managed key (Search Management REST API 2026-03-01-preview or later); encryptionKey on each index"
+    setVia: [apiCli]
+    area: data
+    default: "Microsoft-managed keys"
+    requires: "Key Vault Crypto Service Encryption User for the search service's managed identity"
+    recommended: "Set a service-level key so that indexes created later inherit it, and assign the Azure Policy definition that reports search services without customer-managed keys. A key cannot be added to an index that already exists."
+    why: "Vector stores are indexes that Agent Service creates in your search service. Without a default key they are encrypted with Microsoft-managed keys only."
+    mitigations: [AML.M0012]
+    url: https://learn.microsoft.com/en-us/azure/search/search-security-manage-encryption-keys
+    verified: "2026-11-18"
+  - id: policyAiServicesNetworkAccess
+    name: "Azure AI Services resources should restrict network access"
+    where: "Azure Policy › Definitions › built-in (Azure AI Services) › assign at management group or subscription scope, effect Deny"
+    setVia: [cloudPolicy]
+    area: network
+    default: "Not assigned"
+    recommended: "Assign with effect Deny above every subscription that may hold a Foundry resource. Add the Deny definitions Azure Cosmos DB should disable public network access and Azure AI Search services should disable public network access for the stores."
+    why: "A Foundry resource is public unless someone closes it. With Deny, a deployment that leaves network access open is refused before the resource exists."
+    mitigations: [D3-ACH, D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
+    verified: "2026-11-18"
+  - id: policyAiServicesKeyAccess
+    name: "Azure AI Services resources should have key access disabled (disable local authentication)"
+    where: "Azure Policy › Definitions › built-in (Azure AI Services) › assign at management group or subscription scope, effect Deny"
+    setVia: [cloudPolicy]
+    area: identity
+    default: "Not assigned"
+    recommended: "Assign with effect Deny. Add Cosmos DB database accounts should have local authentication methods disabled so the conversation store also accepts Microsoft Entra tokens only."
+    why: "Agent endpoints never accept API keys, but the model endpoints of the same Foundry resource do until key access is disabled. Policy stops a later deployment switching keys back on."
+    mitigations: [D3-ACH, D3-CH]
+    url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
+    verified: "2026-11-18"
+  - id: policyAiServicesCmk
+    name: "Azure AI Services resources should encrypt data at rest with a customer-managed key (CMK)"
+    where: "Azure Policy › Definitions › built-in (Cognitive Services) › assign at management group or subscription scope, effect Deny"
+    setVia: [cloudPolicy]
+    area: data
+    default: "Not assigned"
+    recommended: "Assign with effect Deny. Add Azure Cosmos DB accounts should use customer-managed keys to encrypt data at rest (Deny) and Azure AI Search services should use customer-managed keys to encrypt data at rest (audit only)."
+    why: "Microsoft says this definition is not assessed by default. Assigning it means a Foundry resource or conversation store without your key cannot be created."
+    mitigations: [D3-ACH, AML.M0012]
+    url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
+    verified: "2026-11-18"
+  - id: policyAllowedLocations
+    name: "Allowed locations"
+    where: "Azure Policy › Definitions › built-in (General) › assign at management group or subscription scope, effect Deny"
+    setVia: [cloudPolicy]
+    area: data
+    default: "Not assigned"
+    recommended: "List only the regions you have approved. The Foundry resource must be in the same region as its virtual network, and its key vault in the same region as the resource."
+    why: "Region decides where agent state rests. The definition excludes resources that use the 'global' region, and it does not govern where a Global deployment type processes prompts."
+    mitigations: [D3-ACH]
+    url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
+    verified: "2026-11-18"
+  - id: foundryDiagnosticSetting
+    name: "Diagnostic setting on the Foundry resource (Audit, RequestResponse)"
+    where: "Azure portal › Foundry resource › Monitoring › Diagnostic settings › Add diagnostic setting › Send to Log Analytics workspace"
+    setVia: [adminConsole, apiCli]
+    area: audit
+    default: "No diagnostic setting"
+    recommended: "Select Audit and RequestResponse and send them to your own workspace. Assign Diagnostic logs in Azure AI services resources should be enabled so a resource without the setting is reported."
+    why: "Resource logs are not collected until a diagnostic setting exists. They record data-plane requests to the Foundry resource, which the activity log does not."
+    mitigations: [cap-agent-tracing]
+    url: https://learn.microsoft.com/en-us/azure/ai-services/diagnostic-logging
+    verified: "2026-11-18"
+  - id: activityLogExport
+    name: "Export Activity Logs (subscription diagnostic setting)"
+    where: "Azure Monitor › Activity log › Export Activity Logs › Send to Log Analytics workspace"
+    setVia: [adminConsole, apiCli]
+    area: audit
+    default: "Kept for 90 days, not exported"
+    recommended: "Export the activity log of every subscription that holds Foundry resources to the workspace that receives the traces and the gateway log (AzureActivity table), and limit who can read it."
+    why: "The activity log shows who created or changed the Foundry resource, its projects, network rules and role assignments. Azure deletes it after 90 days unless you export it."
+    mitigations: [cap-agent-tracing]
+    url: https://learn.microsoft.com/en-us/azure/azure-monitor/fundamentals/activity-log
+    verified: "2026-11-18"
+  - id: entraAgentSignInLogs
+    name: "Microsoft Entra Agent ID logs (agent sign-in and audit logs)"
+    where: "Microsoft Entra admin center › Entra ID › Monitoring & health › Sign-in logs (agent filters) and Audit logs (agentType)"
+    setVia: [identityProvider]
+    area: audit
+    recommended: "Review agent sign-ins and audit events with the Foundry traces. Match the agent identity's application ID, which is the azp or appid claim of its tokens, to the caller your gateway records."
+    why: "These logs show which agent identity obtained a token for which resource, and on behalf of which user. That is the join between the service's traces and your gateway's record."
+    mitigations: [cap-agent-tracing, D3-AA]
+    url: https://learn.microsoft.com/en-us/entra/agent-id/sign-in-audit-logs-agents
+    verified: "2026-11-18"
+  - id: storeDataPlaneRoles
+    name: "Runtime roles of the project managed identity on the stores"
+    where: "Access control (IAM): Cosmos DB Operator and Storage Account Contributor at account level; Cosmos DB Built-in Data Contributor on database enterprise_memory; Storage Blob Data Contributor and Storage Blob Data Owner on the two project containers; Search Index Data Contributor and Search Service Contributor"
+    setVia: [apiCli, adminConsole]
+    area: identity
+    recommended: "Grant the project's managed identity only the documented roles, at database and container scope where the role allows it. Give each trust group its own project, and for production its own Foundry resource."
+    why: "Agents reach their state as the project's managed identity with no stored key. Every agent in a project shares that identity and the same files, conversations and indexes."
+    mitigations: [D3-CH, AML.M0031]
+    url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+    verified: "2026-11-18"
+  - id: webSearchSubscriptionBlock
+    name: "OpenAI.BlockedTools.web_search (subscription feature registration)"
+    where: "Subscription › resource provider Microsoft.CognitiveServices › feature OpenAI.BlockedTools.web_search, registered with the Azure CLI"
+    setVia: [apiCli]
+    area: tools
+    default: "Web search available"
+    recommended: "Register the feature on every subscription whose agents must not search the web. It disables the web search tool for all Foundry accounts in the subscription and needs Contributor at subscription scope."
+    why: "Web search is called from Microsoft's side over public endpoints and bypasses the agent subnet, so your firewall cannot limit it. This switch removes the tool for a whole subscription."
+    mitigations: [cap-agent-egress-control]
+    url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/web-search
+    verified: "2026-11-18"
+  # <<< managed agent service rows
 
 implementations:
   - architecture: archChatAgent
@@ -3917,3 +4060,109 @@ implementations:
       - entraAppSignInDisable
       - entraAgentDisable
       - apimSubscriptionState
+  # >>> managed agent service mapping (checked against the vendor's pages by two people)
+  - architecture: archCloudManagedAgent
+    asOf: "2026-11"
+    verified: "2026-11-18"
+    reference:
+      - title: "Baseline Microsoft Foundry chat reference architecture (Azure Architecture Center)"
+        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
+    summary:
+      - "On Azure the pattern is Microsoft Foundry Agent Service in standard setup with private networking. Agents live in a Foundry project; conversations, files and vectors sit in your Azure Cosmos DB, Storage and Foundry IQ (Azure AI Search); the Foundry endpoint is closed to a private endpoint and agent traffic leaves through a subnet you delegate. Tool calls reach your MCP servers through Azure API Management. Microsoft Entra ID gives each agent its own identity; Key Vault, Azure Policy and Azure Monitor supply keys, guard rails and logs."
+    bindings:
+      - { block: entry, service: "Your web app on Azure App Service", build: true, note: "Signs users in with Microsoft Entra ID and calls the agent's Responses endpoint through the Foundry private endpoint as its managed identity. It must check who owns each conversation." }
+      - { block: agentDef, service: "Foundry project: agent versions, deployed by pipeline", build: true, note: "Prompt agent definitions, or hosted agent code and azure.yaml, in source control. Bicep or Terraform sets network, keys and stores. The pipeline must run inside the virtual network." }
+      - { block: memory, service: "Azure Cosmos DB, Blob Storage, Foundry IQ (Azure AI Search)", note: "Standard setup only: conversations in Cosmos DB, files in Blob Storage, vector stores in Azure AI Search (Foundry IQ). Basic setup keeps all three in Microsoft-managed storage." }
+      - { block: aiGateway, service: "Azure API Management (MCP servers), internal", build: true, note: "Fronts your MCP servers on a private address and validates the agent's Entra token. Azure AI Gateway is a newer preview alternative, in two regions only." }
+      - { block: internalTools, service: "Your MCP servers and APIs in the virtual network", build: true, note: "Workload-owned MCP servers, OpenAPI tools and A2A agents on a subnet of their own, accepting traffic from the gateway only. Container Apps is the tested private MCP host; Functions is not validated." }
+      - { block: orgData, service: "Your Azure data services behind private endpoints", build: true, note: "Systems of record and knowledge indexes reached by your tool servers, or by Foundry IQ knowledge bases with the user's token so source permissions apply." }
+      - { block: managedRuntime, service: "Microsoft Foundry Agent Service", note: "Prompt agents: Microsoft runs the loop. Hosted agents: your code in a VM sandbox per session. Models are deployments in the same Foundry resource. Tool calls leave by a data proxy per project." }
+      - { block: nativeTools, service: "Foundry built-in tools (file search, code interpreter)", note: "File search reaches your stores by private endpoint. Code interpreter runs in a Microsoft sandbox on the backbone network. Computer use and image generation are not supported when network isolated." }
+      - { block: vendorTools, service: "Foundry tool catalogue and remote MCP servers", note: "Catalogue MCP servers, SharePoint grounding and public MCP servers the definition names, with credentials in project connections. Work IQ is not supported in a network-isolated project." }
+      - { block: openWeb, service: "Web search (Web IQ) and Grounding with Bing", note: "Runs from Microsoft's side over public endpoints, outside the agent subnet. Data sent to Bing leaves the Azure compliance and geographic boundary and the Data Protection Addendum does not apply." }
+    sources:
+      entry: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
+      agentDef: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+      memory: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+      aiGateway: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
+      internalTools: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
+      orgData: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/foundry-iq-connect
+      managedRuntime: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agents-networking-deep-dive
+      nativeTools: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+      vendorTools: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/toolbox-overview
+      openWeb: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/web-search
+    differences:
+      - at: managedRuntime->aiGateway
+        text: "Nothing forces tool calls through your gateway. Foundry does not register or rewrite an MCP endpoint: each tool or connection must be given the gateway-routed address by hand, and a direct address keeps working. Hold it with the approved-tools policy (preview) listing only gateway endpoints, and with network rules on the agent subnet."
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/governance
+      - at: nativeTools->memory
+        text: "State is in your account only with standard setup, chosen when the project is created and not changeable afterwards. Agent Service reaches Cosmos DB, Storage and Foundry IQ as the project's managed identity, shared by every agent in the project, not as each agent's own identity. Memory stores (preview) stay in managed storage with no virtual network support."
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+      - at: memory
+        text: "A customer-managed key on the Foundry resource does not cover prompt agent state in Microsoft-managed storage. You bring the three stores and set your key on each one separately. A hosted agent's per-session $HOME volume sits on platform storage, is not encrypted with your key, is kept for 30 days and cannot be switched off."
+        url: https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
+      - at: entry->managedRuntime
+        text: "A new Foundry resource is fully public: any caller with a valid credential can reach the endpoint. Private endpoints and the public access flag apply to the whole resource, not to one project. Network injection for outbound traffic must be chosen when the resource is created and cannot be added or changed later."
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
+      - at: nativeTools->openWeb
+        text: "Web search, Bing grounding and SharePoint grounding use public endpoints even in a network-isolated project, and web search bypasses the agent subnet, so Azure Firewall never sees it. Bing data leaves the Azure compliance and geographic boundary. The limits are the definition, the tool policies, or a subscription-wide block on web search."
+        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+      - at: managedRuntime
+        text: "Two runtimes sit behind one endpoint. For a prompt agent Microsoft runs the loop. For a hosted agent you supply the loop as a container or source code; it runs in a VM-isolated sandbox per session attached to your delegated subnet, and its own outbound traffic leaves directly through that subnet while its tool calls still use the data proxy."
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agents-networking-deep-dive
+      - at: aiGateway
+        text: "API Management policies apply to a whole MCP server, not to one tool, and the documented policies are token validation, rate limits, IP filtering and caching: approval checks and screening of tool results must be built or left to Foundry guardrails. Foundry no longer links API Management; a gateway it created earlier is public. Azure AI Gateway is preview, in two regions."
+        url: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
+      - at: agentDef->managedRuntime
+        text: "Built-in Azure Policy can deny public network access, key access, missing customer-managed keys and unapproved models. The agent and tool definitions are preview, and the agent content-filter ones only audit. No built-in definition was found that requires standard setup or network injection; that needs a custom definition."
+        url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
+    alsoNeeded:
+      - service: "Microsoft Entra ID with Microsoft Entra Agent ID"
+        role: identity
+        why: "Signs in users, the front end's managed identity and each agent's own identity. Conditional Access and risk features for agents need Microsoft Agent 365 licences."
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+      - service: "Azure Virtual Network with private DNS zones"
+        role: network
+        why: "A subnet delegated to Microsoft.App/environments (at least /27, one per Foundry resource) for agent traffic, a private endpoint subnet, and the privatelink zones for Foundry and each store."
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+      - service: "Azure Firewall"
+        role: network
+        why: "Filters traffic leaving the delegated agent subnet by name. Must allow the Microsoft Entra sign-in endpoints the agent runtime needs, without TLS inspection."
+        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+      - service: "Azure Application Gateway with Web Application Firewall"
+        role: ingress
+        why: "why: The single public entry to your front end; the agent endpoint itself refuses traffic from public networks."
+        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
+      - service: "Azure Key Vault or Managed HSM"
+        role: keys
+        why: "Holds the customer-managed keys for the Foundry resource and the three stores. Soft delete and purge protection are required, in the same region as the Foundry resource."
+        url: https://learn.microsoft.com/en-us/azure/foundry/concepts/encryption-keys-portal
+      - service: "Azure Key Vault (connection secrets)"
+        role: secrets
+        why: "Standard setup uses a Key Vault for the secrets and connection strings of the agent infrastructure; a Microsoft-managed vault is used unless you connect your own."
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+      - service: "Azure Container Registry"
+        role: registry
+        why: "Holds hosted agent images. A registry with public access disabled works only for projects created after 25 June 2026."
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+      - service: "Application Insights and a Log Analytics workspace"
+        role: logging
+        why: "Tracing is off until an Application Insights resource is connected to the project. Diagnostic settings, the activity log and the gateway log go to the same workspace."
+        url: https://learn.microsoft.com/en-us/azure/foundry/observability/concepts/trace-data
+      - service: "Azure Policy"
+        role: other
+        why: "Assigns the built-in definitions that refuse public network access, key access, unapproved models and unapproved tools before a resource exists."
+        url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
+      - service: "Build agents or a jump box inside the virtual network"
+        role: other
+        why: "With public access disabled, deployments and the Foundry portal's project pages work only from a machine that can reach the private endpoint."
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+    quickstart:
+      - title: "Set up your environment for Foundry Agent Service"
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/environment-setup
+      - title: "Set up private networking for Foundry Agent Service"
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+      - title: "Networking options for Foundry Agent Service"
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
+    settings: [entraAssignmentRequired, apimValidateToken, apimMcpServers, searchDocumentAccess, tenantClaimValidation, storageCmk, firewallEgress, entraAgentDisable, storePrivateEndpoints, apimInternalVnet, cosmosCmk, searchCmk, policyAiServicesNetworkAccess, policyAiServicesKeyAccess, policyAiServicesCmk, policyAllowedLocations, foundryDiagnosticSetting, activityLogExport, entraAgentSignInLogs, storeDataPlaneRoles, webSearchSubscriptionBlock]
+  # <<< managed agent service mapping
