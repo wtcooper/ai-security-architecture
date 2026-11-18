@@ -196,7 +196,9 @@ may follow it back. It is never `bidir`. An outsider that may connect to us — 
 agent, a relay — holds an agreement, and so sits in the vendor band; the vendor reaches our
 systems through two controlled crossings only — the outbound tunnel to the AI gateway for tool
 calls, and a GitHub App on named repositories, admitted from the vendor's published IPs, for our
-own source control (GitHub Enterprise Cloud, which always sits in the Enterprise cloud band). Nor does a design connect out to a tool
+own source control (GitHub Enterprise Cloud, which always sits in the Enterprise cloud band). A provider's
+agent service inside our own cloud account (the managed agent service in your cloud) is the one
+exception: it has no tunnel, and its tool calls reach the AI gateway over our private network. Nor does a design connect out to a tool
 surface outside any agreement: the external band holds only what our agents read or we pull —
 the Open web, public Source control, and public package, model and training sources — plus
 model providers and the consumer products drawn to be blocked. Tool services and Downstream
@@ -309,8 +311,8 @@ that runtime as a provider-kind child.
 drawings that is the local harness and its Native tools: git to our Source control on the
 developer's own credentials, brokered calls through the AI gateway, the web and packages
 directly. On the managed runtimes it is the Managed runtime: git to our Source control through
-the GitHub App, tool calls down the tunnel, the vendor's connectors, the web and packages from
-its Native tools. The Vendor service is the control plane and front door — people enter, admins
+the GitHub App, tool calls down the tunnel (or over our private network, where the service runs
+in our own cloud account), the vendor's connectors, the web and packages from its Native tools. The Vendor service is the control plane and front door — people enter, admins
 configure, audit leaves — and opens no data connection; on the endpoint drawings it is also the
 API the local harness calls. The API/SDK runtime draws no Vendor service because our own
 application is its front door. Where a vendor is one block (the enterprise chat service, the
