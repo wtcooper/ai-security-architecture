@@ -314,8 +314,8 @@ For a hosted pattern (`surfaceCloud`), each file under `data/clouds/` (`aws.yaml
         kind: runtime               # cluster | runtime | managed
         name: "The service, as the vendor names it"
         mapped: true                # exactly one: the option the bindings and settings above describe
-        compare: { agentLoop: "…", patching: "…", data: "…", network: "…", identity: "…",
-                   framework: "…", longRunning: "…", portability: "…", effort: "…", fits: "…" }
+        compare: { runs: "…", patching: "…", data: "…", network: "…", identity: "…",
+                   accepts: "…", workload: "…", portability: "…", effort: "…", fits: "…" }
         sources: [https://…]
       - id: ownCluster
         kind: cluster               # a variant on the same pattern: only what changes
@@ -327,10 +327,10 @@ For a hosted pattern (`surfaceCloud`), each file under `data/clouds/` (`aws.yaml
         differences: [ { at: harness->gateway, text: "…", url: https://… } ]
         alsoNeeded: [ { service: "…", role: network, why: "…" } ]
       - id: managedService
-        kind: managed               # the vendor runs the agent loop: another pattern, not a variant
+        kind: managed               # the vendor runs it for you: not a variant, so no bindings or settings
         name: "…"
         compare: { … }
-        pattern: archManagedAgentRuntime   # the pattern it is drawn as
+        pattern: archManagedAgentRuntime   # agent patterns only: the pattern a managed agent is drawn as
         tool: toolTheProduct               # the product catalogued on that pattern
         offers: [ { name: "…", what: "One sentence.", url: https://… } ]
     settings: [settingIdOne, settingIdTwo]   # rows of the file's settings library

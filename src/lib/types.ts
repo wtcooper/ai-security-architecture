@@ -919,22 +919,27 @@ export interface CloudImplementation {
 }
 
 /**
- * Who runs the agent. On your own cluster and on the platform's own runtime the pattern is
- * the same and only some components and settings change; a managed agent service moves the agent
- * loop into the vendor's boundary, which is a different pattern.
+ * Who runs the thing a hosted pattern is about: the agent, the MCP server, the model server, the
+ * training job or the sandbox. On your own cluster and on the platform's own runtime the pattern
+ * is the same and only some components and settings change; on a managed service the vendor
+ * runs it, so the pattern's own components and settings no longer describe it. For an agent that
+ * is a different pattern, which the option names.
  */
 export const HOSTING_KINDS = ["cluster", "runtime", "managed"] as const;
 export type HostingKind = (typeof HOSTING_KINDS)[number];
 
-/** The rows every hosting option is compared on, in the order they are read. No ranking. */
+/**
+ * The rows every hosting option is compared on, in the order they are read. No ranking. The
+ * labels here are the general ones; a pattern words them for what it hosts (cloud/model.ts).
+ */
 export const HOSTING_COMPARE = [
-  ["agentLoop", "Who runs the agent loop"],
+  ["runs", "Who runs it"],
   ["patching", "Who patches the runtime"],
-  ["data", "Where prompts and state are processed and kept"],
+  ["data", "Where data is processed and kept"],
   ["network", "Private networking and outbound control"],
-  ["identity", "The identity the agent runs as"],
-  ["framework", "Frameworks and agent types it accepts"],
-  ["longRunning", "Long-running and event-driven work"],
+  ["identity", "The identity it runs as"],
+  ["accepts", "What it accepts"],
+  ["workload", "How it handles the work"],
   ["portability", "What moving off it involves"],
   ["effort", "What your team operates"],
   ["fits", "When the vendor says it fits"],
@@ -955,10 +960,10 @@ export interface HostingOption {
   compare: Record<HostingCompareKey, string>;
   /** The vendor pages the comparison rests on. */
   sources?: string[];
-  /** Managed only: the pattern this option is drawn as, and the product catalogued on it. */
+  /** Managed only, and only where another pattern draws it (an agent): that pattern, and the product catalogued on it. */
   pattern?: string;
   tool?: string;
-  /** Managed only: the kinds of agent the service lets you build. */
+  /** Managed only: what the service lets you do, as its documentation lists it. */
   offers?: { name: string; what: string; url?: string }[];
   /** A variant on the same pattern (not the mapped one): only what changes. */
   summary?: string;

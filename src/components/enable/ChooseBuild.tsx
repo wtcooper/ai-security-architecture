@@ -3,27 +3,29 @@
 /**
  * Step 2 of Enable on a hosted pattern: the choices a builder makes before any setting, in the
  * order they are made. Where it runs (a cloud, or the organisation's own data centre); how it is
- * hosted there (your own cluster, the platform's own runtime, or a managed agent service);
+ * hosted there (your own cluster, the platform's own runtime, or a managed service);
  * and what the boxes you build are built with (a framework or a server).
  *
  * The hosting options of a platform are compared on the same rows, each a sentence taken from the
  * vendor's own pages, with no ranking. Two of the three kinds keep the same pattern and change
- * only some components and settings; a managed agent service moves the agent loop into the
- * vendor's boundary, so it is drawn as another pattern and this step links to it. What the
- * organisation has approved (data/org/products.yaml) is marked on each option.
+ * only some components and settings; on a managed service the vendor runs the thing itself, so
+ * this pattern no longer describes it. A managed agent is drawn as another pattern, and this
+ * step links to it. The rows are worded for what the pattern hosts: an agent, an MCP server, a
+ * model server, a training job or a sandbox. What the organisation has approved
+ * (data/org/products.yaml) is marked on each option.
  */
 import Link from "next/link";
 
-import { HOSTING_KIND_LABEL, hostingInEffect, hostingOptionsFor, type CloudProduct } from "@/components/cloud/model";
+import { HOSTING_KIND_LABEL, hostingInEffect, hostingOptionsFor, hostingRows, hostingWords, type CloudProduct, type HostingWords } from "@/components/cloud/model";
 import { archetypeById, hostingAdoptionFor, type Product } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
-import { HOSTING_COMPARE, type Archetype, type HostingOption } from "@/lib/types";
+import type { Archetype, HostingOption } from "@/lib/types";
 import { AdoptionPill, ChoiceRow, ProductPills } from "./ProductSettings";
 
 /** What choosing an option does, in a few words. */
-const consequence = (option: HostingOption, inEffect: boolean) =>
+const consequence = (option: HostingOption, inEffect: boolean, words: HostingWords) =>
   option.kind === "managed"
-    ? "The vendor hosts and operates the agent, so this is drawn as another pattern"
+    ? words.managed
     : inEffect
       ? "Shown on the drawing and in the settings below"
       : "The same pattern: some components and settings change";
@@ -32,7 +34,9 @@ function HostingCards({
   platform,
   host,
   onPickHost,
+  words,
 }: {
+  words: HostingWords;
   platform: CloudProduct;
   host: string | null;
   onPickHost: (id: string | null) => void;
@@ -51,9 +55,9 @@ function HostingCards({
               <span className="text-[13px] font-semibold leading-snug text-ink">{o.name}</span>
               {approved.set && <AdoptionPill status={approved.status} title={approved.note ?? "Recorded in data/org/products.yaml"} />}
             </span>
-            <span className="mt-0.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">{HOSTING_KIND_LABEL[o.kind]}</span>
+            <span className="mt-0.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">{o.kind === "managed" ? words.managedKind : HOSTING_KIND_LABEL[o.kind]}</span>
             <span className="mt-1.5 block text-[12.5px] leading-snug text-ink-2">{o.compare.fits}</span>
-            <span className="mt-1.5 block text-[11.5px] leading-snug text-ink-3">{consequence(o, on)}</span>
+            <span className="mt-1.5 block text-[11.5px] leading-snug text-ink-3">{consequence(o, on, words)}</span>
           </>
         );
         const frame = `flex h-full flex-col justify-start rounded-lg border p-3 text-left transition-colors ${on ? "border-ink bg-paper ring-1 ring-ink" : "border-line bg-paper hover:border-ink-3"}`;
@@ -77,7 +81,8 @@ function HostingCards({
 }
 
 /** Every option on the same rows, a sentence each from the vendor's own pages. */
-function HostingComparison({ platform }: { platform: CloudProduct }) {
+function HostingComparison({ platform, patternId }: { platform: CloudProduct; patternId: string }) {
+  const words = hostingWords(patternId);
   const options = hostingOptionsFor(platform);
   const sources = [...new Set(options.flatMap((o) => o.sources ?? []))];
   const offers = options.filter((o) => o.offers?.length);
@@ -96,7 +101,7 @@ function HostingComparison({ platform }: { platform: CloudProduct }) {
             </tr>
           </thead>
           <tbody>
-            {HOSTING_COMPARE.map(([key, label]) => (
+            {hostingRows(patternId).map(([key, label]) => (
               <tr key={key} className="border-b border-line align-top" data-compare-row={key}>
                 <th scope="row" className="py-2 pr-4 font-semibold text-ink">{label}</th>
                 {options.map((o) => (
@@ -108,7 +113,7 @@ function HostingComparison({ platform }: { platform: CloudProduct }) {
         </table>
         {offers.map((o) => (
           <div key={o.id} className="mt-3 text-[12.5px] leading-snug text-ink-2" data-hosting-offers={o.id}>
-            <p className="font-semibold text-ink">What {o.name} lets you build</p>
+            <p className="font-semibold text-ink">What {o.name} {words.offers}</p>
             <ul className="mt-1 space-y-1">
               {o.offers!.map((x) => (
                 <li key={x.name}>
@@ -175,6 +180,7 @@ export function ChooseBuild({
   const filled = [...new Set(frameworks.flatMap((p) => (p.kind === "tool" ? p.tool.fills ?? [] : [])).map((id) => titles.get(id) ?? id))];
   const defaults = platform ? [...new Set(platform.implementation.bindings.map((b) => b.builtWith).filter((x): x is string => Boolean(x)))] : [];
   const options = platform ? hostingOptionsFor(platform) : [];
+  const words = hostingWords(archetype.id);
   const short = platform ? (platform.cloud.selfManaged ? "This mapping" : `${platform.cloud.short}'s own guides`) : "";
   return (
     <div className="space-y-4" data-choose-build>
@@ -182,13 +188,13 @@ export function ChooseBuild({
         <ProductPills products={platforms} selected={platform?.id ?? ""} onPick={onPickPlatform} label="Where it runs" />
       </ChoiceRow>
 
-      <ChoiceRow n="b" label="How it is hosted there" hint="who runs the agent: you, the platform, or the vendor">
+      <ChoiceRow n="b" label="How it is hosted there" hint={`who runs ${words.thing}: you, the platform, or the vendor`}>
         {!platform ? (
           <p className="pt-1 text-[12.5px] leading-snug text-ink-3" data-hosting-wait>Pick where it runs first; that platform&rsquo;s ways of hosting it appear here.</p>
         ) : options.length ? (
           <>
-            <HostingCards platform={platform} host={host} onPickHost={onPickHost} />
-            <HostingComparison platform={platform} />
+            <HostingCards platform={platform} host={host} onPickHost={onPickHost} words={words} />
+            <HostingComparison platform={platform} patternId={archetype.id} />
           </>
         ) : (
           <p className="pt-1 text-[12.5px] leading-snug text-ink-3" data-hosting-single>

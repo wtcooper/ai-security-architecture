@@ -171,9 +171,9 @@ export async function loadClouds(
           if (unknownRows.length) ctx.fail(`${oat}: unknown compare row ${unknownRows.join(", ")}`);
           for (const u of o.sources ?? []) if (!/^https:\/\//.test(u)) ctx.fail(`${oat}: a source must be an https address`);
           if (o.kind === "managed") {
-            // The vendor runs the agent loop there, so it is drawn as another pattern.
-            if (!o.pattern || !archById.has(o.pattern)) ctx.fail(`${oat}: a managed option names the pattern it is drawn as`);
-            if (o.mapped || o.bindings?.length || o.addSettings?.length) ctx.fail(`${oat}: a managed option is another pattern, not a variant of this one`);
+            // The vendor runs it there. A managed agent is drawn as another pattern, which the option names.
+            if (o.pattern && !archById.has(o.pattern)) ctx.fail(`${oat}: unknown pattern ${o.pattern}`);
+            if (o.mapped || o.bindings?.length || o.addSettings?.length) ctx.fail(`${oat}: on a managed option the vendor runs it, so it is not a variant of this pattern and has no components or settings here`);
             if (o.tool && ctx.toolIds && !ctx.toolIds.has(o.tool)) ctx.fail(`${oat}: unknown tool ${o.tool}`);
             for (const x of o.offers ?? []) if (!x.name?.trim() || !x.what?.trim()) ctx.fail(`${oat}: each offer needs a name and what it is`);
             continue;

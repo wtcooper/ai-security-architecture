@@ -7,7 +7,7 @@
 import { ownedControls } from "@/components/drawing/layout";
 import { archetypesInOrder, clouds, productsForArchetype, type Product } from "@/lib/data";
 import { cloudSlug } from "@/lib/routes";
-import type { Archetype, ArchBlock, CloudBinding, CloudPlatform, HostingOption, ProductSetting } from "@/lib/types";
+import { HOSTING_COMPARE, type Archetype, type ArchBlock, type CloudBinding, type CloudPlatform, type HostingCompareKey, type HostingOption, type ProductSetting } from "@/lib/types";
 
 export type CloudProduct = Extract<Product, { kind: "cloud" }>;
 
@@ -74,8 +74,96 @@ export function hostedAs(product: CloudProduct, optionId: string | null): CloudP
 export const HOSTING_KIND_LABEL: Record<string, string> = {
   cluster: "Your own cluster",
   runtime: "The platform's own runtime",
-  managed: "A managed agent service",
+  managed: "A managed service",
 };
+
+/** How one hosted pattern words its hosting choice: what is hosted, and the comparison rows that differ. */
+export interface HostingWords {
+  /** What is hosted, as it reads after "who runs". */
+  thing: string;
+  managedKind: string;
+  /** What choosing the managed option means. */
+  managed: string;
+  offers: string;
+  rows: Partial<Record<HostingCompareKey, string>>;
+}
+
+const AGENT_HOSTING: HostingWords = {
+  thing: "the agent",
+  managedKind: "A managed agent service",
+  managed: "The vendor hosts and operates the agent, so this is drawn as another pattern",
+  offers: "lets you build",
+  rows: {
+    runs: "Who runs the agent loop",
+    data: "Where prompts and state are processed and kept",
+    identity: "The identity the agent runs as",
+    accepts: "Frameworks and agent types it accepts",
+    workload: "Long-running and event-driven work",
+  },
+};
+
+const managedMeans = (thing: string) => `The vendor runs ${thing} for you, so this pattern's components and settings no longer describe it`;
+
+const HOSTING_WORDS: Record<string, HostingWords> = {
+  archRemoteMcpServer: {
+    thing: "the MCP server",
+    managedKind: "A managed service",
+    managed: managedMeans("the MCP server"),
+    offers: "offers",
+    rows: {
+      runs: "Who runs the MCP server",
+      data: "Where requests and tool results are processed and kept",
+      identity: "The identity the server runs as",
+      accepts: "Transports, languages and SDKs it accepts",
+      workload: "Sessions, streaming and long tool calls",
+    },
+  },
+  archSelfHostedInference: {
+    thing: "the model server",
+    managedKind: "A managed service",
+    managed: managedMeans("the model server"),
+    offers: "offers",
+    rows: {
+      runs: "Who runs the model server",
+      data: "Where prompts, completions and weights are processed and kept",
+      identity: "The identity the model server runs as",
+      accepts: "Models, formats and serving engines it accepts",
+      workload: "GPUs, scaling and idle capacity",
+    },
+  },
+  archTrainingPipeline: {
+    thing: "the training job",
+    managedKind: "A managed service",
+    managed: managedMeans("the training"),
+    offers: "offers",
+    rows: {
+      runs: "Who runs the training code",
+      data: "Where training data, checkpoints and weights are processed and kept",
+      identity: "The identity the job runs as",
+      accepts: "Frameworks, containers and tuning methods it accepts",
+      workload: "Long jobs, GPUs, checkpoints and interruptions",
+    },
+  },
+  archAgentSandbox: {
+    thing: "the sandbox",
+    managedKind: "A managed service",
+    managed: managedMeans("the sandbox"),
+    offers: "offers",
+    rows: {
+      runs: "Who runs the sandbox, and what isolates each run",
+      data: "Where a run's code, files and results are processed and kept",
+      identity: "The identity a run has",
+      accepts: "Images, languages and tools it accepts",
+      workload: "Start time, session length and parallel runs",
+    },
+  },
+};
+
+export const hostingWords = (patternId: string): HostingWords => HOSTING_WORDS[patternId] ?? AGENT_HOSTING;
+
+/** The comparison rows as one pattern labels them. */
+export const hostingRows = (patternId: string): [HostingCompareKey, string][] =>
+  HOSTING_COMPARE.map(([key, label]) => [key, hostingWords(patternId).rows[key] ?? label]);
 
 /** A product's own settings that deliver one control on this pattern, in the order the product lists them. */
 export const optionsFor = (product: Product, controlId: string): ProductSetting[] =>

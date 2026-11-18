@@ -9,7 +9,7 @@ import { SURFACE_SITUATION } from "../src/components/patterns/labels";
 import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { OnCloud } from "../src/components/cloud/CloudViews";
 import { IncidentWalkthrough } from "../src/components/incidents/IncidentWalkthrough";
-import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor, hostedAs, hostingOptionsFor } from "../src/components/cloud/model";
+import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor, hostedAs, hostingOptionsFor, hostingWords } from "../src/components/cloud/model";
 import { SettingCheck } from "../src/components/enable/SettingCheck";
 import { ControlTable } from "../src/components/enable/ControlTable";
 import { controlGroups } from "../src/components/enable/model";
@@ -241,17 +241,18 @@ test("a platform's hosting options are compared on the same rows; a variant keep
     for (const product of cloudProductsFor(a.id)) {
       const options = hostingOptionsFor(product);
       const where = `${a.id} on ${product.cloud.short}`;
-      // Every agent pattern says how it can be hosted on every platform.
-      if (AGENT_PATTERNS.includes(a.id)) assert.ok(options.length, `${where}: lists its hosting options`);
-      if (!options.length) continue;
+      // Every hosted pattern says how it can be hosted on every platform.
+      assert.ok(options.length, `${where}: lists its hosting options`);
       assert.equal(options.filter((o) => o.mapped).length, 1, `${where}: one option is the mapping itself`);
       for (const o of options) {
         for (const [key] of HOSTING_COMPARE) assert.ok(o.compare[key]?.trim(), `${where} ${o.id}: answers "${key}"`);
         assert.ok(o.sources?.length, `${where} ${o.id}: names the pages its comparison rests on`);
         if (o.kind === "managed") {
-          // The vendor runs the agent loop: another pattern, linked and not redrawn.
+          // The vendor runs it. A managed agent is another pattern, linked and not redrawn; for the
+          // other hosted patterns no pattern draws it, and the option says what the service offers.
           const other = dataset.archetypes.find((x) => x.id === o.pattern);
-          assert.ok(other && other.id !== a.id, `${where} ${o.id}: points at the pattern that draws it`);
+          if (AGENT_PATTERNS.includes(a.id)) assert.ok(other && other.id !== a.id, `${where} ${o.id}: points at the pattern that draws it`);
+          else assert.ok(!o.pattern && o.offers?.length, `${where} ${o.id}: says what the service offers`);
           if (o.tool) assert.equal(dataset.tools.find((t) => t.id === o.tool)?.architecture, o.pattern, `${where} ${o.id}: its product is catalogued on that pattern`);
           assert.equal(hostedAs(product, o.id), product, `${where} ${o.id}: choosing it changes nothing on this pattern`);
           continue;
@@ -273,7 +274,10 @@ test("a platform's hosting options are compared on the same rows; a variant keep
       );
       assert.equal([...choose.matchAll(/data-hosting-option="/g)].length, options.length, `${where}: a card per option`);
       assert.equal([...choose.matchAll(/data-compare-row="/g)].length, HOSTING_COMPARE.length, `${where}: every comparison row`);
-      for (const o of options.filter((x) => x.kind === "managed")) assert.match(choose, new RegExp(`data-hosting-pattern="${o.pattern}"`), `${where}: ${o.id} links to its pattern`);
+      for (const o of options.filter((x) => x.kind === "managed" && x.pattern)) assert.match(choose, new RegExp(`data-hosting-pattern="${o.pattern}"`), `${where}: ${o.id} links to its pattern`);
+      // The rows are worded for what the pattern hosts, so an agent is named only on an agent pattern.
+      assert.match(choose, new RegExp(`who runs ${hostingWords(a.id).thing}`), `${where}: says what is hosted`);
+      if (!AGENT_PATTERNS.includes(a.id)) assert.doesNotMatch(choose, /Who runs the agent loop|managed agent service/, `${where}: no agent wording`);
       // The page compares and does not rank: it says so, and marks no option as the one to pick. (A cell may quote the vendor's own guidance.)
       assert.match(choose, /Nothing here ranks the options/, `${where}: says it does not rank`);
       assert.doesNotMatch(choose, /data-recommended|data-rank/, `${where}: no option is marked as the one to pick`);
