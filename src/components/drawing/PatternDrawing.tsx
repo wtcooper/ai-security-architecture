@@ -39,6 +39,7 @@ export function PatternDrawing({
   services = null,
   differs = null,
   ownBoundary = null,
+  builtWith = null,
   minScale = MIN_SCALE,
   className,
 }: {
@@ -58,6 +59,8 @@ export function PatternDrawing({
   differs?: Map<string, string> | null;
   /** The title of the organisation's own boundary, when the chosen platform is not a cloud. */
   ownBoundary?: string | null;
+  /** Block id -> the framework or server the reader chose to build that box with. */
+  builtWith?: Map<string, string> | null;
   /** The smallest share of natural size to draw at inline before scrolling sideways. Lower where seeing the whole drawing matters more than reading it. */
   minScale?: number;
   className?: string;
@@ -230,6 +233,7 @@ export function PatternDrawing({
       services={services}
       differs={differs}
       ownBoundary={ownBoundary}
+      builtWith={builtWith}
       onPickMitigation={onPickMitigation}
       onPickRisk={(id) => onHighlight?.(highlight?.kind === "risk" && highlight.id === id ? null : { kind: "risk", id })}
       onHover={setCard}

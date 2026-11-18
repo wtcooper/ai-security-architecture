@@ -45,6 +45,7 @@ export function checkSettings(
     if (s.verified && !ISO_DAY.test(s.verified)) ctx.fail(`${at}: verified must be YYYY-MM-DD`);
     if (s.url && !/^https:\/\//.test(s.url)) ctx.fail(`${at}: url must be https`);
     if (!SETTING_AREAS.includes(s.area)) ctx.fail(`${at}: area must be one of ${SETTING_AREAS.join(", ")}`);
+    if (s.builtWith !== undefined && (typeof s.builtWith !== "string" || !s.builtWith.trim() || s.builtWith.length > 40)) ctx.fail(`${at}: builtWith names a framework or server in 1 to 40 characters`);
     if (s.check) {
       // A check reads and never changes: this catalogue does not tell an organisation how to deploy.
       const problem = checkCommandProblem(String(s.check.command ?? ""));
@@ -112,6 +113,12 @@ export async function loadClouds(
         if (bound.has(b.block)) ctx.fail(`${at}: block ${b.block} bound twice`);
         bound.add(b.block);
         if (!b.service?.trim()) ctx.fail(`${at} ${b.block}: needs a service`);
+        const extra = Object.keys(b).filter((k) => !["block", "service", "note", "build", "builtWith", "url", "verified"].includes(k));
+        // A comma inside an unquoted service splits it into a stray key: quote the value.
+        if (extra.length) ctx.fail(`${at} ${b.block}: unknown field "${extra.join('", "')}" — quote a service or note that contains a comma`);
+        if (b.builtWith !== undefined && (typeof b.builtWith !== "string" || !b.builtWith.trim() || b.builtWith.length > 40)) ctx.fail(`${at} ${b.block}: builtWith names a framework or server in 1 to 40 characters`);
+        // The platform names where the box runs; the framework is recorded beside it, not inside the name.
+        if (/\((Strands|ADK|Microsoft Agent Framework|LangGraph)\)\s*$/.test(b.service ?? "")) ctx.fail(`${at} ${b.block}: name the framework in builtWith, not in brackets after the service`);
       }
       for (const b of blocks) if (!bound.has(b.id)) ctx.fail(`${at}: block ${b.id} (${b.title}) has no binding — name the service or mark it build: true`);
       // What the mapping was checked against. `sources` is authored as block id -> vendor page, so a

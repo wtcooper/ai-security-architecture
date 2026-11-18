@@ -81,7 +81,15 @@ architectures with their surface).
    - a programmatic managed runtime driven from the customer's own application over an API or
      SDK — agent, environment, session, vault objects; custom tools executed by customer code →
      `archManagedAgentRuntime` (Claude Managed Agents, the OpenAI Agents API, AgentCore harness)
-   - SDK / runtime the customer hosts → `archAgentWorkflow`
+   - SDK / runtime the customer hosts → `archAgentWorkflow`, or the hosted pattern it is used to
+     build (`archChatAgent`, `archActionAgent`, `archAgentFederation`, `archAgentSandbox`,
+     `archSelfHostedInference`, `archTrainingPipeline`, `archRemoteMcpServer`). On a hosted
+     pattern the tool is what a box is **built with**, not where the pattern runs: add
+     `fills: [<block id>]` naming the box or boxes of that pattern it is used to build (an agent
+     SDK fills the agent harness, an inference server fills the runtime). The build requires it.
+     Where it runs (AWS, Azure, Google Cloud, on-premises) is a platform under `data/clouds/`
+     and is chosen separately on the page, so do not record cloud settings on the tool or the
+     tool's own settings in a cloud file
    - vendor chat, Office add-in, chat/connector integration → `archEnterpriseAiChat`
    - browser extension or agentic browser acting in the user's logged-in sessions →
      `archAgenticBrowser`

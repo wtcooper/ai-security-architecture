@@ -10,7 +10,8 @@
  *
  * A step also stands open while it holds what the reader asked for: the control lit on the
  * drawing, or the product a link opened. Once a product is chosen (a cloud above the drawing,
- * or a pill in the second step) every control also names that product's own settings for it.
+ * or a pill in the second step) every control also names that product's own settings for it;
+ * on a hosted pattern that can be two products, the platform and the framework.
  * The pattern's governance guidance is prose, not steps, and lives under How it works.
  */
 import { useState, type ReactNode } from "react";
@@ -92,6 +93,7 @@ export function EnablePanel({
   onShowDrawing,
   tool: productId,
   onPickTool,
+  onDropFramework,
   cloud = null,
 }: {
   archetype: Archetype;
@@ -103,6 +105,8 @@ export function EnablePanel({
   tool: string | null;
   focus?: string | null;
   onPickTool: (productId: string | null) => void;
+  /** On a hosted pattern: lets go of the framework and keeps the platform. */
+  onDropFramework?: () => void;
   /** The cloud the pattern is shown as built on, or null for the cloud-neutral pattern. */
   cloud?: CloudProduct | null;
 }) {
@@ -111,9 +115,15 @@ export function EnablePanel({
   const shared = controls.filter((m) => isBaseline(m.id)).length;
   const alsoNeeded = baselineNotPinned(archetype);
   const products = productsForArchetype(archetype.id);
-  // The open product is the one the reader picked, or else the cloud the pattern is shown on.
-  const product = (productId ? products.find((p) => p.id === productId) : undefined) ?? cloud ?? undefined;
+  const picked = productId ? products.find((p) => p.id === productId) : undefined;
+  // A hosted pattern has two separate choices: the platform it runs on (a cloud or the
+  // organisation's own data centre) and the framework or server its own boxes are built with.
   const built = products.some((p) => p.kind === "cloud");
+  const platform = cloud ?? (picked?.kind === "cloud" ? picked : null);
+  const framework = built && picked?.kind === "tool" ? picked : null;
+  // What the control rows name settings for: both choices on a hosted pattern, else the one product open.
+  const chosen = built ? [platform, framework].filter((p): p is NonNullable<typeof p> => Boolean(p)) : picked ? [picked] : [];
+  const platformCount = products.filter((p) => p.kind === "cloud").length;
 
   // Every step starts folded. A step also stands open while it holds the lit control or the
   // opened product, so a chip picked on the drawing or a product link lands on a visible row.
@@ -136,7 +146,7 @@ export function EnablePanel({
     } else next.add(id);
     setUnfolded(next);
   };
-  const short = product ? productShort(product) : null;
+  const short = chosen.length ? chosen.map(productShort).join(" and ") : null;
 
   return (
     <div className="space-y-2.5">
@@ -176,7 +186,7 @@ Two steps to run this pattern safely: put the controls in place, then set them i
             onOpen(id);
           }}
           onShowDrawing={onShowDrawing}
-          product={product ?? null}
+          products={chosen}
         />
         {alsoNeeded.length > 0 && (
           <p className="mt-2 text-[12px] leading-snug text-ink-3" title={BASELINE_HELP}>
@@ -189,22 +199,38 @@ Two steps to run this pattern safely: put the controls in place, then set them i
       <Step
         n={2}
         id="tools"
-        title={built ? "Set it in your cloud or tool" : "Set it in your product"}
-        aside={products.length ? count(`${cloud ? `${cloud.cloud.short} · ` : ""}${products.length} products`) : undefined}
+        title={built ? "Set it where it runs, and in what you build it with" : "Set it in your product"}
+        aside={
+          products.length
+            ? count(
+                built
+                  ? `${cloud ? `${cloud.cloud.short} · ` : ""}${platformCount} platforms${products.length > platformCount ? ` · ${products.length - platformCount} ${products.length - platformCount === 1 ? "framework" : "frameworks"}` : ""}`
+                  : `${products.length} products`,
+              )
+            : undefined
+        }
         expanded={isOpen("tools")}
         onToggle={() => toggle("tools")}
         lead={
-          products.length
-            ? "The same list, now as settings: what to set and to what, why, and the control each one delivers. Pick your product first."
-            : "No product of this kind is catalogued yet. Build it to the controls above."
+          !products.length
+            ? "No product of this kind is catalogued yet. Build it to the controls above."
+            : built
+              ? "The same list, now as settings. Two separate choices: the platform it runs on, and the framework or server you build it with. Pick one of each."
+              : "The same list, now as settings: what to set and to what, why, and the control each one delivers. Pick your product first."
         }
       >
         {products.length > 0 && (
           <ProductSettings
             archetype={archetype}
             products={products}
-            selected={product?.id ?? null}
-            onPick={(id) => onPickTool(id)}
+            selected={picked?.id ?? platform?.id ?? null}
+            platform={platform}
+            onPick={(id) => {
+              // The step stays open while the reader is choosing, whatever they let go of.
+              setUnfolded(new Set(unfolded).add("tools"));
+              if (id === null && onDropFramework) onDropFramework();
+              else onPickTool(id ?? platform?.id ?? null);
+            }}
             lit={open}
             onLight={(id) => {
               setLitFromTools(true);

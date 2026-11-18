@@ -660,6 +660,9 @@ function checkArchetypes(
       // Named products age fast. An undated one silently becomes a wrong claim.
       if (!ex.asOf?.trim()) fail(`${where}: exemplar "${ex.name}" needs an asOf date`);
       if (!ex.note?.trim()) fail(`${where}: exemplar "${ex.name}" needs a note`);
+      // On a hosted pattern an example is an example of one box: a framework, a server, an isolation technology.
+      if (arch.surface === "surfaceCloud" && !ex.fills) fail(`${where}: exemplar "${ex.name}" needs fills: the box it is an example of`);
+      if (ex.fills && !arch.blocks.some((b) => b.id === ex.fills)) fail(`${where}: exemplar "${ex.name}" fills "${ex.fills}", which is not a block of this pattern`);
     }
     for (const d of arch.deviations ?? []) {
       if (!d.reason?.trim()) fail(`${where}: deviation "${d.subject}" has no reason`);
@@ -1165,6 +1168,8 @@ type PatternLeg = {
   outbound?: boolean;
   route?: string;
   label?: string;
+  /** Other registered names for the same leg, for a drawing whose subject the standard label leaves out. */
+  labelVariants?: string[];
 };
 type PatternSpec = {
   requires?: string[];
@@ -1238,7 +1243,8 @@ function checkPatterns(
         if (leg.path && found.path !== leg.path) drift.push(`path ${found.path} (pattern says ${leg.path})`);
         if (leg.bidir && !found.bidir) drift.push("not bidirectional (pattern is)");
         if (leg.outbound && !found.outbound) drift.push("not outbound (pattern is)");
-        if (leg.label && found.label !== leg.label)
+        // A registered variant of the label is the same leg under a name one drawing needs.
+        if (leg.label && found.label !== leg.label && !(leg.labelVariants ?? []).includes(found.label ?? ""))
           drift.push(`label "${found.label ?? ""}" (pattern says "${leg.label}")`);
         return drift.length
           ? [`${arch.id}: ${name} leg ${found.from}->${found.to} diverges — ${drift.join("; ")}`]
@@ -1559,6 +1565,11 @@ function checkTooling(
     const arch = archetypeById.get(tool.architecture);
     if (!arch) {
       fail(`${where}: architecture "${tool.architecture}" is not a reference architecture`);
+    }
+    // On a hosted pattern a tool is what a box is built with, not an alternative to where it runs.
+    if (arch?.surface === "surfaceCloud" && !tool.fills?.length) fail(`${where}: needs fills: the box or boxes of ${arch.id} it is used to build`);
+    for (const id of tool.fills ?? []) {
+      if (arch && !arch.blocks.some((blk) => blk.id === id)) fail(`${where}: fills "${id}", which is not a block of ${arch.id}`);
     }
 
     // A third-party SaaS architecture is the browser-based interface only. A vendor's desktop and

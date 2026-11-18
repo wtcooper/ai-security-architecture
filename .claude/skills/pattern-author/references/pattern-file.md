@@ -32,7 +32,13 @@ exemplars:                   # real products of this kind
       What it is and which part of the drawing it illustrates.
     url: https://…           # the vendor's own page, read before citing
     asOf: "2026-11"          # the month you read it. Required.
+    fills: harness           # hosted patterns only, and required there: the box it is an example of
 ```
+
+On a hosted pattern an example is an example of one box (a framework for the agent, a server
+for the inference runtime, an isolation technology for the sandbox), never of where the pattern
+runs: that is a platform under `data/clouds/`. On endpoint and SaaS patterns an example is a
+whole product and has no `fills`.
 
 `distinguishedBy` is where the case for the pattern is made. If you cannot write it, the
 pattern is probably a product of its neighbour.
@@ -287,6 +293,10 @@ For a hosted pattern (`surfaceCloud`), each file under `data/clouds/` (`aws.yaml
       - One paragraph: what runs where and what makes it safe.
     bindings:                       # one per box that is not an actor or a control-plane box
       - { block: gateway, service: "The service that plays it", note: "What a builder must know." }
+      - { block: harness, service: "Your agent on <the platform's runtime>", builtWith: "<framework>" }
+        # builtWith: the framework or server the platform's own guides build that box with. Never
+        # put it in brackets after the service: the platform says where the box runs, and what it
+        # is built with is the builder's choice. Quote a service or note that contains a comma.
       - { block: tools, service: "Your tool servers", build: true }     # nothing managed fills it
     sources:                        # block id -> the vendor page that service was checked on
       gateway: https://…
@@ -308,6 +318,9 @@ For a hosted pattern (`surfaceCloud`), each file under `data/clouds/` (`aws.yaml
   platform: is the gateway really in the path, or does the default call direct; is search a
   feature of the model platform; does the sandbox have a network. What does not hold is a
   `differences` entry, not a quiet omission.
+- A setting row that is really a framework's or a server's own (a tool-approval hook in an agent
+  SDK, a flag of the inference server) carries `builtWith: <its name>`, so the page says it
+  applies if the box is built with that.
 - A setting row may carry a `check` (`command`, `expect`, `url`): one read-only command from the
   vendor's command reference. Never a command that creates or changes anything.
 - An on-premises entry names software the organisation runs, says under `requires` when a

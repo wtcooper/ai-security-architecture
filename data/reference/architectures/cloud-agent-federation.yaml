@@ -9,9 +9,9 @@ summary:
     Our agent working with agents other organisations run — a vendor platform's agent, a
     partner's — over the Agent2Agent protocol, in both directions. The whole architecture is
     an identity problem: which agent is speaking, on whose behalf, with what it may do, and how
-    far that authority is allowed to travel. Its lesson is identity federation versus agent
-    identity only: our users' identity travels to the federated vendor peer, never to the
-    partner.
+    far that authority is allowed to travel. Both peers are treated as equally untrusted and
+    get the same checks. Only one thing differs between them: our users' identity travels to
+    the federated vendor peer, never to the partner.
 
 description:
   - >
@@ -48,7 +48,11 @@ description:
     messages and the card itself land in our agent's context as instruction, so the gateway
     classifies inbound artifacts the way it classifies any tool result, and the card a peer
     publishes is admitted once — signature verified, hash pinned, skills reviewed — into a
-    registry our agents may reach, not discovered live from the open web.
+    registry our agents may reach, not discovered live from the open web. None of this depends
+    on which peer it is. The vendor platform's agent and the partner's are checked the same way
+    on every task: identity, signed card, scopes, what the task carries out, what comes back
+    and what it may cost. An agreement buys an assessment and, with the vendor, a federation;
+    it does not buy trust in what the peer's model writes.
   - >
     How much of this is in production is an honest question. A2A reached 1.0 in March 2026
     under the Agentic AI Foundation, the specification has three formal bindings, and the
@@ -75,6 +79,7 @@ distinguishedBy:
 
 exemplars:
   - name: Google Agent Development Kit (ADK)
+    fills: harness
     note: >
       Provides A2A support for exposing an agent and calling remote agents, experimental in Go,
       Java and Kotlin. These integration building blocks require deployment-specific identity,
@@ -82,15 +87,20 @@ exemplars:
     url: https://adk.dev/a2a/
     asOf: "2026-11"
   - name: Microsoft Agent Framework
+    fills: harness
     note: >
       A2A client and hosting integrations connect independently deployed agents. The application
       supplies authentication, task storage and deployment around the protocol adapters.
     url: https://learn.microsoft.com/en-us/agent-framework/journey/agent-to-agent
     asOf: "2026-10"
   - name: Atlassian Rovo A2A Gateway
+    fills: peerVendor
     note: >
       A vendor-operated peer that accepts goals from external A2A clients to work across Jira and
-      Confluence. Illustrates the remote peer side of federation.
+      Confluence. Illustrates the remote peer side of federation. It signs in the user (OAuth with
+      PKCE) and gives the calling agent no identity of its own; the protocol allows several
+      sign-in schemes, and this pattern draws the stronger one, where the agent has its own
+      identity as well.
     url: https://developer.atlassian.com/cloud/rovo-a2a/
     asOf: "2026-10"
 
@@ -110,9 +120,10 @@ zones:
     gloss: "peer organisations"
     note: >
       The organisations whose agents we work with, each under an agreement. Their agents, Agent
-      Cards, token endpoints and tenant models are theirs. The vendor platform's agreement adds
-      identity federation, so our users' identity is honoured there; the partner's lighter
-      agreement does not, so tasks with it run on agent identities alone.
+      Cards, token endpoints and tenant models are theirs, and both are equally untrusted: every
+      check at the crossing applies to each. The vendor platform's agreement adds identity
+      federation, so our users' identity is honoured there; the partner's lighter agreement
+      does not, so tasks with it run on agent identities alone.
   - id: zoneExternal
     owner: external
     note: >
@@ -342,10 +353,18 @@ blocks:
     zone: zoneCloud
     col: 3
     row: 2
-    pack: toolServicesRemote
     note: >
       Our own servers and connectors, reached when an inbound task from a peer needs our
       systems — on a token exchanged for the purpose, never on the peer's token.
+    items:
+      - id: remoteMcpServers
+        label: Remote MCP servers
+        icon: plug
+        note: Our own MCP servers, called for an inbound task on a token exchanged for that skill.
+      - id: apisConnectors
+        label: APIs & connectors
+        icon: plug
+        note: Our own APIs and connectors to systems of record, behind the same exchange.
 
   - id: orgData
     kind: external
@@ -516,7 +535,7 @@ edges:
     to: entry
     crossing:
       kind: person
-      via: "The person at the front end: single sign-on at our identity provider binds who is asking"
+      via: "The person at the front end: single sign-on binds who is asking, and their grant says which peers may act for them"
     path: primary
     bidir: true
     label: request / outcome
@@ -552,7 +571,7 @@ edges:
     to: gateway
     path: primary
     bidir: true
-    label: "inference, MCP & skills"
+    label: "inference, MCP, skills & A2A"
     note: >
       Every call the harness makes leaves here — inference, tool calls to our own servers, and
       every A2A task to a peer, sent without a credential of its own because the gateway
@@ -630,6 +649,12 @@ pins:
         token we sent is bound to that peer and that skill, so it cannot travel a hop further.
         What we lose is sight — which agents actually touched the task — unless trace context
         and task ids are carried and the peer's audit is part of the agreement.
+    - risk: riskAgentDelegationChainOpacity
+      at: gateway->partner
+      note: >
+        The same loss of sight with the partner, and with less to lean on: the partner agreement
+        carries no federation, so the trace context and task ids we send, and the audit the
+        partner agrees to keep, are all that says which agents touched the task after it left us.
     - risk: riskAgenticDelegationConfusedDeputy
       at: gateway->authServer
       note: >
@@ -643,6 +668,12 @@ pins:
         model we do not operate, and they land in our agent's context as instruction. The
         classification at the crossing screens them before the harness reads them; what survives
         is bounded by the action policy, not trusted.
+    - risk: riskPromptInjection
+      at: gateway->peerVendor
+      note: >
+        The vendor platform's artifacts are no safer than the partner's. An agreement and a
+        federation say who the peer is, not what its model wrote; its artifacts, status messages
+        and card text are screened at the crossing in the same way.
     - risk: riskShadowAndUnknownAgents
       at: gateway
       note: >
@@ -661,6 +692,17 @@ pins:
         Whatever our harness puts in a task message leaves our organisation. Data-loss
         inspection on the outbound task is the same control as on any tool call, applied to a
         payload a model composed.
+    - risk: riskSensitiveDataDisclosure
+      at: gateway->partner
+      note: >
+        A task sent to the partner leaves our organisation just as one sent to the vendor does,
+        and here no user identity travels to say whose data it is. The outbound payload is
+        inspected and redacted at the crossing before it goes.
+    - risk: riskEconomicDenialOfWallet
+      at: gateway->peerVendor
+      note: >-
+        The vendor platform's streams and artifacts land in our context and on our inference bill
+        exactly as the partner's do; a contract does not bound them, so the per-task limits do.
     - risk: riskEconomicDenialOfWallet
       at: gateway->partner
       note: >-
@@ -677,6 +719,12 @@ pins:
       note: >-
         A peer's Agent Card can change after admission — a moved token URL, altered skill descriptions —
         and our gateway reads it as a trusted description of what the peer does.
+    - risk: riskToolRegistryTampering
+      at: gateway->partner
+      note: >-
+        The partner's card can change after admission in the same way, and with no federation
+        its card and the registration it gave us are all we hold. It is verified against the pinned
+        key and fingerprint on every task.
   mitigations:
     - mitigation: D3-AA
       at: authServer
@@ -696,12 +744,15 @@ pins:
         at every exchange. A federation is a relationship a person owns, reviewed like any access grant.
     - mitigation: D3-CTS
       at: gateway->authServer
-      do: "Issue a new token at every hand-off, limited to the next agent, and never pass on the credential a request arrived with."
-      why: "Each token then works for one hop only, and the exchanges are your record of who delegated to whom."
+      do: "Issue a new token at every hand-off, limited to the next agent, short-lived and usable once, and never pass on the credential a request arrived with."
+      why: "Each token then works for one hop only and cannot be replayed, and the exchanges are your record of who delegated to whom."
       note: >-
         Every hop gets its own token: user assertion → peer-bound token outbound; peer token →
         downstream token inbound. The exchange is the delegation record, and nothing crosses a boundary
-        on the credential it arrived with.
+        on the credential it arrived with. Replay is closed at the same place: each assertion carries a
+        single-use `jti` and expires in minutes, tokens are sender-constrained (DPoP or mutual TLS) where
+        the peer supports it, and the gateway refuses a task whose `messageId` it has already accepted, so
+        a captured token or task cannot be sent again.
     - mitigation: cap-agent-tool-registry
       at: govSupplyChain
       do: "Keep a register of approved partner agents, with each one's description verified by signature and fingerprint, and a register of the descriptions you publish."
@@ -742,6 +793,13 @@ pins:
       note: >-
         Bounds on what one partner task may cost us — stream duration, artifact size, retries and fan-
         out — per peer and per task.
+    - mitigation: AML.M0036
+      at: gateway->peerVendor
+      do: "Apply the same limits to the vendor platform's agent: how long a task streams, how large its results are, and how many retries and sub-tasks it starts."
+      why: "A contract does not cap what a vendor's agent sends back, and it reaches your model bill the same way."
+      note: >-
+        The same per-peer, per-task bounds on the vendor platform's agent. Both peers are metered alike; the
+        agreement changes who is accountable, not what a task may cost.
     - mitigation: cap-ai-vendor-assessment
       at: peerVendor
       do: "Review the partner platform before signing: how it handles your users' identities, how it separates customers, whether it signs its agent descriptions and what audit records it exports."
@@ -750,6 +808,14 @@ pins:
         The assessment behind the agreement: how the platform handles our users' assertions, its tenant
         isolation, its card signing, its audit export — the questions A2A does not answer and the contract
         must.
+    - mitigation: cap-ai-vendor-assessment
+      at: partner
+      do: "Review the partner organisation's agent before the first task: who operates it, whether it signs its agent description, how it keeps your tasks apart from others' and what records it will share."
+      why: "A lighter agreement is not a reason for a lighter review, because the partner's agent reads your tasks and writes into your agent's context."
+      note: >-
+        The partner is assessed as the vendor platform is, scaled to a relationship with no federation: its
+        operator, its card signing and key handling, its tenant isolation, how long it keeps our task content,
+        and the audit records it will reconcile with ours. Recorded against its entry in the peer registry.
     - mitigation: cap-agent-tracing
       at: govObservability
       do: "Carry a shared trace identifier and the agent's identity on every task, and match task records across both organisations."
@@ -778,6 +844,15 @@ pins:
       note: >-
         Each peer's card — the vendor's and the partner's — treated as a dependency: signature verified against
         the key pinned at admission and on every task, hash pinned, a change a decision rather than a surprise.
+    - mitigation: D3-APA
+      at: user->entry
+      do: "Record at your front end what each person has agreed your agent may do with other organisations' agents on their behalf, and show them which organisation a task will go to before it is sent."
+      why: "The protocol does not ask the person before data is shared between agents, so their agreement has to be captured where they sign in."
+      note: >-
+        The user's grant, captured where their identity is bound: which peers may act for them and for which
+        skills, shown before a task leaves and revocable by them. A2A leaves user consent to the implementer,
+        so the front end is where it is recorded, and the same surface relays a peer's
+        `TASK_STATE_AUTH_REQUIRED` when the partner needs the person's own authority.
 
 walkthrough:
   title: A user's task crosses to a federated peer platform
@@ -1187,12 +1262,14 @@ deviations:
       packages. This drawing's subject is identity between agents, its native tools exist for
       memory, and the install path is drawn identically on the single agent workflow; adding it
       here would spend two blocks on a path this architecture does not change.
-  - subject: A2A peer agents are blocks, not a Tool services item
+  - subject: A2A peer agents are blocks, and Tool services does not list them
     reason: >
       Elsewhere in the catalogue a peer agent is an item on Tool services — how an agent reaches
       another agent over the network. Here the peer is the subject, its card and token endpoint
       are where the identity work happens, and an item could not carry them; the registered
-      Peer agent block is used twice in the vendor band.
+      Peer agent block is used twice in the vendor band. Tool services therefore lists its
+      other two standard items and leaves "A2A peer agents" out, so the drawing does not show
+      the peers twice.
 
 sources:
   - title: "Agent2Agent protocol — specification v1.0"

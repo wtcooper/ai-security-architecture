@@ -5,7 +5,7 @@ and what was done about it. Nothing here fails the build.
 
 Thirty-seven inconsistencies were reported inside the pattern files while their one-liners and
 crossings were written. Each was then checked against its file. Eighteen were real and fixed
-with a prose-only edit, twelve need a design decision and are listed below with their options,
+with a prose-only edit, twelve needed a design decision, of which seven are still listed below with their options,
 and seven were not issues. Onboarding a product for two patterns raised two more decisions,
 one of which (the sandbox technique) is now settled, as is the local runtime's egress question. No pin, block, flow or zone was changed by that pass.
 
@@ -24,6 +24,7 @@ one of which (the sandbox technique) is now settled, as is the local runtime's e
 | Version 1's header summary was missing from the pattern page | Restored. See [V1-COMPARISON.md](V1-COMPARISON.md). |
 | Agent sandbox: the drawing asserted a microVM round each rollout, which its example does not provide | A sandbox is now defined by what it does: a boundary around running code, enforced from outside that code, that denies everything it does not explicitly grant. The technique sets its strength, not whether it is one. The definition is in the vocabulary and is used by the sandbox and personal-agent patterns; Kata Containers and gVisor stay as examples, and each cloud's mapping still names that cloud's own technique. |
 | Local model runtime: a risk note and a deviation relied on a device firewall rule that no control pinned | Outbound Traffic Filtering is now pinned on the weight fetch and on the runtime, delivered by the organisation's existing egress proxy and not by a per-process firewall rule. Model sources are held to the internal mirror, so quarantine is the only way in, and the runtime vendor's cloud is refused, because a tool's own switch is the user's to change. The model itself makes no calls, and the calling harness's egress stays on its own pattern. Ollama, LM Studio and llama.cpp each gained a row, read on the vendor's page on 2026-11-16. |
+| Agent federation: pins differed between the two peers, nothing was pinned at the front end, Tool services listed the peers again, the gateway label did not name A2A, and the Rovo example signs in the user and not the agent | Decided on 2026-11-18: both peers are equally untrusted. The five shared risks (injection, data disclosure, card tampering, cost, delegation opacity), the cost limit and the assessment are pinned on both peer flows; what stays different is whose identity travels. The user's grant is pinned at the front end. Tool services lists its other two standard items only. The label is the registered variant "inference, MCP, skills & A2A". The Rovo example is kept with a note. Replay protection is stated in the token-exchange control: single-use, short-lived assertions and a task refused the second time. No control was added, so no chip was renumbered. |
 
 ## By design, not gaps
 
@@ -47,15 +48,10 @@ Each would change what a pattern claims, so nothing was changed.
 | Personal autonomous agent | Egress control and Execution Isolation are pinned on the sandbox, so the tools-to-open-web crossing shows no control. | Keep them on the sandbox and accept the empty row (or have the table inherit from the enclosing box); or pin egress control on the tools, as the coding-agent patterns do. |
 | Enterprise AI chat | Identity services describes domain capture, but its only pin is admin consent on the vendor's connectors. | Add an access-policy pin for domain capture; or leave it as a vendor-tenant setting and reword the box to lead with admin consent. |
 | Persistent managed agents | The source-control note relies on the vendor's git proxy holding the credential, but credential scoping is pinned only on the connector flow. | Pin credential scoping for the repository credential; or treat it as vendor-internal and soften the note to "verify per product". |
-| Agent federation | Tool services carries an "A2A peer agents" item, while a deviation says peers are blocks. | Drop the item from this pattern; or keep the standard item set and say so in the deviation. |
-| Agent federation | Risk and control pins differ between the two peers, though the notes say most apply to both. | Keep one pin per risk on the peer where it bites hardest and record that; or pin each shared risk on both peer flows. |
-| Agent federation | Nothing is pinned at the front end, so the user's crossing is "through the person", unlike the chat agent. | Leave it, since the pattern's subject is identity between agents; or pin the user-grant control there as the chat agent does. |
-| Agent federation | The harness-to-gateway label reads "inference, MCP & skills" and does not name A2A. The label is a registered vocabulary term. | Leave it and rely on the corrected note; or register an A2A variant of the label in the vocabulary. |
 | Agent sandbox | No sign-in or approval control is pinned on the researcher or the orchestrator. | Pin one on the researcher's flow; or record that operator access to the cluster is outside this drawing. |
 | Agent sandbox | The kill switch is pinned on Observability & response, though the orchestrator enforces the stop. | Keep it there, as every other pattern does; or move it to the orchestrator. |
 | Self-hosted inference | Observability & response's note describes the serving inventory and red teaming, which Supply-chain assurance owns, and not its own pin, the request log. | Rewrite the note around the log; or keep red teaming as an Observability duty and pin a control for it. |
 | Training pipeline | Agent Authentication is pinned only on job-to-storage, though it is also checked at the corpus store. | Keep the one pin as representative; or add a second on the corpus flow. |
-| Agent federation | Atlassian's Rovo A2A Gateway, a named example, authenticates the user by OAuth with PKCE, not the per-agent key or mTLS identity the pattern draws. | Keep it as an example and note the difference; or drop it. |
 
 ## Fixed in the prose
 

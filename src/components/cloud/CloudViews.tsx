@@ -91,6 +91,11 @@ export function CloudComparison({ archetype, products }: { archetype: Archetype;
                       <>
                         <span className="text-ink">{binding.service}</span>
                         {binding.build && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-3">You build this</span>}
+                        {binding.builtWith && !binding.service.includes(binding.builtWith) && (
+                          <span className="block text-[11.5px] text-ink-3" data-built-with>
+                            built with {binding.builtWith} in {p.cloud.selfManaged ? "this mapping" : `${p.cloud.short}'s guides`}
+                          </span>
+                        )}
                       </>
                     ) : (
                       <span className="text-ink-3">—</span>

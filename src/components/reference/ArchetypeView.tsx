@@ -16,7 +16,7 @@ import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawi
 import { CrossingsRegister } from "@/components/drawing/CrossingsRegister";
 import { CloudSwitch } from "@/components/cloud/CloudSwitch";
 import { cloudProductFor, cloudProductsFor, differenceMarks, platformWords } from "@/components/cloud/model";
-import { cloudById, componentChoiceFor, incidents } from "@/lib/data";
+import { cloudById, componentChoiceFor, incidents, toolById } from "@/lib/data";
 import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
@@ -91,6 +91,11 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   const services = cloudProduct ? servicesFor(cloudProduct.id, archetype.id) : null;
   // Where the chosen cloud does not follow the drawing: marked on the drawing, listed under How it works.
   const differs = useMemo(() => (cloudProduct ? differenceMarks(archetype, cloudProduct) : null), [archetype, cloudProduct]);
+  // The framework or server chosen in the settings step, named in the box it fills.
+  const builtWith = useMemo(() => {
+    const chosen = tool ? toolById.get(tool) : undefined;
+    return chosen?.architecture === archetype.id && chosen.fills?.length ? new Map(chosen.fills.map((id) => [id, chosen.name] as const)) : null;
+  }, [tool, archetype.id]);
   const differCount = cloudProduct?.implementation.differences?.length ?? 0;
   const moreCount = cloudProduct?.implementation.alsoNeeded?.length ?? 0;
   const showOnCloud = () => {
@@ -100,7 +105,12 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   };
   // A product picked in the settings step is the open product; a cloud is also the page's cloud.
   const pickProduct = (id: string | null) => {
-    if (id && cloudById.has(id)) onCloud(id);
+    if (id && cloudById.has(id)) {
+      onCloud(id);
+      // Where it runs and what it is built with are separate choices: a framework already
+      // chosen in the settings step stays chosen when the platform changes.
+      if (tool && !cloudById.has(tool)) return;
+    }
     onPickTool(id);
   };
   // The switch above the drawing: if a cloud's settings are open, they follow it.
@@ -221,6 +231,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               services={services}
               differs={differs}
               ownBoundary={cloudProduct?.cloud.boundary ?? null}
+              builtWith={builtWith}
               className="w-full"
             />
           </div>
@@ -315,6 +326,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
             tool={tool}
             focus={focus}
             onPickTool={pickProduct}
+            onDropFramework={() => onPickTool(cloudProduct?.id ?? null)}
             cloud={cloudProduct}
           />
         )}

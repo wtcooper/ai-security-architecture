@@ -37,11 +37,14 @@ export function CapabilityTable({
   onOpen,
   onShowDrawing,
   product = null,
+  products = product ? [product] : [],
 }: {
   groups: ControlGroup[];
   archetype: Archetype;
   /** The cloud or tool the reader is enabling: its own settings are named on every control. */
   product?: Product | null;
+  /** On a hosted pattern, both choices: the platform it runs on and the framework it is built with. */
+  products?: Product[];
   /** The capability whose row is open, which is also the one lit on the drawing. */
   open: string | null;
   onOpen: (id: string | null) => void;
@@ -80,7 +83,7 @@ export function CapabilityTable({
           const where = placementsFor(archetype.id, m.id);
           const reduces = risksForMitigation(m.id).filter((r) => pinnedRisks.has(r.id));
           const own = statusFile[m.id];
-          const options = product ? optionsFor(product, m.id) : [];
+          const named = products.map((p) => ({ product: p, options: optionsFor(p, m.id) }));
           // One instruction per place the control is pinned; most controls have one.
           const steps = where.steps;
           return (
@@ -105,7 +108,9 @@ export function CapabilityTable({
                       <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-2" data-why>{step.why}</span>
                     </span>
                   ))}
-                  {product && <OptionNames short={productShort(product)} options={options} />}
+                  {named.map(({ product: p, options }) => (
+                    <OptionNames key={p.id} short={productShort(p)} options={options} />
+                  ))}
                 </span>
                 <span className="col-start-2 text-[12px] leading-snug md:col-start-auto">
                   <span className="block font-semibold text-ink-2" data-control-name>{capabilityName(m.id)}</span>
@@ -120,7 +125,9 @@ export function CapabilityTable({
               </button>
               {expanded && (
                 <div className="space-y-3 border-t border-line bg-mist/30 px-4 py-3.5 text-[12.5px] leading-relaxed text-ink-2 md:pl-[60px]">
-                  {product && <NativeOptions id={product.id} name={product.name} options={options} />}
+                  {named.map(({ product: p, options }) => (
+                    <NativeOptions key={p.id} id={p.id} name={p.name} options={options} />
+                  ))}
                   {reduces.length > 0 && (
                     <p className="text-[12px]">
                       <span className="font-semibold text-ink">Reduces here: </span>

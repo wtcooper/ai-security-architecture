@@ -8,7 +8,10 @@ import { SURFACE_SITUATION } from "../src/components/patterns/labels";
 import { OnCloud } from "../src/components/cloud/CloudViews";
 import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor } from "../src/components/cloud/model";
 import { SettingCheck } from "../src/components/enable/SettingCheck";
-import { componentChoiceIn, dataset } from "../src/lib/data";
+import { CapabilityTable } from "../src/components/enable/CapabilityTable";
+import { controlGroups } from "../src/components/enable/model";
+import { ProductSettings } from "../src/components/enable/ProductSettings";
+import { componentChoiceIn, dataset, productsForArchetype } from "../src/lib/data";
 import { checkCommandProblem, type ProductStatusEntry } from "../src/lib/types";
 import { checkProductStatus } from "./lib/products";
 
@@ -142,4 +145,81 @@ test("an organisation can record what it runs in place of the reference, and a l
   refuse({ components: { [block]: { uses: "x", link: "http://insecure.example.com" } } }, /https/);
   refuse({ settings: { [setting]: { link: "ftp://x" } } }, /https/);
   refuse({ components: { [block]: { uses: "x" } } }, /is a tool/, dataset.tools[0].id);
+});
+
+test("on a hosted pattern, where it runs and what it is built with are two choices, not one list", () => {
+  for (const a of hosted) {
+    const products = productsForArchetype(a.id);
+    const platforms = products.filter((p) => p.kind === "cloud");
+    const frameworks = products.filter((p) => p.kind === "tool");
+    assert.ok(frameworks.length, `${a.id}: has a catalogued framework or server`);
+    // Every catalogued tool and every example says which box it fills.
+    for (const p of frameworks) {
+      if (p.kind !== "tool") continue;
+      assert.ok(p.tool.fills?.length, `${p.tool.id}: says which box it is used to build`);
+      for (const id of p.tool.fills!) assert.ok(a.blocks.some((b) => b.id === id), `${p.tool.id}: fills a box of ${a.id}`);
+    }
+    for (const e of a.exemplars ?? []) assert.ok(e.fills && a.blocks.some((b) => b.id === e.fills), `${a.id}: example ${e.name} names the box it is an example of`);
+    // No platform names a framework inside a component's name.
+    for (const p of platforms) {
+      if (p.kind !== "cloud") continue;
+      for (const b of p.implementation.bindings) assert.doesNotMatch(b.service, /\((Strands|ADK|Microsoft Agent Framework|LangGraph)\)/, `${a.id} on ${p.cloud.short}: ${b.block} names the framework in builtWith`);
+    }
+
+    const [platform] = platforms;
+    const [framework] = frameworks;
+    const render = (selected: string | null, where: typeof platform | null) =>
+      renderToStaticMarkup(<ProductSettings archetype={a} products={products} selected={selected} platform={where} onPick={() => {}} lit={null} onLight={() => {}} />);
+    // Nothing chosen: both rows of choices, and no table until the reader picks.
+    const none = render(null, null);
+    assert.match(none, /data-choice="Where it runs"/);
+    assert.match(none, /data-choice="What you build it with"/);
+    assert.match(none, /data-choose-first/);
+    assert.doesNotMatch(none, /data-settings=/);
+    // Both chosen: one table holding both products' settings, each row saying whose it is.
+    const both = render(framework.id, platform);
+    assert.match(both, new RegExp(`data-settings="${platform.id} ${framework.id}"`), `${a.id}: one table for both`);
+    const rows = [...both.matchAll(/data-setting-name/g)].length;
+    assert.equal(rows, platform.settings.length + framework.settings.length, `${a.id}: every setting of both is a row`);
+    assert.equal([...both.matchAll(/data-setting-source=/g)].length, rows, `${a.id}: every row says whose it is`);
+    assert.match(both, /data-setting-source="cloud"/);
+    assert.match(both, /data-setting-source="tool"/);
+    // The platform alone: its settings; a row that belongs to a framework says so.
+    const alone = render(platform.id, platform);
+    assert.match(alone, new RegExp(`data-settings="${platform.id}"`));
+    const tagged = platform.settings.filter((st) => st.builtWith).length;
+    assert.equal([...alone.matchAll(/data-setting-source="framework"/g)].length, tagged, `${a.id}: ${tagged} framework rows are marked`);
+
+    // The control rows name both products' settings.
+    const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(a)} archetype={a} open={null} onOpen={() => {}} products={[platform, framework]} />);
+    const expected = a.mitigations.reduce((n, id) => n + [platform, framework].filter((p) => p.settings.some((st) => st.mitigations.includes(id))).length, 0);
+    assert.equal([...table.matchAll(/data-option-names/g)].length, expected, `${a.id}: each control names the platform's and the framework's settings`);
+
+    // The drawing names the chosen framework in the box it fills, and nowhere else.
+    const html = page(a.id, `tool=${framework.id}`);
+    assert.match(html, /data-box-tag="built-with"/, `${a.id}: the box is tagged`);
+    assert.doesNotMatch(page(a.id), /data-box-tag="built-with"/, `${a.id}: no tag until a framework is chosen`);
+  }
+  // A pattern that is bought, not hosted, keeps its one row of products.
+  const bought = dataset.archetypes.find((a) => a.surface !== "surfaceCloud" && productsForArchetype(a.id).length > 1)!;
+  const one = renderToStaticMarkup(<ProductSettings archetype={bought} products={productsForArchetype(bought.id)} selected={null} onPick={() => {}} lit={null} onLight={() => {}} />);
+  assert.doesNotMatch(one, /data-hosted-choices/);
+});
+
+test("agent federation checks both peers alike; only whose identity travels differs", () => {
+  const a = dataset.archetypes.find((x) => x.id === "archAgentFederation")!;
+  const risksAt = (at: string) => a.pins.risks.filter((p) => p.at === at).map((p) => p.risk).sort();
+  const shared = ["riskAgentDelegationChainOpacity", "riskEconomicDenialOfWallet", "riskPromptInjection", "riskSensitiveDataDisclosure", "riskToolRegistryTampering"];
+  for (const at of ["gateway->peerVendor", "gateway->partner"]) for (const r of shared) assert.ok(risksAt(at).includes(r), `${at} carries ${r}`);
+  const controlAt = (id: string) => a.pins.mitigations.filter((p) => p.mitigation === id).map((p) => p.at);
+  assert.deepEqual(controlAt("AML.M0036").sort(), ["gateway->partner", "gateway->peerVendor"], "the cost limit is on both peers");
+  assert.deepEqual(controlAt("cap-ai-vendor-assessment").sort(), ["partner", "peerVendor"], "both peers are assessed");
+  assert.ok(controlAt("D3-APA").includes("user->entry"), "the user's grant is pinned at the front end");
+  assert.match(a.pins.mitigations.find((p) => p.mitigation === "D3-CTS")!.note ?? "", /replay|sent again/i, "replay protection is stated in the token-exchange control");
+  const tools = a.blocks.find((b) => b.id === "internalTools")!;
+  assert.ok(!(tools.items ?? []).some((i) => /A2A/.test(i.label)), "Tool services does not list the peers again");
+  assert.match(a.edges.find((e) => e.from === "harness" && e.to === "gateway")!.label ?? "", /A2A/, "the gateway flow names A2A");
+  assert.match(a.exemplars!.find((e) => /Rovo/.test(e.name))!.note, /signs in the user/, "the Rovo example says how it differs");
+  // No control was added, so no chip was renumbered.
+  assert.equal(a.mitigations.length, 13);
 });

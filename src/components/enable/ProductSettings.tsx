@@ -1,8 +1,11 @@
 "use client";
 
 /**
- * Step 2 of Enable: the same list as step 1, now in the product. One pill per product; for the
- * one picked, every recommended setting as a row shaped like a control row: what to set and the
+ * Step 2 of Enable: the same list as step 1, now in the product. One pill per product; on a
+ * hosted pattern, two rows of pills, because where it runs (a cloud or the organisation's own
+ * data centre) and what its boxes are built with (a framework or a server) are separate choices
+ * and not alternatives. For what is picked, every recommended setting as a row shaped like a
+ * control row, both products' rows in one table when two are picked: what to set and the
  * value, one line of why, and beside it the control it delivers (by number and name) and where
  * it is set. The settings sit under the same plain headings, in the same order, as the controls
  * above, so the eye meets nothing new moving from one step to the next.
@@ -12,7 +15,7 @@
  * appears only once the organisation has recorded a status for that product.
  */
 import Link from "next/link";
-import { Fragment, useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
 import { SettingCheck } from "./SettingCheck";
@@ -37,9 +40,9 @@ export function AdoptionPill({ status, title }: { status: AdoptionStatus; title?
 }
 
 /** The row of products, each a pill tinted by its adoption. */
-function ProductPills({ products, selected, onPick }: { products: Product[]; selected: string; onPick: (id: string) => void }) {
+function ProductPills({ products, selected, onPick, label = "Products" }: { products: Product[]; selected: string; onPick: (id: string) => void; label?: string }) {
   return (
-    <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Products">
+    <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={label}>
       {products.map((p) => {
         const a = adoptionFor(p.id);
         const m = ADOPTION_META[a.status];
@@ -76,27 +79,41 @@ const placeOf = (setting: ProductSetting) => {
   return head.length > 56 ? `${head.slice(0, 54).trimEnd()}…` : head;
 };
 
-/** One product's settings, under the same headings and in the same order as the controls of step 1. */
+/** How a product is named in a tight space: a platform by its short name, a tool by its own. */
+const shortOf = (product: Product) => (product.kind === "cloud" ? product.cloud.short : product.tool.name);
+
+/**
+ * The settings of one product, or of two chosen together on a hosted pattern (where it runs, and
+ * what it is built with), under the same headings and in the same order as the controls of step 1.
+ * With two, each row says which it belongs to.
+ */
 export function SettingsTable({
   product,
+  products = product ? [product] : [],
   archetype,
   lit,
   onLight,
 }: {
-  product: Product;
+  product?: Product;
+  /** One product, or the platform and the framework of a hosted pattern. */
+  products?: Product[];
   archetype: Archetype;
   /** The control lit on the drawing, so its name reads as selected here too. */
   lit: string | null;
   onLight: (capabilityId: string) => void;
 }) {
   const number = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
-  const groups = settingGroups(archetype, product.settings);
-  // Shown only once a status is recorded for this product; until then every row would read "Not enabled".
-  const recorded = product.settings.some((s) => settingAdoptionFor(product.id, s.id).set);
+  // A setting belongs to the product that lists it; two products may use the same id.
+  const owner = new Map<ProductSetting, Product>(products.flatMap((p) => p.settings.map((st) => [st, p] as const)));
+  const groups = settingGroups(archetype, products.flatMap((p) => p.settings));
+  // Shown only once a status is recorded for one of these products; until then every row would read "Not enabled".
+  const recorded = products.some((p) => p.settings.some((st) => settingAdoptionFor(p.id, st.id).set));
+  // A row says whose it is when two products are shown, or when the platform's file carries a framework's own setting.
+  const tagged = products.length > 1;
   const grid = recorded ? "md:grid-cols-[28px_minmax(0,2.3fr)_minmax(0,1fr)_104px]" : "md:grid-cols-[28px_minmax(0,2.3fr)_minmax(0,1fr)]";
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-paper" data-settings={product.id}>
+    <div className="overflow-hidden rounded-xl border border-line bg-paper" data-settings={products.map((p) => p.id).join(" ")}>
       <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${grid}`}>
         <span aria-hidden />
         <span>What to set</span>
@@ -121,14 +138,16 @@ export function SettingsTable({
           <ul className="divide-y divide-line border-b border-line last:border-b-0">
             {group.settings.map((s) => {
               const controls = controlsDelivered(archetype, s);
-              const expanded = open === s.id;
+              const product = owner.get(s)!;
+              const key = `${product.id}-${s.id}`;
+              const expanded = open === key;
               const a = settingAdoptionFor(product.id, s.id);
               const ourLink = settingLinkFor(product.id, s.id);
               return (
-                <li key={s.id} id={`setting-${product.id}-${s.id}`} className="scroll-mt-24">
+                <li key={key} id={`setting-${key}`} className="scroll-mt-24">
                   <button
                     type="button"
-                    onClick={() => setOpen(expanded ? null : s.id)}
+                    onClick={() => setOpen(expanded ? null : key)}
                     aria-expanded={expanded}
                     className={`grid w-full grid-cols-[28px_minmax(0,1fr)] gap-x-4 gap-y-1 px-4 py-3 text-left transition-colors hover:bg-mist/50 ${expanded ? "bg-mist/50" : ""} ${grid}`}
                   >
@@ -146,7 +165,24 @@ export function SettingsTable({
                       {controls.length ? number.get(controls[0]) : "·"}
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-[13.5px] font-semibold leading-snug text-ink" data-setting-name>{s.name}</span>
+                      <span className="block text-[13.5px] font-semibold leading-snug text-ink" data-setting-name>
+                        {s.name}
+                        {(tagged || s.builtWith) && (
+                          <span
+                            className="ml-2 inline-block rounded border border-line bg-mist px-1.5 py-px align-[1px] text-[10.5px] font-semibold text-ink-2"
+                            data-setting-source={s.builtWith ? "framework" : product.kind}
+                            title={
+                              s.builtWith
+                                ? `A ${s.builtWith} setting: it applies if you build this with ${s.builtWith}`
+                                : product.kind === "cloud"
+                                  ? `A setting of ${product.cloud.name}: where it runs`
+                                  : `A setting of ${product.tool.name}: what you build it with`
+                            }
+                          >
+                            {s.builtWith ?? shortOf(product)}
+                          </span>
+                        )}
+                      </span>
                       <span className="mt-0.5 block text-[13px] leading-snug text-ink" data-setting-value>
                         <span className="text-ink-3">Set to </span>
                         {s.recommended}
@@ -186,6 +222,15 @@ export function SettingsTable({
                           <>
                             <dt className="text-ink-3">Requires</dt>
                             <dd>{s.requires}</dd>
+                          </>
+                        )}
+                        {s.builtWith && product.kind === "cloud" && (
+                          <>
+                            <dt className="text-ink-3">Applies if</dt>
+                            <dd data-setting-built-with>
+                              You build this with {s.builtWith}, as {shortOf(product) === "On-premises" ? "this mapping does" : `${shortOf(product)}'s own guides do`}. With another framework or server, use its own
+                              setting for the same control.
+                            </dd>
                           </>
                         )}
                         <dt className="text-ink-3">Checked</dt>
@@ -289,10 +334,24 @@ function ProductHeader({ product, archetype }: { product: Product; archetype: Ar
   );
 }
 
+/** One row of choices in the settings step of a hosted pattern, with what the choice is. */
+function ChoiceRow({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+  return (
+    <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[150px_minmax(0,1fr)]" data-choice={label}>
+      <p className="pt-1 text-[12.5px] font-semibold leading-snug text-ink">
+        {label}
+        <span className="block text-[11.5px] font-normal text-ink-3">{hint}</span>
+      </p>
+      <div>{children}</div>
+    </div>
+  );
+}
+
 export function ProductSettings({
   archetype,
   products,
   selected,
+  platform = null,
   onPick,
   lit,
   onLight,
@@ -301,10 +360,70 @@ export function ProductSettings({
   products: Product[];
   /** The product open, or null for the default: the first one switched on, else the first. */
   selected: string | null;
-  onPick: (id: string) => void;
+  /** On a hosted pattern: the cloud or data centre the pattern is shown as built on. */
+  platform?: Product | null;
+  /** Picks a product; null lets go of the framework on a hosted pattern. */
+  onPick: (id: string | null) => void;
   lit: string | null;
   onLight: (capabilityId: string) => void;
 }) {
+  const platforms = products.filter((p) => p.kind === "cloud");
+  const frameworks = products.filter((p) => p.kind === "tool");
+  // A hosted pattern has two separate choices: where it runs, and what its own boxes are built with.
+  // They are not alternatives, so they are not one row of pills.
+  if (platforms.length) {
+    const picked = products.find((p) => p.id === selected);
+    const where = platform ?? (picked?.kind === "cloud" ? picked : null);
+    const framework = picked?.kind === "tool" ? picked : null;
+    const chosen = [where, framework].filter((p): p is Product => Boolean(p));
+    const titles = new Map(archetype.blocks.map((b) => [b.id, b.title]));
+    // The boxes the catalogued frameworks fill, as the reader sees them on the drawing.
+    const filled = [...new Set(frameworks.flatMap((p) => (p.kind === "tool" ? p.tool.fills ?? [] : [])).map((id) => titles.get(id) ?? id))];
+    const defaults = where?.kind === "cloud" ? [...new Set(where.implementation.bindings.map((b) => b.builtWith).filter((x): x is string => Boolean(x)))] : [];
+    return (
+      <div data-hosted-choices>
+        <div className="space-y-3 rounded-xl border border-line bg-mist/40 p-3.5">
+          <ChoiceRow label="Where it runs" hint="a cloud, or your own data centre">
+            <ProductPills products={platforms} selected={where?.id ?? ""} onPick={onPick} label="Where it runs" />
+          </ChoiceRow>
+          {frameworks.length > 0 && (
+            <ChoiceRow label="What you build it with" hint={`fills ${filled.length === 1 ? "the" : "these boxes:"} ${filled.join(", ")}${filled.length === 1 ? " box" : ""}`}>
+              <ProductPills products={frameworks} selected={framework?.id ?? ""} onPick={(id) => onPick(id === framework?.id ? null : id)} label="What you build it with" />
+              {defaults.length > 0 && !framework && (
+                <p className="mt-1.5 text-[12px] leading-snug text-ink-3" data-default-framework>
+                  {where?.kind === "cloud" && where.cloud.selfManaged ? "This mapping builds" : `${shortOf(where!)}'s own guides build`} it with {defaults.join(" and ")}. That is a default, not a
+                  requirement: any framework that fills the box runs there.
+                </p>
+              )}
+            </ChoiceRow>
+          )}
+        </div>
+        {chosen.length === 0 ? (
+          <p className="mt-3 text-[13px] leading-snug text-ink-2" data-choose-first>
+            These are two separate choices, not alternatives. Pick where it runs, what you build it with, or both, to see the settings under the same headings as the controls above.
+          </p>
+        ) : (
+          <>
+            <div className="mt-3 space-y-2.5">
+              {chosen.map((p) => (
+                <ProductHeader key={p.id} product={p} archetype={archetype} />
+              ))}
+            </div>
+            {chosen.some((p) => p.settings.length) && (
+              <div className="mt-3">
+                <SettingsTable key={chosen.map((p) => p.id).join("+")} products={chosen.filter((p) => p.settings.length)} archetype={archetype} lit={lit} onLight={onLight} />
+              </div>
+            )}
+            {framework?.kind === "tool" && !framework.settings.length && (
+              <div className="mt-4">
+                <ToolRecord tool={framework.tool} />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
   const fallback = products.find((p) => adoptionFor(p.id).status === "enabled") ?? products[0];
   const product = products.find((p) => p.id === selected) ?? fallback;
   if (!product) return null;

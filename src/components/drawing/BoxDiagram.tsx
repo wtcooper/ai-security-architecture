@@ -39,6 +39,12 @@ export const BOUNDARY_TONE: Record<BoundaryTone, { stroke: string; fill: string;
 const reverse = (k: string) => k.split("->").reverse().join("->");
 const STEP = "var(--ink)";
 
+/** A box's small tag line, cut to the box's width: capitals at 8.5px with tracking run about 6.1px each. */
+const fitTag = (text: string, width: number) => {
+  const max = Math.max(8, Math.floor(width / 6.1));
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+};
+
 export function BoxDiagram({
   archetype,
   spec,
@@ -49,6 +55,7 @@ export function BoxDiagram({
   services = null,
   differs = null,
   ownBoundary = null,
+  builtWith = null,
   onPickMitigation,
   onPickRisk,
   onHover,
@@ -71,6 +78,8 @@ export function BoxDiagram({
   differs?: Map<string, string> | null;
   /** The title of the organisation's own boundary when the pattern is shown somewhere other than a cloud ("Enterprise data centre"). */
   ownBoundary?: string | null;
+  /** Block id -> the framework or server the reader chose to build that box with. */
+  builtWith?: Map<string, string> | null;
   onPickMitigation?: (id: string) => void;
   onPickRisk?: (id: string) => void;
   onHover?: (card: HoverCard | null) => void;
@@ -345,7 +354,16 @@ export function BoxDiagram({
             const sub = service ? service.service : summaryOf(block);
             // A long title takes a second line and the one-liner gives one up.
             const titleLines = wrap(block.title, bx.w - 22, 13.2, 2);
-            const room = Math.max(1, bx.lines - (titleLines.length - 1) - (service?.build || service?.ours ? 1 : 0));
+            // One small line under the words: whose choice the box is, or what it is built with.
+            const chosenWith = builtWith?.get(bx.id);
+            const tag = service?.ours
+              ? "YOUR ORGANISATION'S CHOICE"
+              : chosenWith && !(service?.service ?? "").includes(chosenWith)
+                ? fitTag(`BUILT WITH ${chosenWith.toUpperCase()}`, bx.w - 24)
+                : service?.build
+                  ? "YOU BUILD THIS"
+                  : null;
+            const room = Math.max(1, bx.lines - (titleLines.length - 1) - (tag ? 1 : 0));
             const subLines = sub ? wrap(sub, bx.w - 24, 10.5, bx.tone === "container" ? bx.lines : bx.tone === "governance" ? 3 : room) : [];
             const subY = bx.y + 35 + (titleLines.length - 1) * 14;
             const accent = bx.tone === "actor" || bx.tone === "governance" ? null : blockTab(block);
@@ -371,9 +389,17 @@ export function BoxDiagram({
                     {s}
                   </text>
                 ))}
-                {(service?.build || service?.ours) && (
-                  <text x={bx.x + 12} y={subY + subLines.length * 12.5} fontSize={8.5} fontWeight={700} letterSpacing="0.06em" fill="var(--ink-3)" data-box-tag={service.ours ? "ours" : "build"}>
-                    {service.ours ? "YOUR ORGANISATION'S CHOICE" : "YOU BUILD THIS"}
+                {tag && (
+                  <text
+                    x={bx.x + 12}
+                    y={subY + subLines.length * 12.5}
+                    fontSize={8.5}
+                    fontWeight={700}
+                    letterSpacing="0.06em"
+                    fill={tag.startsWith("BUILT WITH") ? "var(--ink-2)" : "var(--ink-3)"}
+                    data-box-tag={service?.ours ? "ours" : tag.startsWith("BUILT WITH") ? "built-with" : "build"}
+                  >
+                    {tag}
                   </text>
                 )}
               </g>

@@ -539,6 +539,11 @@ export interface ArchetypeExemplar {
   url?: string;
   /** When this was true, e.g. "2026-08". This field ages; the taxonomy should not. */
   asOf?: string;
+  /**
+   * The box this is an example of, on a hosted pattern: a framework fills the agent, an isolation
+   * technology fills the sandbox. Absent where the example is the whole pattern (a product).
+   */
+  fills?: string;
 }
 
 export interface ArchetypeDeviation {
@@ -752,6 +757,11 @@ export interface ProductSetting {
   verified: string;
   /** A read-only command that shows whether the setting is at its recommended value. */
   check?: SettingCheck;
+  /**
+   * In a platform's file: the framework or server software this row belongs to, when the row is
+   * not the platform's own setting. It applies if that box is built with it.
+   */
+  builtWith?: string;
 }
 
 /**
@@ -829,6 +839,12 @@ export interface CloudBinding {
   note?: string;
   /** True when no managed service fills the block: the organisation builds or runs it. */
   build?: boolean;
+  /**
+   * The framework or server software the platform's own guides build this box with. A default,
+   * not a requirement: the platform says where the box runs, and what it is built with is the
+   * builder's choice.
+   */
+  builtWith?: string;
 }
 
 /** What a supporting service is for, in the words a builder would look for it under. */
@@ -923,6 +939,12 @@ export interface Tool {
    * A product with two runtimes (a local and a cloud form) is two entities.
    */
   architecture: string;
+  /**
+   * On a hosted pattern, the box or boxes this is used to build: a framework fills the agent, a
+   * server fills the inference runtime. It is what separates "what you build it with" from "where
+   * it runs" (a cloud or the organisation's own data centre): the two are chosen independently.
+   */
+  fills?: string[];
   status?: ToolStatus;
   /** When these facts were verified against the vendor's docs, e.g. "2026-09". */
   asOf: string;

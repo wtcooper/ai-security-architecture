@@ -7,14 +7,50 @@
  * of it, where its drawing departs from the catalogue's rules, and where the claims come from. Collapsed except the narrative,
  * because the earlier version of this tab taught that showing everything at once reads as noise.
  */
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
 import { CloudComparison, OnCloud } from "@/components/cloud/CloudViews";
 import { bindingFor, cloudProductsFor, platformWords, type CloudProduct } from "@/components/cloud/model";
 import { summaryOf } from "@/components/drawing/layout";
-import { capabilityName, componentChoiceFor, guidanceByArchetype } from "@/lib/data";
+import { capabilityName, componentChoiceFor, guidanceByArchetype, toolsForArchetype } from "@/lib/data";
+import { patternHref } from "@/lib/routes";
 import type { Archetype, ComponentChoice } from "@/lib/types";
+
+/**
+ * What a box is built with, kept apart from where it runs: the catalogued frameworks and servers
+ * that fill it, and, with a platform chosen, the one that platform's own guides use.
+ */
+function BuiltWith({ archetype, blockId, cloud }: { archetype: Archetype; blockId: string; cloud: CloudProduct | null }) {
+  const tools = toolsForArchetype(archetype.id).filter((t) => t.fills?.includes(blockId));
+  const usual = cloud ? bindingFor(cloud, blockId)?.builtWith : undefined;
+  if (!tools.length && !usual) return null;
+  return (
+    <span className="mt-0.5 block text-[12.5px] text-ink-2" data-component-built-with>
+      <span className="font-semibold text-ink">Built with: </span>
+      {usual && (
+        <>
+          {usual} in {cloud!.cloud.selfManaged ? "this mapping" : `${cloud!.cloud.short}'s guides`}, a default and not a requirement
+          {tools.length ? ". " : "."}
+        </>
+      )}
+      {tools.length > 0 && (
+        <>
+          {usual ? "Catalogued with its settings: " : "your choice. Catalogued with its settings: "}
+          {tools.map((t, i) => (
+            <span key={t.id}>
+              {i > 0 && " · "}
+              <Link href={patternHref(archetype.id, { tool: t.id, cloud: cloud?.id })} className="font-semibold text-introduced hover:underline">
+                {t.name}
+              </Link>
+            </span>
+          ))}
+        </>
+      )}
+    </span>
+  );
+}
 
 /** What the organisation recorded it runs for a component (data/status.yaml), with its own module or runbook. */
 function OurChoice({ choice }: { choice?: ComponentChoice }) {
@@ -101,9 +137,19 @@ export function ArchetypeDetail({ archetype, cloud = null }: { archetype: Archet
 
       {archetype.exemplars?.length ? (
         <Section title="Examples" count={archetype.exemplars.length}>
+          {archetype.exemplars.some((e) => e.fills) && (
+            <p className="mb-3 max-w-3xl text-[12.5px] leading-snug text-ink-3">
+              Each is an example of one box on the drawing: what that box is built with, not where the pattern runs. Where it runs is the Built on choice above the drawing.
+            </p>
+          )}
           <ul className="space-y-2.5">
             {archetype.exemplars.map((e) => (
-              <li key={e.name} className="text-[13px] leading-snug text-ink-2">
+              <li key={e.name} className="text-[13px] leading-snug text-ink-2" data-example={e.name}>
+                {e.fills && (
+                  <span className="mr-2 inline-block rounded border border-line bg-mist px-1.5 py-px text-[10.5px] font-semibold text-ink-2" data-example-fills={e.fills}>
+                    {archetype.blocks.find((b) => b.id === e.fills)?.title ?? e.fills}
+                  </span>
+                )}
                 {e.url ? (
                   <a href={e.url} target="_blank" rel="noreferrer" className="font-semibold text-ink hover:text-introduced hover:underline">
                     {e.name} ↗
@@ -180,6 +226,7 @@ export function ComponentList({ archetype, cloud = null }: { archetype: Archetyp
                   </span>
                 )}
                 {cloud && <OurChoice choice={componentChoiceFor(cloud.id, archetype.id, b.id)} />}
+                <BuiltWith archetype={archetype} blockId={b.id} cloud={cloud} />
                   {b.note && <span className="mt-0.5 block">{b.note.trim()}</span>}
                   {b.items?.length ? (
                     <ul className="mt-1.5 space-y-1 border-l border-line pl-3">
