@@ -1124,6 +1124,194 @@ settings:
     url: https://knative.dev/docs/serving/traffic-management/
     verified: "2026-11-18"
   # <<< hosting rows
+  # >>> more hosting rows (settings used only by a hosting variant of the server, inference, training and sandbox patterns)
+  - id: gvisorRunscPlatform
+    name: "runsc platform (--platform: systrap or kvm)"
+    where: "gVisor › /etc/containerd/runsc.toml › [runsc_config] platform = \"kvm\" or \"systrap\"; containerd config.toml, runsc runtime options: TypeUrl io.containerd.runsc.v1.options and ConfigPath"
+    setVia: [configFile]
+    area: tools
+    default: "systrap"
+    requires: "The KVM platform needs KVM and access to /dev/kvm on the node; gVisor recommends it on bare metal only"
+    recommended: "On bare-metal sandbox nodes set platform = \"kvm\", which gVisor advises there for performance and which uses virtualisation for address-space isolation; keep systrap on nodes that are virtual machines. Leave network at its default (the sandbox's own stack) and do not enable host networking."
+    why: "The default platform, systrap, traps system calls with seccomp on the host kernel. gVisor recommends KVM on bare metal for performance and systrap inside virtual machines, and says virtualisation hardware does not by itself add security."
+    mitigations: [D3-EI, D3-HBPI]
+    url: https://gvisor.dev/docs/user_guide/platforms/
+    verified: "2026-11-18"
+  - id: gvisorRuntimeMonitoring
+    name: "Runtime monitoring trace points (--pod-init-config)"
+    where: "gVisor › runsc flag pod-init-config=<file>, set under [runsc_config] in runsc.toml on every gVisor node; a monitoring process on the node receives the stream"
+    setVia: [configFile]
+    area: audit
+    requires: "runsc release-20220704.0 or newer. Falco can be the receiver only at 0.33.1 to 0.43.x: Falco 0.44.0 removed its gVisor engine"
+    recommended: "Pass runsc a trace-point file on every sandbox node so each new sandbox streams its events to a monitoring process there: Falco 0.43.x or earlier, which generates the file with --gvisor-generate-config, or a receiver of your own. Forward alerts to the collector and the orchestrator's stop handler."
+    why: "gVisor handles a sandbox's system calls in its own kernel instead of passing them to the host, so a record of what a rollout did has to come from gVisor's trace points. gVisor's guide uses Falco, which dropped this support in 0.44.0."
+    mitigations: [cap-agent-tracing]
+    url: https://gvisor.dev/docs/tutorials/falco/
+    verified: "2026-11-18"
+  - id: knativeClusterLocalVisibility
+    name: "Private Services (networking.knative.dev/visibility: cluster-local)"
+    where: "Knative Serving › Service metadata.labels: networking.knative.dev/visibility: cluster-local (kubectl label kservice <name> networking.knative.dev/visibility=cluster-local)"
+    setVia: [configFile, apiCli]
+    area: network
+    default: "Services use the .svc.cluster.local domain until a domain is configured for the cluster or the Service"
+    recommended: "Label the MCP server's Knative Service cluster-local so that it is never published on the external gateway, and let only LiteLLM call it through the cluster-local address."
+    why: "Once a domain is configured, Knative publishes Services on the external gateway. The label keeps the server behind the AI gateway, where the per-tool rules are applied."
+    mitigations: [AML.M0028]
+    url: https://knative.dev/docs/serving/services/private-services/
+    verified: "2026-11-18"
+  - id: knativeTagDigestResolution
+    name: "Tag resolution (registries-skipping-tag-resolving)"
+    where: "Knative Serving › ConfigMap config-deployment (knative-serving): registries-skipping-tag-resolving; controller Deployment: SSL_CERT_DIR or SSL_CERT_FILE with your registry's CA certificate"
+    setVia: [configFile]
+    area: tools
+    default: "Tags are resolved to digests when a Revision is created"
+    recommended: "Keep tag resolution on for your Harbor registry: leave it out of registries-skipping-tag-resolving and mount Harbor's CA certificate into the Knative controller so that every Revision records the image digest."
+    why: "Knative resolves the image tag to a digest when it creates a Revision, so the reviewed image, with the tool definitions baked in, is the one every replica of that Revision runs."
+    mitigations: [cap-mcp-tool-integrity]
+    url: https://knative.dev/docs/serving/tag-resolution/
+    verified: "2026-11-18"
+  - id: kserveStandardDeploymentMode
+    name: "Default deployment mode (defaultDeploymentMode)"
+    where: "KServe › ConfigMap inferenceservice-config (namespace kserve) › deploy.defaultDeploymentMode; per service, the annotation serving.kserve.io/deploymentMode"
+    setVia: [configFile, apiCli]
+    area: tools
+    default: "Knative"
+    recommended: "Set defaultDeploymentMode to Standard (Helm value kserve.controller.deploymentMode) so that each model runs as a plain Deployment and Service, and annotate each InferenceService with serving.kserve.io/deploymentMode: Standard."
+    why: "KServe recommends Standard deployment for generative models. The default mode, Knative, adds a serverless layer with its own ingress and scale to zero that this mapping does not describe."
+    mitigations: [D3-ACH]
+    url: https://kserve.github.io/website/docs/admin-guide/configurations
+    verified: "2026-11-18"
+  - id: kserveIngressCreationOff
+    name: "disableIngressCreation and the cluster-local visibility label"
+    where: "KServe › ConfigMap inferenceservice-config › ingress.disableIngressCreation; per service, the label networking.kserve.io/visibility: cluster-local"
+    setVia: [configFile, apiCli]
+    area: network
+    default: "false: an ingress is created for each InferenceService"
+    recommended: "Set disableIngressCreation to true, or label every InferenceService networking.kserve.io/visibility: cluster-local, so that a model server has no route of its own and is reached only through LiteLLM."
+    why: "In Standard mode KServe creates an ingress for each InferenceService. That route is a second way in that skips the gateway's keys, quotas, guardrails and logging."
+    mitigations: [D3-NI]
+    url: https://kserve.github.io/website/docs/admin-guide/configurations
+    verified: "2026-11-18"
+  - id: kserveStorageContainerVerify
+    name: "ClusterStorageContainer (custom storage initialiser)"
+    where: "KServe › ClusterStorageContainer (serving.kserve.io/v1alpha1) › spec.container (image, env, resources) and spec.supportedUriFormats (prefix or regex)"
+    setVia: [configFile, code]
+    area: data
+    default: "A ClusterStorageContainer named default handles s3://, hf:// and the other built-in schemes"
+    recommended: "Register your own storage initialiser image for the released-weights URI prefix. It copies the release to the model directory, runs model_signing verify with the release key and exits non-zero on a mismatch. Let only one ClusterStorageContainer match that prefix."
+    why: "KServe injects the init container that downloads the weights, and its storage pages describe no signature or digest check, so verification at load has to live in a storage container you supply."
+    mitigations: [AML.M0014]
+    url: https://kserve.github.io/website/docs/model-serving/storage/storage-containers
+    verified: "2026-11-18"
+  - id: kserveS3StorageSecret
+    name: "S3 credentials for the storage initialiser (ServiceAccount and Secret annotations)"
+    where: "KServe › Secret annotations serving.kserve.io/s3-endpoint, s3-usehttps and s3-region; the Secret listed under the ServiceAccount's secrets; InferenceService spec.predictor.serviceAccountName"
+    setVia: [configFile, apiCli]
+    area: identity
+    default: "S3 settings in the inferenceservice ConfigMap are used when the annotations are missing"
+    recommended: "Give each model its own ServiceAccount and a Secret that holds a read-only Ceph key for the released-weights bucket only, with s3-endpoint set to your Ceph Object Gateway and s3-usehttps set to 1. Rotate the key from Vault."
+    why: "KServe hands the storage initialiser S3 credentials from a Secret attached to the ServiceAccount. A key that can only read one bucket keeps the serving identity away from candidates and other models."
+    mitigations: [AML.M0005, D3-CH]
+    url: https://kserve.github.io/website/docs/model-serving/storage/providers/s3
+    verified: "2026-11-18"
+  - id: kserveAutoMountToken
+    name: "security.autoMountServiceAccountToken"
+    where: "KServe › ConfigMap inferenceservice-config › security.autoMountServiceAccountToken; overridden per service in the InferenceService spec"
+    setVia: [configFile]
+    area: identity
+    default: "true"
+    recommended: "Set security.autoMountServiceAccountToken to false so that predictor pods carry no Kubernetes API token, and switch it on only for a service that needs one."
+    why: "A model server has no reason to call the Kubernetes API, and KServe mounts a service account token into its pods by default."
+    mitigations: [D3-CH]
+    url: https://kserve.github.io/website/docs/admin-guide/configurations
+    verified: "2026-11-18"
+  - id: slurmAuthPlugin
+    name: "AuthType (auth/slurm or auth/munge)"
+    where: "Slurm › slurm.conf and slurmdbd.conf: AuthType=auth/slurm with slurm.key (or slurm.jwks) owned by SlurmUser, or AuthType=auth/munge with the same munge.key on every host"
+    setVia: [configFile]
+    area: identity
+    default: "auth/munge"
+    recommended: "Use one authentication plugin on every host, keep its key readable only by SlurmUser (or the munge user), give each pipeline its own Unix account with the same UID and GID on all nodes, and rotate the key on a schedule."
+    why: "Slurm identifies a job by the UID and GID of the request, which the plugin vouches for between hosts. A leaked key, or UIDs that differ between nodes, lets one account's job run as another."
+    mitigations: [D3-AA]
+    url: https://slurm.schedmd.com/authentication.html
+    verified: "2026-11-18"
+  - id: slurmRestdJwt
+    name: "slurmrestd with JWT authentication (AuthAltTypes=auth/jwt)"
+    where: "Slurm › slurm.conf and slurmdbd.conf: AuthAltTypes=auth/jwt and AuthAltParameters=jwks=<file> (or jwt_key=<file>); slurmrestd run as its own unprivileged user behind a TLS proxy"
+    setVia: [configFile, identityProvider]
+    area: identity
+    default: "scontrol token issues tokens with a lifespan of 1800 seconds"
+    recommended: "Let the pipeline submit jobs only through slurmrestd with short-lived tokens: RS256 tokens from Keycloak checked against its JWKS file, or scontrol token with a short lifespan. Run slurmrestd as a dedicated unprivileged user behind a TLS 1.3 proxy."
+    why: "The submitting step runs outside the Slurm cluster and needs an identity Slurm can check. Slurm says slurmrestd is not designed to face the internet and should not run as root or SlurmUser."
+    mitigations: [D3-AA]
+    url: https://slurm.schedmd.com/rest.html
+    verified: "2026-11-18"
+  - id: slurmAccountingEnforce
+    name: "AccountingStorageEnforce and SlurmDBD accounting"
+    where: "Slurm › slurm.conf: AccountingStorageType=accounting_storage/slurmdbd, AccountingStorageEnforce=associations,limits,qos, JobAcctGatherType=jobacct_gather/cgroup; associations created with sacctmgr"
+    setVia: [configFile, apiCli]
+    area: audit
+    default: "No enforcement: jobs run under each cluster's local policies"
+    recommended: "Store accounting through SlurmDBD and enforce associations, so that only accounts registered for a pipeline can run jobs and every job and step is recorded with its user, account and resources. Ship the records to your log store."
+    why: "Without enforcement any authenticated user can submit to the GPU partition. The accounting records are the audit trail of who trained what, when and on which nodes."
+    mitigations: [D3-AA, AML.M0024]
+    url: https://slurm.schedmd.com/accounting.html
+    verified: "2026-11-18"
+  - id: slurmCgroupConstraints
+    name: "cgroup.conf constraints (ConstrainCores, ConstrainDevices, ConstrainRAMSpace)"
+    where: "Slurm › cgroup.conf: ConstrainCores=yes, ConstrainDevices=yes, ConstrainRAMSpace=yes; slurm.conf: ProctrackType=proctrack/cgroup, TaskPlugin=task/cgroup,task/affinity"
+    setVia: [configFile]
+    area: tools
+    default: "no for each Constrain option"
+    recommended: "Set all three to yes so that a job can use only the cores, memory and GPU devices it was allocated, and submit training jobs with --exclusive when a node must not be shared with another job."
+    why: "Every Constrain option defaults to no. Until they are set, the cgroup plugins do not hold a job on a shared node to the cores, memory and devices it was allocated."
+    mitigations: [D3-EI]
+    url: https://slurm.schedmd.com/cgroup.conf.html
+    verified: "2026-11-18"
+  - id: slurmOciContainers
+    name: "OCI containers (oci.conf and --container)"
+    where: "Slurm › oci.conf beside slurm.conf on every compute node: RunTimeRun (or RunTimeCreate, RunTimeStart, RunTimeQuery, RunTimeKill, RunTimeDelete), RunTimeEnvExclude; sbatch --container=<bundle path>"
+    setVia: [configFile, apiCli]
+    area: tools
+    default: "No oci.conf: container support is off and --container has no effect"
+    recommended: "Configure a rootless runtime (crun, runc or nvidia-container-runtime) in oci.conf on every GPU node and run training only as --container jobs, from bundles unpacked from a signed, scanned Harbor image at a pinned digest. Set RunTimeEnvExclude to keep submit-host variables out."
+    why: "Without oci.conf Slurm ignores the requested container and runs the script directly on the node. A rootless container holds the job to the file system of the approved image."
+    mitigations: [D3-EI]
+    url: https://slurm.schedmd.com/oci.conf.html
+    verified: "2026-11-18"
+  - id: slurmNamespaceTmpfs
+    name: "namespace/tmpfs (private /tmp and /dev/shm for each job)"
+    where: "Slurm › slurm.conf: NamespaceType=namespace/tmpfs and PrologFlags=Contain; job_container.conf: BasePath, AutoBasePath"
+    setVia: [configFile]
+    area: data
+    recommended: "Enable the plugin on every compute node so that each job gets its own /tmp and /dev/shm in a private mount namespace, removed when the job ends."
+    why: "Scratch directories shared across a node let one job read what another left behind. The plugin gives each job a private view and deletes it afterwards."
+    mitigations: [D3-EI]
+    url: https://slurm.schedmd.com/job_container.conf.html
+    verified: "2026-11-18"
+  - id: slurmPamAdopt
+    name: "pam_slurm_adopt"
+    where: "Compute nodes › the sshd PAM stack: pam_slurm_adopt.so; slurm.conf: PrologFlags=contain, TaskPlugin=task/cgroup, ProctrackType=proctrack/cgroup"
+    setVia: [configFile]
+    area: identity
+    recommended: "Install the module on every compute node so that a user can open an SSH session only on a node where that user has a running job, and the session is adopted into that job's extern step."
+    why: "Compute nodes are ordinary Linux hosts. Without the module an account holder can log in to a GPU node at any time, outside any job's limits and accounting."
+    mitigations: [D3-EI]
+    url: https://slurm.schedmd.com/pam_slurm_adopt.html
+    verified: "2026-11-18"
+  - id: computeNodeEgressFirewall
+    name: "nftables output chain with policy drop (compute nodes)"
+    where: "Compute nodes › nftables ruleset: a base chain of type filter on hook output with policy drop, and accept rules for the Slurm daemons, mirrors, buckets, shared storage and log collector"
+    setVia: [configFile]
+    area: network
+    default: "accept when a chain is given no policy"
+    recommended: "Drop outbound traffic from GPU nodes by default and allow only the Slurm daemons, the Nexus and Harbor mirrors, the Ceph Object Gateway, shared storage and the log collector. Apply the same limits again in the data centre network."
+    why: "Slurm has no network policy and its containers use the host network, so a training job can reach whatever its node can. The node firewall takes the place of the default-deny NetworkPolicy."
+    mitigations: [D3-NI]
+    url: https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains
+    verified: "2026-11-18"
+  # <<< more hosting rows
 
 implementations:
   - architecture: archChatAgent
@@ -1850,6 +2038,104 @@ implementations:
         url: https://docs.litellm.ai/docs/mcp
       - title: "Keycloak Operator Installation - Keycloak"
         url: https://www.keycloak.org/operator/installation
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: kubernetes
+        kind: cluster
+        name: "Kubernetes"
+        url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "Your MCP server process runs in the pods of a Deployment on a cluster that your organisation installs and operates."
+          patching: "Your organisation patches the node operating systems, Kubernetes, the container runtime, the base image and the server's dependencies."
+          data: "Requests and tool results are processed in your pods and stay in your data centre; any logs or stores that keep them are ones you run."
+          network: "Pods accept and send all traffic by default; NetworkPolicy, enforced by a network plugin such as Cilium, limits inbound and outbound connections."
+          identity: "Each pod runs as a Kubernetes ServiceAccount and receives a short-lived, rotating projected token that other services can verify."
+          accepts: "Any container image; Streamable HTTP is served as a plain HTTP service written with any MCP SDK, such as TypeScript, Python, Go, C#, Rust or Java."
+          workload: "A fixed or autoscaled number of replicas runs all the time; how long a stream or a tool call may last is set by your gateway and your server."
+          portability: "The image and manifests are standard Kubernetes objects that run on any conformant cluster; nothing in them is tied to a vendor."
+          effort: "Your team operates the cluster, ingress, certificates, scaling, upgrades and logging, and is on call for the server and the nodes."
+          fits: "Kubernetes documents a Deployment as the way to run an application workload that usually does not maintain state."
+        sources:
+          - https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+          - https://kubernetes.io/docs/concepts/services-networking/network-policies/
+          - https://kubernetes.io/docs/concepts/security/service-accounts/
+          - https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/
+          - https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http.md
+          - https://modelcontextprotocol.io/docs/sdk
+      - id: knative
+        kind: runtime
+        name: "Knative Serving"
+        url: https://knative.dev/docs/serving/
+        asOf: "2026-11"
+        compare:
+          runs: "Knative Serving, installed on the cluster by your platform team, creates and scales the pods of your server from a Knative Service you declare."
+          patching: "Your organisation patches the nodes, Kubernetes, Knative Serving, its networking layer and your image; Knative adds a queue-proxy sidecar to each pod."
+          data: "Requests and tool results pass through Knative's ingress, activator and queue-proxy on the way to your pods, all inside your own cluster."
+          network: "Services stay on the cluster-local domain until a domain is configured, and a label keeps one off the external gateway; outbound limits remain NetworkPolicy."
+          identity: "Pods run as the Kubernetes ServiceAccount named in the Service's revision template and receive the same projected tokens as any other pod."
+          accepts: "Any container that serves HTTP on one port; Knative lists HTTP, HTTP/2, gRPC and WebSocket, so a Streamable HTTP server from any MCP SDK fits."
+          workload: "Scales on concurrency or request rate, to zero by default; each request is limited by timeoutSeconds, 300 seconds by default and 600 at most unless raised."
+          portability: "The container is unchanged; leaving Knative means rewriting the Knative Service as a Deployment, a Service and an autoscaler."
+          effort: "Your team operates the cluster and also Knative Serving, its activator, autoscaler and networking layer, and tunes cold starts and timeouts."
+          fits: "Knative presents Serving for serverless workloads: request-driven HTTP services with revisions, traffic splitting and autoscaling down to zero."
+        sources:
+          - https://knative.dev/docs/serving/
+          - https://knative.dev/docs/install/
+          - https://knative.dev/docs/serving/autoscaling/scale-to-zero/
+          - https://knative.dev/docs/serving/autoscaling/scale-bounds/
+          - https://knative.dev/docs/serving/configuration/config-defaults/
+          - https://knative.dev/docs/serving/services/private-services/
+          - https://knative.dev/docs/serving/request-flow/
+          - https://knative.dev/docs/serving/autoscaling/autoscaler-types/
+          - https://knative.dev/docs/serving/reference/serving-api/
+          - https://knative.dev/docs/serving/tag-resolution/
+          - https://knative.dev/docs/serving/configuration/deployment/
+          - https://knative.dev/blog/articles/Knative-Serving-WebSockets/
+          - https://raw.githubusercontent.com/knative-extensions/net-gateway-api/main/README.md
+          - https://knative.dev/docs/serving/encryption/encryption-overview/
+          - https://kubernetes.io/docs/concepts/services-networking/network-policies/
+          - https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http.md
+          - https://knative.dev/docs/install/operator/knative-with-operators/
+        summary: "Your MCP server image is deployed as a Knative Service instead of a Deployment. Knative creates a Revision for each change, resolves the image tag to a digest, adds a queue-proxy sidecar and scales pods on request load, to zero by default. Calls from LiteLLM now pass through Knative's ingress layer and, at low traffic, its activator. You gain autoscaling and revisions; you also operate Knative Serving and its networking layer, and must set scale bounds and timeouts to suit streams."
+        bindings:
+          - { block: service, service: "Your MCP server as a Knative Service", build: true, note: "One Revision per release. Set min-scale to 1 or more if cold starts matter. The server must still check issuer, audience, expiry and scope on every call itself.", url: https://knative.dev/docs/serving/ }
+        addSettings: [knativeScaleBounds, knativeRequestLimits, knativeGatewayApiIngress, knativeTrafficSplit, knativeClusterLocalVisibility, knativeTagDigestResolution]
+        differences:
+          - at: gateway->service
+            text: "Calls no longer travel from LiteLLM's pods straight to the server's pods. They enter Knative's ingress layer and, at low or zero traffic, the activator, which holds them until a pod is ready. A network policy that admits only the gateway's pods no longer works as written: admit the Knative ingress and activator pods, and have the service verify the gateway's signed JWT."
+            url: https://knative.dev/docs/serving/request-flow/
+          - at: service
+            text: "Knative scales a Service to zero by default: enable-scale-to-zero is true and min-scale is 0 with the default autoscaler. The first call after an idle period then waits for a pod to start. A published server that must answer at once needs autoscaling.knative.dev/min-scale set to 1 or more, which the Deployment in the mapping had implicitly."
+            url: https://knative.dev/docs/serving/autoscaling/scale-to-zero/
+          - at: service
+            text: "Every request has a time limit. timeoutSeconds defaults to 300 seconds and cannot exceed max-revision-timeout-seconds, 600 by default. In MCP revision 2026-07-28 a long tool call and a subscriptions/listen stream are each one HTTP request, so plan for them to end at that limit unless the platform team raises it and the activator's termination grace period with it."
+            url: https://knative.dev/docs/serving/configuration/config-defaults/
+          - at: toolDefs->service
+            text: "Knative's controller resolves each image tag to a digest when a Revision is created, so the controller needs a network path to your registry and its CA certificate. A Revision keeps that digest, and a new tool-definition release reaches callers only as a new Revision, which can be given a share of traffic before it takes all of it."
+            url: https://knative.dev/docs/serving/tag-resolution/
+        alsoNeeded:
+          - service: "Knative Serving (controller, autoscaler, activator, webhook)"
+            role: other
+            why: "Installed and upgraded by your platform team from YAML or with the Knative Operator; the install needs cluster-admin rights."
+            url: https://knative.dev/docs/install/
+          - service: "A Knative networking layer (Kourier, or the Gateway API layer on Envoy Gateway)"
+            role: ingress
+            why: "Knative routes every request through one networking layer. Kourier is the suggested choice if you have none (the Operator defaults to Istio); the Gateway API layer is beta and names Envoy Gateway among its tested implementations."
+            url: https://knative.dev/docs/install/
+          - service: "cert-manager"
+            role: keys
+            why: "Needed only if you encrypt the hop inside the cluster: Knative relies on cert-manager for cluster-local domain TLS, a feature it marks experimental."
+            url: https://knative.dev/docs/serving/encryption/encryption-overview/
+        quickstart:
+          - title: "Installing Knative"
+            url: https://knative.dev/docs/install/
+          - title: "Configuring private Services"
+            url: https://knative.dev/docs/serving/services/private-services/
+          - title: "Configuring scale bounds"
+            url: https://knative.dev/docs/serving/autoscaling/scale-bounds/
+    # <<< hosting options
     settings:
       - keycloakGroupsAccess
       - keycloakClientScopes
@@ -1986,6 +2272,115 @@ implementations:
         url: https://docs.vllm.ai/en/latest/deployment/k8s.html
       - title: "Install NVIDIA GPU Operator in Air-Gapped Environments"
         url: https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/install-gpu-operator-air-gapped.html
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: kubernetes
+        kind: cluster
+        name: "Kubernetes"
+        url: https://docs.vllm.ai/en/latest/deployment/k8s.html
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "vLLM runs as a Deployment that you write, one per model, on GPU nodes of a cluster your organisation operates."
+          patching: "Your organisation patches the nodes, GPU drivers and Kubernetes, and mirrors or rebuilds the vLLM image for each release."
+          data: "Prompts and completions are processed in your vLLM pods and weights sit in your own bucket and node volumes, all in your data centre."
+          network: "Pods accept and send all traffic by default; NetworkPolicy limits callers to the gateway and blocks outbound traffic from the serving pods."
+          identity: "Each pod runs as a Kubernetes ServiceAccount with a short-lived projected token, which your secret and object stores can exchange for credentials."
+          accepts: "Whatever your image serves: vLLM loads Hugging Face model architectures behind an OpenAI-compatible server, and any other engine can be packaged the same way."
+          workload: "Pods request nvidia.com/gpu and hold their GPUs while they run; the replica count is fixed unless you add and tune an autoscaler yourself."
+          portability: "The image, flags and manifests are standard Kubernetes objects that move to any conformant cluster with GPU nodes."
+          effort: "Your team writes and maintains the manifests, probes, rollouts and scaling, and is on call for the model server, the GPUs and the cluster."
+          fits: "vLLM's own guide documents a plain Deployment and Service on Kubernetes first and lists Helm, KServe, LWS, llm-d and others as alternatives."
+        sources:
+          - https://docs.vllm.ai/en/latest/deployment/k8s.html
+          - https://docs.vllm.ai/en/latest/
+          - https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+          - https://kubernetes.io/docs/concepts/services-networking/network-policies/
+          - https://kubernetes.io/docs/concepts/security/service-accounts/
+          - https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/
+      - id: kserve
+        kind: runtime
+        name: "KServe"
+        url: https://kserve.github.io/website/
+        asOf: "2026-11"
+        compare:
+          runs: "KServe's controller, installed by your platform team, creates the model server pods from an InferenceService or LLMInferenceService that you declare."
+          patching: "Your organisation patches nodes, drivers, Kubernetes and KServe; the Hugging Face runtime image, which embeds vLLM, is published by the KServe project."
+          data: "Prompts, completions and weights stay in your cluster; a storage initialiser copies weights into each pod from your bucket or the Hub, and a PVC is mounted directly."
+          network: "Standard mode creates an Ingress or Gateway API route for each service unless that is switched off; outbound limits remain NetworkPolicy."
+          identity: "Predictor pods run as the ServiceAccount named in the spec; S3 credentials come from a Secret attached to it and read through KServe annotations."
+          accepts: "The Hugging Face runtime serves generation, embedding and rerank models on vLLM with OpenAI-style routes; LLMInferenceService runs a vLLM image you name."
+          workload: "Each replica requests nvidia.com/gpu; in Standard mode KEDA can scale on vLLM metrics but scale from zero is not supported; node caches can pre-load weights."
+          portability: "Models and the vLLM engine are unchanged; KServe resources have to be rewritten as Deployments and Services, and the /openai route prefix may change."
+          effort: "Your team operates the cluster and also KServe, cert-manager, a gateway or ingress controller and optionally KEDA, and is on call for them and the GPUs."
+          fits: "KServe recommends Standard deployment for generative models, and LLMInferenceService for large models, multi-GPU inference or high throughput."
+        sources:
+          - https://kserve.github.io/website/
+          - https://kserve.github.io/website/docs/model-serving/generative-inference/overview
+          - https://kserve.github.io/website/docs/model-serving/generative-inference/llmisvc/llmisvc-overview
+          - https://kserve.github.io/website/docs/model-serving/generative-inference/llmisvc/llmisvc-configuration
+          - https://kserve.github.io/website/docs/admin-guide/kubernetes-deployment-llmisvc
+          - https://kserve.github.io/website/docs/admin-guide/overview
+          - https://kserve.github.io/website/docs/admin-guide/kubernetes-deployment
+          - https://kserve.github.io/website/docs/admin-guide/configurations
+          - https://kserve.github.io/website/docs/getting-started/genai-first-isvc
+          - https://kserve.github.io/website/docs/getting-started/genai-first-llmisvc
+          - https://kserve.github.io/website/docs/model-serving/storage/providers/s3
+          - https://kserve.github.io/website/docs/model-serving/storage/storage-containers
+          - https://kserve.github.io/website/docs/model-serving/generative-inference/autoscaling
+          - https://kserve.github.io/website/docs/model-serving/generative-inference/modelcache/localmodel
+          - https://kserve.github.io/website/docs/model-serving/generative-inference/llmisvc/llmisvc-envoy-ai-gateway
+          - https://docs.vllm.ai/en/latest/deployment/integrations/kserve.html
+          - https://kubernetes.io/docs/concepts/services-networking/network-policies/
+          - https://kserve.github.io/website/docs/model-serving/storage/providers/pvc
+          - https://kserve.github.io/website/docs/reference/crd-api
+        summary: "vLLM is no longer a Deployment you write: you declare an InferenceService that uses KServe's Hugging Face runtime (vLLM backend) in Standard deployment mode; KServe creates the Deployment, Service, route and autoscaler and injects a storage initialiser that copies the weights from the Ceph bucket. LiteLLM stays in front. You gain a declared model resource and metric-based scaling; you also operate KServe, cert-manager and a gateway controller, and must close the route KServe opens per service."
+        bindings:
+          - { block: api, service: "KServe InferenceService (OpenAI-style routes)", builtWith: "vLLM", note: "Routes are served under /openai/v1 unless KSERVE_OPENAI_ROUTE_PREFIX is changed. KServe's guide calls the endpoint without an API key, so network policy keeps other callers out.", url: https://kserve.github.io/website/docs/model-serving/generative-inference/overview }
+          - { block: runtime, service: "KServe Hugging Face runtime on GPU nodes", builtWith: "vLLM", note: "One InferenceService per model in Standard mode on the tainted GPU pool. The runtime uses its vLLM backend and falls back to the Hugging Face backend for models vLLM does not support.", url: https://kserve.github.io/website/docs/getting-started/genai-first-isvc }
+        dropSettings: [modelSigningVerify]
+        addSettings: [kserveStandardDeploymentMode, kserveIngressCreationOff, kserveStorageContainerVerify, kserveS3StorageSecret, kserveAutoMountToken]
+        differences:
+          - at: gateway->api
+            text: "In Standard mode KServe creates a Kubernetes Service and, by default, an Ingress or Gateway API route for every InferenceService, with a URL under ingressDomain. That route is a second path to the model that skips LiteLLM. Set disableIngressCreation or the cluster-local visibility label, and keep the default-deny policy that admits only the gateway's pods."
+            url: https://kserve.github.io/website/docs/admin-guide/kubernetes-deployment
+          - at: api
+            text: "KServe's guide for the Hugging Face runtime says the service does not require API key authentication, and its client example passes a placeholder key. The OpenAI routes sit under /openai/v1, not /v1, so LiteLLM's api_base must carry the prefix or KSERVE_OPENAI_ROUTE_PREFIX must be emptied. Until you add a key of your own, network policy is the only lock on the model server."
+            url: https://kserve.github.io/website/docs/getting-started/genai-first-isvc
+          - at: storage->runtime
+            text: "Weights are fetched by a storage initialiser that KServe injects, with keys from a Secret attached to the ServiceAccount; the role annotation it documents is the AWS one. Its S3 page describes no checksum or signature check, and an hf:// URI makes the pod download from the Hub. Use s3:// or pvc:// URIs only, and a storage container of your own that verifies the release."
+            url: https://kserve.github.io/website/docs/model-serving/storage/providers/s3
+          - at: runtime
+            text: "KServe's default deployment mode is Knative, not a plain Deployment, so Standard must be chosen explicitly. In Standard mode scale from zero is not supported for HTTP requests. KEDA autoscaling on vLLM metrics works in Standard mode only, and its documented examples keep minReplicas at 1, so an idle model still holds its GPU."
+            url: https://kserve.github.io/website/docs/admin-guide/kubernetes-deployment
+          - at: runtime
+            text: "LLMInferenceService, the resource KServe points to for large models, multi-GPU or multi-node serving, is an alpha API (v1alpha1 and v1alpha2) in the 0.21 documentation. It needs Kubernetes 1.32 or later, Gateway API, the Gateway API Inference Extension, Envoy Gateway and, for multi-node, LeaderWorkerSet, and its managed router creates a Gateway and an HTTPRoute per service."
+            url: https://kserve.github.io/website/docs/admin-guide/kubernetes-deployment-llmisvc
+        alsoNeeded:
+          - service: "KServe controller and its custom resources"
+            role: other
+            why: "Installed and upgraded by your platform team with Helm or Kustomize; the Standard mode guide asks for Kubernetes 1.32 or later."
+            url: https://kserve.github.io/website/docs/admin-guide/kubernetes-deployment
+          - service: "cert-manager"
+            role: keys
+            why: "KServe's Standard mode guide lists Cert Manager 1.15.0 or later for the webhook certificates."
+            url: https://kserve.github.io/website/docs/admin-guide/kubernetes-deployment
+          - service: "A Gateway API or Ingress controller for KServe"
+            role: ingress
+            why: "The Standard mode guide requires a network controller, Gateway API (recommended) or Ingress, even if every model is kept cluster-local."
+            url: https://kserve.github.io/website/docs/admin-guide/kubernetes-deployment
+          - service: "KEDA"
+            role: other
+            why: "Needed only to scale on vLLM metrics such as vllm:num_requests_running; without it KServe creates a HorizontalPodAutoscaler."
+            url: https://kserve.github.io/website/docs/model-serving/generative-inference/autoscaling
+        quickstart:
+          - title: "Deploy Your First LLM with InferenceService"
+            url: https://kserve.github.io/website/docs/getting-started/genai-first-isvc
+          - title: "Standard Kubernetes Deployment (administrator guide)"
+            url: https://kserve.github.io/website/docs/admin-guide/kubernetes-deployment
+          - title: "Hugging Face runtime overview"
+            url: https://kserve.github.io/website/docs/model-serving/generative-inference/overview
+    # <<< hosting options
     settings:
       - litellmVirtualKeys
       - litellmMasterKey
@@ -2121,6 +2516,113 @@ implementations:
         url: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
       - title: "Authentication with Username and Password"
         url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: kubernetes
+        kind: cluster
+        name: "Kubernetes"
+        url: https://www.kubeflow.org/docs/components/trainer/overview/
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "Kubeflow Trainer turns your TrainJob into pods that run your training code on GPU nodes of a cluster your organisation operates."
+          patching: "Your organisation patches the nodes, GPU drivers, Kubernetes and Kubeflow Trainer, and rebuilds the runtime and training images."
+          data: "Training data, checkpoints and candidate weights stay in your own buckets and on your nodes, held by your organisation."
+          network: "Pods accept and send all traffic by default; NetworkPolicy and Cilium rules limit a job to the mirrors and buckets it needs."
+          identity: "A TrainJob's pods run as a Kubernetes ServiceAccount and receive a short-lived projected token that storage and secret services can verify."
+          accepts: "Any container image; Trainer ships runtimes for PyTorch, DeepSpeed, JAX, MLX and XGBoost, and TorchTune runtimes for fine-tuning LLMs."
+          workload: "A TrainJob runs until it finishes or reaches activeDeadlineSeconds; suspending it ends its pods, and its lifecycle guide describes no checkpoint mechanism."
+          portability: "TrainJob and runtime objects are Kubernetes APIs that move to any conformant cluster with Kubeflow Trainer installed; the training image is unchanged."
+          effort: "Your team operates the cluster, the GPU operator, Kubeflow Trainer, its runtimes and any queueing add-on, and is on call for failed jobs and nodes."
+          fits: "Kubeflow describes Trainer as a Kubernetes-native platform for LLM fine-tuning and distributed training, from a single machine to large clusters."
+        sources:
+          - https://www.kubeflow.org/docs/components/trainer/overview/
+          - https://trainer.kubeflow.org/en/latest/operator-guides/runtime.html
+          - https://trainer.kubeflow.org/en/latest/user-guides/trainjob-lifecycle.html
+          - https://kubernetes.io/docs/concepts/services-networking/network-policies/
+          - https://kubernetes.io/docs/concepts/security/service-accounts/
+      - id: slurm
+        kind: cluster
+        name: "Slurm Workload Manager"
+        url: https://slurm.schedmd.com/overview.html
+        asOf: "2026-11"
+        compare:
+          runs: "slurmd on each compute node starts your batch script, or an OCI container named with --container, under the Linux account that submitted the job."
+          patching: "Your organisation patches the node operating systems, GPU drivers, the OCI runtime and Slurm itself, which has a major release every six months."
+          data: "Training data, checkpoints and weights sit on storage that your nodes mount or reach; Slurm itself keeps only job records in its accounting database."
+          network: "Slurm has no network policy and its containers use the host network, so outbound limits come from node firewalls and the data centre network."
+          identity: "A job carries the submitter's UID and GID, which MUNGE or auth/slurm authenticates between hosts; a job gets no workload token of its own."
+          accepts: "Any program or script; unprivileged OCI containers through runc, crun or nvidia-container-runtime, and Apptainer, Enroot or Charliecloud images."
+          workload: "Queues jobs with time limits and GPUs requested as GRES; preemption cancels, requeues or suspends a job, and Slurm documents requeue, not checkpointing."
+          portability: "Batch scripts and sbatch options are specific to Slurm; the training code and its container move unchanged if they were built as OCI images."
+          effort: "Your team operates slurmctld, slurmdbd and its database, slurmd on every node, the shared user directory and keys, and the nodes themselves."
+          fits: "Slurm describes itself as a cluster management and job scheduling system for Linux clusters that allocates nodes and queues contended work."
+        sources:
+          - https://slurm.schedmd.com/overview.html
+          - https://slurm.schedmd.com/containers.html
+          - https://slurm.schedmd.com/oci.conf.html
+          - https://slurm.schedmd.com/gres.html
+          - https://slurm.schedmd.com/preempt.html
+          - https://slurm.schedmd.com/authentication.html
+          - https://slurm.schedmd.com/cgroup.conf.html
+          - https://slurm.schedmd.com/sbatch.html
+          - https://slurm.schedmd.com/accounting.html
+          - https://slurm.schedmd.com/job_container.conf.html
+          - https://slurm.schedmd.com/rest.html
+          - https://slurm.schedmd.com/quickstart_admin.html
+          - https://slurm.schedmd.com/upgrades.html
+          - https://slurm.schedmd.com/jwt.html
+          - https://slurm.schedmd.com/pam_slurm_adopt.html
+          - https://slurm.schedmd.com/slurm.conf.html
+          - https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains
+          - https://www.kubeflow.org/docs/components/trainer/overview/
+        summary: "The training step leaves Kubernetes. A pipeline step submits a batch job to a Slurm cluster through slurmrestd or sbatch, and slurmd runs the training image as an unprivileged OCI container on GPU nodes. Curation, evaluation, the registry and signing stay as mapped. Slurm brings queueing, accounting and GPU scheduling; it brings no network policy, no per-job service account and no image pull, so node firewalls, Unix accounts, cgroup limits and staging of the image become yours to set up."
+        bindings:
+          - { block: trainJob, service: "Slurm batch job in an OCI container on GPU nodes", note: "Submitted with sbatch --container or through slurmrestd; GPUs are requested with --gpus, and each pipeline submits under its own Unix account.", url: https://slurm.schedmd.com/containers.html }
+        dropSettings: [kubeflowTrainJobServiceAccount, k8sRuntimeClassSandbox]
+        addSettings: [slurmAuthPlugin, slurmRestdJwt, slurmAccountingEnforce, slurmCgroupConstraints, slurmOciContainers, slurmNamespaceTmpfs, slurmPamAdopt, computeNodeEgressFirewall]
+        differences:
+          - at: trainJob
+            text: "Slurm has nothing like a NetworkPolicy. Its container guide says custom container networks are unsupported and containers should use host networking, so a job reaches whatever its node reaches. Limits on outbound traffic come from a firewall on each compute node and from the data centre network, not from the scheduler."
+            url: https://slurm.schedmd.com/containers.html
+          - at: pkgRegistry->trainJob
+            text: "Slurm does not pull images or copy them to nodes: the OCI bundle must already exist on the execution node, and without oci.conf the --container option has no effect. A staging step must unpack the approved Harbor image, at its digest, onto every GPU node or onto shared storage before the job is submitted, and no admission check verifies it again at start."
+            url: https://slurm.schedmd.com/containers.html
+          - at: trainJob->storage
+            text: "A Slurm job has no service account and no workload token. It runs with the submitter's UID, and Slurm's JWTs authenticate clients to slurmctld and slurmdbd only. Ceph's AssumeRoleWithWebIdentity therefore has no token to exchange inside the job: the submitting step has to obtain short-lived, per-run bucket credentials and hand them to the job."
+            url: https://slurm.schedmd.com/jwt.html
+          - at: trainJob
+            text: "Isolation between jobs on a node is Linux accounts and cgroups on one shared kernel, and the cgroup limits are off by default: ConstrainCores, ConstrainDevices and ConstrainRAMSpace each default to no. Containers must be rootless. A sandbox runtime class such as Kata or gVisor has no counterpart here; use --exclusive when a job must have a node to itself."
+            url: https://slurm.schedmd.com/cgroup.conf.html
+        alsoNeeded:
+          - service: "SlurmDBD with MySQL or MariaDB"
+            role: logging
+            why: "Holds the job and step accounting records; Slurm recommends SlurmDBD in front of the database."
+            url: https://slurm.schedmd.com/accounting.html
+          - service: "A directory with uniform UIDs and GIDs (for example LDAP)"
+            role: identity
+            why: "Slurm requires a uniform user and group name space, UIDs and GIDs included, across the cluster."
+            url: https://slurm.schedmd.com/quickstart_admin.html
+          - service: "MUNGE or auth/slurm key distribution"
+            role: keys
+            why: "Every host in the cluster must hold the shared authentication key, which you distribute, protect and rotate."
+            url: https://slurm.schedmd.com/authentication.html
+          - service: "An OCI runtime and bundle staging on the GPU nodes"
+            role: registry
+            why: "Slurm does not transfer bundles to compute nodes, so images are unpacked onto the nodes or shared storage with tools such as skopeo and umoci."
+            url: https://slurm.schedmd.com/containers.html
+          - service: "A TLS proxy in front of slurmrestd"
+            role: ingress
+            why: "Slurm says the REST API is not designed to be internet facing and recommends TLS 1.3 or later, and where possible an authenticating proxy, in front of it."
+            url: https://slurm.schedmd.com/rest.html
+        quickstart:
+          - title: "Quick Start Administrator Guide"
+            url: https://slurm.schedmd.com/quickstart_admin.html
+          - title: "Containers Guide"
+            url: https://slurm.schedmd.com/containers.html
+          - title: "Generic Resource (GRES) Scheduling"
+            url: https://slurm.schedmd.com/gres.html
+    # <<< hosting options
     settings:
       - presidioDatasetRedaction
       - mlflowDatasetTracking
@@ -2261,6 +2763,107 @@ implementations:
         url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/kata-containers/
       - title: "Using Kubernetes - vLLM"
         url: https://docs.vllm.ai/en/latest/deployment/k8s/
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: kubernetes
+        kind: cluster
+        name: "Kubernetes (agent-sandbox on Kata Containers)"
+        url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/kata-containers-isolation/
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "Your orchestrator creates and deletes each agent-sandbox Sandbox; Kata Containers runs every pod in a lightweight virtual machine with its own kernel."
+          patching: "Your organisation patches the nodes, Kubernetes, the agent-sandbox controller, Kata's hypervisor and guest kernel, and the task images."
+          data: "Code, files and results of a run stay in the sandbox pod and its volumes on your nodes until your orchestrator collects or deletes them."
+          network: "Pods accept and send all traffic by default; NetworkPolicy or Cilium rules limit each sandbox to the offline web, the mirror and platform services."
+          identity: "A sandbox pod runs as a Kubernetes ServiceAccount; a task holds a short-lived projected token only if the pod template mounts one."
+          accepts: "Any OCI image, so any language and tools; Kata needs nodes with virtualisation extensions and, in the agent-sandbox guide, the containerd runtime."
+          workload: "Warm pools hand out pre-started sandboxes; one lives until its shutdownTime or deletion, can keep volumes, and many run in parallel across nodes."
+          portability: "Sandbox objects and images move to any Kubernetes cluster that has agent-sandbox; the RuntimeClass name is the only runtime-specific part."
+          effort: "Your team operates the cluster, the agent-sandbox controller and router, Kata Containers on dedicated nodes, and the warm pools."
+          fits: "agent-sandbox points to Kata Containers where hardware-level isolation is wanted, such as multi-tenant platforms or highly untrusted code."
+        sources:
+          - https://agent-sandbox.sigs.k8s.io/
+          - https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/README.md
+          - https://agent-sandbox.sigs.k8s.io/docs/getting_started/overview/
+          - https://agent-sandbox.sigs.k8s.io/docs/use-cases/kata-containers-isolation/
+          - https://agent-sandbox.sigs.k8s.io/docs/sandbox/lifecycle/
+          - https://raw.githubusercontent.com/kata-containers/kata-containers/main/README.md
+          - https://kubernetes.io/docs/concepts/services-networking/network-policies/
+          - https://kubernetes.io/docs/concepts/security/service-accounts/
+      - id: gvisor
+        kind: cluster
+        name: "Kubernetes (agent-sandbox on gVisor)"
+        url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/gvisor-isolation/
+        asOf: "2026-11"
+        compare:
+          runs: "Your orchestrator creates and deletes each agent-sandbox Sandbox; gVisor's runsc gives every pod a user-space kernel that handles its system calls."
+          patching: "Your organisation patches the nodes, Kubernetes, the agent-sandbox controller, the runsc binaries on every sandbox node, and the task images."
+          data: "Code, files and results stay in the sandbox pod on your nodes; by default writes to the root file system go to an overlay and leave the image untouched."
+          network: "Each sandbox uses gVisor's own network stack by default; what a pod may reach is still set by NetworkPolicy or Cilium, as gVisor itself advises."
+          identity: "A sandbox pod runs as a Kubernetes ServiceAccount; a task holds a short-lived projected token only if the pod template mounts one."
+          accepts: "Any OCI image on x86_64 or ARM64 nodes with Linux 5.6 or later; not every system call is implemented, and io_uring is disabled by default."
+          workload: "No virtual machine is booted per sandbox; warm pools, shutdownTime and volumes work as for any pod, and agent-sandbox documents snapshots only on GKE."
+          portability: "Sandbox objects and images are unchanged on any cluster with agent-sandbox; only runtimeClassName differs, and images must be retested per runtime."
+          effort: "Your team operates the cluster, the agent-sandbox controller and router, runsc and its containerd shim on the nodes, and compatibility testing."
+          fits: "agent-sandbox points to gVisor for user-space isolation on hosts without nested virtualisation; gVisor advises its KVM platform on bare metal."
+        sources:
+          - https://agent-sandbox.sigs.k8s.io/
+          - https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/README.md
+          - https://agent-sandbox.sigs.k8s.io/docs/getting_started/overview/
+          - https://agent-sandbox.sigs.k8s.io/docs/use-cases/gvisor-isolation/
+          - https://agent-sandbox.sigs.k8s.io/docs/use-cases/kata-containers-isolation/
+          - https://agent-sandbox.sigs.k8s.io/docs/sandbox/lifecycle/
+          - https://agent-sandbox.sigs.k8s.io/docs/sandbox/snapshots/
+          - https://gvisor.dev/docs/
+          - https://gvisor.dev/docs/architecture_guide/platforms/
+          - https://gvisor.dev/docs/user_guide/platforms/
+          - https://gvisor.dev/docs/user_guide/containerd/quick_start/
+          - https://gvisor.dev/docs/user_guide/containerd/configuration/
+          - https://gvisor.dev/docs/user_guide/install/
+          - https://gvisor.dev/docs/user_guide/networking/
+          - https://gvisor.dev/docs/user_guide/compatibility/
+          - https://gvisor.dev/docs/architecture_guide/security/
+          - https://gvisor.dev/docs/user_guide/production/
+          - https://gvisor.dev/docs/user_guide/filesystem/
+          - https://gvisor.dev/docs/tutorials/falco/
+          - https://gvisor.dev/blog/2022/08/01/threat-detection/
+          - https://falco.org/blog/falco-0-44-0/
+          - https://github.com/falcosecurity/falco/releases/tag/0.44.0
+        summary: "The same agent-sandbox pods run under the gVisor RuntimeClass instead of Kata. Each pod gets a user-space kernel (runsc) that intercepts its system calls, so nodes need no hardware virtualisation: any x86_64 or ARM64 node with Linux 5.6 or later will do. In exchange the wall is a user-space kernel on a shared host kernel, not a virtual machine; some system calls and devices are missing, and every task image has to be tested under it."
+        bindings:
+          - { block: sandbox, service: "agent-sandbox Sandbox on gVisor (RuntimeClass gvisor)", note: "runsc, its gvisor-bin directory and containerd-shim-runsc-v1 are installed on each sandbox node and the pod template sets runtimeClassName: gvisor. gVisor advises the KVM platform on bare-metal nodes for performance.", url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/gvisor-isolation/ }
+        addSettings: [gvisorRunscPlatform, gvisorRuntimeMonitoring]
+        differences:
+          - at: sandbox
+            text: "The wall is a user-space kernel, not a virtual machine. The default systrap platform intercepts system calls with seccomp; the KVM platform uses virtualisation for address-space isolation and is advised on bare metal for performance. gVisor warns that virtualisation hardware does not by itself make a sandbox more secure, and gives no protection against hardware side channels."
+            url: https://gvisor.dev/docs/architecture_guide/security/
+          - at: localTools
+            text: "gVisor does not implement every system call or every /proc and /sys file. io_uring is disabled by default, KVM cannot be used inside a sandbox, iptables is only partly supported, and block-device file systems and most custom device files are unavailable. Each task image, browser and computer-use tool has to be tested under runsc before a run depends on it."
+            url: https://gvisor.dev/docs/user_guide/compatibility/
+          - at: localTools->platform
+            text: "System calls made inside a sandbox are handled by gVisor's own kernel and are not passed to the host, so a trace of a rollout's actions has to come from gVisor's trace points, enabled with --pod-init-config on every sandbox node. gVisor's guide pairs them with Falco, but Falco 0.44.0 removed its gVisor engine, so use Falco 0.43 or earlier or a monitoring process of your own."
+            url: https://gvisor.dev/docs/tutorials/falco/
+          - at: sandbox
+            text: "agent-sandbox documents saving and restoring a sandbox's memory and file state (snapshots) only for gVisor on GKE, through GKE's own snapshot resources. On your own cluster a sandbox that is stopped or reaches its shutdownTime keeps only what was written to its volumes, so a rollout cannot be parked and resumed mid-episode."
+            url: https://agent-sandbox.sigs.k8s.io/docs/sandbox/snapshots/
+        alsoNeeded:
+          - service: "runsc and containerd-shim-runsc-v1 on every sandbox node"
+            role: other
+            why: "Installed from gVisor's apt repository or release archive, which since July 2026 also carries a gvisor-bin directory that must stay beside runsc, and registered as a containerd runtime; they take the place of the Kata packages and hypervisor."
+            url: https://gvisor.dev/docs/user_guide/install/
+          - service: "A receiver for gVisor's trace points on the sandbox nodes"
+            role: logging
+            why: "Only Falco 0.43.x or earlier can receive gVisor's trace points; Falco 0.44.0 removed its gVisor engine, so with a current Falco runtime monitoring needs a monitoring process of your own."
+            url: https://gvisor.dev/docs/tutorials/falco/
+        quickstart:
+          - title: "agent-sandbox: gVisor Isolation"
+            url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/gvisor-isolation/
+          - title: "gVisor: containerd quick start (RuntimeClass)"
+            url: https://gvisor.dev/docs/user_guide/containerd/quick_start/
+          - title: "gVisor: installation"
+            url: https://gvisor.dev/docs/user_guide/install/
+    # <<< hosting options
     settings:
       - k8sRuntimeClassSandbox
       - agentSandboxTemplate
