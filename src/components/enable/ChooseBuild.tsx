@@ -23,7 +23,7 @@ import { AdoptionPill, ChoiceRow, ProductPills } from "./ProductSettings";
 /** What choosing an option does, in a few words. */
 const consequence = (option: HostingOption, inEffect: boolean) =>
   option.kind === "managed"
-    ? "The vendor runs the agent loop, so this is drawn as another pattern"
+    ? "The vendor hosts and operates the agent, so this is drawn as another pattern"
     : inEffect
       ? "Shown on the drawing and in the settings below"
       : "The same pattern: some components and settings change";
@@ -56,7 +56,7 @@ function HostingCards({
             <span className="mt-1.5 block text-[11.5px] leading-snug text-ink-3">{consequence(o, on)}</span>
           </>
         );
-        const frame = `block h-full rounded-lg border p-3 text-left transition-colors ${on ? "border-ink bg-paper ring-1 ring-ink" : "border-line bg-paper hover:border-ink-3"}`;
+        const frame = `flex h-full flex-col justify-start rounded-lg border p-3 text-left transition-colors ${on ? "border-ink bg-paper ring-1 ring-ink" : "border-line bg-paper hover:border-ink-3"}`;
         return o.kind === "managed" ? (
           <div key={o.id} className={frame} data-hosting-option={o.id} data-hosting-kind={o.kind}>
             {body}
