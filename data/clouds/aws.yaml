@@ -951,6 +951,169 @@ settings:
     mitigations: [D3-APA]
     url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-eks-setup-rbac.html
     verified: "2026-11-18"
+  # >>> hosting rows (settings used only by a hosting variant)
+  - id: eksImdsHopLimit
+    name: "Instance metadata options (IMDSv2 required, hop limit 1)"
+    where: "Amazon EC2 › node group launch template › Metadata options (HttpTokens required, HttpPutResponseHopLimit 1)"
+    setVia: [apiCli]
+    area: identity
+    default: "Varies: nodes created by eksctl or the CloudFormation template get hop limit 2; AL2023 managed node groups and EKS Auto Mode get hop limit 1"
+    requires: "Every pod that needs AWS access uses EKS Pod Identity or IRSA"
+    recommended: "Require IMDSv2 and set the hop limit to 1 on every node that runs agent pods (aws ec2 modify-instance-metadata-options --http-tokens required --http-put-response-hop-limit 1, or the same in the launch template). Do not give agent pods hostNetwork."
+    why: "Unless instance metadata is restricted, a pod's containers can also use the node's IAM role, which is wider than the role bound to the agent's service account."
+    mitigations: [D3-CH]
+    url: https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html
+    verified: "2026-11-18"
+  - id: eksAppNetworkPolicy
+    name: "ApplicationNetworkPolicy (DNS-based network policy)"
+    where: "Amazon EKS Auto Mode › Network Policy Controller › ApplicationNetworkPolicy in the agent namespace (egress domainNames)"
+    setVia: [clusterPolicy]
+    area: network
+    default: "No policy; the Network Policy Controller is off until the amazon-vpc-cni ConfigMap enables it"
+    requires: "EKS Auto Mode nodes, with enable-network-policy-controller set to true"
+    recommended: "One policy selecting the agent pods, policyTypes Egress, that allows CoreDNS and the domainNames of the AgentCore Gateway endpoint and of the AWS service endpoints the agent calls, and nothing else."
+    why: "Kubernetes allows all pod traffic by default. A domain allow list at the pod keeps the gateway the agent's only way out, ahead of the Network Firewall rules on the subnet."
+    mitigations: [cap-agent-egress-control]
+    url: https://docs.aws.amazon.com/eks/latest/userguide/auto-net-pol.html
+    verified: "2026-11-18"
+  - id: eksIsolatedPods
+    name: "Isolated pods (runtimeClassName isolated-sandbox)"
+    where: "Amazon EKS › agent Deployment pod spec › runtimeClassName; EKS Auto Mode, or node groups on an AMI built with the Nitro Sandbox runtime"
+    setVia: [configFile]
+    area: tools
+    default: "Off; pods use the default container runtime and share the node's kernel"
+    requires: "Kubernetes 1.36 or later and an EC2 instance type that supports Nitro Sandboxes"
+    recommended: "Set runtimeClassName: isolated-sandbox on the agent pods so each runs in its own Nitro Sandbox; add the annotation sandbox.amazonaws.com/network-isolated: \"true\" to any pod that only runs generated code."
+    why: "Containers on a node share one Linux kernel, so a container escape can expose other workloads. An isolated pod runs in its own hardware-isolated sandbox with its own kernel."
+    mitigations: [D3-EI]
+    url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+    verified: "2026-11-18"
+  - id: eksAgentQuarantine
+    name: "Delete the Pod Identity association and scale to zero"
+    where: "Amazon EKS › (cluster) › Access › Pod Identity associations › Delete; the agent Deployment set to zero replicas, from your incident runbook"
+    setVia: [apiCli]
+    area: identity
+    recommended: "Runbook order: set the agent Deployment to zero replicas, delete its Pod Identity association (aws eks delete-pod-identity-association), then revoke the role's active sessions in IAM."
+    why: "EKS has no session to stop. Credentials already issued to a pod can stay valid until they expire, so deleting the association needs the session revocation beside it."
+    mitigations: [cap-agent-kill-switch]
+    url: https://docs.aws.amazon.com/eks/latest/APIReference/API_DeletePodIdentityAssociation.html
+    verified: "2026-11-18"
+  - id: sqsQueueAccessPolicy
+    name: "Queue access policy (aws:SourceArn)"
+    where: "Amazon SQS › (the run queue) › Access policy; IAM policy on the agent's Pod Identity role"
+    setVia: [apiCli, adminConsole]
+    area: identity
+    recommended: "Allow sqs:SendMessage to events.amazonaws.com only where aws:SourceArn is the one rule's ARN (or to the one schedule's execution role); allow sqs:ReceiveMessage and sqs:DeleteMessage to the agent's Pod Identity role alone."
+    why: "On EKS a message on the queue is what starts a run, so the queue's policy takes the place of the resource-based policy on the runtime."
+    mitigations: [D3-APA]
+    url: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html
+    verified: "2026-11-18"
+  - id: eksClusterAccessEntries
+    name: "Access entries with namespace-scoped access policies"
+    where: "Amazon EKS › (cluster) › Access › IAM access entries; access policy with access scope type namespace"
+    setVia: [apiCli, adminConsole]
+    area: identity
+    recommended: "Give the deployment pipeline role and the on-call role access entries whose access policies are scoped to the agent namespace (--access-scope type=namespace,namespaces=...); keep no standing cluster-wide administrator entry."
+    why: "Whoever can change or exec into the agent's pods can act with the agent's role. On EKS that power sits behind the Kubernetes API, so cluster access needs the same care as the role."
+    mitigations: [D3-APA]
+    url: https://docs.aws.amazon.com/eks/latest/userguide/access-policies.html
+    verified: "2026-11-18"
+  - id: eksControlPlaneLogs
+    name: "Control plane logging (audit and authenticator)"
+    where: "Amazon EKS › (cluster) › Control plane logging › audit and authenticator log types, sent to CloudWatch Logs"
+    setVia: [apiCli, adminConsole]
+    area: audit
+    default: "Off; each log type is turned off"
+    recommended: "Turn on the audit and authenticator log types for the agent cluster and keep the log group with the organisation's other audit logs."
+    why: "Changes to the running agent, such as a new image or an exec into a pod, are calls to the cluster's API server. The Kubernetes audit log is the record of them."
+    mitigations: [cap-agent-tracing, AML.M0024]
+    url: https://docs.aws.amazon.com/eks/latest/userguide/control-plane-logs.html
+    verified: "2026-11-18"
+  - id: eksPrivateEndpoint
+    name: "Cluster endpoint access (private)"
+    where: "Amazon EKS › (cluster) › Networking › Cluster endpoint access (endpoint private access, endpoint public access, public access CIDRs)"
+    setVia: [apiCli, adminConsole]
+    area: network
+    default: "Public endpoint enabled, private endpoint disabled"
+    recommended: "Enable endpoint private access and disable public access, or limit public access to named CIDR blocks."
+    why: "By default the Kubernetes API server that controls the agent's pods is reachable from the internet, with IAM and Kubernetes RBAC as its only gate."
+    mitigations: [D3-NI]
+    url: https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html
+    verified: "2026-11-18"
+  - id: gatewayTargetPrivateEndpoint
+    name: "Private endpoint (privateEndpoint) on the gateway target"
+    where: "AgentCore Gateway › HTTP passthrough target for the agent › privateEndpoint (Amazon VPC Lattice resource gateway in the cluster VPC)"
+    setVia: [apiCli]
+    area: network
+    requires: "An internal load balancer in front of the A2A server; managed or self-managed VPC Lattice resources"
+    recommended: "Register the A2A server as an HTTP passthrough target with protocolType A2A and a privateEndpoint, and allow inbound traffic to its internal load balancer only from the resource gateway's security group."
+    why: "The agent no longer sits behind Runtime's endpoint. A private target keeps the A2A server off the internet, so a peer reaches it only through the gateway."
+    mitigations: [D3-NI]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+    verified: "2026-11-18"
+  - id: runtimeLifecycleConfig
+    name: "Lifecycle configuration (idleRuntimeSessionTimeout, maxLifetime)"
+    where: "AgentCore Runtime › (agent runtime) › lifecycleConfiguration"
+    setVia: [apiCli]
+    area: tools
+    default: "idleRuntimeSessionTimeout 900 seconds, maxLifetime 28800 seconds"
+    recommended: "Set maxLifetime to the longest a single run may compute and keep idleRuntimeSessionTimeout short, so a run that waits on an operator releases its microVM and resumes from saved state."
+    why: "A durable function suspends at no cost while it waits. A runtime session holds its microVM until the idle timeout, and these two limits are what bound a runaway run."
+    mitigations: [AML.M0036]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+    verified: "2026-11-18"
+  - id: sfnStartExecutionRole
+    name: "Execution role on the rule target (states:StartExecution)"
+    where: "Amazon EventBridge › rule › target › RoleArn, or pipe › execution role (RoleArn); IAM policy on that role"
+    setVia: [apiCli]
+    area: identity
+    recommended: "One role per rule or pipe, allowed states:StartExecution on the workflow's state machine ARN only; no other principal holds that action on it."
+    why: "Starting an execution is what starts a run. The target's role takes the place of the function's resource-based policy tied to the rule."
+    mitigations: [D3-APA]
+    url: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-targets.html
+    verified: "2026-11-18"
+  - id: sfnTaskTokenApproval
+    name: "Wait for a Callback with Task Token (.waitForTaskToken)"
+    where: "AWS Step Functions › state machine › Task state before consequential steps; states:SendTaskSuccess and states:SendTaskFailure held by the approval service only"
+    setVia: [configFile, apiCli]
+    area: tools
+    recommended: "Put a .waitForTaskToken task before each consequential step, pass the token only to the approval service and set a timeout. Agent roles hold SendTaskSuccess as activity workers, so guard the token."
+    why: "The workflow pauses, for up to a year, until the token comes back. Whoever can return the token approves the step."
+    mitigations: [AML.M0029]
+    url: https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html
+    verified: "2026-11-18"
+  - id: sfnStopExecution
+    name: "StopExecution"
+    where: "AWS Step Functions API, called from your incident runbook for every running execution of the workflow"
+    setVia: [apiCli]
+    area: tools
+    recommended: "Runbook order: disable the rule or pipe, call StopExecution on each running execution, then scale the agent Deployments to zero and revoke their roles' sessions."
+    why: "Stopping the execution ends the journalled run, but a pod that already holds an activity task keeps working until it is stopped as well."
+    mitigations: [cap-agent-kill-switch]
+    url: https://docs.aws.amazon.com/step-functions/latest/apireference/API_StopExecution.html
+    verified: "2026-11-18"
+  - id: sfnEncryptionConfig
+    name: "Customer managed key (encryption configuration)"
+    where: "AWS Step Functions › state machine and each activity › encryption configuration (KMS key and data key reuse period)"
+    setVia: [apiCli, adminConsole]
+    area: data
+    default: "Encrypted at rest with an AWS owned key"
+    recommended: "Choose a customer managed KMS key when creating the state machine and each activity, and grant use of the key only to the workflow role, the agent roles and incident reviewers."
+    why: "Execution history now holds every step's input and output. The key decides who can read that journal, as KMSKeyArn in DurableConfig did."
+    mitigations: []
+    url: https://docs.aws.amazon.com/step-functions/latest/dg/encryption-at-rest.html
+    verified: "2026-11-18"
+  - id: albOidcClaimsVerify
+    name: "Verify x-amzn-oidc-data (user claims signature and signer)"
+    where: "Your agent code, on every request from the load balancer; pod ingress limited to the load balancer"
+    setVia: [code]
+    area: identity
+    recommended: "Verify the signature of the x-amzn-oidc-data header with the load balancer's public key, check that the signer field is your load balancer's ARN, take the user only from those claims and reject requests without the header."
+    why: "Runtime validated the caller's token before the agent saw a request. In a pod nothing does, so a neighbouring workload could call the agent as any user."
+    mitigations: [D3-APA, D3-CTS]
+    url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-authenticate-users.html
+    verified: "2026-11-18"
+  # <<< hosting rows
 
 implementations:
   - architecture: archChatAgent
@@ -1071,6 +1234,182 @@ implementations:
       - { block: openWeb, service: Brave or Tavily Search as a gateway target, note: "From AgentCore Gateway's built-in integration templates." }
       - { block: sources, service: "Public registries (PyPI, npm)" }
       - { block: registry, service: AWS CodeArtifact repository }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: agentCoreRuntime
+        kind: runtime
+        name: "Amazon Bedrock AgentCore Runtime"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop, in any framework or none, packaged as a container image or code zip that AWS hosts with one microVM per session."
+          patching: "AWS patches the host, the OS kernel and, for direct code deployments, the language runtime; you rebuild container images from patched base images."
+          data: "Prompts and tool results are processed in a per-session microVM that AWS runs and ends with the session; lasting state goes to AgentCore Memory or mounted storage."
+          network: "Network mode is PUBLIC or VPC; VPC mode puts network interfaces in your subnets under your security groups, with no internet route unless you add a NAT gateway."
+          identity: "An IAM execution role that AgentCore Runtime assumes, plus a workload identity in AgentCore Identity; callers are checked by IAM SigV4 or an OAuth JWT authoriser."
+          framework: "Any framework or custom code, such as Strands Agents, LangGraph, CrewAI, Google ADK or OpenAI Agents SDK, serving HTTP, MCP, A2A or AG-UI from ARM64 containers."
+          longRunning: "Sessions run up to 8 hours on microVMs or 14 days on Instances and end after 15 idle minutes by default; schedules and events arrive through a caller that invokes it."
+          portability: "The agent is a container serving /invocations and /ping, so it can run elsewhere; sessions and inbound auth need replacing, and AgentCore services stay callable."
+          effort: "You own agent code, image rebuilds, IAM and resource policies, session-to-user mapping, input validation and VPC settings; AWS runs scaling, isolation and patching."
+          fits: "AWS guidance: the code-defined path when you need custom orchestration or multi-agent patterns in any framework; microVMs are called the best starting point."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-how-it-works.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-instances-how-it-works.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-security-best-practices.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-long-run.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-http-protocol-contract.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/using-any-agent-framework.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-vs-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-filesystem-configurations.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/agents-classic-maintenance-mode.html
+          - https://docs.aws.amazon.com/decision-guides/latest/decision-guides/genai-guide.html
+          - https://aws.amazon.com/bedrock/agentcore/faqs/
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html
+      - id: eks
+        kind: cluster
+        name: "Amazon Elastic Kubernetes Service (Amazon EKS)"
+        url: https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in containers you build and deploy as Kubernetes workloads; EKS runs the control plane and schedules the pods."
+          patching: "AWS patches the control plane; you patch node operating systems and images, unless EKS Auto Mode is on, where AWS patches nodes and replaces them within 21 days."
+          data: "Prompts, tool results and state are processed in pods on EC2 nodes in your account and VPC; lasting state sits in whichever stores you attach."
+          network: "Pods get VPC addresses with no traffic restriction by default; Kubernetes network policies, security groups for Pods and your VPC routing control outbound traffic."
+          identity: "An IAM role bound to the pod's Kubernetes service account by an EKS Pod Identity association, with credentials served by the Pod Identity Agent on the node."
+          framework: "Any framework or language that runs in a container; an AWS example of agents on EKS Auto Mode uses the Strands Agents SDK."
+          longRunning: "Pods run as Deployments or Jobs with no session limit, though Auto Mode replaces nodes within 21 days; HPA or KEDA scale them, and durable waits need an engine you add."
+          portability: "The agent ships as containers on the Kubernetes API, which AWS notes eases moves across clouds and on premises; IAM, load balancer and add-on bindings change."
+          effort: "You operate cluster version upgrades, add-ons, node capacity, ingress, network policy, autoscaling and telemetry; EKS Auto Mode takes over nodes and core add-ons."
+          fits: "AWS guidance: choose EKS for the Kubernetes API and ecosystem, portability across clouds and on premises, or existing Kubernetes skills and tooling."
+        sources:
+          - https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/automode.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-on-eks.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/auto-net-pol.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security-groups-for-pods.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/horizontal-pod-autoscaler.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-autoscaling-hpa-keda.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sample-deployment.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html
+          - https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html
+          - https://docs.aws.amazon.com/decision-guides/latest/decision-guides/choosing-aws-container-service.html
+          - https://docs.aws.amazon.com/step-functions/latest/dg/connect-eks.html
+          - https://aws.amazon.com/blogs/containers/observability-patterns-for-ai-agents-on-amazon-eks/
+          - https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html
+        summary: "The turn loop runs in pods on Amazon EKS; the Application Load Balancer forwards each turn to the pods, and scheduled runs arrive on an SQS queue. Gateway, Memory, Knowledge Bases and Code Interpreter are unchanged. You now carry what Runtime did for each conversation: the microVM around the session, validation of the caller's token, the execution role binding, VPC placement and session stop, plus node patching, scaling and telemetry."
+        bindings:
+          - { block: agent, service: "Your agent in pods on Amazon EKS", builtWith: "Strands Agents", note: "A Deployment behind an Ingress that the AWS Load Balancer Controller or EKS Auto Mode turns into ALB target groups. Conversations share pods.", url: https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html }
+          - { block: events, service: "EventBridge Scheduler and Amazon SQS", note: "The schedule's SendMessage target puts a message on a queue that the agent pods poll; no Lambda function invokes a runtime.", url: https://docs.aws.amazon.com/scheduler/latest/UserGuide/managing-targets-templated.html }
+        dropSettings: [runtimeInboundJwt, runtimeExecutionRole, runtimeVpcMode, runtimeStopSession]
+        addSettings: [eksPodIdentity, eksNetworkPolicy, agentWorkloadIdentity, sqsQueueAccessPolicy, eksImdsHopLimit, eksAppNetworkPolicy, eksIsolatedPods, eksAgentQuarantine, eksClusterAccessEntries, eksControlPlaneLogs, eksPrivateEndpoint, albOidcClaimsVerify]
+        differences:
+          - at: entry->agent
+            text: "Runtime validated the caller's JWT and gave every conversation its own microVM. On EKS the load balancer forwards to pod addresses (target type ip), pods are shared by many users, and the agent must verify the signature and signer of the x-amzn-oidc-data header and keep conversations apart in code. Pod ingress has to be limited to the load balancer."
+            url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-authenticate-users.html
+          - at: agent->gateway
+            text: "Kubernetes places no restriction on pod traffic by default, and enforcement must be switched on first (enableNetworkPolicy on the VPC CNI add-on, or the Auto Mode Network Policy Controller ConfigMap). Until a policy selects the agent pods they can reach any address the VPC routes to, not only the gateway."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - at: agent
+            text: "Unless instance metadata is restricted (IMDSv2 with hop limit 1), a pod's containers can also obtain the node's IAM role, and a pod with hostNetwork always can. On Runtime the agent's credentials came only from the runtime's execution role."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - at: events->agent
+            text: "A scheduled run is a queue message that a pod picks up under its own Pod Identity role, not an invocation carrying the user's token. The user the run acts for has to travel in the message, and the queue's access policy decides who can start one."
+            url: https://docs.aws.amazon.com/scheduler/latest/UserGuide/managing-targets-templated.html
+          - at: agent
+            text: "StopRuntimeSession has no equivalent: ending one conversation is your application's job. Stopping the agent means scaling it to zero and deleting its Pod Identity association, and credentials already issued can stay valid until expiry unless the role's sessions are revoked in IAM."
+            url: https://docs.aws.amazon.com/eks/latest/APIReference/API_DeletePodIdentityAssociation.html
+        alsoNeeded:
+          - service: "AWS Load Balancer Controller (built into EKS Auto Mode)"
+            role: ingress
+            why: "Creates the Application Load Balancer target groups for the agent's pods from an Ingress; Runtime exposed its own endpoint."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html
+          - service: "EKS Pod Identity Agent (EKS add-on; built into EKS Auto Mode)"
+            role: identity
+            why: "Serves the pod its role credentials, which Runtime supplied from the runtime's execution role."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-id-agent-setup.html
+          - service: "Amazon VPC CNI network policy agent, or the EKS Auto Mode Network Policy Controller"
+            role: network
+            why: "Enforces pod-level network policy; it is off until you enable it, and without it no policy takes effect."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy-configure.html
+          - service: "ADOT SDK settings and an agent log group in CloudWatch"
+            role: logging
+            why: "Agents hosted outside AgentCore Runtime need their own log group and the OpenTelemetry environment variables before AgentCore Observability shows their traces."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+          - service: "Amazon CloudWatch Observability EKS add-on"
+            role: logging
+            why: "Collects container logs and metrics from the nodes; Runtime wrote the agent's logs to CloudWatch without an agent to install."
+            url: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Observability-EKS-addon.html
+          - service: "Horizontal Pod Autoscaler or KEDA, with Karpenter or EKS Auto Mode for nodes"
+            role: other
+            why: "Pods and nodes scale by rules you write; Runtime started and stopped a microVM per session for you."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html
+        quickstart:
+          - title: "Get started with Amazon EKS: EKS Auto Mode"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/getting-started-automode.html
+          - title: "Learn how EKS Pod Identity grants pods access to AWS services"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - title: "Observability patterns for AI agents on Amazon EKS (AWS Containers blog)"
+            url: https://aws.amazon.com/blogs/containers/observability-patterns-for-ai-agents-on-amazon-eks/
+      - id: agentCoreHarness
+        kind: managed
+        name: "Amazon Bedrock AgentCore harness"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolBedrockAgentcore
+        compare:
+          agentLoop: "AWS runs the loop, powered by Strands Agents; you declare the model, system prompt, tools, memory and limits as configuration and call InvokeHarness."
+          patching: "AWS patches the infrastructure, the OS kernel and the managed harness runtime; you rebuild any custom container image you bring."
+          data: "Each session runs in its own microVM on AgentCore Runtime; conversation state persists in AgentCore Memory, which the service provisions unless you configure your own."
+          network: "Sessions run on the public network by default and can be placed in your VPC; tools are reached through AgentCore Gateway, remote MCP servers or built-in tools."
+          identity: "An IAM execution role you own, which the harness assumes; callers use IAM SigV4 or a JWT authoriser, and per-user identity reaches tools only with JWT."
+          framework: "No framework choice: one managed loop with models from Amazon Bedrock, OpenAI, Google Gemini or LiteLLM-compatible providers; graph and workflow patterns are unsupported."
+          longRunning: "A microVM session lasts up to 8 hours, with iteration, time and token limits per invocation; a Step Functions task can call InvokeHarness for up to 15 minutes."
+          portability: "Export to code turns the configuration into a Strands Agents Python agent for AgentCore Runtime; Gateway, Browser and Code Interpreter tools are rewired by hand."
+          effort: "You own the configuration, IAM, caller authorisation, input validation, skill sources and network settings; AWS runs the loop, compute and scaling."
+          fits: "AWS guidance: use the harness unless you need to own the loop; it is also the recommended target for Amazon Bedrock Agents Classic, now in maintenance mode."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-vs-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-memory.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-environment.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-operations.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-export.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-versioning.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/agents-classic-maintenance-mode.html
+          - https://docs.aws.amazon.com/step-functions/latest/dg/connect-bedrockagentcore.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/bedrock-managed-agents-openai.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-get-started-bma.html
+          - https://aws.amazon.com/bedrock/agentcore/faqs/
+        offers:
+          - name: "AgentCore harness"
+            what: "A managed agent loop, generally available per the developer guide, that you define with a model, system prompt and tools and invoke with one API call, each session in its own microVM."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+          - name: "Harness in a custom environment (container image)"
+            what: "The same managed loop running inside a linux/arm64 container image that you build and push to Amazon ECR, for agents that need their own dependencies and tools."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-environment.html
+          - name: "Subagent delegation (built-in subagent tool)"
+            what: "The agent hands a self-contained task to a fresh child agent, which is not a separately configured harness, and receives its result; AWS describes wider multi-agent collaboration as limited."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - name: "Human-in-the-loop agent (inline function tools)"
+            what: "Tool schemas that execute on the client side: the harness pauses, returns the call to your code and resumes when you send the result, which is the documented pattern for approvals."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - name: "Harness as a workflow step (AgentCore InvokeHarness state)"
+            what: "An AWS Step Functions task state that invokes a harness in request-response mode, with a maximum of 15 minutes per task."
+            url: https://docs.aws.amazon.com/step-functions/latest/dg/connect-bedrockagentcore.html
+    # <<< hosting options
     settings:
       - idcAppAssignment
       - albAuthenticate
@@ -1199,6 +1538,178 @@ implementations:
       - { block: openWeb, service: Brave or Tavily Search as a gateway target }
       - { block: sources, service: "Public registries (PyPI, npm)" }
       - { block: registry, service: AWS CodeArtifact repository }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: agentCoreRuntime
+        kind: runtime
+        name: "Amazon Bedrock AgentCore Runtime"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop, in any framework or none, packaged as a container image or code zip that AWS hosts with one microVM per session."
+          patching: "AWS patches the host, the OS kernel and, for direct code deployments, the language runtime; you rebuild container images from patched base images."
+          data: "Prompts and tool results are processed in a per-session microVM that AWS runs and ends with the session; lasting state goes to AgentCore Memory or mounted storage."
+          network: "Network mode is PUBLIC or VPC; VPC mode puts network interfaces in your subnets under your security groups, with no internet route unless you add a NAT gateway."
+          identity: "An IAM execution role that AgentCore Runtime assumes, plus a workload identity in AgentCore Identity; callers are checked by IAM SigV4 or an OAuth JWT authoriser."
+          framework: "Any framework or custom code, such as Strands Agents, LangGraph, CrewAI, Google ADK or OpenAI Agents SDK, serving HTTP, MCP, A2A or AG-UI from ARM64 containers."
+          longRunning: "Sessions run up to 8 hours on microVMs or 14 days on Instances and end after 15 idle minutes by default; schedules and events arrive through a caller that invokes it."
+          portability: "The agent is a container serving /invocations and /ping, so it can run elsewhere; sessions and inbound auth need replacing, and AgentCore services stay callable."
+          effort: "You own agent code, image rebuilds, IAM and resource policies, session-to-user mapping, input validation and VPC settings; AWS runs scaling, isolation and patching."
+          fits: "AWS guidance: the code-defined path when you need custom orchestration or multi-agent patterns in any framework; microVMs are called the best starting point."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-how-it-works.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-instances-how-it-works.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-security-best-practices.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-long-run.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-http-protocol-contract.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/using-any-agent-framework.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-vs-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-filesystem-configurations.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/agents-classic-maintenance-mode.html
+          - https://docs.aws.amazon.com/decision-guides/latest/decision-guides/genai-guide.html
+          - https://aws.amazon.com/bedrock/agentcore/faqs/
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html
+      - id: eks
+        kind: cluster
+        name: "Amazon Elastic Kubernetes Service (Amazon EKS)"
+        url: https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in containers you build and deploy as Kubernetes workloads; EKS runs the control plane and schedules the pods."
+          patching: "AWS patches the control plane; you patch node operating systems and images, unless EKS Auto Mode is on, where AWS patches nodes and replaces them within 21 days."
+          data: "Prompts, tool results and state are processed in pods on EC2 nodes in your account and VPC; lasting state sits in whichever stores you attach."
+          network: "Pods get VPC addresses with no traffic restriction by default; Kubernetes network policies, security groups for Pods and your VPC routing control outbound traffic."
+          identity: "An IAM role bound to the pod's Kubernetes service account by an EKS Pod Identity association, with credentials served by the Pod Identity Agent on the node."
+          framework: "Any framework or language that runs in a container; an AWS example of agents on EKS Auto Mode uses the Strands Agents SDK."
+          longRunning: "Pods run as Deployments or Jobs with no session limit, though Auto Mode replaces nodes within 21 days; HPA or KEDA scale them, and durable waits need an engine you add."
+          portability: "The agent ships as containers on the Kubernetes API, which AWS notes eases moves across clouds and on premises; IAM, load balancer and add-on bindings change."
+          effort: "You operate cluster version upgrades, add-ons, node capacity, ingress, network policy, autoscaling and telemetry; EKS Auto Mode takes over nodes and core add-ons."
+          fits: "AWS guidance: choose EKS for the Kubernetes API and ecosystem, portability across clouds and on premises, or existing Kubernetes skills and tooling."
+        sources:
+          - https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/automode.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-on-eks.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/auto-net-pol.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security-groups-for-pods.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/horizontal-pod-autoscaler.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-autoscaling-hpa-keda.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sample-deployment.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html
+          - https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html
+          - https://docs.aws.amazon.com/decision-guides/latest/decision-guides/choosing-aws-container-service.html
+          - https://docs.aws.amazon.com/step-functions/latest/dg/connect-eks.html
+          - https://aws.amazon.com/blogs/containers/observability-patterns-for-ai-agents-on-amazon-eks/
+          - https://docs.aws.amazon.com/eks/latest/userguide/al2023.html
+        summary: "The agent loop runs in pods on an Amazon EKS cluster in your VPC and takes runs from an SQS queue that EventBridge rules and schedules feed; AgentCore Gateway, Memory and Code Interpreter are still called as services. You now carry what Runtime did: a microVM around each session, the execution role binding, VPC placement, session stop, node patching, scaling, and log and trace delivery. EKS Auto Mode hands node patching and core add-ons back to AWS."
+        bindings:
+          - { block: planner, service: "Your agent in pods on Amazon EKS", builtWith: "Strands Agents", note: "A Deployment with no inbound path; its service account maps to an IAM role through EKS Pod Identity. One pod serves many runs.", url: https://docs.aws.amazon.com/eks/latest/userguide/ml-on-eks.html }
+          - { block: events, service: "Amazon EventBridge and SQS, polled by the agent pods", note: "Rules and schedules send to a queue; the pods receive and validate messages under their Pod Identity role. No Lambda function invokes a runtime.", url: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-targets.html }
+        dropSettings: [runtimeResourcePolicy, runtimeExecutionRole, runtimeVpcMode, runtimeStopSession]
+        addSettings: [eksPodIdentity, eksNetworkPolicy, agentWorkloadIdentity, eksImdsHopLimit, eksAppNetworkPolicy, eksIsolatedPods, eksAgentQuarantine, sqsQueueAccessPolicy, eksClusterAccessEntries, eksControlPlaneLogs, eksPrivateEndpoint]
+        differences:
+          - at: planner
+            text: "On Runtime every session runs in its own microVM that ends with the session. EKS pods share the node's Linux kernel and one pod serves many runs, so keeping runs apart is your code's job. runtimeClassName isolated-sandbox puts each pod in a Nitro Sandbox (Kubernetes 1.36 or later), which separates pods, not runs."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+          - at: planner->gateway
+            text: "Kubernetes places no restriction on pod traffic by default, and enforcement must be switched on first (enableNetworkPolicy on the VPC CNI add-on, or the Auto Mode Network Policy Controller ConfigMap). Until a policy selects the agent pods they can reach any address the VPC routes to, not only the gateway."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - at: events->planner
+            text: "Nothing invokes the agent: the pods poll the queue under one long-lived Pod Identity role, so every run starts with the same grant unless the message carries an on-behalf-of token that your code validates. Who may start a run is decided by the queue's access policy, not by a resource-based policy on a runtime."
+            url: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html
+          - at: planner
+            text: "Unless instance metadata is restricted (IMDSv2 with hop limit 1), a pod's containers can also obtain the node's IAM role, and a pod with hostNetwork always can. On Runtime the agent's credentials came only from the runtime's execution role."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - at: gateway
+            text: "Runtime versions and endpoints do not exist; a release is a new image rolled out by the Deployment. Gateway A/B testing of an agent hosted outside Runtime needs each variant registered as an HTTP passthrough target with Gateway tracing enabled, so the variants need an HTTP entry point as well as the queue."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/ab-testing-3p-agents.html
+        alsoNeeded:
+          - service: "EKS Pod Identity Agent (EKS add-on; built into EKS Auto Mode)"
+            role: identity
+            why: "Serves the pod its role credentials, which Runtime supplied from the runtime's execution role."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-id-agent-setup.html
+          - service: "Amazon VPC CNI network policy agent, or the EKS Auto Mode Network Policy Controller"
+            role: network
+            why: "Enforces pod-level network policy; it is off until you enable it, and without it no policy takes effect."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy-configure.html
+          - service: "ADOT SDK settings and an agent log group in CloudWatch"
+            role: logging
+            why: "Agents hosted outside AgentCore Runtime need their own log group and the OpenTelemetry environment variables before AgentCore Observability shows their traces."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+          - service: "Amazon CloudWatch Observability EKS add-on"
+            role: logging
+            why: "Collects container logs and metrics from the nodes; Runtime wrote the agent's logs to CloudWatch without an agent to install."
+            url: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Observability-EKS-addon.html
+          - service: "Horizontal Pod Autoscaler or KEDA, with Karpenter or EKS Auto Mode for nodes"
+            role: other
+            why: "Pods and nodes scale by rules you write; Runtime started and stopped a microVM per session for you."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html
+        quickstart:
+          - title: "Get started with Amazon EKS: EKS Auto Mode"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/getting-started-automode.html
+          - title: "Learn how EKS Pod Identity grants pods access to AWS services"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - title: "Observability patterns for AI agents on Amazon EKS (AWS Containers blog)"
+            url: https://aws.amazon.com/blogs/containers/observability-patterns-for-ai-agents-on-amazon-eks/
+      - id: agentCoreHarness
+        kind: managed
+        name: "Amazon Bedrock AgentCore harness"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolBedrockAgentcore
+        compare:
+          agentLoop: "AWS runs the loop, powered by Strands Agents; you declare the model, system prompt, tools, memory and limits as configuration and call InvokeHarness."
+          patching: "AWS patches the infrastructure, the OS kernel and the managed harness runtime; you rebuild any custom container image you bring."
+          data: "Each session runs in its own microVM on AgentCore Runtime; conversation state persists in AgentCore Memory, which the service provisions unless you configure your own."
+          network: "Sessions run on the public network by default and can be placed in your VPC; tools are reached through AgentCore Gateway, remote MCP servers or built-in tools."
+          identity: "An IAM execution role you own, which the harness assumes; callers use IAM SigV4 or a JWT authoriser, and per-user identity reaches tools only with JWT."
+          framework: "No framework choice: one managed loop with models from Amazon Bedrock, OpenAI, Google Gemini or LiteLLM-compatible providers; graph and workflow patterns are unsupported."
+          longRunning: "A microVM session lasts up to 8 hours, with iteration, time and token limits per invocation; a Step Functions task can call InvokeHarness for up to 15 minutes."
+          portability: "Export to code turns the configuration into a Strands Agents Python agent for AgentCore Runtime; Gateway, Browser and Code Interpreter tools are rewired by hand."
+          effort: "You own the configuration, IAM, caller authorisation, input validation, skill sources and network settings; AWS runs the loop, compute and scaling."
+          fits: "AWS guidance: use the harness unless you need to own the loop; it is also the recommended target for Amazon Bedrock Agents Classic, now in maintenance mode."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-vs-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-memory.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-environment.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-operations.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-export.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-versioning.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/agents-classic-maintenance-mode.html
+          - https://docs.aws.amazon.com/step-functions/latest/dg/connect-bedrockagentcore.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/bedrock-managed-agents-openai.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-get-started-bma.html
+          - https://aws.amazon.com/bedrock/agentcore/faqs/
+        offers:
+          - name: "AgentCore harness"
+            what: "A managed agent loop, generally available per the developer guide, that you define with a model, system prompt and tools and invoke with one API call, each session in its own microVM."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+          - name: "Harness in a custom environment (container image)"
+            what: "The same managed loop running inside a linux/arm64 container image that you build and push to Amazon ECR, for agents that need their own dependencies and tools."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-environment.html
+          - name: "Subagent delegation (built-in subagent tool)"
+            what: "The agent hands a self-contained task to a fresh child agent, which is not a separately configured harness, and receives its result; AWS describes wider multi-agent collaboration as limited."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - name: "Human-in-the-loop agent (inline function tools)"
+            what: "Tool schemas that execute on the client side: the harness pauses, returns the call to your code and resumes when you send the result, which is the documented pattern for approvals."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - name: "Harness as a workflow step (AgentCore InvokeHarness state)"
+            what: "An AWS Step Functions task state that invokes a harness in request-response mode, with a maximum of 15 minutes per task."
+            url: https://docs.aws.amazon.com/step-functions/latest/dg/connect-bedrockagentcore.html
+    # <<< hosting options
     settings:
       - runtimeResourcePolicy
       - runtimeExecutionRole
@@ -1348,6 +1859,266 @@ implementations:
       - { block: openWeb, service: Brave or Tavily Search as a gateway target }
       - { block: sources, service: "Public registries (PyPI, npm)" }
       - { block: registry, service: AWS CodeArtifact repository }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: lambdaDurable
+        kind: runtime
+        name: "AWS Lambda durable functions"
+        url: https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop in a Lambda function wrapped by the durable execution SDK, which checkpoints each step and replays the handler after an interruption."
+          patching: "Lambda patches the OS and managed runtimes automatically; for functions deployed as container images you rebuild from the latest base image and redeploy."
+          data: "Processed in Lambda execution environments; Lambda stores step results as checkpoints, encrypted at rest (your KMS key if set) and kept up to 90 days after the run."
+          network: "A function outside a VPC has internet access; a VPC configuration attaches it to your subnets and security groups, with internet only through a NAT gateway."
+          identity: "The function's IAM execution role, which Lambda assumes; it must also allow lambda:CheckpointDurableExecution and lambda:GetDurableExecutionState."
+          framework: "Code on a managed or custom Lambda runtime or OCI image, using an AWS durable SDK (Node.js, Python, Java, .NET, Go) or your own, deterministic on replay."
+          longRunning: "Async executions run up to one year and suspend without charge on waits and callbacks; synchronous and event source mapping runs end at 15 minutes by default."
+          portability: "Steps, waits and callbacks are written against the AWS durable execution SDK and Lambda's checkpoint API, so moving off means rewriting the orchestration."
+          effort: "You own function code, versions and aliases, replay-safe changes, dead-letter queues and alarms; Lambda runs scaling, checkpoint storage and recovery."
+          fits: "AWS guidance: use it for code-first workflows centred on Lambda, including AI workflows that chain model calls and wait for human review."
+        sources:
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-step-functions.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-security.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-encryption.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-configuration.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-invoking.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-invoking-esm.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-supported-runtimes.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-best-practices.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-examples.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc-internet.html
+          - https://docs.aws.amazon.com/durable-execution/sdk-reference/languages/go/
+      - id: agentCoreRuntime
+        kind: runtime
+        name: "Amazon Bedrock AgentCore Runtime"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop, in any framework or none, packaged as a container image or code zip that AWS hosts with one microVM per session."
+          patching: "AWS patches the host, the OS kernel and, for direct code deployments, the language runtime; you rebuild container images from patched base images."
+          data: "Prompts and tool results are processed in a per-session microVM that AWS runs and ends with the session; lasting state goes to AgentCore Memory or mounted storage."
+          network: "Network mode is PUBLIC or VPC; VPC mode puts network interfaces in your subnets under your security groups, with no internet route unless you add a NAT gateway."
+          identity: "An IAM execution role that AgentCore Runtime assumes, plus a workload identity in AgentCore Identity; callers are checked by IAM SigV4 or an OAuth JWT authoriser."
+          framework: "Any framework or custom code, such as Strands Agents, LangGraph, CrewAI, Google ADK or OpenAI Agents SDK, serving HTTP, MCP, A2A or AG-UI from ARM64 containers."
+          longRunning: "Sessions run up to 8 hours on microVMs or 14 days on Instances and end after 15 idle minutes by default; schedules and events arrive through a caller that invokes it."
+          portability: "The agent is a container serving /invocations and /ping, so it can run elsewhere; sessions and inbound auth need replacing, and AgentCore services stay callable."
+          effort: "You own agent code, image rebuilds, IAM and resource policies, session-to-user mapping, input validation and VPC settings; AWS runs scaling, isolation and patching."
+          fits: "AWS guidance: the code-defined path when you need custom orchestration or multi-agent patterns in any framework; microVMs are called the best starting point."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-how-it-works.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-instances-how-it-works.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-security-best-practices.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-long-run.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-http-protocol-contract.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/using-any-agent-framework.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-vs-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-filesystem-configurations.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/agents-classic-maintenance-mode.html
+          - https://docs.aws.amazon.com/decision-guides/latest/decision-guides/genai-guide.html
+          - https://aws.amazon.com/bedrock/agentcore/faqs/
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html
+          - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-custom-bus-universal-targets.html
+          - https://docs.aws.amazon.com/lambda/latest/dg/durable-invoking-esm.html
+        summary: "The supervisor and its specialists run as one Strands Agents process in an AgentCore Runtime session, started by a Lambda function that EventBridge and SQS invoke. Runtime adds a microVM per run and async jobs past a 15-minute request, but no checkpoint log or replay: a session's compute ends at 8 hours on microVMs (14 days on Instances), so your code saves step state to AgentCore Memory or session storage and resumes the run when the approval event arrives."
+        bindings:
+          - { block: events, service: "Amazon EventBridge, SQS and AWS Lambda", note: "An ingress function validates the event and calls InvokeAgentRuntime with the run's session ID; rule targets list no AgentCore Runtime target.", url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-invoke-agent.html }
+          - { block: harness, service: "Your agents on AgentCore Runtime", builtWith: "Strands Agents", note: "One runtime session per run, in its own microVM; idle timeout 15 minutes and maximum lifetime 8 hours by default.", url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html }
+          - { block: orchestration, service: "Your supervisor agent, checkpointing in your code", builtWith: "Strands Agents", note: "No durable steps: the supervisor writes each step's result to memory or session storage and reloads it when the run is invoked again.", url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-how-it-works.html }
+          - { block: state, service: "AgentCore Memory and session storage", note: "Session storage (preview) keeps a session's files across stop and resume; AgentCore Memory holds events. Neither journals or replays steps.", url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-filesystem-configurations.html }
+        dropSettings: [lambdaInvokePolicy, durableConfig, durableCallbackApproval, lambdaVpcConfig, durableStopExecution]
+        addSettings: [runtimeResourcePolicy, runtimeExecutionRole, runtimeVpcMode, runtimeStopSession, strandsInterrupts, runtimeLifecycleConfig]
+        differences:
+          - at: orchestration->state
+            text: "A durable function journals every step and replays after a failure. A Runtime session's state is ephemeral: if the microVM ends mid-run, only what your code already wrote to AgentCore Memory or session storage survives, and a step that had started can run twice unless you make it idempotent."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-how-it-works.html
+          - at: operator->events
+            text: "A durable callback suspends for days without compute charge. A Runtime session is ended after 15 idle minutes by default and at 8 hours at most on microVMs, so waiting for an operator ends the session; the approval event invokes the runtime again with the same session ID, in a new microVM, and the supervisor reloads its state."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+          - at: events->harness
+            text: "The function's resource-based policy tied the trigger to one EventBridge rule. Here an ingress Lambda function calls InvokeAgentRuntime, so the runtime's resource-based policy names that function's role, and the ingress function's own invoke permissions decide who can start a run."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/resource-based-policies.html
+          - at: harness
+            text: "AWS's examples create runtimes with networkMode PUBLIC. The route through Network Firewall holds only once the runtime is set to VPC mode in private subnets, and in VPC mode it has no internet access unless those subnets route to a NAT gateway."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+          - at: subagents
+            text: "Runtime creates one workload identity for the whole runtime, and a Runtime-managed identity cannot fetch a workload access token directly. A principal per agent inside one process still needs workload identities that you create and request tokens for in code, as on Lambda."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/get-workload-access-token.html
+        alsoNeeded:
+          - service: "AWS Lambda ingress function"
+            role: ingress
+            why: "EventBridge started the durable function directly, SQS for 15 minutes at most; a runtime needs InvokeAgentRuntime."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-invoke-agent.html
+          - service: "AgentCore Memory with the Strands Agents SDK integration"
+            role: other
+            why: "Holds the conversation and step state that Lambda's checkpoint log held."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/strands-sdk-memory.html
+          - service: "Amazon ECR repository (container deployments)"
+            role: registry
+            why: "A runtime deployed as a container pulls an ARM64 image from Amazon ECR; direct code deployment avoids it."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-how-it-works.html
+        quickstart:
+          - title: "Get started with AgentCore Runtime using the AgentCore CLI"
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-get-started-cli.html
+          - title: "Handle asynchronous and long running agents with AgentCore Runtime"
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-long-run.html
+          - title: "Configure AgentCore lifecycle settings"
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+      - id: eks
+        kind: cluster
+        name: "Amazon Elastic Kubernetes Service (Amazon EKS)"
+        url: https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in containers you build and deploy as Kubernetes workloads; EKS runs the control plane and schedules the pods."
+          patching: "AWS patches the control plane; you patch node operating systems and images, unless EKS Auto Mode is on, where AWS patches nodes and replaces them within 21 days."
+          data: "Prompts, tool results and state are processed in pods on EC2 nodes in your account and VPC; lasting state sits in whichever stores you attach."
+          network: "Pods get VPC addresses with no traffic restriction by default; Kubernetes network policies, security groups for Pods and your VPC routing control outbound traffic."
+          identity: "An IAM role bound to the pod's Kubernetes service account by an EKS Pod Identity association, with credentials served by the Pod Identity Agent on the node."
+          framework: "Any framework or language that runs in a container; an AWS example of agents on EKS Auto Mode uses the Strands Agents SDK."
+          longRunning: "Pods run as Deployments or Jobs with no session limit, though Auto Mode replaces nodes within 21 days; HPA or KEDA scale them, and durable waits need an engine you add."
+          portability: "The agent ships as containers on the Kubernetes API, which AWS notes eases moves across clouds and on premises; IAM, load balancer and add-on bindings change."
+          effort: "You operate cluster version upgrades, add-ons, node capacity, ingress, network policy, autoscaling and telemetry; EKS Auto Mode takes over nodes and core add-ons."
+          fits: "AWS guidance: choose EKS for the Kubernetes API and ecosystem, portability across clouds and on premises, or existing Kubernetes skills and tooling."
+        sources:
+          - https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/automode.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-on-eks.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/auto-net-pol.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security-groups-for-pods.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/horizontal-pod-autoscaler.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-autoscaling-hpa-keda.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sample-deployment.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html
+          - https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html
+          - https://docs.aws.amazon.com/decision-guides/latest/decision-guides/choosing-aws-container-service.html
+          - https://docs.aws.amazon.com/step-functions/latest/dg/connect-eks.html
+          - https://aws.amazon.com/blogs/containers/observability-patterns-for-ai-agents-on-amazon-eks/
+          - https://docs.aws.amazon.com/step-functions/latest/dg/concepts-activities.html
+          - https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html
+          - https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html
+          - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-pipes-permissions.html
+          - https://docs.aws.amazon.com/service-authorization/latest/reference/list_awsstepfunctions.html
+        summary: "The supervisor and specialists run as pods on Amazon EKS. Lambda's checkpoint-and-replay engine does not come with the cluster, so the journal moves to an engine you add: here an AWS Step Functions Standard workflow started by EventBridge, with the agent pods as activity workers and a task token for operator approval. You also carry node and image patching, scaling, pod identity, network policy and telemetry, which Lambda ran."
+        bindings:
+          - { block: events, service: "Amazon EventBridge, SQS and EventBridge Pipes", note: "A rule, or a pipe from the queue, starts a state machine execution under an IAM role; nothing invokes the pods.", url: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-pipes-event-target.html }
+          - { block: harness, service: "Your agents in pods on Amazon EKS", builtWith: "Strands Agents", note: "Each agent can run as its own Deployment with its own service account and Pod Identity role, so a principal per agent can be an IAM role as well as a token.", url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html }
+          - { block: orchestration, service: "Your supervisor agent, on AWS Step Functions tasks", builtWith: "Strands Agents", note: "A Standard workflow records each step for up to a year; agent pods poll for work as activity workers, and .waitForTaskToken pauses for an operator.", url: https://docs.aws.amazon.com/step-functions/latest/dg/concepts-activities.html }
+          - { block: state, service: "Step Functions execution history and AgentCore Memory", note: "Execution history is the step journal, readable for 90 days after a run completes; Bedrock Knowledge Bases stays the vector index.", url: https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html }
+        dropSettings: [lambdaInvokePolicy, durableConfig, durableCallbackApproval, lambdaVpcConfig, durableStopExecution]
+        addSettings: [eksPodIdentity, eksNetworkPolicy, eksImdsHopLimit, eksAppNetworkPolicy, eksIsolatedPods, eksAgentQuarantine, eksClusterAccessEntries, eksControlPlaneLogs, eksPrivateEndpoint, sfnStartExecutionRole, sfnTaskTokenApproval, sfnStopExecution, sfnEncryptionConfig]
+        differences:
+          - at: orchestration->state
+            text: "The graph is no longer one function replayed from a checkpoint log. Step Functions holds the journal and passes each task's input and output between pods, so what a step returns is stored in execution history, readable for 90 days after the run, as well as in memory; the state machine's own encryption and access settings now cover it."
+            url: https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html
+          - at: operator->events
+            text: "An approval resumes the run through SendTaskSuccess with the task token, not through a Lambda durable callback. Any principal allowed states:SendTaskSuccess that holds the token can approve, and activity workers need that action too, so the approval token must not reach the agents."
+            url: https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html
+          - at: events->harness
+            text: "The trigger no longer reaches the agents. EventBridge, or a pipe from SQS, starts an execution under an IAM role, and the pods pull tasks under their own Pod Identity roles. The grant for the run has to travel in the execution input and be checked by each agent, since no invocation binds it."
+            url: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-targets.html
+          - at: harness->gateway
+            text: "Kubernetes places no restriction on pod traffic by default, and enforcement must be switched on first (enableNetworkPolicy on the VPC CNI add-on, or the Auto Mode Network Policy Controller ConfigMap). Until a policy selects the agent pods they can reach any address the VPC routes to, not only the gateway."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - at: harness
+            text: "Pods share the node's Linux kernel and, unless instance metadata is restricted to IMDSv2 with hop limit 1, can obtain the node's IAM role. Setting runtimeClassName isolated-sandbox gives each pod its own Nitro Sandbox (Kubernetes 1.36 or later). On Lambda the function's only credentials were its execution role."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+        alsoNeeded:
+          - service: "AWS Step Functions (Standard workflow and activities)"
+            role: other
+            why: "Journals steps, retries them and waits for approvals, which the durable execution engine in Lambda did."
+            url: https://docs.aws.amazon.com/step-functions/latest/dg/concepts-activities.html
+          - service: "EKS Pod Identity Agent (EKS add-on; built into EKS Auto Mode)"
+            role: identity
+            why: "Serves the pod its role credentials, which Lambda supplied from the function's execution role."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-id-agent-setup.html
+          - service: "Amazon VPC CNI network policy agent, or the EKS Auto Mode Network Policy Controller"
+            role: network
+            why: "Enforces pod-level network policy; it is off until you enable it, and without it no policy takes effect."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy-configure.html
+          - service: "ADOT SDK settings and an agent log group in CloudWatch"
+            role: logging
+            why: "Agents hosted outside AgentCore Runtime need their own log group and the OpenTelemetry environment variables before AgentCore Observability shows their traces."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+          - service: "Amazon CloudWatch Observability EKS add-on"
+            role: logging
+            why: "Collects container logs and metrics from the nodes; Lambda wrote the function's logs to CloudWatch without an agent to install."
+            url: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Observability-EKS-addon.html
+          - service: "Horizontal Pod Autoscaler or KEDA, with Karpenter or EKS Auto Mode for nodes"
+            role: other
+            why: "Pods and nodes scale by rules you write; Lambda scaled the function for you, including to zero."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html
+        quickstart:
+          - title: "Get started with Amazon EKS: EKS Auto Mode"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/getting-started-automode.html
+          - title: "Learn about Activities in Step Functions"
+            url: https://docs.aws.amazon.com/step-functions/latest/dg/concepts-activities.html
+          - title: "Learn how EKS Pod Identity grants pods access to AWS services"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+      - id: agentCoreHarness
+        kind: managed
+        name: "Amazon Bedrock AgentCore harness"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolBedrockAgentcore
+        compare:
+          agentLoop: "AWS runs the loop, powered by Strands Agents; you declare the model, system prompt, tools, memory and limits as configuration and call InvokeHarness."
+          patching: "AWS patches the infrastructure, the OS kernel and the managed harness runtime; you rebuild any custom container image you bring."
+          data: "Each session runs in its own microVM on AgentCore Runtime; conversation state persists in AgentCore Memory, which the service provisions unless you configure your own."
+          network: "Sessions run on the public network by default and can be placed in your VPC; tools are reached through AgentCore Gateway, remote MCP servers or built-in tools."
+          identity: "An IAM execution role you own, which the harness assumes; callers use IAM SigV4 or a JWT authoriser, and per-user identity reaches tools only with JWT."
+          framework: "No framework choice: one managed loop with models from Amazon Bedrock, OpenAI, Google Gemini or LiteLLM-compatible providers; graph and workflow patterns are unsupported."
+          longRunning: "A microVM session lasts up to 8 hours, with iteration, time and token limits per invocation; a Step Functions task can call InvokeHarness for up to 15 minutes."
+          portability: "Export to code turns the configuration into a Strands Agents Python agent for AgentCore Runtime; Gateway, Browser and Code Interpreter tools are rewired by hand."
+          effort: "You own the configuration, IAM, caller authorisation, input validation, skill sources and network settings; AWS runs the loop, compute and scaling."
+          fits: "AWS guidance: use the harness unless you need to own the loop; it is also the recommended target for Amazon Bedrock Agents Classic, now in maintenance mode."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-vs-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-memory.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-environment.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-operations.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-export.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-versioning.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/agents-classic-maintenance-mode.html
+          - https://docs.aws.amazon.com/step-functions/latest/dg/connect-bedrockagentcore.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/bedrock-managed-agents-openai.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-get-started-bma.html
+          - https://aws.amazon.com/bedrock/agentcore/faqs/
+        offers:
+          - name: "AgentCore harness"
+            what: "A managed agent loop, generally available per the developer guide, that you define with a model, system prompt and tools and invoke with one API call, each session in its own microVM."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+          - name: "Harness in a custom environment (container image)"
+            what: "The same managed loop running inside a linux/arm64 container image that you build and push to Amazon ECR, for agents that need their own dependencies and tools."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-environment.html
+          - name: "Subagent delegation (built-in subagent tool)"
+            what: "The agent hands a self-contained task to a fresh child agent, which is not a separately configured harness, and receives its result; AWS describes wider multi-agent collaboration as limited."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - name: "Human-in-the-loop agent (inline function tools)"
+            what: "Tool schemas that execute on the client side: the harness pauses, returns the call to your code and resumes when you send the result, which is the documented pattern for approvals."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - name: "Harness as a workflow step (AgentCore InvokeHarness state)"
+            what: "An AWS Step Functions task state that invokes a harness in request-response mode, with a maximum of 15 minutes per task."
+            url: https://docs.aws.amazon.com/step-functions/latest/dg/connect-bedrockagentcore.html
+    # <<< hosting options
     settings:
       - lambdaInvokePolicy
       - agentWorkloadIdentity
@@ -2002,6 +2773,177 @@ implementations:
       - { block: peerVendor, service: Vendor platform agent (A2A) }
       - { block: provider, service: Amazon Bedrock foundation models }
       - { block: partner, service: Partner organisation's agent (A2A) }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: agentCoreRuntime
+        kind: runtime
+        name: "Amazon Bedrock AgentCore Runtime"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop, in any framework or none, packaged as a container image or code zip that AWS hosts with one microVM per session."
+          patching: "AWS patches the host, the OS kernel and, for direct code deployments, the language runtime; you rebuild container images from patched base images."
+          data: "Prompts and tool results are processed in a per-session microVM that AWS runs and ends with the session; lasting state goes to AgentCore Memory or mounted storage."
+          network: "Network mode is PUBLIC or VPC; VPC mode puts network interfaces in your subnets under your security groups, with no internet route unless you add a NAT gateway."
+          identity: "An IAM execution role that AgentCore Runtime assumes, plus a workload identity in AgentCore Identity; callers are checked by IAM SigV4 or an OAuth JWT authoriser."
+          framework: "Any framework or custom code, such as Strands Agents, LangGraph, CrewAI, Google ADK or OpenAI Agents SDK, serving HTTP, MCP, A2A or AG-UI from ARM64 containers."
+          longRunning: "Sessions run up to 8 hours on microVMs or 14 days on Instances and end after 15 idle minutes by default; schedules and events arrive through a caller that invokes it."
+          portability: "The agent is a container serving /invocations and /ping, so it can run elsewhere; sessions and inbound auth need replacing, and AgentCore services stay callable."
+          effort: "You own agent code, image rebuilds, IAM and resource policies, session-to-user mapping, input validation and VPC settings; AWS runs scaling, isolation and patching."
+          fits: "AWS guidance: the code-defined path when you need custom orchestration or multi-agent patterns in any framework; microVMs are called the best starting point."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-how-it-works.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-instances-how-it-works.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-security-best-practices.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-long-run.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-http-protocol-contract.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/using-any-agent-framework.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-vs-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-filesystem-configurations.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/agents-classic-maintenance-mode.html
+          - https://docs.aws.amazon.com/decision-guides/latest/decision-guides/genai-guide.html
+          - https://aws.amazon.com/bedrock/agentcore/faqs/
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html
+      - id: eks
+        kind: cluster
+        name: "Amazon Elastic Kubernetes Service (Amazon EKS)"
+        url: https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in containers you build and deploy as Kubernetes workloads; EKS runs the control plane and schedules the pods."
+          patching: "AWS patches the control plane; you patch node operating systems and images, unless EKS Auto Mode is on, where AWS patches nodes and replaces them within 21 days."
+          data: "Prompts, tool results and state are processed in pods on EC2 nodes in your account and VPC; lasting state sits in whichever stores you attach."
+          network: "Pods get VPC addresses with no traffic restriction by default; Kubernetes network policies, security groups for Pods and your VPC routing control outbound traffic."
+          identity: "An IAM role bound to the pod's Kubernetes service account by an EKS Pod Identity association, with credentials served by the Pod Identity Agent on the node."
+          framework: "Any framework or language that runs in a container; an AWS example of agents on EKS Auto Mode uses the Strands Agents SDK."
+          longRunning: "Pods run as Deployments or Jobs with no session limit, though Auto Mode replaces nodes within 21 days; HPA or KEDA scale them, and durable waits need an engine you add."
+          portability: "The agent ships as containers on the Kubernetes API, which AWS notes eases moves across clouds and on premises; IAM, load balancer and add-on bindings change."
+          effort: "You operate cluster version upgrades, add-ons, node capacity, ingress, network policy, autoscaling and telemetry; EKS Auto Mode takes over nodes and core add-ons."
+          fits: "AWS guidance: choose EKS for the Kubernetes API and ecosystem, portability across clouds and on premises, or existing Kubernetes skills and tooling."
+        sources:
+          - https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/automode.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-on-eks.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/auto-net-pol.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/security-groups-for-pods.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/horizontal-pod-autoscaler.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-autoscaling-hpa-keda.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sample-deployment.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html
+          - https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html
+          - https://docs.aws.amazon.com/decision-guides/latest/decision-guides/choosing-aws-container-service.html
+          - https://docs.aws.amazon.com/step-functions/latest/dg/connect-eks.html
+          - https://aws.amazon.com/blogs/containers/observability-patterns-for-ai-agents-on-amazon-eks/
+        summary: "Our A2A agent, server and client, runs in pods on Amazon EKS. Peers still enter and leave through AgentCore Gateway, which now reaches the agent as an HTTP passthrough target of protocol type A2A on an internal load balancer, not as a Runtime target. Cognito, AgentCore Identity and AWS Agent Registry are unchanged. You now carry the microVM per session, Runtime's inbound authoriser, the workload identity token calls, patching, scaling and telemetry."
+        bindings:
+          - { block: harness, service: "Your A2A agent in pods on Amazon EKS", builtWith: "Strands Agents", note: "Registered on the gateway as an HTTP passthrough target (protocolType A2A) whose endpoint is an internal load balancer in the cluster VPC.", url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-http-passthrough.html }
+          - { block: localTools, service: "Your tool handlers in the agent pod", note: "In-process handlers in the agent's container; they call AgentCore Memory under the pod's Pod Identity role.", url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html }
+        addSettings: [eksPodIdentity, eksNetworkPolicy, agentWorkloadIdentity, eksImdsHopLimit, eksAppNetworkPolicy, eksIsolatedPods, eksAgentQuarantine, eksClusterAccessEntries, eksControlPlaneLogs, eksPrivateEndpoint, gatewayTargetPrivateEndpoint]
+        differences:
+          - at: harness->gateway
+            text: "On Runtime the gateway reaches the agent as an AgentCore Runtime target over the AWS backbone. On EKS the agent is an HTTP passthrough target behind a load balancer; unless that load balancer is internal and pod ingress admits only the gateway's path, a peer or a neighbouring pod can call the A2A server without crossing the gateway and its policy engine."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+          - at: harness
+            text: "Runtime adds a session header to each A2A request and runs each session in its own microVM. In a pod, tasks from the vendor peer, the partner and our own users share one process and one kernel, so task state is kept apart only by your code; isolated-sandbox pods separate pods, not tasks."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-a2a-protocol-contract.html
+          - at: authServer
+            text: "Runtime hands the agent a workload access token with each invocation. In a pod the code must call GetWorkloadAccessTokenForJWT, under the Pod Identity role and for a workload identity you created, before AgentCore Identity releases a peer credential or runs the on-behalf-of exchange."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/get-workload-access-token.html
+          - at: gateway->partner
+            text: "Kubernetes does not restrict pod egress by default, so the A2A client in the pod can open a connection to a peer directly unless network policy and the VPC's routing leave the gateway as the only destination. Enforcement has to be enabled on the cluster before any policy takes effect."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+        alsoNeeded:
+          - service: "AWS Load Balancer Controller (built into EKS Auto Mode)"
+            role: ingress
+            why: "Creates the Application Load Balancer target groups for the agent's pods from an Ingress; Runtime exposed its own endpoint."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html
+          - service: "Amazon VPC Lattice resource gateway (managed by AgentCore or self-managed)"
+            role: network
+            why: "Gives AgentCore Gateway a private path into the cluster VPC; a Runtime target needed none."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-egress-private-endpoints.html
+          - service: "EKS Pod Identity Agent (EKS add-on; built into EKS Auto Mode)"
+            role: identity
+            why: "Serves the pod its role credentials, which Runtime supplied from the runtime's execution role."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-id-agent-setup.html
+          - service: "Amazon VPC CNI network policy agent, or the EKS Auto Mode Network Policy Controller"
+            role: network
+            why: "Enforces pod-level network policy; it is off until you enable it, and without it no policy takes effect."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy-configure.html
+          - service: "ADOT SDK settings and an agent log group in CloudWatch"
+            role: logging
+            why: "Agents hosted outside AgentCore Runtime need their own log group and the OpenTelemetry environment variables before AgentCore Observability shows their traces."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+          - service: "Horizontal Pod Autoscaler or KEDA, with Karpenter or EKS Auto Mode for nodes"
+            role: other
+            why: "Pods and nodes scale by rules you write; Runtime started and stopped a microVM per session for you."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html
+        quickstart:
+          - title: "Get started with Amazon EKS: EKS Auto Mode"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/getting-started-automode.html
+          - title: "HTTP passthrough targets (AgentCore Gateway)"
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-http-passthrough.html
+          - title: "Get workload access token (AgentCore Identity)"
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/get-workload-access-token.html
+      - id: agentCoreHarness
+        kind: managed
+        name: "Amazon Bedrock AgentCore harness"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolBedrockAgentcore
+        compare:
+          agentLoop: "AWS runs the loop, powered by Strands Agents; you declare the model, system prompt, tools, memory and limits as configuration and call InvokeHarness."
+          patching: "AWS patches the infrastructure, the OS kernel and the managed harness runtime; you rebuild any custom container image you bring."
+          data: "Each session runs in its own microVM on AgentCore Runtime; conversation state persists in AgentCore Memory, which the service provisions unless you configure your own."
+          network: "Sessions run on the public network by default and can be placed in your VPC; tools are reached through AgentCore Gateway, remote MCP servers or built-in tools."
+          identity: "An IAM execution role you own, which the harness assumes; callers use IAM SigV4 or a JWT authoriser, and per-user identity reaches tools only with JWT."
+          framework: "No framework choice: one managed loop with models from Amazon Bedrock, OpenAI, Google Gemini or LiteLLM-compatible providers; graph and workflow patterns are unsupported."
+          longRunning: "A microVM session lasts up to 8 hours, with iteration, time and token limits per invocation; a Step Functions task can call InvokeHarness for up to 15 minutes."
+          portability: "Export to code turns the configuration into a Strands Agents Python agent for AgentCore Runtime; Gateway, Browser and Code Interpreter tools are rewired by hand."
+          effort: "You own the configuration, IAM, caller authorisation, input validation, skill sources and network settings; AWS runs the loop, compute and scaling."
+          fits: "AWS guidance: use the harness unless you need to own the loop; it is also the recommended target for Amazon Bedrock Agents Classic, now in maintenance mode."
+        sources:
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-vs-runtime.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-memory.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-environment.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-operations.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-export.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-versioning.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/agents-classic-maintenance-mode.html
+          - https://docs.aws.amazon.com/step-functions/latest/dg/connect-bedrockagentcore.html
+          - https://docs.aws.amazon.com/bedrock/latest/userguide/bedrock-managed-agents-openai.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-get-started-bma.html
+          - https://aws.amazon.com/bedrock/agentcore/faqs/
+        offers:
+          - name: "AgentCore harness"
+            what: "A managed agent loop, generally available per the developer guide, that you define with a model, system prompt and tools and invoke with one API call, each session in its own microVM."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+          - name: "Harness in a custom environment (container image)"
+            what: "The same managed loop running inside a linux/arm64 container image that you build and push to Amazon ECR, for agents that need their own dependencies and tools."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-environment.html
+          - name: "Subagent delegation (built-in subagent tool)"
+            what: "The agent hands a self-contained task to a fresh child agent, which is not a separately configured harness, and receives its result; AWS describes wider multi-agent collaboration as limited."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - name: "Human-in-the-loop agent (inline function tools)"
+            what: "Tool schemas that execute on the client side: the harness pauses, returns the call to your code and resumes when you send the result, which is the documented pattern for approvals."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+          - name: "Harness as a workflow step (AgentCore InvokeHarness state)"
+            what: "An AWS Step Functions task state that invokes a harness in request-response mode, with a maximum of 15 minutes per task."
+            url: https://docs.aws.amazon.com/step-functions/latest/dg/connect-bedrockagentcore.html
+    # <<< hosting options
     settings:
       - idcAppAssignment
       - cognitoM2mClients
