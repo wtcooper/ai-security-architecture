@@ -3,7 +3,7 @@
 /**
  * Step 2 of Enable on a hosted pattern: the choices a builder makes before any setting, in the
  * order they are made. Where it runs (a cloud, or the organisation's own data centre); how it is
- * hosted there (your own cluster, the platform's container runtime, or a managed agent service);
+ * hosted there (your own cluster, the platform's own runtime, or a managed agent service);
  * and what the boxes you build are built with (a framework or a server).
  *
  * The hosting options of a platform are compared on the same rows, each a sentence taken from the
@@ -86,10 +86,10 @@ function HostingComparison({ platform }: { platform: CloudProduct }) {
     <details className="mt-3 rounded-lg border border-line bg-paper" open data-hosting-comparison>
       <summary className="cursor-pointer px-3 py-2 text-[12.5px] font-semibold text-ink">Compare them row by row</summary>
       <div className="overflow-x-auto border-t border-line px-3 pb-3 pt-2">
-        <table className="w-full min-w-[720px] border-collapse text-left text-[12.5px] leading-snug">
+        <table className="w-full min-w-[720px] table-fixed border-collapse text-left text-[12.5px] leading-snug">
           <thead>
             <tr className="border-b border-line-strong text-[11px] uppercase tracking-[0.06em] text-ink-3">
-              <th className="w-[20%] py-2 pr-4 font-semibold" />
+              <th className="w-[17%] py-2 pr-4 font-semibold" />
               {options.map((o) => (
                 <th key={o.id} className="py-2 pr-4 font-semibold">{o.name}</th>
               ))}

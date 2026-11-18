@@ -73,7 +73,7 @@ export function hostedAs(product: CloudProduct, optionId: string | null): CloudP
 
 export const HOSTING_KIND_LABEL: Record<string, string> = {
   cluster: "Your own cluster",
-  runtime: "The platform's container runtime",
+  runtime: "The platform's own runtime",
   managed: "A managed agent service",
 };
 

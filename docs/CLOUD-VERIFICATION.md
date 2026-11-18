@@ -380,7 +380,7 @@ Sigstore and OpenSSF Model Signing, and an OpenTelemetry, Loki and Langfuse logg
 
 On 18 November 2026 each of the four agent patterns (single agent workflow, chat agent with
 tools, multi-agent workflow, agent-to-agent federation) gained its hosting options on every
-platform: your own cluster, the platform's container runtime, and the managed agent service.
+platform: your own cluster, the platform's own runtime, and the managed agent service.
 The options are compared on the same ten rows and not ranked; a variant on the same pattern
 states only the components and settings that change.
 

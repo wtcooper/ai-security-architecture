@@ -349,7 +349,7 @@ For a hosted pattern (`surfaceCloud`), each file under `data/clouds/` (`aws.yaml
   vendor's command reference. Never a command that creates or changes anything.
 - Hosting options are compared, never ranked: each row is a plain sentence from the vendor's own
   page, the same rows for every option. Running your code on your own cluster or on the
-  platform's container runtime keeps the pattern's trust boundaries, so it is a variant; a
+  platform's own runtime keeps the pattern's trust boundaries, so it is a variant; a
   managed agent service moves the agent loop into the vendor's boundary, so it points at the
   pattern that draws that.
 - An on-premises entry names software the organisation runs, says under `requires` when a

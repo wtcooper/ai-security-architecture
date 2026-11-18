@@ -904,7 +904,7 @@ export interface CloudImplementation {
 }
 
 /**
- * Who runs the agent. On your own cluster and on the platform's container runtime the pattern is
+ * Who runs the agent. On your own cluster and on the platform's own runtime the pattern is
  * the same and only some components and settings change; a managed agent service moves the agent
  * loop into the vendor's boundary, which is a different pattern.
  */
