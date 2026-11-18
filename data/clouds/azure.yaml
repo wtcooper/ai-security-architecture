@@ -1010,6 +1010,250 @@ settings:
     url: https://learn.microsoft.com/en-us/entra/msidweb/agent-id-sdk/scenarios/managed-identity
     verified: "2026-11-18"
   # <<< hosting rows
+  # >>> more hosting rows (settings used only by a hosting variant of the server, inference, training and sandbox patterns)
+  - id: sessionExecutorRole
+    name: "Azure ContainerApps Session Executor (role on the session pool)"
+    where: "Session pool › Access control (IAM); az role assignment create --role \"Azure ContainerApps Session Executor\" --scope <session pool resource ID>"
+    setVia: [identityProvider, apiCli]
+    area: identity
+    default: "No identity can call the pool management API until the role is assigned"
+    recommended: "Assign the role at the scope of the one session pool to the orchestrator's and harness's workload identity only, never to people or to graders, and request tokens for the audience https://dynamicsessions.io."
+    why: "A valid token can create and enter any session in the pool, so the set of identities holding this role is the set that can reach rollouts."
+    mitigations: [D3-APA, D3-AA]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+    verified: "2026-11-18"
+  - id: sessionPoolIdentityLifecycle
+    name: "managedIdentitySettings lifecycle (session access to the pool's managed identity)"
+    where: "Microsoft.App/sessionPools › properties.managedIdentitySettings[].lifecycle, in ARM or Bicep"
+    setVia: [cloudPolicy]
+    area: identity
+    default: "None: the identity is used only to pull the image"
+    recommended: "None. Give the pool a user-assigned identity with AcrPull for image pull, and never set lifecycle to Main for a pool that runs model-generated code."
+    why: "With Main, any code in the session can mint Microsoft Entra tokens for the pool's identity; with None the model's tools hold no Azure permission at all."
+    mitigations: [AML.M0028]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+    verified: "2026-11-18"
+  - id: sessionPoolLifecycle
+    name: "Session lifecycle configuration (lifecycleType, cooldownPeriodInSeconds, maxAlivePeriodInSeconds)"
+    where: "Session pool › properties.dynamicPoolConfiguration.lifecycleConfiguration; az containerapp sessionpool create --cooldown-period"
+    setVia: [cloudPolicy, apiCli]
+    area: tools
+    default: "Timed: the session is deleted after the cooldown period without requests"
+    recommended: "Use a new session identifier for every rollout and never reuse one. Choose OnContainerExit with a maximum alive period just above the longest episode, or Timed with the shortest cooldown (300 seconds)."
+    why: "Each rollout starts in a fresh sandbox and nothing a previous episode left behind, files or processes, survives into the next."
+    mitigations: [D3-EI]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
+    verified: "2026-11-18"
+  - id: sessionStopApi
+    name: "Stop Session API (.management/stopSession)"
+    where: "POST <pool management endpoint>/.management/stopSession?identifier=<session>, called by the orchestrator or by the automated stop action"
+    setVia: [apiCli, code]
+    area: tools
+    default: "Sessions end only by cooldown, maximum alive period or container exit"
+    recommended: "Have the orchestrator call stopSession when an episode ends, and have the alert action that halts a run list the pool's sessions and stop each one."
+    why: "A rollout that misbehaves is terminated at once instead of living on until its idle timer expires."
+    mitigations: [cap-agent-kill-switch]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container
+    verified: "2026-11-18"
+  - id: sessionPoolLogs
+    name: "Session log categories (AppEnvSessionConsoleLogs, AppEnvSessionLifeCycleLogs, AppEnvSessionPoolEventLogs)"
+    where: "Container Apps environment › Monitoring › Logging options › Azure Monitor, then Diagnostic settings › session log categories › Send to Log Analytics workspace"
+    setVia: [cloudPolicy, apiCli]
+    area: audit
+    default: "Not collected"
+    recommended: "Set the environment's log destination to Azure Monitor and send all session categories to the Log Analytics workspace used for the run; have the tool server write every command it executes to stdout."
+    why: "The platform collects what the sandbox prints and when sessions start and stop, so the record of a rollout does not depend on the sandbox having a network path out."
+    mitigations: [cap-agent-tracing]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container
+    verified: "2026-11-18"
+  - id: functionsFlexVnetIntegration
+    name: "Virtual network integration (Flex Consumption plan)"
+    where: "Function app › Networking › Virtual network integration; a subnet delegated to Microsoft.App/environments, with a route table that sends 0.0.0.0/0 to Azure Firewall"
+    setVia: [apiCli, cloudPolicy]
+    area: network
+    default: "No virtual network integration; outbound calls go straight to the internet"
+    recommended: "Integrate the function app with its own subnet delegated to Microsoft.App/environments and associate a route table whose default route points at Azure Firewall. On Flex Consumption all outbound traffic already goes through the virtual network, so there is no Route All flag to set."
+    why: "A tool tricked by injected text can then reach only the destinations the firewall allows, the same wall the App Service mapping builds with outboundVnetRouting.allTraffic."
+    mitigations: [D3-OTF]
+    url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options
+    verified: "2026-11-18"
+  - id: functionsMcpWebhookAuthLevel
+    name: "system.webhookAuthorizationLevel (MCP extension)"
+    where: "host.json › extensions.mcp.system.webhookAuthorizationLevel; the mcp_extension system key under Function app › Functions › App keys"
+    setVia: [configFile]
+    area: identity
+    default: "System: the endpoint requires the mcp_extension system key"
+    recommended: "Keep System and let only API Management hold the mcp_extension key, sent in the x-functions-key header. Set Anonymous only when built-in MCP authorisation is on and access restrictions or a private endpoint already limit the app to the gateway."
+    why: "The key is one shared secret for the whole server, so it suits a single trusted caller, the gateway, and must never be handed to MCP clients in place of their own tokens."
+    mitigations: [D3-APA]
+    url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp
+    verified: "2026-11-18"
+  - id: containerAppsRequireAuth
+    name: "Built-in authentication: Require authentication (unauthenticated client action Return401)"
+    where: "Container Apps › (server app) › Authentication › Restrict access; az containerapp auth update --unauthenticated-client-action Return401"
+    setVia: [apiCli, cloudPolicy]
+    area: identity
+    default: "Built-in authentication is not enabled; every request reaches the container"
+    recommended: "Enable the Microsoft Entra provider with the server's app registration and tenant issuer, set the unauthenticated client action to Return401 so API clients receive a 401 and no sign-in redirect, and keep the allowed token audiences to the server's own identifiers."
+    why: "The platform's authentication sidecar rejects requests without a valid token before they reach the server, which is what App Service Authentication did in the mapping."
+    mitigations: [D3-APA]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-authentication
+    verified: "2026-11-18"
+  - id: containerAppsKeyVaultSecrets
+    name: "Secrets as Key Vault references (keyvaultref with identityref)"
+    where: "Container Apps › (server app) › Secrets › Type: Key Vault reference; --secrets \"<name>=keyvaultref:<Key Vault secret URI>,identityref:<managed identity ID>\""
+    setVia: [apiCli, cloudPolicy]
+    area: identity
+    default: "A secret's value can be stored directly in the container app"
+    recommended: "Define every secret, including the client secret that built-in authentication creates, as a Key Vault reference resolved by the app's user-assigned identity holding Key Vault Secrets User on that vault only; leave the version out of the URI so rotation is picked up."
+    why: "Secret values stay in Key Vault under its access control, and a rotated secret reaches the app within about 30 minutes without anyone copying it into configuration."
+    mitigations: [D3-CH]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets
+    verified: "2026-11-18"
+  - id: containerAppsEnvironmentVnet
+    name: "Virtual network for the Container Apps environment (workload profiles, internal)"
+    where: "az containerapp env create --infrastructure-subnet-resource-id <subnet delegated to Microsoft.App/environments> --internal-only; chosen when the environment is created"
+    setVia: [apiCli, cloudPolicy]
+    area: network
+    default: "An Azure-generated network that is publicly accessible and can reach internet-accessible endpoints"
+    recommended: "Create a workload profiles environment in your own subnet, delegated to Microsoft.App/environments and internal-only, and associate the route table that sends outbound traffic to Azure Firewall. The network type cannot be changed after creation."
+    why: "User-defined routes work only on a workload profiles environment in a network you supply, so this choice is what makes the outbound allow list at the firewall possible."
+    mitigations: [D3-OTF]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/networking
+    verified: "2026-11-18"
+  - id: aksMcpAuthMiddleware
+    name: "Custom authentication middleware (token validation in the server)"
+    where: "Your server code: middleware that validates the Microsoft Entra token's signature, issuer, audience and scopes, and serves the protected resource metadata document"
+    setVia: [code]
+    area: identity
+    default: "A Deployment accepts any request that reaches its Service"
+    recommended: "Reject every request without a valid token whose audience is the server's Application ID URI, and return 401 with the protected resource metadata address. Keep the check in the server even though API Management validates the token first."
+    why: "AKS has no equivalent of App Service Authentication, so without this the server trusts whatever reaches the pod, including traffic that did not come through the gateway."
+    mitigations: [D3-APA, D3-AA]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-choosing-azure-service
+    verified: "2026-11-18"
+  - id: aksKeyVaultCsiProvider
+    name: "Azure Key Vault provider for Secrets Store CSI Driver"
+    where: "AKS › az aks enable-addons --addons azure-keyvault-secrets-provider; a SecretProviderClass in the server's namespace that names the vault and uses workload identity"
+    setVia: [apiCli, configFile]
+    area: identity
+    default: "Add-on not enabled; secrets are Kubernetes Secret objects"
+    recommended: "Enable the add-on, mount the server's remaining secrets from Key Vault through a SecretProviderClass that authenticates with the pod's workload identity, and grant that identity Key Vault Secrets User on the one vault only."
+    why: "Secrets stay in Key Vault under its access control and rotation instead of in manifests or cluster Secrets that any namespace reader could copy."
+    mitigations: [D3-CH]
+    url: https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver
+    verified: "2026-11-18"
+  - id: aksOutboundUserDefinedRouting
+    name: "Outbound type userDefinedRouting"
+    where: "AKS › az aks create --outbound-type userDefinedRouting, with a route table on the node subnet whose 0.0.0.0/0 route points at Azure Firewall; application rules list the allowed names"
+    setVia: [apiCli, cloudPolicy]
+    area: network
+    default: "loadBalancer: outbound traffic leaves through an AKS-assigned public IP"
+    recommended: "Create the cluster with outbound type userDefinedRouting and a default route to Azure Firewall, then allow only the names AKS itself needs and the systems of record the tools call."
+    why: "A tool steered by injected text cannot send data to an arbitrary host, because every outbound connection from the cluster passes the firewall's allow list."
+    mitigations: [D3-OTF]
+    url: https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+    verified: "2026-11-18"
+  - id: amlEndpointPublicNetworkAccess
+    name: "public_network_access (managed online endpoint)"
+    where: "Azure Machine Learning › Endpoints › (endpoint) YAML or az ml online-endpoint update --set public_network_access=disabled; needs a private endpoint on the workspace"
+    setVia: [apiCli, cloudPolicy]
+    area: network
+    default: "enabled"
+    recommended: "disabled, so scoring requests arrive only through the workspace private endpoint in the virtual network that API Management is joined to."
+    why: "Callers cannot skip the gateway, its rate limits and its content checks by calling the endpoint's public address directly."
+    mitigations: [D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-secure-online-endpoint
+    verified: "2026-11-18"
+  - id: amlEndpointAadToken
+    name: "auth_mode: aad_token (Microsoft Entra token authentication)"
+    where: "Azure Machine Learning › Endpoints › (endpoint) YAML auth_mode; the caller's identity holds a role with Microsoft.MachineLearningServices/workspaces/onlineEndpoints/score/action"
+    setVia: [apiCli, identityProvider]
+    area: identity
+    default: "key"
+    recommended: "aad_token, with the scoring action granted only to API Management's managed identity, which requests a token for the resource https://ml.azure.com."
+    why: "Scoring then needs an identity and a role assignment that can be revoked, instead of a static key that never expires."
+    mitigations: [D3-AA]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-authenticate-online-endpoint
+    verified: "2026-11-18"
+  - id: amlOnlineDeploymentInstances
+    name: "instance_type and instance_count (one deployment per sensitivity tier)"
+    where: "Azure Machine Learning › Endpoints › (endpoint) › deployment YAML: instance_type, instance_count"
+    setVia: [apiCli, configFile]
+    area: tools
+    default: "Each deployment gets its own virtual machine instances"
+    recommended: "Serve each sensitivity tier from its own endpoint and deployment, so its model and prompts run on virtual machine instances that no other tier's deployment uses."
+    why: "Azure ML assigns virtual machines to a deployment and blocks deployments from connecting to each other, which gives the tier separation that tainted node pools gave on AKS."
+    mitigations: [D3-HBPI]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints-online
+    verified: "2026-11-18"
+  - id: amlEndpointTraffic
+    name: "Endpoint traffic and mirror traffic"
+    where: "Azure Machine Learning › Endpoints › (endpoint) › Update traffic; az ml online-endpoint update --traffic and --mirror-traffic"
+    setVia: [apiCli]
+    area: tools
+    default: "A new deployment receives no live traffic"
+    recommended: "Deploy each release as a new deployment at 0%, mirror a share of live traffic to it, then move a small percentage before all of it; keep the previous deployment until the new one is accepted."
+    why: "A bad release is caught on mirrored or limited traffic and rolled back by changing percentages, without redeploying."
+    mitigations: [cap-staged-rollout-gate]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-safely-rollout-online-endpoints
+    verified: "2026-11-18"
+  - id: amlEndpointIdentity
+    name: "Endpoint managed identity (user-assigned)"
+    where: "Azure Machine Learning › Endpoints › (endpoint) YAML identity.type: user_assigned; AcrPull on the registry and Storage Blob Data Reader on the workspace default datastore"
+    setVia: [apiCli, identityProvider]
+    area: identity
+    default: "System-assigned identity; the identity cannot be changed after the endpoint is created"
+    recommended: "Create the endpoint with a user-assigned identity that holds only AcrPull and Storage Blob Data Reader and no write role. For a model deployed from a registry, Microsoft says to assign both roles at subscription level, so the scope is wider than one registry and one store."
+    why: "The serving container reads its image and weights with a credential it never sees and cannot use to alter the release."
+    mitigations: [AML.M0005, D3-CH]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-access-resources-from-endpoints-managed-identities
+    verified: "2026-11-18"
+  - id: amlEndpointDiagnostics
+    name: "Diagnostic setting on the online endpoint"
+    where: "Azure portal › (resource group) › (online endpoint resource) › Monitoring › Diagnostic settings; AmlOnlineEndpointTrafficLog, AmlOnlineEndpointConsoleLog and AmlOnlineEndpointEventLog to Log Analytics"
+    setVia: [cloudPolicy, apiCli]
+    area: audit
+    default: "Not collected"
+    recommended: "Send all three log categories to the Log Analytics workspace that already holds the API Management gateway logs, and join them on the request ID."
+    why: "The gateway log shows who asked; these logs show what reached the model server and what its container did, which the cluster's own logging used to provide."
+    mitigations: [AML.M0024]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-monitor-online-endpoints
+    verified: "2026-11-18"
+  - id: amlKubernetesComputeIdentity
+    name: "Managed identity on the Kubernetes compute target"
+    where: "az ml compute attach --type Kubernetes --identity-type SystemAssigned or UserAssigned; or Azure Machine Learning studio › Compute › Attached compute › (compute) › edit managed identity"
+    setVia: [apiCli, identityProvider]
+    area: identity
+    default: "No managed identity on the compute target"
+    recommended: "Attach the training namespace as its own compute target with a user-assigned identity that holds AcrPull on the workspace registry and read access to the training corpus and write access to the job output container only; keep datastores on identity-based access."
+    why: "The job reaches data and images as a named identity with narrow roles, not with storage keys, and that identity is separate from the evaluation and promotion identities."
+    mitigations: [D3-AA]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-to-workspace
+    verified: "2026-11-18"
+  - id: amlKubernetesInstanceType
+    name: "Instance types (nodeSelector and resource limits)"
+    where: "InstanceType custom resources in the cluster (kubectl apply), each with a nodeSelector and resource requests and limits; selected per job with resources.instance_type"
+    setVia: [configFile, clusterPolicy]
+    area: tools
+    default: "defaultinstancetype, created at attach with minimal resources"
+    recommended: "Define an instance type per trust level whose nodeSelector matches only that level's tainted GPU node pool, and set it explicitly in every training job; do not leave jobs on the default instance type."
+    why: "Training jobs land only on the node pool reserved for them, so job code does not share nodes with the extension's own pods or with other teams' workloads."
+    mitigations: [D3-EI]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-kubernetes-instance-types
+    verified: "2026-11-18"
+  - id: amlKubernetesNamespace
+    name: "Kubernetes namespace of the compute target"
+    where: "az ml compute attach --type Kubernetes --namespace <namespace>; the namespace is created in the cluster before the attach"
+    setVia: [apiCli]
+    area: network
+    default: "The default namespace; all of the compute target's workloads run in the namespace named at attach"
+    recommended: "Give training its own namespace and compute target, with a default-deny network policy in that namespace that allows only the workspace, storage and registry endpoints the job needs."
+    why: "All of a compute target's jobs are placed in its namespace, which makes the namespace the unit to which network policy and Kubernetes access control are applied."
+    mitigations: [D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-to-workspace
+    verified: "2026-11-18"
+  # <<< more hosting rows
 
 implementations:
   - architecture: archChatAgent
@@ -2130,6 +2374,328 @@ implementations:
       - { block: service, service: Your MCP server on Azure App Service, note: "Built-in MCP server authorization serves the protected resource metadata; Azure Functions MCP bindings are the serverless alternative." }
       - { block: toolDefs, service: Tool definitions in your repository, build: true, note: "Versioned with the release and pinned by hash where the server loads them." }
       - { block: orgData, service: Your systems of record, build: true, note: "Reached on an on-behalf-of token or the server's own managed identity, never the caller's token." }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: appService
+        kind: runtime
+        name: "Azure App Service"
+        url: https://learn.microsoft.com/en-us/azure/app-service/overview
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "App Service runs your web app, with the MCP endpoint your code mounts beside its other routes, on the instances of your App Service plan."
+          patching: "Azure patches the host and guest operating systems monthly and updates built-in language runtimes; you keep the MCP SDK, dependencies and any custom container current."
+          data: "Requests and tool results are handled by your app code on the plan's instances in its region; anything kept is what your code and logging settings store."
+          network: "Access restrictions and private endpoints limit inbound traffic; virtual network integration carries outbound traffic, all of it only when that routing is switched on."
+          identity: "The app runs as a system-assigned or user-assigned managed identity, and App Service Authentication checks callers' tokens before requests reach your code."
+          accepts: "Streamable HTTP servers built with an MCP SDK in .NET, Python, Node.js or Java, or a custom container; a preview feature builds tools from an OpenAPI 3.0 specification."
+          workload: "Unless Always On is set the app unloads after 20 idle minutes; a request with no response in about 230 seconds times out; the Python and Node.js tutorials are stateless."
+          portability: "A server built with a standard MCP SDK moves unchanged; the authentication configuration and protected resource metadata setting are App Service features to rebuild."
+          effort: "Your team owns the app code, its dependencies, the plan's scaling and the authentication configuration; there are no servers or clusters to operate."
+          fits: "Microsoft's guide names it for adding MCP to an existing web app and for code deployment without a Dockerfile."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/mcp-choosing-azure-service
+          - https://learn.microsoft.com/en-us/azure/app-service/tutorial-ai-model-context-protocol-server-node
+          - https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-mcp
+          - https://learn.microsoft.com/en-us/azure/app-service/configure-mcp-built-in
+          - https://learn.microsoft.com/en-us/azure/app-service/overview-patch-os-runtime
+          - https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration
+          - https://learn.microsoft.com/en-us/azure/app-service/networking-features
+          - https://learn.microsoft.com/en-us/azure/app-service/overview-managed-identity
+          - https://learn.microsoft.com/en-us/azure/app-service/overview
+          - https://learn.microsoft.com/en-us/azure/app-service/configure-common
+      - id: functions
+        kind: runtime
+        name: "Azure Functions (MCP extension or self-hosted MCP server)"
+        url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-mcp-tutorial
+        asOf: "2026-11"
+        compare:
+          runs: "The Functions host runs your tools as MCP trigger functions, or a server built with an MCP SDK as a custom handler, on Flex Consumption instances it starts on demand."
+          patching: "The platform, shared with App Service, updates its virtual machines and runtime software; you keep your function code and its dependencies current."
+          data: "Requests and results are processed in the function app in its region; with the SSE transport the extension also uses Azure Queue storage in the host storage account."
+          network: "Flex Consumption supports access restrictions, a private endpoint and virtual network integration, where all outbound traffic already goes through the virtual network."
+          identity: "The function app runs as a managed identity; callers present a function access key by default, or Microsoft Entra tokens when built-in MCP authorisation is on."
+          accepts: "The MCP extension takes C#, Java, JavaScript, TypeScript and Python over Streamable HTTP or SSE; self-hosted servers (preview) must be stateless Streamable HTTP."
+          workload: "Instances scale to zero unless always-ready instances are set; HTTP-triggered functions have 230 seconds to respond; self-hosted servers must be stateless."
+          portability: "Tools written as MCP trigger functions are tied to the Functions programming model; a self-hosted SDK server needs only its host.json removed to run elsewhere."
+          effort: "Your team owns the function code, the access keys or authentication settings, the host storage account and the scale settings; there are no servers to operate."
+          fits: "Microsoft's guide names it for independent, stateless, event-driven tools with per-invocation pricing, and for tools used by Foundry Agent Service."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/mcp-choosing-azure-service
+          - https://learn.microsoft.com/en-us/azure/azure-functions/functions-mcp-tutorial
+          - https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp
+          - https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp-tool-trigger
+          - https://learn.microsoft.com/en-us/azure/azure-functions/self-hosted-mcp-servers
+          - https://learn.microsoft.com/en-us/azure/azure-functions/scenario-custom-remote-mcp-server
+          - https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options
+          - https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan
+          - https://learn.microsoft.com/en-us/azure/azure-functions/functions-scale
+          - https://learn.microsoft.com/en-us/azure/azure-functions/security-concepts
+          - https://learn.microsoft.com/en-us/azure/azure-functions/register-mcp-server-api-center
+          - https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-mcp
+        summary: "The MCP server becomes a function app on the Flex Consumption plan: each tool is an MCP tool trigger function, or an existing SDK-built server runs unchanged as a custom handler (preview). The same built-in MCP authorisation as App Service still serves the discovery document. The builder now carries a host storage account, the extension's system key and cold starts, and no longer sizes an App Service plan."
+        bindings:
+          - { block: service, service: "Your MCP server on Azure Functions (Flex Consumption)", builtWith: "Azure Functions MCP extension", note: "Tools are MCP tool trigger functions served at /runtime/webhooks/mcp, or an SDK-built server runs as a custom handler (preview). Built-in MCP authorisation (preview) still serves the discovery document.", url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-mcp-tutorial }
+        dropSettings: [appServiceRouteAll]
+        addSettings: [apiCenterInventory, functionsFlexVnetIntegration, functionsMcpWebhookAuthLevel]
+        differences:
+          - at: gateway->service
+            text: "The MCP extension serves the server at /runtime/webhooks/mcp, not at a path your code chooses, and by default asks for the mcp_extension system key. API Management must be pointed at that path and send the key, or the level is set to Anonymous. Turning on built-in MCP authentication in the portal (preview) switches the key requirement off automatically."
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp
+          - at: service
+            text: "Hosting a server built with an MCP SDK is in public preview. It supports only stateless servers on the Streamable HTTP transport, only the Flex Consumption plan, and needs the feature flag AzureWebJobsFeatureFlags=EnableMcpCustomHandlerPreview. Microsoft's page says to use the MCP extension when the server must keep state."
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/self-hosted-mcp-servers
+          - at: toolDefs->service
+            text: "With the MCP extension there is no definitions file for the server to load. Each tool's name, description and properties are written in the function's trigger declaration, so the reviewed and pinned artefact is the deployment package itself. Pin the package by hash and review trigger metadata in code review."
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp-tool-trigger
+          - at: service
+            text: "Instances scale to zero, so the first call after a quiet period waits for a cold start unless always-ready instances are set (the default is zero). Microsoft also states that an HTTP-triggered function has at most 230 seconds to respond, whatever the function timeout, so plan long tool calls within that limit."
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-scale
+          - at: service->orgData
+            text: "A function app has a public endpoint and, without virtual network integration, calls out directly to the internet. Both walls are choices: access restrictions or a private endpoint inbound, and an integration subnet routed to a firewall outbound. The app also needs its host storage account reachable from that subnet."
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options
+        alsoNeeded:
+          - service: "Azure Storage account (function app host storage)"
+            role: other
+            why: "Every function app needs a host storage account; on Flex Consumption it also holds the deployment package, and the SSE transport uses its queues."
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp
+          - service: "Application Insights with a Log Analytics workspace"
+            role: logging
+            why: "Microsoft's tutorial enables it when the function app is created; it is where function executions and errors are recorded."
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-mcp-tutorial
+          - service: "User-assigned managed identity"
+            role: identity
+            why: "The tutorial selects managed identity authentication so the app reaches its storage account and Application Insights without keys."
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-mcp-tutorial
+        quickstart:
+          - title: "Tutorial: Host an MCP server on Azure Functions"
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-mcp-tutorial
+          - title: "Build a custom remote MCP server using Azure Functions"
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/scenario-custom-remote-mcp-server
+          - title: "Self-hosted remote MCP server on Azure Functions (public preview)"
+            url: https://learn.microsoft.com/en-us/azure/azure-functions/self-hosted-mcp-servers
+      - id: containerApps
+        kind: runtime
+        name: "Azure Container Apps (standalone container app)"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview
+        asOf: "2026-11"
+        compare:
+          runs: "Container Apps runs your containerised MCP server as replicas behind its HTTPS ingress; the platform has no MCP-specific awareness and you supply the image."
+          patching: "Microsoft describes the platform as keeping the underlying resources up to date; the image, its base layers and the MCP SDK are yours to rebuild and redeploy."
+          data: "Requests and tool results are handled by your replicas in the environment's region; console logs go to the environment's Log Analytics workspace by default."
+          network: "IP restrictions, internal environments and private endpoints limit inbound traffic; a workload profiles environment in your own network can route outbound to a firewall."
+          identity: "The app runs as a system-assigned or user-assigned managed identity; built-in authentication, a sidecar on each replica, checks callers' Microsoft Entra tokens."
+          accepts: "Any containerised server in a language with an MCP SDK, over Streamable HTTP on the ingress; tutorials cover .NET, Python, Node.js and Java (the Java one uses SSE)."
+          workload: "Replicas scale to zero by default, so Microsoft advises a minimum of one; ingress request timeout is 240 seconds, or up to 30 idle minutes with premium ingress."
+          portability: "The container runs on any container platform; ingress, scale rules, secret references and built-in authentication settings are Container Apps configuration to rebuild."
+          effort: "Your team owns the Dockerfile, image and registry, scale limits, authentication settings and the environment's network; there is no cluster to operate."
+          fits: "Microsoft's guide calls it the most flexible default for a custom MCP server, and names it for container-based teams and for several servers that call each other."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/mcp-choosing-azure-service
+          - https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview
+          - https://learn.microsoft.com/en-us/azure/container-apps/mcp-authentication
+          - https://learn.microsoft.com/en-us/azure/container-apps/mcp-troubleshooting
+          - https://learn.microsoft.com/en-us/azure/container-apps/tutorial-mcp-server-python
+          - https://learn.microsoft.com/en-us/azure/container-apps/tutorial-mcp-server-nodejs
+          - https://learn.microsoft.com/en-us/azure/container-apps/authentication
+          - https://learn.microsoft.com/en-us/azure/container-apps/authentication-entra
+          - https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets
+          - https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
+          - https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview
+          - https://learn.microsoft.com/en-us/azure/container-apps/ip-restrictions
+          - https://learn.microsoft.com/en-us/azure/container-apps/networking
+          - https://learn.microsoft.com/en-us/azure/container-apps/vnet-custom
+          - https://learn.microsoft.com/en-us/azure/container-apps/user-defined-routes
+          - https://learn.microsoft.com/en-us/azure/container-apps/scale-app
+          - https://learn.microsoft.com/en-us/azure/container-apps/revisions
+          - https://learn.microsoft.com/en-us/azure/container-apps/log-options
+          - https://learn.microsoft.com/en-us/azure/container-apps/overview
+          - https://learn.microsoft.com/en-us/azure/container-apps/tutorial-mcp-server-java
+          - https://learn.microsoft.com/en-us/azure/container-apps/ingress-environment-configuration
+          - https://learn.microsoft.com/en-us/azure/container-apps/health-probes
+        summary: "The MCP server is a container you build, run as a container app behind the platform's HTTPS ingress, published through API Management. Microsoft runs the hosts and scaling; the builder now carries a Dockerfile, an image registry and the minimum replica count. Built-in authentication checks Entra tokens much as App Service does, but no protected resource metadata support is documented, and outbound filtering needs an environment created in your own virtual network."
+        bindings:
+          - { block: service, service: "Your MCP server on Azure Container Apps", note: "A container serving Streamable HTTP behind Container Apps ingress, with built-in authentication set to return 401 and ingress reachable only from API Management.", url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview }
+        dropSettings: [appServiceRequireAuth, keyVaultReferences, appServiceRouteAll]
+        addSettings: [agentManagedIdentity, firewallEgress, containerAppsTrafficSplit, containerAppsRequireAuth, containerAppsKeyVaultSecrets, containerAppsEnvironmentVnet]
+        differences:
+          - at: service
+            text: "In this hosting model Container Apps has, in Microsoft's words, no MCP-specific awareness. Its built-in authentication validates Microsoft Entra bearer tokens, but the pages read do not mention the protected resource metadata that App Service Authentication publishes. Plan for the server to serve its own discovery document, or for clients configured with the scope in advance."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview
+          - at: gateway->service
+            text: "A container app with external ingress in a default environment is reachable from the internet, and with no IP restriction rules all inbound traffic is allowed. To keep API Management as the only door, use an internal environment joined to the gateway's network or IP restrictions, and leave built-in authentication on Return401."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview
+          - at: service->orgData
+            text: "By default the environment sits on an Azure-generated network and can call any internet-accessible endpoint. Routing outbound traffic to Azure Firewall needs a workload profiles environment in a virtual network you supply, and the network type cannot be changed afterwards, so an environment created with defaults has to be rebuilt."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/networking
+          - at: service
+            text: "Replicas scale to zero by default, and Microsoft's troubleshooting page puts the first request after idle at 10 to 30 seconds; set minimum replicas to 1. The ingress request timeout is 240 seconds; premium ingress can raise the idle limit to 30 minutes. Default probes are TCP; point any HTTP health probe at a separate GET path, not the MCP endpoint, which accepts only POST."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-troubleshooting
+          - at: service->authServer
+            text: "Microsoft's steps give built-in authentication a client secret for the server's app registration and store it as a secret in the container app, where the mapping uses certificate credentials. A secret changed by hand does not reach running revisions until a new revision is deployed or the revision is restarted; a Key Vault reference without a version avoids that."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/authentication-entra
+        alsoNeeded:
+          - service: "Azure Container Registry"
+            role: registry
+            why: "The server ships as a container image that the app pulls, with a managed identity for the pull; App Service took a code deployment."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
+          - service: "Container Apps environment (workload profiles)"
+            role: other
+            why: "Every container app runs in an environment, which holds the network type and logging destination that an App Service plan did not."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/networking
+          - service: "Virtual network with Azure Firewall and a route table"
+            role: network
+            why: "Outbound filtering is not a flag on the app: it is a subnet you delegate to the environment and a user-defined route to a firewall you run."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/user-defined-routes
+          - service: "Log Analytics workspace"
+            role: logging
+            why: "Container console and system logs are stored in the environment's Log Analytics workspace, the default destination."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/log-options
+        quickstart:
+          - title: "Host MCP servers on Azure Container Apps"
+            url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview
+          - title: "Tutorial: Deploy a Python MCP server to Azure Container Apps"
+            url: https://learn.microsoft.com/en-us/azure/container-apps/tutorial-mcp-server-python
+          - title: "Secure MCP servers on Azure Container Apps"
+            url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-authentication
+      - id: aks
+        kind: cluster
+        name: "Azure Kubernetes Service (AKS)"
+        url: https://learn.microsoft.com/en-us/azure/aks/what-is-aks
+        asOf: "2026-11"
+        compare:
+          runs: "You run the MCP server as a Kubernetes Deployment with a Service and ingress on a cluster whose node pools you define; Azure runs the control plane."
+          patching: "Azure manages the control plane; node operating system patches arrive through the upgrade channel you choose, and you rebuild and redeploy the server image."
+          data: "Requests and tool results are processed in your pods on nodes in your subscription and virtual network; anything kept is what your code and log collection store."
+          network: "You choose the virtual network, ingress and outbound type; pods can send and receive any traffic until you add network policies and route outbound traffic to a firewall."
+          identity: "Pods use Microsoft Entra Workload ID, a Kubernetes service account federated to a managed identity; caller authentication is your own middleware."
+          accepts: "Any containerised server in any language with an MCP SDK, over Streamable HTTP behind an ingress controller or gateway of your choice."
+          workload: "Pods run continuously, so there is no cold start unless you scale to zero with KEDA; replica counts and autoscaling (HPA, KEDA, cluster autoscaler) are yours to set."
+          portability: "The container and Kubernetes manifests run on any conformant cluster; workload identity federation, ingress and Key Vault wiring are redone on the new platform."
+          effort: "Your team operates the cluster: upgrades, node pools, ingress, network policy, secrets, image scanning and the server's own authentication."
+          fits: "Microsoft's guide names it for teams that already run an AKS cluster or need the Kubernetes API, custom networking, a service mesh or GPU node pools beside the server."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/mcp-choosing-azure-service
+          - https://learn.microsoft.com/en-us/azure/aks/openwebsearch-on-aks
+          - https://learn.microsoft.com/en-us/azure/aks/support-policies
+          - https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+          - https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver
+          - https://learn.microsoft.com/en-us/azure/aks/app-routing
+          - https://learn.microsoft.com/en-us/azure/aks/app-routing-gateway-api
+          - https://learn.microsoft.com/en-us/azure/aks/internal-lb
+          - https://learn.microsoft.com/en-us/azure/aks/what-is-aks
+        summary: "The MCP server is a container you build, run as a Deployment on an AKS cluster you operate and published to API Management through an internal load balancer or gateway. Nothing on the cluster does what App Service did for the server: you now carry token validation and the discovery document in code, secrets through the Key Vault CSI driver, outbound routing, network policy, node patching and image scanning."
+        bindings:
+          - { block: service, service: "Your MCP server on AKS (Deployment, Service and ingress)", note: "A container exposing Streamable HTTP, reachable only from API Management. No built-in MCP authorisation: the server publishes its own protected resource metadata and validates every token.", url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-choosing-azure-service }
+        dropSettings: [appServiceRequireAuth, keyVaultReferences, appServiceRouteAll]
+        addSettings: [aksWorkloadIdentity, aksInternalLoadBalancer, aksNetworkPolicy, aksImdsRestriction, aksNodeOsUpgradeChannel, aksEntraIdAuthorisation, aksDisableLocalAccounts, defenderContainerVa, aksMcpAuthMiddleware, aksKeyVaultCsiProvider, aksOutboundUserDefinedRouting]
+        differences:
+          - at: service
+            text: "AKS has no built-in MCP authorisation. Microsoft's guide says to secure the endpoint with Microsoft Entra Workload Identity for service-to-service calls or with custom authentication middleware, so the 401 challenge, the protected resource metadata document and token validation are all code the builder writes and tests."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-choosing-azure-service
+          - at: gateway->service
+            text: "A Kubernetes Service is reachable only inside the cluster until the builder publishes it. Use an internal load balancer or a Gateway, and join API Management to the virtual network. The NGINX-based application routing add-on loses Azure support after November 2026; Microsoft points to its Gateway API implementation instead."
+            url: https://learn.microsoft.com/en-us/azure/aks/app-routing-gateway-api
+          - at: service->orgData
+            text: "By default all pods in an AKS cluster can send and receive traffic without limitations, and the default outbound type sends traffic out through a load balancer's public IP. The outbound filter of this pattern exists only once the builder adds network policies and routes the node subnet to a firewall."
+            url: https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - at: service->authServer
+            text: "By default every pod can reach the Instance Metadata Service at 169.254.169.254, which Microsoft says could be exploited to obtain tokens and other platform information. Blocking it is a preview feature; until it is on, exclude that address with a network policy so the server relies only on its workload identity."
+            url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
+          - at: service
+            text: "Microsoft's guidance for this option is thin: one paragraph in the hosting guide (a Deployment, a Service and an ingress) and one walkthrough that deploys a specific open-source server with the KMCP controller. There is no AKS counterpart to the App Service and Functions authorisation tutorials."
+            url: https://learn.microsoft.com/en-us/azure/aks/openwebsearch-on-aks
+        alsoNeeded:
+          - service: "Azure Container Registry"
+            role: registry
+            why: "The server now ships as a container image that the cluster pulls; App Service took a code deployment."
+            url: https://learn.microsoft.com/en-us/azure/aks/cluster-container-registry-integration
+          - service: "Application routing add-on (Gateway API) or an internal load balancer"
+            role: ingress
+            why: "Something must publish the Service to API Management and terminate TLS; App Service provided the HTTPS endpoint itself."
+            url: https://learn.microsoft.com/en-us/azure/aks/app-routing-gateway-api
+          - service: "Microsoft Entra Workload ID with the cluster's OIDC issuer"
+            role: identity
+            why: "It replaces the app's managed identity: each pod's service account is federated to a user-assigned identity."
+            url: https://learn.microsoft.com/en-us/azure/aks/workload-identity-deploy-cluster
+          - service: "Azure Key Vault provider for Secrets Store CSI Driver"
+            role: secrets
+            why: "It replaces App Service Key Vault references for delivering secrets to the server."
+            url: https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver
+          - service: "Azure Firewall with a route table on the node subnet"
+            role: network
+            why: "With outbound type userDefinedRouting AKS configures no outbound path, so the builder supplies it."
+            url: https://learn.microsoft.com/en-us/azure/aks/limit-egress-traffic
+          - service: "Azure Monitor Container insights"
+            role: logging
+            why: "Server logs are pod output, and on an AKS Standard cluster log collection is optional and enabled by the builder."
+            url: https://learn.microsoft.com/en-us/azure/aks/monitor-aks
+        quickstart:
+          - title: "Choose an Azure service for your MCP server (AKS section)"
+            url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-choosing-azure-service
+          - title: "Deploy Open-WebSearch MCP Server on AKS"
+            url: https://learn.microsoft.com/en-us/azure/aks/openwebsearch-on-aks
+          - title: "Deploy and configure workload identity on an AKS cluster"
+            url: https://learn.microsoft.com/en-us/azure/aks/workload-identity-deploy-cluster
+      - id: apiManagementMcp
+        kind: managed
+        name: "Azure API Management (REST API exposed as an MCP server)"
+        url: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
+        asOf: "2026-11"
+        compare:
+          runs: "API Management's gateway serves the MCP endpoint and turns the REST operations you select into tools; you run only the API behind it."
+          patching: "Azure applies service updates to the API Management instance automatically in phased rollouts; you patch only the backend API."
+          data: "Tool calls pass through the gateway to your backend API; tool arguments and results are not captured unless you enable payload logging for the MCP server."
+          network: "Depending on tier, the instance can be injected into or integrated with a virtual network to reach private backends, and can take an inbound private endpoint."
+          identity: "The instance has a system-assigned or user-assigned managed identity, and credential manager can attach OAuth tokens to the backend calls a tool makes."
+          accepts: "Any HTTP-compatible REST API managed in the instance; it exposes MCP tools only, with no resources or prompts, and does not work in workspaces."
+          workload: "Each tool call becomes one backend API request; policies must not read the response body, because buffering breaks the streaming that MCP needs."
+          portability: "The tools exist only as API Management configuration over your API; moving off means writing an MCP server that calls the same API."
+          effort: "Your team maintains the backend API, the choice of operations and the instance's policies and logging; there is no MCP server code to operate."
+          fits: "Microsoft describes it for reusing APIs already managed in API Management as agent tools without building a server."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
+          - https://learn.microsoft.com/en-us/azure/api-management/export-rest-mcp-server
+          - https://learn.microsoft.com/en-us/azure/api-management/secure-mcp-servers
+          - https://learn.microsoft.com/en-us/azure/api-management/monitor-mcp-servers
+          - https://learn.microsoft.com/en-us/azure/api-management/manage-mcp-servers-rest-api
+          - https://learn.microsoft.com/en-us/azure/api-management/virtual-network-concepts
+          - https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-use-managed-service-identity
+          - https://learn.microsoft.com/en-us/azure/api-management/credentials-overview
+          - https://learn.microsoft.com/en-us/azure/api-management/configure-service-update-settings
+          - https://learn.microsoft.com/en-us/azure/api-management/expose-existing-mcp-server
+        offers:
+          - name: "Expose a REST API as an MCP server"
+            what: "In the portal under APIs › MCP Servers you pick a managed HTTP-compatible API and the operations to expose, and API Management publishes them as tools at a server URL ending in /mcp."
+            url: https://learn.microsoft.com/en-us/azure/api-management/export-rest-mcp-server
+          - name: "Tool selection after creation"
+            what: "The operations exposed as tools can be changed later in the Tools blade of the MCP server."
+            url: https://learn.microsoft.com/en-us/azure/api-management/export-rest-mcp-server
+          - name: "Policies at MCP server scope"
+            what: "Policies such as rate limiting, token validation, IP filtering and caching apply to all tools of the server together, after any global policies; they cannot be set per tool."
+            url: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
+          - name: "Inbound authentication"
+            what: "Callers can be required to present a subscription key or a Microsoft Entra token checked by the validate-azure-ad-token policy, and the Authorization header can be forwarded to the backend with an explicit policy."
+            url: https://learn.microsoft.com/en-us/azure/api-management/secure-mcp-servers
+          - name: "Credential manager for backend calls"
+            what: "API Management can fetch an OAuth 2.0 token from a configured credential provider and attach it to the backend request a tool makes."
+            url: https://learn.microsoft.com/en-us/azure/api-management/secure-mcp-servers
+          - name: "MCP telemetry and payload logging"
+            what: "Each MCP request is written to Application Insights with MCP-specific dimensions such as the tool, and logging of tool arguments and results can be switched on per MCP server."
+            url: https://learn.microsoft.com/en-us/azure/api-management/monitor-mcp-servers
+          - name: "Programmatic management"
+            what: "MCP servers can be created and managed with the REST API, ARM templates, Bicep, the Azure CLI and Terraform, using API version 2025-09-01-preview or later."
+            url: https://learn.microsoft.com/en-us/azure/api-management/manage-mcp-servers-rest-api
+          - name: "Service tiers and self-hosted gateway"
+            what: "MCP server features are available in the Developer, Basic, Standard and Premium tiers and the v2 tiers, and the self-hosted gateway can serve MCP servers in your own infrastructure."
+            url: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
+          - name: "Existing MCP server pass-through"
+            what: "The same feature can instead front an MCP server you host elsewhere, which is how the repository's mapped option uses API Management as the gateway."
+            url: https://learn.microsoft.com/en-us/azure/api-management/expose-existing-mcp-server
+    # <<< hosting options
     settings:
       - entraAssignmentRequired
       - appServiceRequireAuth
@@ -2253,6 +2819,185 @@ implementations:
       - { block: storage, service: Azure Blob Storage (model files) }
       - { block: sources, service: Public model hubs (Hugging Face) }
       - { block: registry, service: Azure Machine Learning registry }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: aks
+        kind: cluster
+        name: "Azure Kubernetes Service with the AI toolchain operator add-on (KAITO)"
+        url: https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "You run the model server as pods on GPU node pools in your cluster; the KAITO add-on creates the GPU nodes and the vLLM inference service from a workspace manifest."
+          patching: "Azure manages the control plane; node operating system patches arrive through the upgrade channel you choose, and you track KAITO presets or rebuild your serving images."
+          data: "Prompts, completions and weights stay on cluster nodes and storage in your own subscription; Microsoft's page presents this control as the reason to self-host."
+          network: "You choose the virtual network, ingress and outbound type; pods can send and receive any traffic until you add network policies and route outbound traffic to a firewall."
+          identity: "Serving pods use Microsoft Entra Workload ID, a Kubernetes service account federated to a managed identity you create."
+          accepts: "KAITO preset models served by vLLM, Hugging Face models through its custom template (Hugging Face runtime only), or any serving container you deploy yourself."
+          workload: "Jobs are queued by the Volcano scheduler on nodes you provision; node autoscaling is unsupported for training unless you replace the default Volcano configuration."
+          portability: "KAITO is a CNCF Sandbox project and vLLM is open source, so manifests and images run on other Kubernetes clusters; node pools, identity and storage wiring are redone."
+          effort: "Your team operates the cluster: upgrades, GPU node pools and quota, ingress, network policy, serving images, metrics collection and capacity."
+          fits: "Microsoft describes it for organisations with inference at scale and GPU access that want an alternative to per-token pricing, customisation, or strict data control."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator
+          - https://learn.microsoft.com/en-us/azure/aks/kaito-custom-inference-model
+          - https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator-monitoring
+          - https://learn.microsoft.com/en-us/azure/aks/use-nvidia-gpu
+          - https://learn.microsoft.com/en-us/azure/aks/support-policies
+          - https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+          - https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - https://learn.microsoft.com/en-us/azure/aks/ai-ml-overview
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-troubleshoot-kubernetes-extension
+      - id: managedOnlineEndpoints
+        kind: runtime
+        name: "Azure Machine Learning managed online endpoints"
+        url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints-online
+        asOf: "2026-11"
+        compare:
+          runs: "Azure Machine Learning provisions virtual machines and runs your container or scoring script behind an endpoint; you supply the model, environment and instance size."
+          patching: "Azure updates the host operating system image at least monthly; you redeploy to pick up patched base images and maintain any image you bring yourself."
+          data: "Prompts and completions are processed on the deployment's virtual machines in the workspace region; weights are a registered model Azure ML mounts into the container."
+          network: "The endpoint's public_network_access flag and the workspace private endpoint control inbound traffic; the workspace managed virtual network controls outbound traffic."
+          identity: "The endpoint runs as a system-assigned or user-assigned managed identity fixed at creation; callers use a key, an Azure ML token or a Microsoft Entra token."
+          accepts: "MLflow and Triton models without code, a scoring script on curated images, or your own container image such as Triton, TorchServe or TensorFlow Serving."
+          workload: "Each deployment has its own GPU or CPU instances, scaled by hand or by Azure Monitor autoscale rules but never to zero; a request can run for 180 seconds at most."
+          portability: "A custom container and its weights move as they are; endpoint and deployment definitions, scoring routes, autoscale rules and traffic settings are Azure ML constructs."
+          effort: "Your team owns the serving image, model versions, scaling rules and quota; Azure ML handles node provisioning, host updates and node recovery."
+          fits: "Microsoft calls it the recommended way to use online endpoints, for teams that want managed deployment in place of running Kubernetes themselves."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints-online
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-online-endpoints
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container
+          - https://learn.microsoft.com/en-us/azure/machine-learning/concept-secure-online-endpoint
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-access-resources-from-endpoints-managed-identities
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-authenticate-online-endpoint
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-autoscale-endpoints
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-safely-rollout-online-endpoints
+          - https://learn.microsoft.com/en-us/azure/machine-learning/concept-vulnerability-management
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-quotas
+          - https://learn.microsoft.com/en-us/azure/machine-learning/reference-yaml-deployment-managed-online
+          - https://learn.microsoft.com/en-us/azure/machine-learning/reference-yaml-endpoint-online
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-monitor-online-endpoints
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-models-from-huggingface
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-share-models-pipelines-across-workspaces-with-registries
+          - https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints
+        summary: "The model server runs as a container you supply on GPU virtual machines that Azure Machine Learning provisions, patches and replaces, behind a managed online endpoint that API Management calls. The cluster, node pools, ingress and network policy of the mapping disappear. In exchange the weights load from a registered model rather than your own Blob account, requests are capped at 180 seconds, and network isolation follows the workspace."
+        bindings:
+          - { block: api, service: "Azure ML managed online endpoint (scoring URI)", note: "One HTTPS scoring address per endpoint with Microsoft Entra token authentication; with public network access disabled, API Management reaches it through the workspace private endpoint.", url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints-online }
+          - { block: runtime, service: "Your container on an Azure ML managed online deployment", note: "A serving image you bring, on GPU instances Azure ML provisions; Microsoft's guide shows TensorFlow Serving, TorchServe and Triton. One deployment per release, with traffic split across them.", url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container }
+          - { block: storage, service: "Azure ML registered model, mounted into the deployment", note: "The deployment names a model version in the workspace or a registry and Azure ML mounts its files into the container, replacing the separate serving Blob account.", url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container }
+        dropSettings: [aksGpuNodeTaints, aksNetworkPolicy]
+        addSettings: [amlManagedNetwork, amlEndpointPublicNetworkAccess, amlEndpointAadToken, amlOnlineDeploymentInstances, amlEndpointTraffic, amlEndpointIdentity, amlEndpointDiagnostics]
+        differences:
+          - at: gateway->api
+            text: "A managed online endpoint is public unless public_network_access is set to disabled, and it authenticates with a key by default. To keep the gateway as the only door, disable public access, join API Management to a network that reaches the workspace private endpoint, and have it call with a Microsoft Entra token for https://ml.azure.com."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-secure-online-endpoint
+          - at: api
+            text: "A request to a managed online endpoint times out after 5 seconds by default and 180 seconds at most (request_timeout_ms). Long generations must stream or finish inside that limit; there is no such platform cap in front of a vLLM service on AKS."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-quotas
+          - at: storage->runtime
+            text: "Azure Machine Learning mounts the registered model into the container; the server does not pull from a Blob account you manage. The signature check must therefore run inside your image before it starts serving. The platform may re-read the model and image at any time, so deleting either breaks the deployment on the next reimage."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container
+          - at: registry->storage
+            text: "The copy step of the AKS mapping is not needed: Microsoft documents deploying a model from a registry directly to an online endpoint in a workspace. The release record becomes the registry model name and version named in the deployment. For an endpoint with a user-assigned identity, Microsoft says the identity needs AcrPull and Storage Blob Data Reader at subscription level."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-share-models-pipelines-across-workspaces-with-registries
+          - at: runtime
+            text: "Azure updates the host operating system image at least once a month by itself, but a patched base image reaches a deployment only when you redeploy, and an image you bring is yours to rebuild. Azure ML also reserves 20% extra quota on some virtual machine sizes for these upgrades."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-vulnerability-management
+        alsoNeeded:
+          - service: "Azure Machine Learning workspace (with its storage account, Key Vault and container registry)"
+            role: other
+            why: "Endpoints and deployments are workspace resources; the AKS mapping needed only the registry."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-online-endpoints
+          - service: "Private endpoint for the workspace"
+            role: network
+            why: "With public network access disabled, scoring requests arrive only through the workspace's private endpoint."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-secure-online-endpoint
+          - service: "Workspace managed virtual network (allow only approved outbound)"
+            role: network
+            why: "It is what limits where a deployment can send data, in place of cluster network policy and a firewall."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-secure-online-endpoint
+          - service: "Azure Monitor autoscale"
+            role: other
+            why: "Scaling rules for a deployment are Azure Monitor autoscale settings rather than a Kubernetes autoscaler."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-autoscale-endpoints
+        quickstart:
+          - title: "Deploy a model in a custom container to an online endpoint"
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container
+          - title: "Secure your managed online endpoints with network isolation"
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-secure-online-endpoint
+          - title: "Safe rollout for online endpoints"
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-safely-rollout-online-endpoints
+      - id: foundryModels
+        kind: managed
+        name: "Microsoft Foundry Models (serverless API and managed compute deployments)"
+        url: https://learn.microsoft.com/en-us/azure/foundry/concepts/deployments-overview
+        asOf: "2026-11"
+        compare:
+          runs: "Microsoft runs the model server: on Microsoft-hosted endpoints for serverless API deployments, or on dedicated GPU capacity it manages for managed compute."
+          patching: "Microsoft owns the serving runtimes, base container images and security patches, and applies updates to live deployments without a redeploy."
+          data: "Prompts and completions are processed in a region, a data zone or globally, by deployment type; Microsoft holds the weights; stored data stays in the resource geography."
+          network: "The Foundry resource has a public network access flag and private endpoints; managed compute deployments need no outbound access to Hugging Face."
+          identity: "Callers use Microsoft Entra ID with the Foundry User role, or an account key; the model server runs as Microsoft's service, not as an identity of yours."
+          accepts: "Catalogue models on serverless (sold by Azure, selected partners) and managed compute (Hugging Face collection, vLLM and others); own weights only via Fireworks import."
+          workload: "Serverless is billed per token or as provisioned throughput; managed compute is billed hourly per accelerator, scales by model instances and returns 429 when saturated."
+          portability: "Deployments answer on OpenAI-compatible routes and open weights exist elsewhere; templates and quota are Foundry-only, and no download of tuned adapters is documented."
+          effort: "Your team manages deployments, quota, access roles and, on managed compute, its own content checks; there are no servers, images or GPUs to operate."
+          fits: "Microsoft says to use the serverless API whenever possible, and managed compute for open-source models that need dedicated GPU capacity."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/deployments-overview
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/managed-compute-overview
+          - https://learn.microsoft.com/en-us/azure/foundry/how-to/deploy-models-managed
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/scale-managed-compute
+          - https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/deployment-types
+          - https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure
+          - https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-from-partners
+          - https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/hugging-face-models
+          - https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/openai/data-privacy
+          - https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/instant-models
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/adapter-deployment-overview
+          - https://learn.microsoft.com/en-us/azure/foundry/how-to/fireworks/fireworks-model-catalog
+          - https://learn.microsoft.com/en-us/azure/foundry/how-to/fireworks/import-custom-models
+          - https://learn.microsoft.com/en-us/azure/foundry/how-to/fireworks/privacy-compliance-faq
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/monitor-managed-compute
+        offers:
+          - name: "Serverless API deployments"
+            what: "Models sold by Azure, which include gpt-oss and models from Meta, DeepSeek and Mistral AI, and selected partner models are served from Microsoft-hosted endpoints with standard, provisioned, batch and developer deployment types."
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/deployments-overview
+          - name: "Deployment types and data processing location"
+            what: "Global, Data Zone and regional deployment types set where prompts and responses are processed; data at rest remains in the designated Azure geography."
+            url: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/deployment-types
+          - name: "Managed compute"
+            what: "Models from the Hugging Face collection run on dedicated A100, H100, H200 or MI300X accelerators that Microsoft sizes and operates, billed hourly per accelerator, with Global or Data Zone scope and no built-in content filtering."
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/managed-compute-overview
+          - name: "Deployment templates and Microsoft-managed runtimes"
+            what: "Each managed compute model has versioned templates that fix the runtime (for example vLLM, SGLang, TensorRT-LLM, NVIDIA NIM or llama.cpp), accelerator count and context length; Microsoft builds, scans, signs and patches the runtime images."
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/managed-compute-overview
+          - name: "Curated Hugging Face collection"
+            what: "Catalogue models are screened for licence and for code that would run at load time, limited to SafeTensors weights, and pre-staged in Microsoft-managed storage and registry."
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/managed-compute-overview
+          - name: "Unified endpoint and authentication"
+            what: "All deployment types share one Foundry endpoint, reached with Microsoft Entra ID or a key; managed compute answers at /managed-deployments/<name>/ and, for compatible runtimes, at /openai/v1/."
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/managed-compute-overview
+          - name: "Content filtering on serverless deployments"
+            what: "Serverless API deployments include built-in, configurable Azure AI Content Safety filters; managed compute deployments do not, and Microsoft says to call the Content Safety APIs from your application."
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/deployments-overview
+          - name: "Adapter deployments on managed compute (preview)"
+            what: "A LoRA adapter produced by fine-tuning in Foundry can be served on a compatible managed compute deployment under its own deployment name, sharing the base model's capacity; importing your own adapters is not yet possible."
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/adapter-deployment-overview
+          - name: "Instant access to models (preview)"
+            what: "Supported models can be called by name with no deployment, in a project in West US 3 during the preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/instant-models
+          - name: "Fireworks on Foundry, including custom model import"
+            what: "A Microsoft service that serves open models, and your own weights matching a supported base model, on Fireworks AI's inference engine and GPUs; Microsoft states customer data leaves Microsoft facilities, with Fireworks as its subprocessor."
+            url: https://learn.microsoft.com/en-us/azure/foundry/how-to/fireworks/import-custom-models
+          - name: "Private networking"
+            what: "Inbound access to the Foundry resource is governed by its public network access flag and private endpoints."
+            url: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+    # <<< hosting options
     settings:
       - apimValidateToken
       - apimRateLimitByKey
@@ -2381,6 +3126,172 @@ implementations:
       - { block: storage, service: Azure Blob Storage (job outputs) }
       - { block: evaluation, service: Azure ML evaluation job and Foundry red teaming, note: "On separate compute with a read-only identity and no registry or signing access." }
       - { block: registry, service: Azure Machine Learning registry }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: azureMlCompute
+        kind: runtime
+        name: "Azure Machine Learning compute cluster"
+        url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-create-attach-compute-cluster
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "Azure Machine Learning runs your training code in a container on cluster nodes it creates when a job is submitted and removes when the cluster is idle."
+          patching: "Azure updates the node image monthly and nodes pick it up when the cluster scales to zero; you choose and rebuild the environment image the job runs in."
+          data: "Training data, checkpoints and outputs stay in your workspace's storage accounts; nodes run in the workspace region by default, in a managed or your own virtual network."
+          network: "Nodes can sit in the workspace managed virtual network with approved-outbound rules, or in your virtual network with no public IP."
+          identity: "Jobs use the cluster's managed identity, system-assigned or user-assigned, to reach datastores and pull images; a job can be set to use the submitting user's identity."
+          accepts: "Any containerised training code in a curated or custom environment, with PyTorch, TensorFlow, MPI and Ray distribution settings for multi-node jobs."
+          workload: "A job can run for 21 days, or 7 on low-priority nodes that may be pre-empted; the cluster scales between minimum and maximum nodes and can idle at zero."
+          portability: "Training code and its container move as they are; job definitions, data assets, environments and registry references are Azure Machine Learning constructs."
+          effort: "Your team owns training code, environments, quota and cluster size limits; there are no nodes or schedulers to operate."
+          fits: "Microsoft's compute guide points to it when training outgrows one machine or becomes distributed, as a cluster that scales each time a job is submitted."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-create-attach-compute-cluster
+          - https://learn.microsoft.com/en-us/azure/machine-learning/concept-compute-target
+          - https://learn.microsoft.com/en-us/azure/machine-learning/concept-vulnerability-management
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-managed-network
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-identity-based-service-authentication
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-train-distributed-gpu
+          - https://learn.microsoft.com/en-us/azure/machine-learning/reference-yaml-job-command
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-quotas
+      - id: aks
+        kind: cluster
+        name: "Azure Machine Learning Kubernetes compute target on AKS"
+        url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere
+        asOf: "2026-11"
+        compare:
+          runs: "The Azure Machine Learning extension schedules your training job as pods on an AKS cluster that your own team runs and has attached to the workspace."
+          patching: "You patch node operating systems and container images; Microsoft publishes new extension images, which upgrade automatically unless you turn that off."
+          data: "Data, checkpoints and outputs stay in the workspace's storage accounts and are processed on your cluster's nodes, which may also be outside Azure through Azure Arc."
+          network: "The cluster's own virtual network, firewall or proxy and private endpoints apply; the workspace managed virtual network does not extend to an attached cluster."
+          identity: "Jobs use the managed identity given to the Kubernetes compute target when the cluster is attached, system-assigned or user-assigned."
+          accepts: "The same Azure Machine Learning job definitions, on x86-64 node pools only; instance types defined in the cluster select nodes and resource limits for each job."
+          workload: "Jobs are queued by the Volcano scheduler on nodes you provision; node autoscaling is unsupported for training unless you replace the default Volcano configuration."
+          portability: "A job moves between this and other Azure ML compute by changing the compute name; the same extension also attaches clusters on other clouds or on premises."
+          effort: "An operations team runs the cluster, GPU node pools, the extension, instance types, networking and troubleshooting, separately from the data science team."
+          fits: "Microsoft describes it for teams that prefer Kubernetes and can manage it, that want more control with their own AKS, or whose data must stay on premises."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-kubernetes-extension
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-to-workspace
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-kubernetes-instance-types
+          - https://learn.microsoft.com/en-us/azure/machine-learning/reference-kubernetes
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-access-azureml-behind-firewall
+          - https://learn.microsoft.com/en-us/azure/machine-learning/concept-vulnerability-management
+          - https://learn.microsoft.com/en-us/azure/machine-learning/reference-yaml-job-command
+          - https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+          - https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-troubleshoot-kubernetes-extension
+        summary: "The pipeline stays in Azure Machine Learning, but the training job runs as pods on an AKS cluster the organisation operates, attached to the workspace through the Azure Machine Learning extension. The builder now carries what the compute cluster did by itself: node patching, GPU capacity with no autoscaling, the job's network wall, and the identity given to the compute target. The workspace's managed virtual network no longer surrounds the job."
+        bindings:
+          - { block: trainJob, service: "Azure ML job on AKS (Kubernetes compute target)", note: "The Azure Machine Learning extension, installed with enableTraining=True, runs each job as pods in the namespace named at attach, on GPU node pools you size, patch and isolate.", url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere }
+        dropSettings: [amlComputeIdentity]
+        addSettings: [aksNetworkPolicy, aksGpuNodeTaints, firewallEgress, aksNodeOsUpgradeChannel, aksContainerLogs, defenderContainerVa, amlKubernetesComputeIdentity, amlKubernetesInstanceType, amlKubernetesNamespace]
+        differences:
+          - at: trainJob
+            text: "The workspace's managed virtual network isolates compute that Azure Machine Learning creates; an attached AKS cluster is outside it. Microsoft's pattern is an AKS cluster in its own virtual network with private endpoints there for the workspace and its storage, registry and vault, plus whatever firewall and network policy the builder adds."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere
+          - at: pkgRegistry->trainJob
+            text: "Behind a firewall, Microsoft lists outbound addresses that training on Kubernetes compute needs beyond the workspace, storage and registry: pypi.org for job environment initialisation and the Ubuntu archive hosts for security patches. Each is an opening beside the private feed that the builder must grant, proxy or replace with an internal mirror."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-access-azureml-behind-firewall
+          - at: trainJob
+            text: "Microsoft lists node autoscaling as unsupported for training on Kubernetes compute: the extension's Volcano scheduler blocks the AKS cluster autoscaler unless you supply a scheduler configuration without the gang plugin. Otherwise capacity is provisioned ahead and billed while idle. Node patching is the builder's: OS and image vulnerabilities are the customer's responsibility."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere
+          - at: trainJob
+            text: "The extension constrains cluster hardening: Azure Machine Learning does not support disabling local accounts on the AKS cluster, does not support service-principal clusters, and needs its control plane address ranges allowed if the API server has authorised IP ranges. The repository's disable-local-accounts setting therefore cannot be applied here."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-kubernetes-extension
+          - at: trainJob->storage
+            text: "The job writes its candidate with the managed identity assigned to the compute target, not with a compute cluster identity. One cluster can be attached several times, to several workspaces or namespaces, so the same nodes may serve jobs with different identities unless instance types pin each to its own node pool."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-to-workspace
+        alsoNeeded:
+          - service: "AKS cluster with GPU node pools"
+            role: other
+            why: "The compute cluster created and removed nodes for each job; here the nodes exist beforehand, and autoscaling them needs a custom Volcano scheduler configuration."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere
+          - service: "Azure Machine Learning extension (Volcano scheduler, Prometheus operator)"
+            role: other
+            why: "It is what lets the workspace submit jobs to the cluster; it installs a job scheduler and metrics components that the cluster team then maintains."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-kubernetes-extension
+          - service: "Private endpoints for the workspace, storage, registry and vault in the cluster's network"
+            role: network
+            why: "The managed virtual network created these for managed compute; an attached cluster needs its own."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere
+          - service: "Azure Firewall or outbound proxy for the cluster"
+            role: network
+            why: "Outbound control is no longer the workspace's approved-outbound mode; the cluster's outbound path and the extension's required addresses are configured by the builder."
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-access-azureml-behind-firewall
+          - service: "Azure Monitor Container insights"
+            role: logging
+            why: "Node and pod logs of training jobs come from the cluster's own monitoring, which is optional on an AKS Standard cluster, alongside the workspace's job records."
+            url: https://learn.microsoft.com/en-us/azure/aks/monitor-aks
+        quickstart:
+          - title: "Introduction to Kubernetes compute target"
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere
+          - title: "Deploy Azure Machine Learning extension on Kubernetes cluster"
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-kubernetes-extension
+          - title: "Attach a Kubernetes cluster to Azure Machine Learning workspace"
+            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-to-workspace
+      - id: foundryFineTuning
+        kind: managed
+        name: "Microsoft Foundry training (Managed Training and Programmed Training)"
+        url: https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/overview
+        asOf: "2026-11"
+        compare:
+          runs: "Foundry runs the training on its own infrastructure from your data and settings; in Programmed Training (preview) your Python driver directs each step it executes."
+          patching: "Microsoft operates and patches the training infrastructure; you provision no training GPUs, images or nodes."
+          data: "Training files are uploaded to the Foundry resource and stay in its geography at rest; Global and Developer training may copy data and weights to other regions."
+          network: "Access is through the Foundry resource, governed by its public network access flag and private endpoints; a training job has no network of its own to configure."
+          identity: "You call the service with Microsoft Entra roles on the Foundry resource; the training job does not run as an identity of yours."
+          accepts: "Listed base models only, by supervised, preference (DPO) or reinforcement fine-tuning; Programmed Training applies LoRA updates to listed open-weight models."
+          workload: "Jobs queue on Standard, Data zone, Global or Developer capacity; Developer jobs may be pre-empted and resumed, and the service keeps the checkpoints."
+          portability: "The tuned model or adapter deploys to Foundry serverless or managed compute; the pages read describe no download of tuned weights, so leaving means retraining."
+          effort: "Your team prepares datasets and graders, evaluates results and manages deployments and cost; in Programmed Training it also runs the driver and its recovery logic."
+          fits: "Microsoft says to start with Managed Training when new to customisation, and to choose Programmed Training when the training loop itself is the research."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/overview
+          - https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/fine-tuning
+          - https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/fine-tuning-direct-preference-optimization
+          - https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/reinforcement-fine-tuning
+          - https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/programmed-training/overview
+          - https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/programmed-training/concepts
+          - https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/deploy-fine-tuned-models
+          - https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/fine-tuning-safety-evaluation
+          - https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/data-generation
+          - https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/openai/data-privacy
+          - https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/adapter-deployment-overview
+        offers:
+          - name: "Managed Training: supervised fine-tuning (SFT)"
+            what: "You upload JSONL training and validation files, set supported hyperparameters such as epochs, batch size and learning rate multiplier, and Foundry runs the job on a listed base model."
+            url: https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/fine-tuning
+          - name: "Managed Training: preference fine-tuning (DPO)"
+            what: "Training from JSONL examples that pair a preferred and a non-preferred response to the same input, offered for the models the overview table marks DPO."
+            url: https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/fine-tuning-direct-preference-optimization
+          - name: "Managed Training: reinforcement fine-tuning (RFT)"
+            what: "Training from prompts and a grader that scores generated responses, offered for the models the overview table marks RFT; some need an invitation."
+            url: https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/reinforcement-fine-tuning
+          - name: "Programmed Training (preview, access by approval)"
+            what: "An API for writing your own post-training loop in Python over listed open-weight models: your driver controls rollouts, rewards, losses and update timing while Foundry runs sampling and LoRA updates on serverless GPUs."
+            url: https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/programmed-training/overview
+          - name: "Open-weight base models"
+            what: "The supported models table lists open-weight models such as Llama-3.3-70B-Instruct, Qwen3-32B, gpt-oss-20b and Ministral-3B beside Azure OpenAI models, each with its own methods, training types and deployment options."
+            url: https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/overview
+          - name: "Training types"
+            what: "Standard trains in the resource's region with data residency, Data zone within a zone (US only), Global on capacity elsewhere with data and weights copied there, and Developer on idle capacity with no residency or latency guarantee."
+            url: https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/overview
+          - name: "Safety evaluation of fine-tuning (preview)"
+            what: "The service screens training data for harmful content before training and evaluates the tuned model before it can be deployed, with thresholds the customer cannot change."
+            url: https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/fine-tuning-safety-evaluation
+          - name: "Checkpoints"
+            what: "Programmed Training saves adapter weights and optimiser state as training checkpoints that a compatible session can resume from; the REST reference for Managed Training lists job checkpoints, pause and resume operations."
+            url: https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/programmed-training/concepts
+          - name: "Deployment of the result"
+            what: "A tuned model deploys to serverless hosting in Foundry, or as a LoRA adapter on a managed compute base deployment (preview), depending on the model."
+            url: https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/deploy-fine-tuned-models
+          - name: "Synthetic data generation"
+            what: "Synthetic data generation (preview): Foundry can generate a training dataset that you review, download or use directly in a fine-tuning job."
+            url: https://learn.microsoft.com/en-us/azure/foundry/fine-tuning/data-generation
+    # <<< hosting options
     settings:
       - curationFilters
       - amlDataAssetVersions
@@ -2501,6 +3412,167 @@ implementations:
       - { block: registry, service: Azure Artifacts feed }
       - { block: openWeb, service: The live web (crawl source only) }
       - { block: sources, service: "Public registries (PyPI, npm)" }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: aks
+        kind: cluster
+        name: "AKS Pod Sandboxing (Kata Containers) on dedicated node pools"
+        url: https://learn.microsoft.com/en-us/azure/aks/concepts-pod-sandboxing
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "Your orchestrator creates and deletes a pod per rollout; each runs in its own lightweight virtual machine with a separate guest kernel (Kata Containers)."
+          patching: "You keep the Azure Linux node image current through the upgrade channel you choose and rebuild the sandbox images; Azure manages the control plane."
+          data: "Code, files and results of a run stay on cluster nodes and storage in your own subscription; the pod virtual machine boundary does not isolate storage or data paths."
+          network: "You build every wall: the virtual network, network policies, FQDN filtering and the outbound route to a firewall; pods have unrestricted traffic until you do."
+          identity: "Pods use Microsoft Entra Workload ID through a federated service account you assign; by default they can also reach the node's metadata service."
+          accepts: "Linux container images on Azure Linux x86-64 node pools; Arm64 and host networking are not supported, and privileged pods get no host devices."
+          workload: "Jobs are queued by the Volcano scheduler on nodes you provision; node autoscaling is unsupported for training unless you replace the default Volcano configuration."
+          portability: "Kata Containers, Cloud Hypervisor and the manifests are open source and run on other Kubernetes clusters; node pools, identity and network wiring are redone."
+          effort: "Your team operates the cluster, Kata node pools and their sizing, network policy, firewall and logs; Defender for Containers does not assess Kata pods."
+          fits: "Microsoft describes it for isolating untrusted or multi-tenant workloads from the host kernel and each other while they share one cluster's capacity."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/aks/concepts-pod-sandboxing
+          - https://learn.microsoft.com/en-us/azure/aks/considerations-pod-sandboxing
+          - https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing
+          - https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+          - https://learn.microsoft.com/en-us/azure/aks/confidential-containers-overview
+          - https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+          - https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - https://learn.microsoft.com/en-us/azure/aks/imds-restriction
+          - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-troubleshoot-kubernetes-extension
+      - id: dynamicSessions
+        kind: runtime
+        name: "Azure Container Apps dynamic sessions (custom container session pools)"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container
+        asOf: "2026-11"
+        compare:
+          runs: "The session pool starts your image in Hyper-V sandboxes, hands one to each session identifier, and destroys it on stop, idle cooldown or container exit."
+          patching: "The platform runs the hosts and sandbox layer; you rebuild your image and update the pool to a new tag, because the pool caches the image it was given."
+          data: "Code, files and results exist inside the session and go when it is destroyed; console output can be sent to your Log Analytics workspace."
+          network: "Outbound traffic is off by default and is one on-or-off setting per pool; requests enter only through the pool management endpoint with a Microsoft Entra token."
+          identity: "Session code has no identity unless the pool's managed identity is deliberately exposed to it; callers need the Azure ContainerApps Session Executor role."
+          accepts: "Any container image that serves HTTP on a target port, in any language, with CPU and memory set per session and pulled from a registry by key or managed identity."
+          workload: "Prewarmed sessions are allocated in under a second; a session ends after 300 to 3,600 idle seconds or a maximum alive period; pools cap concurrent sessions."
+          portability: "The image runs anywhere containers run; allocation by identifier, the management API calls and pool settings are specific to session pools."
+          effort: "Your team owns the image, the pool's ready and maximum session counts, session identifiers, role assignments and logs; there are no nodes or cluster to run."
+          fits: "Microsoft names it for sandboxes that need a custom runtime, libraries, binaries or tools that the built-in interpreters do not provide."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/sessions
+          - https://learn.microsoft.com/en-us/azure/container-apps/session-pool
+          - https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container
+          - https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+          - https://learn.microsoft.com/en-us/azure/container-apps/billing
+          - https://learn.microsoft.com/en-us/rest/api/resource-manager/containerapps/container-apps-session-pools/create-or-update
+          - https://learn.microsoft.com/en-us/azure/azure-monitor/reference/supported-logs/microsoft-app-managedenvironments-logs
+        summary: "Each rollout's sandbox becomes a session in a custom container session pool: your image in a Hyper-V sandbox that the platform allocates, isolates and destroys. The Kata node pools and their sizing go away. Because a session has no outbound network by default and only an on-or-off switch, the harness moves outside and drives a tool server in the session over HTTP; the orchestrator, graders, inference and offline web stay on AKS."
+        bindings:
+          - { block: sandbox, service: "Container Apps custom container session pool", note: "One Hyper-V isolated session per rollout, allocated from prewarmed instances by a session identifier the orchestrator generates, and destroyed by stopSession, cooldown or container exit.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container }
+          - { block: harness, service: "Your episode harness on AKS, driving the session over HTTP", build: true, note: "Runs beside the orchestrator, not in the sandbox, because a session with outbound traffic disabled cannot call the inference runtime; it sends each action through the pool management endpoint.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage }
+          - { block: localTools, service: "Shell, file and browser tool server in the session image", build: true, note: "An HTTP server in your image on the pool's target port; anything after the management endpoint in the request path is forwarded to it.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage }
+          - { block: platform, service: "Azure Monitor session logs (Log Analytics)", note: "Console output and session lifecycle events reach Log Analytics through the environment's logging. Sessions get no identity by default, and no shared volume is documented.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container }
+        dropSettings: [aksPodSandboxing, aksFqdnFiltering]
+        addSettings: [sessionPoolEgress, sessionExecutorRole, sessionPoolIdentityLifecycle, sessionPoolLifecycle, sessionStopApi, sessionPoolLogs]
+        differences:
+          - at: harness->inference
+            text: "By default a session cannot make outbound requests, so a harness inside the sandbox cannot sample actions from the inference runtime. The documented way in is the pool management endpoint, so the harness runs outside and sends each action in. Enabling egress to call inference from inside would open the sandbox to the internet as well."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+          - at: localTools->offlineWeb
+            text: "Session networking is one setting with two values, EgressDisabled and EgressEnabled; Microsoft's warning for the second is that code in the session can access the internet. The pages read describe no destination list or route for session traffic, so a browsing task cannot be held to the offline web here. Keep such tasks on the AKS option."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
+          - at: localTools->registry
+            text: "With outbound traffic disabled a rollout cannot install packages at run time, pinned or not. Everything it needs is built into the session image from the private feed beforehand. The pool caches that image, and changes reach sessions only when the pool is updated to a new, unique image tag."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
+          - at: graders->harness
+            text: "The pages read describe one data-plane role: a token holder can create and enter any session in the pool, so graders cannot be given read-only access to a sandbox. Have the orchestrator fetch the end state through your tool server and hand it to the graders. Session identifiers alone separate rollouts, so generate them unpredictably and never take one from model output."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+          - at: localTools->platform
+            text: "There is no token issuance to the sandbox unless the pool's managed identity is exposed with lifecycle Main, which lets any code in the session act as that identity. No shared volume is documented either, so files and results leave only through your tool server's HTTP API, and logs are collected by the platform from console output."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+        alsoNeeded:
+          - service: "Container Apps environment with workload profiles"
+            role: other
+            why: "A custom container session pool must be created in a workload profiles environment, which also holds its logging configuration."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
+          - service: "Azure Container Registry with a user-assigned managed identity for image pull"
+            role: registry
+            why: "The pool pulls the session image itself; a managed identity avoids storing a registry password in the pool definition."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+          - service: "Log Analytics workspace"
+            role: logging
+            why: "Session console and lifecycle logs are emitted only when the environment sends them to a workspace."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container
+          - service: "Microsoft Entra role assignment for the caller"
+            role: identity
+            why: "The orchestrator and harness reach sessions with tokens and the Session Executor role instead of Kubernetes credentials."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+        quickstart:
+          - title: "Custom container sessions in Azure Container Apps"
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container
+          - title: "Use session pools in Azure Container Apps"
+            url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
+          - title: "Use dynamic sessions in Azure Container Apps"
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+      - id: dynamicSessionsCodeInterpreter
+        kind: managed
+        name: "Azure Container Apps dynamic sessions (code interpreter session pools)"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-code-interpreter
+        asOf: "2026-11"
+        compare:
+          runs: "The platform runs a built-in Python, Node.js or shell interpreter in a Hyper-V sandbox for each session identifier and removes it after the idle cooldown."
+          patching: "Microsoft supplies and maintains the built-in interpreter containers and the hosts; there is no image for you to build or publish."
+          data: "Code and uploaded files live in the session, under /mnt/data, until it is deleted; outputs come back in the API response and are not written to Log Analytics."
+          network: "Outbound traffic is off by default and is one on-or-off setting per pool; calls go to a regional dynamicsessions.io management endpoint with a Microsoft Entra token."
+          identity: "Callers need a Microsoft Entra token for https://dynamicsessions.io and the Azure ContainerApps Session Executor role; the interpreter is given no identity of yours."
+          accepts: "Python, Node.js or shell code through a REST API or framework plug-ins, with files up to 128 MB; Python sessions include packages such as NumPy and pandas."
+          workload: "Sessions are allocated from a prewarmed pool in under a second; each execution may run 220 seconds; a session ends after 300 to 3,600 idle seconds; 600 per pool at most."
+          portability: "Calls use the session pool REST API or its LangChain, LlamaIndex and Semantic Kernel integrations; moving off means another interpreter service or your own image."
+          effort: "Your team sets the pool's limits and network status, manages session identifiers and role assignments, and nothing else."
+          fits: "Microsoft names it for running AI-generated or user-submitted code quickly without managing a runtime environment."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/sessions
+          - https://learn.microsoft.com/en-us/azure/container-apps/session-pool
+          - https://learn.microsoft.com/en-us/azure/container-apps/sessions-code-interpreter
+          - https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+          - https://learn.microsoft.com/en-us/azure/container-apps/billing
+          - https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview
+          - https://learn.microsoft.com/en-us/azure/container-apps/mcp-authentication
+          - https://learn.microsoft.com/en-us/azure/container-apps/sessions-tutorial-shell
+          - https://learn.microsoft.com/en-us/azure/templates/microsoft.app/sessionpools
+        offers:
+          - name: "Code interpreter session pools"
+            what: "A pool created with container type PythonLTS, NodeLTS or Shell gives each session identifier a preconfigured interpreter in its own Hyper-V sandbox; NodeLTS and Shell exist only in preview API versions, and the shell tutorial is marked preview."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
+          - name: "Code execution API"
+            what: "A REST call runs code in a session and returns the result, including stdout and stderr; each execution is limited to 220 seconds."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-code-interpreter
+          - name: "File upload, download and listing"
+            what: "Files up to 128 MB can be uploaded to the session's /mnt/data directory, listed and downloaded through the pool's API."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-code-interpreter
+          - name: "Preinstalled packages"
+            what: "Python sessions include popular packages such as NumPy, pandas and scikit-learn; the list can be printed from inside a session."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-code-interpreter
+          - name: "LLM framework integrations"
+            what: "Tools and plug-ins for LangChain, LlamaIndex and Semantic Kernel call the pool and handle token acquisition."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-code-interpreter
+          - name: "Platform-managed MCP server for session pools (preview)"
+            what: "When MCP is enabled on a pool the platform exposes an endpoint with three fixed tools (launchShell, runShellCommandInRemoteEnvironment, runPythonCodeInRemoteEnvironment), authenticated by a pool-wide API key unless that is disabled."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview
+          - name: "Session management"
+            what: "API calls return a session's details, list the sessions in a pool and delete a session before its cooldown expires."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-code-interpreter
+          - name: "Network status and pool limits"
+            what: "A pool sets outbound traffic to EgressDisabled (the default) or EgressEnabled, a maximum of concurrent sessions up to 600, and an idle cooldown of 300 to 3,600 seconds."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
+          - name: "Authentication and authorisation"
+            what: "Every management API call needs a Microsoft Entra token with the audience https://dynamicsessions.io from an identity that holds the Azure ContainerApps Session Executor role on the pool."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+          - name: "Billing by allocated session"
+            what: "Code interpreter sessions are billed for the time each session is allocated, in increments of one hour."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/billing
+    # <<< hosting options
     settings:
       - aksEntraIdAuthorisation
       - aksPodSandboxing
