@@ -450,6 +450,63 @@ hosted patterns (remote MCP server, self-hosted inference, training pipeline, ag
 ask a different question ("who runs the server or the job") and are not yet compared. Nothing
 here was deployed or run: every statement rests on a vendor's or a project's documentation.
 
+
+## Hosting options for the other four hosted patterns
+
+On 18 November 2026 the remote MCP server, self-hosted model inference, the training pipeline
+and the agent sandbox gained their hosting options on every platform, so all eight hosted
+patterns now have them. The rows are the same ten, worded for what each pattern hosts (the MCP
+server, the model server, the training job, the sandbox). A managed option here is a service
+where the provider runs that thing for you; no other pattern draws it, so the option says what
+the service offers and what choosing it means.
+
+| Pattern | AWS | Azure | Google Cloud | On-premises |
+| --- | --- | --- | --- | --- |
+| Remote MCP server | **AgentCore Runtime**; EKS; Lambda with API Gateway; managed: AgentCore Gateway | **App Service**; Functions; Container Apps; AKS; managed: API Management | **Cloud Run**; GKE; managed: MCP in Apigee | **Kubernetes**; Knative Serving |
+| Self-hosted inference | **EKS**; SageMaker AI real-time inference; managed: Bedrock Custom Model Import | **AKS with KAITO**; Azure Machine Learning managed online endpoints; managed: Foundry Models | **GKE with Inference Gateway**; Agent Platform endpoints; Cloud Run with GPUs; managed: Model Garden models as a service | **Kubernetes**; KServe |
+| Training pipeline | **SageMaker AI training jobs**; EKS; SageMaker HyperPod; managed: SageMaker AI serverless model customization | **Azure Machine Learning compute cluster**; Azure Machine Learning on AKS; managed: Foundry training | **Agent Platform serverless training**; GKE with Kueue; managed: open model tuning | **Kubernetes**; Slurm |
+| Agent sandbox | **AgentCore Runtime**; EKS isolated pods; Lambda MicroVMs; managed: AgentCore Code Interpreter | **AKS Pod Sandboxing**; Container Apps dynamic sessions (custom container); managed: dynamic sessions code interpreter | **Agent Sandbox on GKE**; Cloud Run sandboxes; managed: Agent Platform sandboxes | **Kubernetes on Kata Containers**; Kubernetes on gVisor |
+
+Bold is the option each mapping's components and settings describe. The same two-person
+method applied: one researcher per platform, then a second who saw the claims without the
+sources.
+
+| What was checked | Claims | Confirmed | Tightened | Wrong | Could not be checked |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| AWS, MCP server and inference | 130 | 126 | 4 | 0 | 0 |
+| AWS, training and sandbox | 158 | 151 | 7 | 0 | 0 |
+| Azure, MCP server | 103 | 96 | 7 | 0 | 0 |
+| Azure, inference, training and sandbox | 180 | 166 | 14 | 0 | 0 |
+| Google Cloud, four patterns | 234 | 222 | 12 | 0 | 0 |
+| On-premises, four patterns | 141 | 131 | 8 | 2 | 0 |
+| **Total** | **946** | **892** | **52** | **2** | **0** |
+
+What the second check changed, in the terms a builder would feel:
+
+- **On-premises.** The two wrong claims were one fact: gVisor's own guide pairs it with Falco
+  for runtime monitoring, but Falco removed its gVisor engine in 0.44.0 (26 May 2026), so only
+  Falco 0.43 or earlier, or a receiver of your own, can read gVisor's trace points. gVisor's
+  KVM platform is advised on bare metal for performance and is not presented as a stronger
+  wall. Knative's default networking layer is Istio; Kourier is the suggested choice.
+- **AWS.** On most GPU instance types a SageMaker endpoint's KMS key does not cover the local
+  NVMe disk the weights sit on; that disk is hardware-encrypted. The bearer-token invoke
+  permission cannot be scoped to one endpoint. EKS Auto Mode patches nodes for you and
+  replaces them within 21 days, which bounds a long training job or sandbox. AgentCore
+  Gateway has its own payload limit (6 MB by default).
+- **Azure.** App Service unloads an idle app after 20 minutes unless Always On is set.
+  Container Apps' 240-second limit is an idle limit that premium ingress can raise to 30
+  minutes. Built-in MCP authorisation on Functions and programmatic management of API
+  Management MCP servers are preview. Managed online endpoints never scale to zero. Training on
+  AKS needs a changed scheduler configuration before nodes can autoscale.
+- **Google Cloud.** Cloud Run sandboxes can now run from their own images (sandbox templates,
+  16 November 2026). Several open models and Provisioned Throughput for them are Preview.
+  Chat Completions on dedicated endpoints is listed for Model Garden deployments only.
+
+Two candidates changed during research, both from the vendor's own pages: AWS's managed
+fine-tuning route is SageMaker AI serverless model customization, not Bedrock model
+customisation; and Lambda MicroVMs was added for the sandbox because AWS documents it for
+reinforcement-learning environments.
+
 ## Keeping it current
 
 A mapping is only as good as its last check. `verified` on each mapping and each setting says

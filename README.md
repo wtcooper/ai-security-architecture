@@ -389,15 +389,17 @@ the second as a variant that changes only some components and settings (`hosting
 platform's file, chosen as `?host=`). A managed agent service, where the vendor runs the agent
 loop, is not a variant: the loop moves into the vendor's boundary, which is another pattern
 (API/SDK managed agent runtime), so the option links there instead of being redrawn here. The
-comparison rows are fixed (who runs the loop, who patches, where prompts and state live,
-networking, identity, frameworks accepted, long-running work, portability, what your team
-operates, when the vendor says it fits) and carry no ranking, because the right answer depends
+comparison rows are fixed (who runs it, who patches, where the data lives, networking,
+identity, what it accepts, how it handles the work, portability, what your team operates, when
+the vendor says it fits) and carry no ranking, because the right answer depends
 on what an organisation has approved. That is recorded in `data/org/products.yaml` under
-`products.<platform>.hosting`, and shown on each option. The four agent patterns list their
+`products.<platform>.hosting`, and shown on each option. All eight hosted patterns list their
 options on every platform (for example, on Azure: Container Apps, AKS and Foundry Agent
-Service). Each claim was written by one researcher and re-checked by a second who was not shown
-the first one's sources; [`docs/CLOUD-VERIFICATION.md`](docs/CLOUD-VERIFICATION.md) has the
-counts and what the second check changed. The other four hosted patterns are not yet compared.
+Service for an agent; AKS, managed online endpoints and Foundry Models for inference). The rows
+are worded for what the pattern hosts: an agent, an MCP server, a model server, a training job
+or a sandbox. Each claim was written by one researcher and re-checked by a second who was not
+shown the first one's sources; [`docs/CLOUD-VERIFICATION.md`](docs/CLOUD-VERIFICATION.md) has
+the counts and what the second check changed.
 
 *On-premises* is the pattern run on infrastructure the organisation owns and operates, where no
 provider runs any part: Kubernetes on its own servers, LiteLLM Proxy as the AI gateway, vLLM

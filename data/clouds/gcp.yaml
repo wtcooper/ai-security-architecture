@@ -985,6 +985,150 @@ settings:
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-gateway-resources
     verified: "2026-11-18"
   # <<< hosting rows
+  # >>> more hosting rows (settings used only by a hosting variant of the server, inference, training and sandbox patterns)
+  - id: cloudRunDirectVpcFirewall
+    name: "Direct VPC egress with network tags and VPC firewall rules"
+    where: "Cloud Run › service or job › Networking › --network, --subnet, --network-tags, --vpc-egress=all-traffic; VPC firewall rules that target the tags"
+    setVia: [apiCli, adminConsole]
+    area: network
+    default: "Off; outbound traffic leaves through Google's shared internet egress"
+    recommended: "Send all traffic to the VPC, give each workload its own network tag, and write egress firewall rules that allow only its named destinations and deny everything else. Add Cloud NAT only if a destination needs it."
+    why: "Without it a service or job can reach the internet directly. Network tags let firewall rules tell one workload from another."
+    mitigations: [D3-NI]
+    url: https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+    verified: "2026-11-18"
+  - id: cloudRunGen2Isolation
+    name: "Second generation execution environment, one instance per trust group"
+    where: "Cloud Run › service › --execution-environment gen2 (jobs and worker pools always use it); a separate service, or a separate job task, for each trust group"
+    setVia: [apiCli, adminConsole]
+    area: data
+    recommended: "Use the second generation environment and never mix trust groups in one instance: a separate service for each sensitivity tier when serving models, and a separate job task for each rollout when running sandboxes."
+    why: "Each instance sits behind a boundary enforced by a virtual machine monitor, which Google describes as stronger than the boundary between containers inside it."
+    mitigations: [D3-HBPI]
+    url: https://docs.cloud.google.com/run/docs/securing/security
+    verified: "2026-11-18"
+  - id: cloudRunSandboxLauncher
+    name: "Cloud Run sandboxes (sandbox launcher)"
+    where: "Cloud Run › job, service or worker pool › --sandbox-launcher (sandboxLauncher: true); the host code starts each sandbox with /usr/local/gcp/bin/sandbox"
+    setVia: [apiCli, configFile, code]
+    area: tools
+    default: "Off"
+    requires: "Preview; second generation execution environment"
+    recommended: "Enable the launcher and run every model action through sandbox do or sandbox run. Do not pass --allow-egress, secrets in --env or writable --mount; mount shared directories readonly and move files in and out as tar archives."
+    why: "A sandbox has a read-only root, no host environment variables, secrets or metadata server credentials and no outbound network, unless these flags relax it."
+    mitigations: [D3-EI]
+    url: https://docs.cloud.google.com/run/docs/code-execution
+    verified: "2026-11-18"
+  - id: cloudRunJobsIam
+    name: "Cloud Run Jobs Executor (roles/run.jobsExecutor)"
+    where: "Cloud Run › Jobs › (rollout job) › Permissions; gcloud run jobs add-iam-policy-binding"
+    setVia: [adminConsole, apiCli]
+    area: identity
+    recommended: "Grant Cloud Run Jobs Executor on the rollout job only to the orchestrator's service account and the researchers' group. Keep Cloud Run Admin and Cloud Run Developer for the platform team."
+    why: "Decides who can start and cancel rollouts, in place of the Kubernetes RoleBinding in the run namespace."
+    mitigations: [D3-APA]
+    url: https://docs.cloud.google.com/run/docs/reference/iam/roles
+    verified: "2026-11-18"
+  - id: cloudRunCancelExecution
+    name: "Cancel job execution"
+    where: "Cloud Run › Jobs › (job) › execution › Actions › Cancel; also the gcloud CLI, client libraries and REST API; needs the run.executions.cancel permission"
+    setVia: [apiCli, adminConsole, code]
+    area: tools
+    recommended: "Have the orchestrator cancel every running execution of a run on a serious-risk alert and then disable the run's service account. Cancel executions, do not delete them, so their logs stay."
+    why: "Cancelling stops the tasks, and the sandboxes inside them, while the execution's configuration, logs and monitoring data remain viewable."
+    mitigations: [cap-agent-kill-switch]
+    url: https://docs.cloud.google.com/run/docs/execute/jobs
+    verified: "2026-11-18"
+  - id: gkeSecretManagerAddOn
+    name: "Secret Manager add-on for GKE"
+    where: "GKE › cluster › --enable-secret-manager (with --enable-secret-manager-rotation); a SecretProviderClass per workload, mounted as a volume in the Pod"
+    setVia: [apiCli, clusterPolicy]
+    area: identity
+    default: "Off"
+    requires: "Workload Identity Federation for GKE on the cluster"
+    recommended: "Enable the add-on with rotation. Mount each upstream credential from Secret Manager through a SecretProviderClass, and grant Secret Manager Secret Accessor only to that workload's Kubernetes ServiceAccount. Keep no credential in the image."
+    why: "Upstream credentials stay in Secret Manager under IAM and reach only the Pod that needs them, as the Cloud Run secret reference did."
+    mitigations: [D3-CH]
+    url: https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component
+    verified: "2026-11-18"
+  - id: apigeeSanitizeModelResponse
+    name: "SanitizeModelResponse policy"
+    where: "Apigee › model proxy › response flow, pointing at a Model Armor template; used with the SanitizeUserPrompt policy on the request flow"
+    setVia: [configFile, apiCli]
+    area: data
+    default: "Not attached"
+    requires: "A Model Armor template; the Model Armor User and Model Armor Viewer roles on the service account that deploys the proxy; an Extensible policy, so Apigee licence terms apply"
+    recommended: "Attach SanitizeUserPrompt to the request flow and SanitizeModelResponse to the response flow of the model proxy, both naming the Model Armor template for this tier, and return an error to the caller when a response is flagged."
+    why: "Model Armor's built-in integration screens only Gemini generateContent calls, so a self-deployed model's prompts and responses are screened at the gateway."
+    mitigations: [cap-output-guardrails]
+    url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/sanitize-llm-response-policy
+    verified: "2026-11-18"
+  - id: endpointPscPrivate
+    name: "Dedicated private endpoint (Private Service Connect)"
+    where: "Agent Platform › Endpoints › create › privateServiceConnectConfig (enablePrivateServiceConnect, projectAllowlist); a forwarding rule in the consuming VPC"
+    setVia: [apiCli, adminConsole]
+    area: network
+    default: "Off (the endpoint is public)"
+    requires: "The projectAllowlist cannot be changed after the endpoint is created"
+    recommended: "Create the endpoint with Private Service Connect enabled and a projectAllowlist that names only the gateway's project. Connect from that VPC with a forwarding rule and use port 443, the TLS port."
+    why: "Requests stay on private addresses and only listed projects can connect. Dedicated public endpoints do not support VPC Service Controls."
+    mitigations: [D3-NI]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/private-service-connect
+    verified: "2026-11-18"
+  - id: endpointTrafficSplit
+    name: "Traffic split between deployed models"
+    where: "Agent Platform › Endpoints › (endpoint) › deployed models › traffic split (gcloud ai endpoints deploy-model --traffic-split)"
+    setVia: [apiCli, adminConsole]
+    area: tools
+    recommended: "Deploy the new model version to the same endpoint with a small share of traffic, raise the share in steps while watching errors and latency, and return the share to the previous deployed model to roll back."
+    why: "Replaces the weighted HTTPRoute between InferencePools: the endpoint itself moves traffic gradually between model versions."
+    mitigations: [cap-staged-rollout-gate]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/deployment
+    verified: "2026-11-18"
+  - id: endpointDedicatedResources
+    name: "Dedicated resources per deployed model (dedicatedResources.machineSpec)"
+    where: "Agent Platform › Endpoints › deploy model › machine type, accelerator and replica counts (dedicatedResources)"
+    setVia: [apiCli, adminConsole]
+    area: data
+    recommended: "Give each sensitivity tier its own endpoint and deployed model, so tiers never share serving nodes. The inference pages describe no Confidential Computing option; where memory encryption is required, serve that tier on Confidential GKE Nodes."
+    why: "Compute belongs to the deployed model, not the endpoint, so separate deployments keep tiers on separate machines. This is weaker than the confidential nodes of the GKE mapping."
+    mitigations: [D3-HBPI]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/configure-compute
+    verified: "2026-11-18"
+  - id: endpointServiceAccount
+    name: "Use a custom service account (deployed model)"
+    where: "Agent Platform › Endpoints › deploy model › service account (gcloud ai endpoints deploy-model --service-account)"
+    setVia: [apiCli, adminConsole]
+    area: identity
+    default: "A service account managed by Agent Platform that can only read the model artefacts"
+    recommended: "Keep the default where the container needs nothing but its artefacts. If it must call other services, attach a dedicated service account that holds only those roles; never reuse a shared one."
+    why: "The serving container's identity decides what a compromised model server can reach."
+    mitigations: [D3-AA, D3-CH]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/custom-service-account
+    verified: "2026-11-18"
+  - id: endpointAccessLogging
+    name: "Access logging and request-response logging (online inference)"
+    where: "Agent Platform › Endpoints › deploy model › --enable-access-logging; request-response logging set on the endpoint, written to BigQuery"
+    setVia: [apiCli, adminConsole]
+    area: audit
+    default: "Access logging is off; container logging is on for the v1 API"
+    recommended: "Enable access logging when deploying the model and keep container logging on. Enable request-response logging to BigQuery only where content may be retained; on dedicated endpoints it covers only predict and rawPredict calls with payloads under 10 MB."
+    why: "Gives a per-request record from the serving side, beside the gateway's own log. Access logging can only be changed by redeploying the model."
+    mitigations: [AML.M0024]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/online-prediction-logging
+    verified: "2026-11-18"
+  - id: gkeAuditLogs
+    name: "Data Access audit logs (Kubernetes Engine API and k8s.io)"
+    where: "IAM & Admin › Audit Logs › Kubernetes Engine API; Kubernetes audit log entries use the service name k8s.io"
+    setVia: [adminConsole, apiCli]
+    area: audit
+    default: "Admin Activity audit logs are always on; Data Access audit logs are off"
+    recommended: "Enable Data Access audit logs for the training cluster's project and route the k8s.io entries for the training namespaces to the log bucket, so that who created, changed or read training workloads is recorded."
+    why: "The job no longer runs through the Agent Platform API, so its audit trail moves to GKE's audit logs."
+    mitigations: [AML.M0024]
+    url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/audit-logging
+    verified: "2026-11-18"
+  # <<< more hosting rows
 
 implementations:
   - architecture: archChatAgent
@@ -2100,6 +2244,148 @@ implementations:
       - { block: service, service: Your MCP server on Cloud Run, note: "Deployed with --functional-type=mcp-server and invoked only by Apigee's service account." }
       - { block: toolDefs, service: Tool definitions in your repository, build: true, note: "Versioned with the release and pinned by hash where the server loads them." }
       - { block: orgData, service: Your systems of record, build: true, note: "Reached on the service's own identity or a Secret Manager credential for that upstream, never the caller's token." }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: cloudRun
+        kind: runtime
+        name: "Cloud Run"
+        url: https://docs.cloud.google.com/run/docs/host-mcp-servers
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "Your MCP server container runs as a Cloud Run service; Google runs the instances and starts and stops them with traffic."
+          patching: "Google patches the infrastructure; you rebuild your image, or enable automatic base image updates so that Google patches its OS and runtime layers."
+          data: "Requests and tool results are processed in instances in the region you choose; instances are stateless, so anything kept goes to a store you choose."
+          network: "Ingress settings and IAM limit who can call it; Direct VPC egress sends outbound traffic into your VPC, otherwise it leaves through Google's shared internet egress."
+          identity: "Each revision runs as the service account set as its service identity; if you set none it uses the Compute Engine default service account."
+          accepts: "Whatever is in your container image or, with sandbox templates, in up to 10 other images; processes can add tools with apt, pip or npm; headless browsers are documented."
+          workload: "Responses can stream and a request can run for up to 60 minutes (5 by default); session affinity is off by default and can still move a client to another instance."
+          portability: "It is a standard container image, so the same image runs on GKE; the Cloud Run service settings, IAM bindings and ingress settings do not carry over."
+          effort: "You operate the server code, its image and the service configuration; there is no cluster, node or autoscaler for you to run."
+          fits: "Google names Cloud Run for deploying custom tools as scalable HTTP endpoints without managing infrastructure, and for stateless request-driven services."
+        sources:
+          - https://docs.cloud.google.com/run/docs/host-mcp-servers
+          - https://docs.cloud.google.com/run/docs/tutorials/deploy-remote-mcp-server
+          - https://docs.cloud.google.com/run/docs/ai/authenticate-mcp-servers
+          - https://docs.cloud.google.com/run/docs/ai/agent-platform-features
+          - https://docs.cloud.google.com/run/docs/securing/security
+          - https://docs.cloud.google.com/run/docs/securing/ingress
+          - https://docs.cloud.google.com/run/docs/configuring/services/service-identity
+          - https://docs.cloud.google.com/run/docs/configuring/request-timeout
+          - https://docs.cloud.google.com/run/docs/configuring/session-affinity
+          - https://docs.cloud.google.com/run/docs/configuring/services/automatic-base-image-updates
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gke-and-cloud-run
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+          - https://docs.cloud.google.com/run/docs/securing/service-identity
+          - https://docs.cloud.google.com/run/docs/configuring/jobs/sandboxes
+      - id: gke
+        kind: cluster
+        name: "Google Kubernetes Engine (GKE)"
+        url: https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+        asOf: "2026-11"
+        compare:
+          runs: "Your MCP server runs as Pods of a Deployment on a GKE cluster in your project; you define and scale the workload and Google runs the control plane."
+          patching: "Google upgrades the control plane; node auto-upgrade is on by default and cannot be turned off in Autopilot; you rebuild and roll out your server image."
+          data: "Requests and tool results are processed in your Pods on your cluster's nodes; Pods are ephemeral, so anything kept goes to a store you attach."
+          network: "A GKE Gateway exposes it through an internal or external Application Load Balancer; you add network policies and an egress path such as Secure Web Proxy."
+          identity: "Pods use a Kubernetes ServiceAccount that Workload Identity Federation for GKE maps to IAM; Agent Registry also documents an Agent Identity annotation."
+          accepts: "Any containerised MCP server, in any language or framework; the transport is whatever your container serves over HTTP behind the Gateway."
+          workload: "GKE supports stateless and stateful applications; you set replicas, autoscaling, timeouts and any session routing on the Deployment and the Gateway."
+          portability: "Kubernetes manifests and the image move to other Kubernetes clusters; GKE Gateway classes, Workload Identity bindings and add-ons are specific to Google Cloud."
+          effort: "You manage the cluster: node configuration, networking, scaling and upgrades, plus the Gateway, policies and the server; Autopilot mode takes over the nodes."
+          fits: "Google suggests GKE for complex systems that need granular control, or when you already run on GKE and want agent tools beside existing applications."
+        sources:
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+          - https://docs.cloud.google.com/agent-registry/register-mcp-servers
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gateway-api
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gke-and-cloud-run
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/node-auto-upgrades
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/ambient-agent-gateway
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+          - https://docs.cloud.google.com/apigee/docs/api-platform/architecture/southbound-networking-patterns-endpoints
+          - https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component
+          - https://docs.cloud.google.com/kubernetes-engine/ai-ml/agent-gateway
+        summary: "The MCP server runs as a Deployment on a GKE cluster in your project, behind an internal GKE Gateway that Apigee reaches through a Private Service Connect endpoint attachment. Apigee remains the gateway and the authorization server. You now carry the cluster, node upgrades, the Gateway, network policy, the outbound path and secret mounting, which Cloud Run handled as service settings; in return Pods can hold sessions and long streams."
+        bindings:
+          - { block: service, service: "Your MCP server on GKE", note: "A Deployment behind an internal GKE Gateway; the label registry.gke.io/functional-type: MCP_SERVER lists it in Agent Registry.", url: https://docs.cloud.google.com/agent-registry/register-mcp-servers }
+        dropSettings: [cloudRunServiceIdentity, secretManagerSecrets, swpEgress]
+        addSettings: [workloadIdentityGke, gkeSwpExplicitProxy, gkeNetworkPolicy, gkeNodeServiceAccount, gkeSecretManagerAddOn]
+        differences:
+          - at: gateway->service
+            text: "A GKE Service has no IAM invoker check like Cloud Run's, so nothing built in stops a caller inside the network from going round Apigee. Expose the server only on an internal Gateway, publish that through a Private Service Connect service attachment that Apigee reaches with an endpoint attachment, and restrict the Pods' ingress with network policy."
+            url: https://docs.cloud.google.com/apigee/docs/api-platform/architecture/southbound-networking-patterns-endpoints
+          - at: service
+            text: "GKE auto-registers the server in Agent Registry only if its Deployment carries the registry.gke.io/functional-type: MCP_SERVER label; the modelcontextprotocol.info annotations let it discover the tools. Google's GKE guidance then governs MCP servers with Agent Gateway, a Preview feature whose ambient Layer 7 set-up is limited to us-central1 and europe-west1, not with Apigee."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/ambient-agent-gateway
+          - at: service->orgData
+            text: "There is no per-service egress setting as on Cloud Run. What a Pod can reach is decided by the cluster: private nodes, network policies you write, and Secure Web Proxy used as an explicit proxy, which filters only clients that honour the proxy setting. Upstream credentials are mounted by the Secret Manager add-on, which is off until you enable it."
+            url: https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component
+        alsoNeeded:
+          - service: "GKE Gateway (gke-l7-rilb, internal Application Load Balancer)"
+            role: ingress
+            why: "Gives the Pods the single internal entry point that the run.app address and ingress setting gave on Cloud Run."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gateway-api
+          - service: "Private Service Connect service attachment and Apigee endpoint attachment"
+            role: network
+            why: "Apigee reaches a backend in your VPC privately through an endpoint attachment to a service attachment that you create."
+            url: https://docs.cloud.google.com/apigee/docs/api-platform/architecture/southbound-networking-patterns-endpoints
+          - service: "Workload Identity Federation for GKE"
+            role: identity
+            why: "Gives the server's Pods their own IAM principal in place of the Cloud Run service identity."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - service: "Secret Manager add-on for GKE"
+            role: secrets
+            why: "Mounts Secret Manager secrets into Pods as volumes; Cloud Run did this with a secret reference."
+            url: https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component
+        quickstart:
+          - title: "Register MCP servers"
+            url: https://docs.cloud.google.com/agent-registry/register-mcp-servers
+          - title: "About Gateway API"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gateway-api
+          - title: "Southbound networking patterns"
+            url: https://docs.cloud.google.com/apigee/docs/api-platform/architecture/southbound-networking-patterns-endpoints
+      - id: apigeeMcp
+        kind: managed
+        name: "MCP in Apigee (MCP Discovery Proxy)"
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/apigee-mcp-overview
+        asOf: "2026-11"
+        compare:
+          runs: "Apigee hosts the MCP endpoint behind an MCP Discovery Proxy; you run no MCP server, only the existing APIs that the generated tools call."
+          patching: "Google runs and patches the MCP endpoint on Apigee; on Apigee hybrid the MCP data plane runs in your own cluster and you manage its Pods."
+          data: "Apigee turns each tool call into a request to your API, which holds the data; Apigee Analytics records usage per tool for Apigee-hosted endpoints."
+          network: "Clients reach /mcp on your Apigee environment group hostname over HTTPS; tool calls go to the API operations served on that same hostname."
+          identity: "The endpoint supports OAuth 2.1 and OpenID Connect; an OAuthV2 policy and API products tie each client app to the tools it may list and call."
+          accepts: "An OpenAPI 3.0.x description of existing APIs, each operation becoming a tool; tools only, with no resources or prompts and no SSE streams."
+          workload: "Stateful MCP versions use initialize and Mcp-Session-Id; a stateless 2026-07-28 mode exists on Apigee but not hybrid; up to 1,000 tools per organisation."
+          portability: "The tools come from your OpenAPI specification and your APIs, which you keep; the proxy, its policies and the API products are Apigee constructs."
+          effort: "You maintain the OpenAPI specification, the proxy's policies, the API products and the underlying APIs; there is no server process to operate."
+          fits: "Google presents it for exposing APIs you already manage in Apigee as tools, without installing or managing local or remote MCP servers."
+        sources:
+          - https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/apigee-mcp-overview
+          - https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/apigee-mcp-quickstart
+          - https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
+          - https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/enable-mcp
+          - https://docs.cloud.google.com/apigee/docs/apihub/register-mcp-apis
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+        offers:
+          - name: "MCP Discovery Proxy"
+            what: "A proxy template that turns the operations of an OpenAPI 3.0.x specification into MCP tools served at the /mcp base path, with no MCP server to deploy."
+            url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/apigee-mcp-quickstart
+          - name: "MCP tool access with API products"
+            what: "The ParsePayload policy reads the JSON-RPC operation so that API products, OAuthV2 or VerifyAPIKey and Quota policies apply per tool and filter tools/list responses."
+            url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
+          - name: "API hub registration"
+            what: "API hub imports MCP proxies from the attached Apigee organisation, registers them with the MCP API style and parses their specifications into MCP tools."
+            url: https://docs.cloud.google.com/apigee/docs/apihub/register-mcp-apis
+          - name: "MCP in Apigee hybrid"
+            what: "From Apigee hybrid 1.17.0 the MCP data plane runs inside your own Kubernetes cluster and supports the stateful protocol versions only."
+            url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/enable-mcp
+          - name: "Apigee Analytics for MCP"
+            what: "For Apigee-hosted endpoints, Apigee Analytics separates MCP traffic from other API traffic and shows usage of each tool."
+            url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/apigee-mcp-overview
+    # <<< hosting options
     settings:
       - identityPlatformTenants
       - apigeeVerifyAccessToken
@@ -2216,6 +2502,227 @@ implementations:
       - { block: storage, service: Cloud Storage (model weights bucket), note: "Mounted read-only through Cloud Storage FUSE; CMEK keys in Cloud KMS." }
       - { block: sources, service: "Public model hubs (Hugging Face)" }
       - { block: registry, service: Agent Platform Model Registry }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: gke
+        kind: cluster
+        name: "GKE with GKE Inference Gateway"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-gke-inference-gateway
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "You run the model server, such as vLLM, as Pods on GPU node pools in your cluster; GKE Inference Gateway, an extension of the GKE Gateway, routes requests to them."
+          patching: "Google upgrades the control plane and, with node auto-upgrade, the nodes; you maintain the model server image and the gateway resources in the cluster."
+          data: "Prompts and completions are processed on your cluster's nodes; weights sit in your own Cloud Storage bucket and are mounted into the Pods."
+          network: "The gateway is a Google Cloud Application Load Balancer created from Gateway resources; private nodes and network policies are yours to configure."
+          identity: "Pods run as Kubernetes ServiceAccounts that Workload Identity Federation for GKE maps to IAM; the nodes have a service account of their own."
+          accepts: "Any model server image and weight format you package, vLLM among them; the gateway routes by the model name in OpenAI API requests."
+          workload: "GPUs and TPUs on node pools you size; the Horizontal Pod Autoscaler scales on model server metrics, and nodes are billed until they are scaled down."
+          portability: "Manifests and the model server image move to other Kubernetes clusters; GKE gateway classes and the Model Armor and Apigee integrations are Google-specific."
+          effort: "You operate the cluster, GPU node pools, model server, autoscaling, gateway resources and upgrades, and are on call for all of them."
+          fits: "Google's guidance picks GKE for deep control, portability, very large models or minimal latency, and cost control with Spot or flex-start VMs."
+        sources:
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-gke-inference-gateway
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/node-auto-upgrades
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/confidential-gke-nodes
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gke-and-cloud-run
+      - id: agentPlatformEndpoints
+        kind: runtime
+        name: "Gemini Enterprise Agent Platform online inference endpoints (self-deployed models)"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/choose-serving-option
+        asOf: "2026-11"
+        compare:
+          runs: "You deploy a model and its serving container to an endpoint; Agent Platform provisions, runs and scales the serving nodes for that deployed model."
+          patching: "Google manages the serving nodes and maintains its prebuilt serving containers; a custom container image, such as your own vLLM build, is yours to rebuild."
+          data: "Prompts and completions are processed on the deployed model's nodes; creating a Model copies its artefacts into a Cloud Storage bucket that Agent Platform manages."
+          network: "Dedicated public endpoints, or private ones over Private Service Connect; the service keeps Google-managed internet access unless a service perimeter blocks it."
+          identity: "The container runs as a service account managed by Agent Platform that can only read the model artefacts, or as a custom service account set at deployment."
+          accepts: "Model Garden one-click models, prebuilt vLLM, Hex-LLM, SGLang, TGI or TensorRT-LLM containers, custom containers, and custom weights (Preview)."
+          workload: "You choose machine type and GPUs or TPUs per deployed model; replicas autoscale between a minimum and a maximum, and Scale To Zero is in Preview."
+          portability: "A custom vLLM image and your weights move elsewhere; the Model and Endpoint resources, the rawPredict route and IAM-based access are specific to the platform."
+          effort: "You operate the model version, container settings, replica limits and access to the endpoint; there is no cluster or node pool for you to run."
+          fits: "Google suggests self-deployment for custom or fine-tuned weights, predictable high-volume traffic, hardware control and strict residency or compliance needs."
+        sources:
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/choose-serving-option
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-garden/self-deployed-models
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/deploy-model-garden
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/deploy-custom-vllm
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/choose-endpoint-type
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/private-service-connect
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/autoscaling
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/configure-compute
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/custom-container-requirements
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/online-prediction-logging
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/custom-service-account
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/deployment
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/introduction
+          - https://docs.cloud.google.com/model-armor/model-armor-vertex-integration
+          - https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/sanitize-llm-response-policy
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/using-dedicated-endpoints
+        summary: "vLLM runs in a serving container on a dedicated Agent Platform endpoint, reached privately over Private Service Connect, with Apigee in front as the gateway. Model Registry deploys the version directly and the endpoint splits traffic between versions. Google now carries nodes, GPU drivers, autoscaling and the load balancer. You give up GKE Inference Gateway routing, Kubernetes network policy and Confidential GKE Nodes, and must call Model Armor from Apigee."
+        bindings:
+          - { block: gateway, service: "Apigee model proxy with Model Armor policies", note: "No GKE Inference Gateway: Apigee fronts the endpoint and screens with the SanitizeUserPrompt and SanitizeModelResponse policies.", url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/sanitize-llm-response-policy }
+          - { block: api, service: "vLLM OpenAI-compatible server on an endpoint", builtWith: "vLLM", note: "note: Called with a raw inference request (rawPredict); Google lists the Chat Completions API on dedicated endpoints for Model Garden deployments only.", url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/deploy-custom-vllm }
+          - { block: runtime, service: "Agent Platform online inference endpoint (dedicated)", builtWith: "vLLM", note: "A deployed model with its own machine type, GPUs and replica range; Agent Platform runs and scales the nodes.", url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/choose-endpoint-type }
+          - { block: storage, service: "Cloud Storage bucket, copied by Agent Platform at upload", note: "Creating the Model copies the artefact directory to a bucket Agent Platform manages; the container reads the copy named in AIP_STORAGE_URI.", url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/custom-container-requirements }
+        dropSettings: [modelArmorInferenceGateway, inferencePoolRollout, confidentialGpuNodes, gkeNetworkPolicy]
+        addSettings: [apigeeSanitizeUserPrompt, apigeeSanitizeModelResponse, endpointPscPrivate, endpointTrafficSplit, endpointDedicatedResources, endpointServiceAccount, endpointAccessLogging]
+        differences:
+          - at: gateway
+            text: "No gateway comes with an endpoint: any principal holding aiplatform.endpoints.predict can call it. To keep the drawing, put Apigee in front and grant that permission only to its service account. Model Armor's built-in integration covers only Gemini generateContent, so prompts and responses are screened by Apigee's SanitizeUserPrompt and SanitizeModelResponse policies."
+            url: https://docs.cloud.google.com/model-armor/model-armor-vertex-integration
+          - at: gateway->api
+            text: "vLLM's server speaks the OpenAI protocol, not Agent Platform's request and response format, so Google's guide calls it with a raw inference request; dedicated endpoints list the Chat Completions API for Model Garden deployments only. Only dedicated endpoints stream and allow timeouts up to one hour; a shared public endpoint stops at 60 seconds and does not stream."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/deploy-custom-vllm
+          - at: registry->storage
+            text: "Creating a Model copies the artefact directory into a bucket that Agent Platform manages, and the container reads that copy through AIP_STORAGE_URI, not your weights bucket. The copy cannot be changed; new weights mean a new Model. Signature and digest checks therefore run before upload and again in the container's start-up."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/custom-container-requirements
+          - at: runtime
+            text: "The managed environment that hosts the endpoint keeps Google's default internet access unless the project is inside a VPC Service Controls perimeter, and a Private Service Connect endpoint gives the container no private route into your VPC. Dedicated public endpoints do not support VPC Service Controls, so use the private endpoint type."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+          - at: sources->storage
+            text: "Google's custom vLLM guide lets the container download weights from Hugging Face when it is given an access token, and Model Garden deploys open models with one click. To match the drawing, upload vetted weights to your bucket, create the Model from that path and give the container no Hugging Face token."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/deploy-custom-vllm
+        alsoNeeded:
+          - service: "Private Service Connect forwarding rule in the gateway's VPC"
+            role: network
+            why: "The private endpoint is reached through a forwarding rule you create in each consuming VPC."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/private-service-connect
+          - service: "Model Armor template"
+            role: other
+            why: "Called from Apigee's SanitizeUserPrompt and SanitizeModelResponse policies; the load balancer extension of the GKE mapping is gone."
+            url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/sanitize-llm-response-policy
+          - service: "VPC Service Controls perimeter"
+            role: network
+            why: "The only control that removes the serving environment's default internet access."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+        quickstart:
+          - title: "Open models overview"
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/choose-serving-option
+          - title: "Deploy open models with a custom vLLM container"
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/deploy-custom-vllm
+          - title: "Use dedicated private endpoints based on Private Service Connect for online inference"
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/private-service-connect
+      - id: cloudRun
+        kind: runtime
+        name: "Cloud Run with GPUs"
+        url: https://docs.cloud.google.com/run/docs/configuring/services/gpu
+        asOf: "2026-11"
+        compare:
+          runs: "Your model server container, for example vLLM or Ollama, runs as a Cloud Run service with one GPU per instance; Google runs the instances."
+          patching: "Google manages the infrastructure and pre-installs the GPU drivers; you rebuild the serving image, which Google advises basing on maintained ML images."
+          data: "Prompts and completions are processed in your service's instances; weights load at start from your Cloud Storage bucket, the container image or the internet."
+          network: "Ingress settings and IAM gate callers; Google's stated way to load weights from Cloud Storage is Direct VPC egress with all traffic sent to the VPC."
+          identity: "Each revision runs as the service account set as its service identity; if you set none it uses the Compute Engine default service account."
+          accepts: "Whatever is in your container image or, with sandbox templates, in up to 10 other images; processes can add tools with apt, pip or npm; headless browsers are documented."
+          workload: "One NVIDIA L4 (24 GB) or RTX PRO 6000 Blackwell (96 GB) per instance; instances scale to zero and start in about 5 seconds before the model loads."
+          portability: "The same container image runs on GKE; the Cloud Run settings for GPU, concurrency, probes and volume mounts are rewritten as Kubernetes manifests there."
+          effort: "You operate the image, model loading, concurrency and maximum instances, and manage GPU quota; there are no nodes or drivers for you to run."
+          fits: "Google positions Cloud Run for containerised inference that can scale to zero, event-driven applications and serving smaller models cost-effectively."
+        sources:
+          - https://docs.cloud.google.com/run/docs/configuring/services/gpu
+          - https://docs.cloud.google.com/run/docs/configuring/services/gpu-best-practices
+          - https://docs.cloud.google.com/run/docs/run-gemma-on-cloud-run
+          - https://docs.cloud.google.com/run/docs/tutorials/autoscale-vllm-with-gpu-metrics
+          - https://docs.cloud.google.com/run/docs/securing/security
+          - https://docs.cloud.google.com/run/docs/securing/ingress
+          - https://docs.cloud.google.com/run/docs/configuring/services/service-identity
+          - https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - https://docs.cloud.google.com/run/docs/configuring/execution-environments
+          - https://docs.cloud.google.com/run/docs/configuring/services/cloud-storage-volume-mounts
+          - https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gke-and-cloud-run
+          - https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/sanitize-llm-response-policy
+          - https://docs.cloud.google.com/run/docs/securing/service-identity
+          - https://docs.cloud.google.com/run/docs/configuring/jobs/sandboxes
+        summary: "vLLM runs as a Cloud Run service with one GPU per instance, loading weights from the Cloud Storage bucket at start, with Apigee in front as the gateway. Google carries the hosts, GPU drivers and scaling, down to zero when idle. You give up GKE Inference Gateway routing, multi-GPU and multi-node serving, Kubernetes network policy and Confidential GKE Nodes, and you add Direct VPC egress, ingress restriction and Model Armor calls from Apigee yourself."
+        bindings:
+          - { block: gateway, service: "Apigee model proxy with Model Armor policies", note: "No GKE Inference Gateway: Apigee calls the service with its own identity and screens with the two Model Armor policies.", url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/sanitize-llm-response-policy }
+          - { block: api, service: "vLLM OpenAI-compatible server on Cloud Run", builtWith: "vLLM", note: "Google's guide serves Gemma through vLLM as an OpenAI API endpoint on the service's HTTPS address.", url: https://docs.cloud.google.com/run/docs/run-gemma-on-cloud-run }
+          - { block: runtime, service: "vLLM on a Cloud Run service with a GPU", builtWith: "vLLM", note: "One NVIDIA L4 or RTX PRO 6000 Blackwell per instance, instance-based billing, scaling to zero when idle.", url: https://docs.cloud.google.com/run/docs/configuring/services/gpu }
+        dropSettings: [modelArmorInferenceGateway, inferencePoolRollout, confidentialGpuNodes, gkeNetworkPolicy]
+        addSettings: [apigeeSanitizeUserPrompt, apigeeSanitizeModelResponse, cloudRunServiceIdentity, cloudRunIngress, cloudRunTrafficSplit, cloudRunDirectVpcFirewall, cloudRunGen2Isolation]
+        differences:
+          - at: runtime
+            text: "An instance has exactly one GPU, an NVIDIA L4 with 24 GB or an RTX PRO 6000 Blackwell with 96 GB, in a short list of regions. There is no multi-GPU or multi-node serving, and the GPU pages describe no Confidential Computing option, so very large models and the confidential tier of the GKE mapping do not fit here."
+            url: https://docs.cloud.google.com/run/docs/configuring/services/gpu
+          - at: gateway->api
+            text: "By default a service's run.app address and ingress setting let any resource on the internet reach it, subject to IAM. Set ingress to internal, disable the default URL and grant the Cloud Run Invoker role only to the gateway's service account, so that callers cannot go round Apigee."
+            url: https://docs.cloud.google.com/run/docs/securing/ingress
+          - at: storage->runtime
+            text: "Weights are downloaded or mounted every time an instance starts, including each scale-out from zero. Google's guidance for loading them from Cloud Storage requires Direct VPC egress with all traffic plus Private Google Access. A Cloud Storage volume mount checks no digest or signature, so the start-up check stays the builder's own step."
+            url: https://docs.cloud.google.com/run/docs/configuring/services/gpu-best-practices
+          - at: registry->storage
+            text: "Model Registry deploys to Agent Platform endpoints, not to Cloud Run, and Cloud Run does not read its aliases. The promotion job must copy the aliased version to the bucket path the service loads and roll out a new revision; Cloud Run traffic splitting between revisions then acts as the staged gate."
+            url: https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration
+          - at: gateway
+            text: "Nothing here routes by model name or cache state as GKE Inference Gateway does. Cloud Run autoscales on CPU utilisation and concurrency by default; to scale on vLLM queue metrics you deploy the Cloud Run External Metrics Autoscaling service from Google's tutorial and run it yourself."
+            url: https://docs.cloud.google.com/run/docs/tutorials/autoscale-vllm-with-gpu-metrics
+        alsoNeeded:
+          - service: "Direct VPC egress subnet with Private Google Access"
+            role: network
+            why: "Google's guidance for loading model weights from Cloud Storage; also the path on which outbound traffic can be limited."
+            url: https://docs.cloud.google.com/run/docs/configuring/services/gpu-best-practices
+          - service: "Model Armor template"
+            role: other
+            why: "Called from Apigee's SanitizeUserPrompt and SanitizeModelResponse policies; the load balancer extension of the GKE mapping is gone."
+            url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/sanitize-llm-response-policy
+          - service: "Cloud Run External Metrics Autoscaling (CREMA)"
+            role: other
+            why: "Optional autoscaler service that you deploy to scale on vLLM's own metrics."
+            url: https://docs.cloud.google.com/run/docs/tutorials/autoscale-vllm-with-gpu-metrics
+        quickstart:
+          - title: "Run agents with Gemma 4 models on Cloud Run"
+            url: https://docs.cloud.google.com/run/docs/run-gemma-on-cloud-run
+          - title: "Best practices: AI inference on Cloud Run services with GPUs"
+            url: https://docs.cloud.google.com/run/docs/configuring/services/gpu-best-practices
+          - title: "Autoscale vLLM model serving with GPU metrics"
+            url: https://docs.cloud.google.com/run/docs/tutorials/autoscale-vllm-with-gpu-metrics
+      - id: modelGardenMaas
+        kind: managed
+        name: "Model Garden open models as Model as a Service (MaaS)"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/use-maas
+        asOf: "2026-11"
+        compare:
+          runs: "Google serves a curated list of open models as serverless managed APIs; you provision nothing and send requests to Agent Platform endpoints."
+          patching: "Google operates and maintains the whole serving stack, including GPU or TPU provisioning, scaling and maintenance."
+          data: "Prompts and responses go to Google's service and are not shared with third parties; data at rest stays in the selected region, processing location may vary."
+          network: "Requests go to the Agent Platform API, reachable privately through Private Service Connect for Google APIs or Private Google Access; you control no outbound traffic."
+          identity: "Callers authenticate with IAM and need the aiplatform.endpoints.predict permission, which the Agent Platform User role includes; no workload of yours runs."
+          accepts: "Only the listed managed models, such as Llama 4, gpt-oss 120B, Gemma 4, DeepSeek and GLM, through the Chat Completions API; you cannot bring weights."
+          workload: "Serverless pay-as-you-go on dynamic shared quota, streaming over server-sent events; Provisioned Throughput for open models is in Preview and covers only some models."
+          portability: "Applications use the OpenAI chat completions format, so they can point at another endpoint that serves the same open model; nothing is deployed to move."
+          effort: "You manage enabling models in Model Garden, IAM, quota and spend; there is no serving infrastructure to operate or be on call for."
+          fits: "Google suggests MaaS for rapid prototyping, minimal operational overhead, variable or bursty traffic and standard models that need no customisation."
+        sources:
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/use-maas
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/maas/use-open-models
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/maas/call-open-model-apis
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/maas/grant-access-open-models
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/open-models/choose-serving-option
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/standard-paygo
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/provisioned-throughput/overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/provisioned-throughput/supported-models
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/maas/zaiorg/glm-52
+        offers:
+          - name: "Managed open models"
+            what: "A curated list of open models is offered as serverless managed APIs: gpt-oss 120B and Llama 4 are GA, DeepSeek-V4.1-Flash and GLM 5.2 are in Preview and Gemma 4 26B A4B IT is Experimental."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/maas/use-open-models
+          - name: "Chat Completions API"
+            what: "The models are called through the Agent Platform Chat Completions API in the OpenAI format, with optional streaming over server-sent events."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/maas/call-open-model-apis
+          - name: "Model enablement and access"
+            what: "A model is enabled from its API Service model card in Model Garden; users need the Consumer Procurement Entitlement Manager and Agent Platform User roles."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/maas/grant-access-open-models
+          - name: "Context caching (Preview)"
+            what: "Implicit context caching is on by default for some open models on pay-as-you-go traffic and discounts cached input tokens."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/maas/use-open-models
+    # <<< hosting options
     settings:
       - apigeeVerifyIam
       - apigeeSpikeArrest
@@ -2337,6 +2844,153 @@ implementations:
       - { block: storage, service: Cloud Storage (candidate bucket) }
       - { block: evaluation, service: "Gen AI evaluation service (Agent Platform), in a pipeline step", note: "For tuned generative models, in its own project in front of promotion. Agent Platform model evaluation covers only predictive image and tabular models. Red teaming is builder-supplied." }
       - { block: registry, service: Agent Platform Model Registry }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: agentPlatformTraining
+        kind: runtime
+        name: "Gemini Enterprise Agent Platform serverless training"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/overview
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "You submit a training job with your code in a container; Google provisions the machines, runs the code and releases the machines when the job ends."
+          patching: "Google manages the compute and maintains its prebuilt training containers; a custom container image is yours to build and keep up to date."
+          data: "Data is read from Cloud Storage, BigQuery or NFS shares you name, and your code writes checkpoints and weights to your bucket; the workers are Google-managed."
+          network: "A Private Service Connect interface or VPC peering reaches your VPC; internet egress stays Google-managed unless a service perimeter blocks it."
+          identity: "Training code runs as the project's Custom Code Service Agent by default, or as a custom service account that you attach to the job."
+          accepts: "Any ML framework in a custom container, or prebuilt containers with integrated support for PyTorch, TensorFlow, scikit-learn and XGBoost."
+          workload: "GPUs and distributed workers per job; workers can restart after maintenance or errors, so Google advises checkpoints; Spot VMs and Dynamic Workload Scheduler exist."
+          portability: "The training container and code run elsewhere unchanged; the job specification, service agents and pipeline wiring are specific to the platform."
+          effort: "You operate the training code, container, job specification and quotas; there is no cluster, and Google handles job queuing, logging and monitoring."
+          fits: "Google calls it ideal for experimentation and for jobs that do not need assured capacity, with no infrastructure to provision or manage."
+        sources:
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/start/training-methods
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/create-custom-job
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/containers-overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/understanding-training-service
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/use-spot-vms
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/schedule-jobs-dws
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/psc-i-egress
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/configure-compute
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/custom-service-account
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+      - id: gke
+        kind: cluster
+        name: "GKE (Jobs or JobSet with Kueue)"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning
+        asOf: "2026-11"
+        compare:
+          runs: "Your training code runs as Kubernetes Jobs, JobSets or Ray jobs on GPU or TPU node pools in your own cluster; you submit, queue and schedule them."
+          patching: "Google upgrades the control plane and auto-upgrades nodes; you maintain the training images and the components you install, such as Kueue."
+          data: "Data, checkpoints and weights stay in your buckets or volumes, for example Cloud Storage mounted with the Cloud Storage FUSE CSI driver, on your nodes."
+          network: "Jobs run on nodes in your VPC; you choose private nodes, the network policies and the outbound path, so what a job can reach is your configuration."
+          identity: "Each Job runs as a Kubernetes ServiceAccount that Workload Identity Federation for GKE maps to IAM roles on the buckets it needs."
+          accepts: "Any framework in a container; Google's guides show TensorFlow, JAX and Ray, and Kueue can queue Jobs, JobSets, RayJobs and Kubeflow job kinds."
+          workload: "Kueue queues and can preempt jobs against quotas; flex-start nodes run for at most seven days and Spot VMs can be preempted, so checkpointing is yours."
+          portability: "Job manifests, images and Kueue configuration move to other Kubernetes clusters; node pool, flex-start and storage driver settings are GKE-specific."
+          effort: "You operate the cluster, the GPU node pools and their capacity, the queueing layer, storage mounts and failed jobs, and are on call for them."
+          fits: "Google's guidance picks GKE for infrastructure control, training very large models, cost control with Spot and flex-start VMs, and portability."
+        sources:
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning
+          - https://docs.cloud.google.com/kubernetes-engine/docs/quickstarts/train-model-gpus-standard
+          - https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/mixed-workloads
+          - https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/kueue-intro
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/provisioningrequest
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/dws
+          - https://docs.cloud.google.com/kubernetes-engine/docs/add-on/ray-on-gke/concepts/overview
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/cloud-storage-fuse-csi-driver
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/node-auto-upgrades
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/audit-logging
+        summary: "Training runs as Kubernetes Jobs or JobSets on GPU node pools in your own GKE cluster, queued by Kueue, reading the corpus and writing candidates through the Cloud Storage FUSE CSI driver. Curation, evaluation, signing and Model Registry stay as mapped. You now carry what serverless training did for you: node pools and GPU capacity, queueing, restarts and checkpoints, node upgrades, the job's identity and its outbound network path."
+        bindings:
+          - { block: trainJob, service: "Kubernetes Jobs or JobSets on GKE GPU node pools", note: "Queued by Kueue, which you install; flex-start or Spot VMs supply GPUs; buckets are mounted with the Cloud Storage FUSE CSI driver.", url: https://docs.cloud.google.com/kubernetes-engine/docs/quickstarts/train-model-gpus-standard }
+        dropSettings: [trainingServiceAccount, trainingPerimeterEgress]
+        addSettings: [workloadIdentityGke, gkeNetworkPolicy, fqdnNetworkPolicy, gkeNodeServiceAccount, gkeAuditLogs]
+        differences:
+          - at: trainJob
+            text: "GKE has no managed job service for training. Kueue and JobSet are components you install and upgrade, and Ray is an add-on you enable. Google's GKE training guides cover plain Jobs, JobSet, Ray and Kueue; no Kubeflow Trainer guide was found in Google's documentation, so that controller would be yours to install and support."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/kueue-intro
+          - at: pkgRegistry->trainJob
+            text: "Nothing pins a training Pod to the mirror. What it can reach is set by the cluster: keep nodes private with no Cloud NAT of your own, allow only the Artifact Registry names with FQDN network policies, and keep the projects inside the VPC Service Controls perimeter, because allowing a Google API name also allows other services on the same shared addresses."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+          - at: corpus->trainJob
+            text: "The Cloud Storage FUSE CSI driver mounts whatever bucket the Pod's identity may read. With Workload Identity Federation for GKE that identity is the Job's Kubernetes ServiceAccount: give each pipeline its own, grant it read access to its approved dataset version only, and keep bucket roles off the node service account."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/cloud-storage-fuse-csi-driver
+          - at: trainJob->storage
+            text: "Flex-start nodes run for at most seven days, Spot VMs can be preempted, and Kueue can preempt a low-priority job to admit a higher one. Nothing resumes a job from a checkpoint for you: the training code must write checkpoints to the bucket and restart from the latest one."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/dws
+          - at: storage->evaluation
+            text: "A Kubernetes Job is not an Agent Platform Pipelines step. The pipeline that runs evaluation and promotion has to launch the Job or wait for it through your own component, and lineage for the training step is recorded in ML Metadata only if that component writes it."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/quickstarts/train-model-gpus-standard
+        alsoNeeded:
+          - service: "Kueue"
+            role: other
+            why: "Queues jobs against GPU quota and decides when they start or wait; you install it on the cluster and upgrade it."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/kueue-intro
+          - service: "Cloud Storage FUSE CSI driver"
+            role: other
+            why: "Mounts the corpus and candidate buckets into training Pods; it is enabled on the cluster."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/cloud-storage-fuse-csi-driver
+          - service: "Workload Identity Federation for GKE"
+            role: identity
+            why: "Gives each Job an IAM principal of its own in place of the custom service account attached to a serverless job."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - service: "Flex-start provisioning mode (Dynamic Workload Scheduler)"
+            role: other
+            why: "Obtains scarce GPUs for a bounded run of up to seven days; serverless training found capacity for you."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/dws
+        quickstart:
+          - title: "Quickstart: Train a model with GPUs on GKE Standard mode"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/quickstarts/train-model-gpus-standard
+          - title: "Optimize GKE resource utilization for mixed AI/ML training and inference workloads"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/mixed-workloads
+          - title: "Deploy a batch system using Kueue"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/kueue-intro
+      - id: agentPlatformTuning
+        kind: managed
+        name: "Gemini Enterprise Agent Platform open model tuning (managed tuning)"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tuning/open-model-tuning
+        asOf: "2026-11"
+        compare:
+          runs: "Google runs the fine-tuning as a managed tuning job; you supply a base model, a JSONL dataset in Cloud Storage and a few settings such as epochs."
+          patching: "Google operates and maintains the tuning infrastructure and training code; there is no image or node for you to patch."
+          data: "Training data is read from your Cloud Storage bucket; the tuned safetensors weights and up to 10 checkpoints are written to your output bucket."
+          network: "Open model tuning is on the list of Agent Platform features that VPC Service Controls supports; the tuning page describes no other network setting."
+          identity: "Jobs run under Google-managed service agents, which need access to your buckets; the tuning page names no way to attach your own service account."
+          accepts: "Listed Gemma, MedGemma, Llama, Qwen and GLM models, or a checkpoint of the same architecture; full fine-tuning, LoRA or distillation, depending on the model."
+          workload: "Google picks the capacity, with the global endpoint recommended; a project can run one tuning job at a time by default, raised by a quota request."
+          portability: "Tuned weights land in your bucket as safetensors files and can be exported and deployed elsewhere; the tuning job definition is not portable."
+          effort: "You prepare datasets, start jobs, watch quota and the cost per training token, and evaluate the result; no training infrastructure is yours."
+          fits: "Google documents it for supervised fine-tuning or distillation of supported open models, and advises distillation when a much stronger teacher model exists."
+        sources:
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tuning/open-model-tuning
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tuning
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-garden/deploy-models-with-custom-weights
+        offers:
+          - name: "Supervised fine-tuning"
+            what: "Full fine-tuning or Low-Rank Adaptation (LoRA), depending on the model, for the listed open models, which include Gemma, Llama, Qwen and GLM variants."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tuning/open-model-tuning
+          - name: "Distillation fine-tuning"
+            what: "A teacher model, listed as GLM 5.2 MaaS, generates responses and a smaller Qwen 3 or Gemma 3 student model is tuned on them, through the Gen AI SDK."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tuning/open-model-tuning
+          - name: "Tuning from a custom checkpoint"
+            what: "A job can start from a custom checkpoint or a previously tuned model that has the same architecture as one of the supported base models."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tuning/open-model-tuning
+          - name: "Tuned model artefacts"
+            what: "The final weights and at most 10 intermediate checkpoints are stored as safetensors files in your Cloud Storage output directory."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tuning/open-model-tuning
+          - name: "Deployment of the tuned model"
+            what: "The tuned model can be deployed to an Agent Platform endpoint through Model Garden's Deploy model with custom weights, a Preview feature, or exported from Cloud Storage and deployed elsewhere."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tuning/open-model-tuning
+          - name: "Managed tuning in the console"
+            what: "The Fine tune button on a model card offers Managed tuning, and the Tuning page has Create tuned model."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/tuning/open-model-tuning
+    # <<< hosting options
     settings:
       - trainingServiceAccount
       - sdpInspectionJobs
@@ -2471,6 +3125,166 @@ implementations:
       - { block: registry, service: Artifact Registry remote and virtual repos }
       - { block: openWeb, service: The live web (crawled offline only) }
       - { block: sources, service: "Public registries (PyPI, npm)" }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: gke
+        kind: cluster
+        name: "Agent Sandbox on GKE"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-sandbox
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "The Agent Sandbox controller you install creates and removes a Pod for each sandbox from claims; GKE Sandbox isolates each Pod with gVisor or a microVM."
+          patching: "Google upgrades the control plane and auto-upgrades nodes; you upgrade the Agent Sandbox controller and rebuild the sandbox images."
+          data: "Code, files and results stay in Pods on your nodes and in the volumes or buckets you attach; Pod snapshots save state only if you take them."
+          network: "The controller creates a NetworkPolicy for each SandboxTemplate; you define the egress and ingress rules that fit your run in the template."
+          identity: "Each sandbox Pod uses a Kubernetes ServiceAccount, which Workload Identity Federation for GKE can map to an IAM principal."
+          accepts: "Any container image and a full Kubernetes PodSpec, including sidecars and GPUs or TPUs; a Python client library requests and drives sandboxes."
+          workload: "Warm pools hand out ready Pods, typically in under a second; a sandbox can be suspended and resumed; parallel runs are limited by your node capacity."
+          portability: "Agent Sandbox is an open source Kubernetes project, so templates and client code move to other clusters; GKE Sandbox and Pod snapshots are GKE features."
+          effort: "You operate the cluster, node pools, the controller and Sandbox Router, the warm pools, network policies and upgrades."
+          fits: "Google advises it when each agent needs a dedicated Pod, a full PodSpec, GPUs or TPUs, or Autopilot, and recommends Agent Substrate for most agent workloads."
+        sources:
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-sandbox
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-workloads
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/sandbox-pods
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/node-auto-upgrades
+      - id: cloudRun
+        kind: runtime
+        name: "Cloud Run sandboxes"
+        url: https://docs.cloud.google.com/run/docs/code-execution
+        asOf: "2026-11"
+        compare:
+          runs: "Your code in a Cloud Run job, service or worker pool starts and deletes each sandbox with the sandbox command; sandboxes are isolated inside that microVM-based instance."
+          patching: "Google manages the infrastructure and supplies the sandbox binary; you rebuild the container image, whose file system the sandbox reads."
+          data: "Code and files live in an ephemeral overlay deleted with the sandbox; you keep results through tar archives, bind mounts or a Cloud Storage bucket."
+          network: "Sandbox egress is blocked by default; --allow-egress opens every host the Cloud Run resource can reach, so finer limits come from its VPC egress settings."
+          identity: "Each revision runs as the service account set as its service identity; if you set none it uses the Compute Engine default service account."
+          accepts: "Whatever is in your container image or, with sandbox templates, in up to 10 other images; processes can add tools with apt, pip or npm; headless browsers are documented."
+          workload: "Sandboxes start almost instantly inside a running instance and share its CPU and memory; a job task can run for up to 168 hours, 12 with a GPU."
+          portability: "The sandbox command exists only on Cloud Run, so the code that launches sandboxes is rewritten elsewhere; the container image itself is portable."
+          effort: "You operate the launcher code, the image, instance sizing and the egress settings; there is no cluster, and the feature is in Preview."
+          fits: "Google presents it for agents on Cloud Run that must run generated code, sub-agents or browsers quickly without creating a new resource for every task."
+        sources:
+          - https://docs.cloud.google.com/run/docs/code-execution
+          - https://docs.cloud.google.com/run/docs/configuring/jobs/sandboxes
+          - https://docs.cloud.google.com/run/docs/configuring/services/sandboxes
+          - https://docs.cloud.google.com/run/docs/reference/sandbox-cli
+          - https://docs.cloud.google.com/run/docs/securing/security
+          - https://docs.cloud.google.com/run/docs/securing/multi-tenant
+          - https://docs.cloud.google.com/run/docs/browser-automation
+          - https://docs.cloud.google.com/run/docs/ai-agents
+          - https://docs.cloud.google.com/run/docs/configuring/execution-environments
+          - https://docs.cloud.google.com/run/docs/configuring/task-timeout
+          - https://docs.cloud.google.com/run/docs/create-jobs
+          - https://docs.cloud.google.com/run/docs/configuring/parallelism
+          - https://docs.cloud.google.com/run/docs/execute/jobs
+          - https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - https://docs.cloud.google.com/run/docs/securing/ingress
+          - https://docs.cloud.google.com/run/docs/reference/iam/roles
+          - https://docs.cloud.google.com/run/quotas
+          - https://docs.cloud.google.com/run/docs/configuring/jobs/service-identity
+          - https://docs.cloud.google.com/run/docs/securing/service-identity
+        summary: "Each rollout is one task of a Cloud Run job. The task's container holds your episode loop and starts a Cloud Run sandbox (Preview) for everything the model runs, so that code sees no credentials, secrets or network unless you allow them. The orchestrator, graders and offline web become Cloud Run services you build. Google carries the hosts and the sandbox runtime; you give up Kubernetes network policy, warm pools and the choice of gVisor or microVM, and sandbox egress is all or nothing."
+        bindings:
+          - { block: sandbox, service: "Cloud Run sandboxes in a job task (Preview)", note: "Started with the sandbox command inside the task's instance, which is itself a second generation microVM.", url: https://docs.cloud.google.com/run/docs/code-execution }
+          - { block: orchestrator, service: "Your run orchestrator on Cloud Run", build: true, note: "Executes the rollout job with one task per rollout and cancels executions as the automatic stop.", url: https://docs.cloud.google.com/run/docs/execute/jobs }
+          - { block: harness, service: "Your episode loop in the job task's container", build: true, note: "Runs outside the sandbox with the task's service identity and passes each model action to sandbox do or sandbox exec.", url: https://docs.cloud.google.com/run/docs/code-execution }
+          - { block: localTools, service: "Shell, files and browser in a Cloud Run sandbox", build: true, note: "note: Tools come from the host container image, mounted read-only, or from a sandbox template image; headless browsers are a documented use.", url: https://docs.cloud.google.com/run/docs/browser-automation }
+          - { block: graders, service: "Your graders on a separate Cloud Run service", build: true, note: "Check the end state from the archive or bucket the orchestrator hands over, never from inside a sandbox.", url: https://docs.cloud.google.com/run/docs/code-execution }
+          - { block: platform, service: "Cloud Run metadata server, Cloud Logging and Monitoring", note: "The metadata server gives credentials to the host container; sandboxes have no access to it by default.", url: https://docs.cloud.google.com/run/docs/securing/security }
+          - { block: offlineWeb, service: "Your offline web snapshot on an internal Cloud Run service", build: true, note: "Ingress set to internal and reached from the tasks over Direct VPC egress.", url: https://docs.cloud.google.com/run/docs/securing/ingress }
+        dropSettings: [gkeGoogleGroupsRbac, gkeSandbox, agentSandboxPolicy, gkeNetworkPolicy, workloadSeparation, fqdnNetworkPolicy, workloadIdentityGke, runAutoStop]
+        addSettings: [cloudRunServiceIdentity, swpEgress, cloudRunIngress, cloudRunDirectVpcFirewall, cloudRunGen2Isolation, cloudRunSandboxLauncher, cloudRunJobsIam, cloudRunCancelExecution]
+        differences:
+          - at: sandbox
+            text: "Sandboxes run inside one Cloud Run instance and share its CPU and memory. Google states that boundaries inside an instance are not as strong as the virtual machine boundary around it. For a fresh, separately walled environment per rollout, give every rollout its own job task instead of many sandboxes in one long-lived instance."
+            url: https://docs.cloud.google.com/run/docs/securing/security
+          - at: localTools->offlineWeb
+            text: "Sandbox egress is all or nothing: blocked by default, and --allow-egress lets the sandbox reach every external host and VPC endpoint that the Cloud Run resource can reach. Limits on where browsing may go therefore come from the task's Direct VPC egress, firewall rules and Secure Web Proxy, not from the sandbox."
+            url: https://docs.cloud.google.com/run/docs/code-execution
+          - at: localTools->platform
+            text: "The task's metadata server gives the service identity's credentials to the host container. A sandbox cannot reach it by default, but the episode loop can, so keep that identity minimal and never pass tokens in with --env. Sandbox output reaches Cloud Logging only when the host pipes it to its own standard streams."
+            url: https://docs.cloud.google.com/run/docs/code-execution
+          - at: localTools->registry
+            text: "By default a local sandbox mounts the host container's root file system read-only, so anything in the image or on the host disk is readable by the model's code; a sandbox template runs it from a separate image instead. Installing packages inside a sandbox needs --allow-egress, which opens the whole network path; baking pinned packages into the image avoids that."
+            url: https://docs.cloud.google.com/run/docs/code-execution
+          - at: orchestrator->harness
+            text: "Cloud Run sandboxes are in Preview. A job execution holds at most 10,000 tasks, started as fast as regional quota allows, and a task can run for 168 hours, or 12 with a GPU. There is no warm pool: a rollout waits for its task's instance to start, after which sandboxes start almost instantly."
+            url: https://docs.cloud.google.com/run/quotas
+        alsoNeeded:
+          - service: "Direct VPC egress subnet and VPC firewall rules"
+            role: network
+            why: "The place to limit what a rollout task can reach, since there is no Kubernetes network policy."
+            url: https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - service: "Cloud Storage bucket for workspace archives"
+            role: other
+            why: "A sandbox's files are deleted with it; results leave as tar archives or through a mounted directory or bucket."
+            url: https://docs.cloud.google.com/run/docs/code-execution
+          - service: "Cloud Run Admin API"
+            role: other
+            why: "The orchestrator calls it to execute and cancel job executions, in place of the Kubernetes API and SandboxClaims."
+            url: https://docs.cloud.google.com/run/docs/execute/jobs
+        quickstart:
+          - title: "Code execution in Cloud Run"
+            url: https://docs.cloud.google.com/run/docs/code-execution
+          - title: "Configure sandboxes for jobs"
+            url: https://docs.cloud.google.com/run/docs/configuring/jobs/sandboxes
+          - title: "Cloud Run for multi-tenant platforms running untrusted code"
+            url: https://docs.cloud.google.com/run/docs/securing/multi-tenant
+      - id: agentPlatformCodeExecution
+        kind: managed
+        name: "Gemini Enterprise Agent Platform sandboxes (Code Execution)"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox
+        asOf: "2026-11"
+        compare:
+          runs: "Google creates and deletes each sandbox when you call the Agent Platform API; it runs in a Google-managed tenant project inside a gVisor-isolated container."
+          patching: "Google maintains the sandbox runtime and the predefined sandbox environments; a custom container image, if you bring one, is yours to rebuild."
+          data: "Code, files and results sit in Google's tenant project for the sandbox's lifetime and return through the API; a customer-managed key can encrypt them at rest."
+          network: "Code Execution sandboxes have no network; template sandboxes are offline by default and can be given internet access or a PSC interface into your VPC."
+          identity: "Sandboxed code has no Google Cloud credentials and cannot query the metadata server; callers need the aiplatform.sandboxEnvironments.execute permission."
+          accepts: "Python or JavaScript with a fixed library set in Code Execution; shell, browser (Computer Use) and custom container sandboxes are created from templates."
+          workload: "Sandboxes usually start in seconds once provisioned, up to 2 minutes from cold; state lasts up to 14 days; the default quota is 1,000 per region."
+          portability: "Sandboxes are driven through the Agent Platform SDK and API, so calling code is rewritten elsewhere; a custom container image can be reused."
+          effort: "You manage templates, time-to-live settings, quotas and the logging done by the calling agent; there is no infrastructure to operate."
+          fits: "Google presents it for agents, running anywhere, that need to execute untrusted generated code in a secure, isolated and managed sandbox."
+        sources:
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-quickstart
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/shell-sandbox-quickstart
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/computer-use
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/custom-containers
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/configure-vpc-sc
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/configure-cmek
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/manage-sandboxes
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/agent-quotas
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+        offers:
+          - name: "Code Execution"
+            what: "Runs Python or JavaScript in an isolated sandbox with no network access, file input and output up to 100 MB, and state kept for a configurable time to live of up to 14 days."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview
+          - name: "Shell sandbox"
+            what: "A managed, isolated Linux container that runs shell commands sent by the agent and returns stdout, stderr and an exit code."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/shell-sandbox-quickstart
+          - name: "Computer Use"
+            what: "An isolated browser environment that the agent drives through API requests or a Chrome DevTools Protocol connection, with a live VNC view."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/computer-use
+          - name: "Custom containers"
+            what: "Runs your own Linux image from Artifact Registry as a sandbox, defined by a SandboxEnvironmentTemplate for which Agent Platform keeps pre-warmed pools."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/custom-containers
+          - name: "Egress control for template sandboxes"
+            what: "Internet access is off by default; a network attachment routes all sandbox egress through a Private Service Connect interface into your VPC, where firewall policy or Secure Web Proxy filters it."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/configure-vpc-sc
+          - name: "Pause, resume and time to live"
+            what: "A sandbox can be paused and resumed with its file system state kept, and config.ttl removes it automatically when the time to live expires."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/manage-sandboxes
+          - name: "Customer-managed encryption keys"
+            what: "A Cloud KMS key chosen when the Agent Platform instance is created encrypts the data that sandboxes write at rest."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/configure-cmek
+    # <<< hosting options
     settings:
       - gkeGoogleGroupsRbac
       - gkeSandbox
