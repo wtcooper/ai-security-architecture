@@ -930,6 +930,61 @@ settings:
     mitigations: [D3-APA]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/google-groups-rbac
     verified: "2026-11-18"
+  # >>> hosting rows (settings used only by a hosting variant)
+  - id: pubsubPullAccess
+    name: "Pull subscription with resource-level access control (Pub/Sub Subscriber and Publisher roles)"
+    where: "Pub/Sub › (trigger subscription, delivery type Pull) › Permissions, and (trigger topic) › Permissions; gcloud pubsub subscriptions set-iam-policy and gcloud pubsub topics set-iam-policy"
+    setVia: [cloudPolicy, apiCli]
+    area: identity
+    recommended: "A pull subscription per agent. Grant Pub/Sub Subscriber on that subscription only to the agent's Kubernetes ServiceAccount principal, and Pub/Sub Publisher on the topic only to the identities of its trigger sources. Grant neither role at project level."
+    why: "The agent opens no inbound endpoint, so a run starts only from a message on its topic. The topic's publishers are then the only principals that can start a run, and only the agent can take the message."
+    mitigations: [D3-APA]
+    url: https://docs.cloud.google.com/pubsub/docs/access-control
+    verified: "2026-11-18"
+  - id: gkeNodeServiceAccount
+    name: "Least-privilege IAM node service account"
+    where: "GKE › cluster and node pools › service account; Organization Policy › constraints/container.managed.disallowDefaultComputeServiceAccount"
+    setVia: [cloudPolicy, apiCli]
+    area: identity
+    default: "Nodes use the Compute Engine default service account"
+    recommended: "A custom node service account holding the Kubernetes Engine Default Node Service Account role (roles/container.defaultNodeServiceAccount) and little else, with the managed constraint enforced. Workloads get their identity from Workload Identity Federation for GKE, never from the node."
+    why: "On GKE a second credential sits beside the agent: the node's. The default account can hold more permissions than GKE needs, so a minimal one leaves a compromised agent nothing on the node worth taking."
+    mitigations: [D3-CH]
+    url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+    verified: "2026-11-18"
+  - id: gkeSwpExplicitProxy
+    name: "Secure Web Proxy as an explicit proxy with a URL list, behind private nodes (GKE)"
+    where: "GKE › cluster or node pool › private nodes (--enable-private-nodes), with no Cloud NAT gateway of your own; Secure Web Proxy in the cluster's VPC in explicit routing mode, its gateway security policy rule matching a URL list; the agent's HTTP client pointed at the proxy address"
+    setVia: [cloudPolicy, configFile]
+    area: network
+    default: "Nodes have external IP addresses and Pods reach any destination"
+    recommended: "Private nodes and no NAT of your own, so the proxy is the agent's only path to the internet, with a policy that allows only a URL list you maintain. Google has no guide joining these for GKE, so test it. Its documented GKE route, ambient egress to the proxy, is in Preview."
+    why: "A gateway security policy blocks every HTTP and HTTPS request until a rule allows it, and workloads on nodes without external addresses cannot reach the internet unless NAT is enabled, so the agent reaches only the hosts you list."
+    mitigations: [cap-agent-egress-control, D3-OTF]
+    url: https://docs.cloud.google.com/secure-web-proxy/docs/quickstart
+    verified: "2026-11-18"
+  - id: cloudDeployCanaryGke
+    name: "Canary deployment strategy (Cloud Deploy, GKE target)"
+    where: "Cloud Deploy › delivery pipeline › stage › strategy.canary.runtimeConfig.kubernetes: serviceNetworking (Service and Deployment) or gatewayServiceMesh (HTTPRoute, Service and Deployment); canaryDeployment.percentages"
+    setVia: [configFile, apiCli]
+    area: tools
+    recommended: "Each new agent image released through canary phases at small percentages, advanced after its evaluation passes. Use gatewayServiceMesh where calls arrive through a Gateway, which splits by request; serviceNetworking splits by Pod count and suits an agent that pulls its work."
+    why: "A new agent, prompt or model revision that behaves badly reaches a small share of runs first. With pod overprovisioning left on, the original Deployment is not modified until the stable phase, so a cancelled rollout leaves it serving."
+    mitigations: [cap-staged-rollout-gate]
+    url: https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary
+    verified: "2026-11-18"
+  - id: gkeGatewayIap
+    name: "Identity-Aware Proxy on a GKE Gateway (GCPBackendPolicy)"
+    where: "GKE › GCPBackendPolicy (networking.gke.io/v1) › spec.default.iap, targetRef the agent's Service, on the internal Gateway (GatewayClass gke-l7-rilb) in front of the agent"
+    setVia: [configFile, cloudPolicy]
+    area: identity
+    default: "No IAP is applied to a Gateway's backend services"
+    recommended: "Enabled on the agent's Service, with the IAP-secured Web App User role granted only to the service accounts of the front end and the gateway. Each caller presents an OIDC token whose audience is the IAP OAuth client ID."
+    why: "Cloud Run checked the caller's IAM permission on every request to the agent. Behind a Gateway nothing does until IAP is on, so without it any workload that can route to the load balancer can drive the agent."
+    mitigations: [D3-APA]
+    url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-gateway-resources
+    verified: "2026-11-18"
+  # <<< hosting rows
 
 implementations:
   - architecture: archChatAgent
@@ -1045,6 +1100,217 @@ implementations:
       - { block: openWeb, service: Grounding with Google Search, note: "Web Grounding for Enterprise where a client contract asks for it." }
       - { block: sources, service: "Public registries (PyPI, npm)" }
       - { block: registry, service: Artifact Registry remote and virtual repos, note: "What the agent's image and tool builds install from; the Code Execution sandbox ships a fixed library set and installs nothing." }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: cloudRun
+        kind: runtime
+        name: "Cloud Run"
+        url: https://docs.cloud.google.com/run/docs/overview/what-is-cloud-run
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop in your own container; Cloud Run starts, scales and stops the container instances."
+          patching: "Google manages the infrastructure and sandbox; you rebuild your image, unless a service uses a Google buildpacks base image with automatic updates."
+          data: "Instances are stateless and run in the region you choose in your project; prompts and state persist only in the stores you connect, such as Firestore."
+          network: "Direct VPC egress can route all outbound traffic into your VPC for firewall rules, NAT or a proxy; by default it leaves for the internet from a shared address pool."
+          identity: "A service account attached to each service or job, user-managed recommended over the Compute Engine default; Agent Identity is in Preview."
+          framework: "Any language and any agent framework that builds into a container image; Google's page names ADK, Dify, LangGraph and n8n as examples."
+          longRunning: "Service requests end at 5 minutes by default and 60 at most; jobs run tasks for up to 7 days, worker pools pull from queues, and Pub/Sub or schedules trigger services."
+          portability: "The agent is a container image, which Google says runs anywhere a container can run; the Cloud Run configuration around it is rewritten for the new host."
+          effort: "Your container image, the service's configuration and the data stores it uses; there is no cluster or server infrastructure for you to manage."
+          fits: "Google's guidance: when you require container deployment and portability with a balance of flexibility and control, running agents like any other service."
+        sources:
+          - https://docs.cloud.google.com/run/docs/overview/what-is-cloud-run
+          - https://docs.cloud.google.com/run/docs/ai-agents
+          - https://docs.cloud.google.com/run/docs/securing/security
+          - https://docs.cloud.google.com/run/docs/securing/service-identity
+          - https://docs.cloud.google.com/run/docs/ai/agent-platform-features
+          - https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - https://docs.cloud.google.com/run/docs/configuring/request-timeout
+          - https://docs.cloud.google.com/run/docs/configuring/task-timeout
+          - https://docs.cloud.google.com/run/docs/configuring/services/automatic-base-image-updates
+          - https://docs.cloud.google.com/run/docs/container-contract
+          - https://docs.cloud.google.com/run/docs/authenticating/overview
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+      - id: gke
+        kind: cluster
+        name: "Google Kubernetes Engine (GKE)"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in Pods you deploy; GKE schedules those Pods onto the nodes of your cluster."
+          patching: "Google patches the control plane and the node OS through auto-upgrades; you keep Standard node pools enrolled, upgrade by hand when delayed, and rebuild your images."
+          data: "Prompts and tool results are processed in Pods on nodes in your project and VPC; Pods are ephemeral, so state is kept in the stores or volumes you attach."
+          network: "Pods run in your VPC; private nodes, network policies, FQDN network policies and firewall rules limit traffic, but by default Pods talk freely and nodes get external IPs."
+          identity: "A Kubernetes ServiceAccount granted IAM roles through Workload Identity Federation for GKE, always on in Autopilot; Agent Identity for GKE is in Preview."
+          framework: "Any language and any framework packaged as a container; ADK documents a GKE deployment and an adk deploy gke command for Python agents."
+          longRunning: "Deployments keep Pods running, CronJobs create Jobs on a schedule, and Pods can pull from Pub/Sub; node auto-upgrades and scale-down can evict running Pods."
+          portability: "The agent is a container image plus Kubernetes manifests on a managed implementation of open source Kubernetes; GKE-specific resources and IAM bindings are redone."
+          effort: "The cluster's node pools, networking, scaling policies, upgrades and access control, plus your workloads; in Autopilot mode Google manages the nodes."
+          fits: "Google's guidance: when you require full control of the infrastructure, your platform team runs Kubernetes, or you already run applications on GKE."
+        sources:
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/shared-responsibility
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/protecting-cluster-metadata
+          - https://docs.cloud.google.com/kubernetes-engine/security/about-agent-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/network-policy
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/latest/network-isolation
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/cronjobs
+          - https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/autoscaling-metrics
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-workloads
+          - https://adk.dev/deploy/gke/
+          - https://adk.dev/deploy/
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+          - https://docs.cloud.google.com/pubsub/docs/subscriber
+          - https://docs.cloud.google.com/pubsub/docs/access-control
+          - https://docs.cloud.google.com/scheduler/docs/overview
+          - https://docs.cloud.google.com/secure-web-proxy/docs/quickstart
+          - https://docs.cloud.google.com/secure-web-proxy/docs/policies-and-rules-overview
+          - https://docs.cloud.google.com/secure-web-proxy/docs/deploy-swp-as-agent-gateway
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/ambient-egress-swp
+          - https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary
+          - https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary/gke/service-networking
+          - https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary/gke/gateway-api
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/gke-overview
+          - https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component
+          - https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gateway-api
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-gateway-resources
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/gatewayclass-capabilities
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways
+          - https://docs.cloud.google.com/iap/docs/authentication-howto
+          - https://docs.cloud.google.com/iap/docs/enabling-kubernetes-howto
+          - https://docs.cloud.google.com/run/docs/authenticating/overview
+          - https://docs.cloud.google.com/run/docs/configuring/request-timeout
+          - https://docs.cloud.google.com/eventarc/standard/docs/gke/route-trigger-cloud-storage
+          - https://docs.cloud.google.com/eventarc/standard/docs/gke/quickstart-pubsub
+        summary: "The agent runs as a Deployment behind an internal Gateway in a GKE cluster you operate; the front end stays on Cloud Run and calls it across the VPC. You now carry what Cloud Run did for you: authenticating callers of the agent (IAP on the Gateway), the Pod's identity and the node's credentials, private nodes and network policy, the outbound proxy route, canary rollouts through Cloud Deploy, and cluster and node upgrades."
+        bindings:
+          - { block: agent, service: "Your agent in a Deployment on GKE", builtWith: "Agent Development Kit (ADK)", note: "A Deployment and ClusterIP Service behind an internal Gateway, on its own Kubernetes ServiceAccount, from your manifests; adk deploy gke (Python only) uses the default one.", url: https://adk.dev/deploy/gke/ }
+          - { block: events, service: "Cloud Scheduler and a Pub/Sub pull subscription", note: "Scheduled runs arrive as messages the agent pulls from its subscription; Cloud Scheduler publishes to the topic. A Kubernetes CronJob is the in-cluster alternative.", url: https://docs.cloud.google.com/scheduler/docs/overview }
+        dropSettings: [cloudRunServiceIdentity, cloudRunTrafficSplit, swpEgress]
+        addSettings: [workloadIdentityGke, gkeNetworkPolicy, fqdnNetworkPolicy, pubsubPullAccess, gkeNodeServiceAccount, gkeSwpExplicitProxy, cloudDeployCanaryGke, gkeGatewayIap]
+        differences:
+          - at: entry->agent
+            text: "Cloud Run services are private by default and check the caller's IAM permission on each request. A GKE Gateway applies no Identity-Aware Proxy until you set it in a GCPBackendPolicy, and its backend timeout defaults to 30 seconds against Cloud Run's 5 minutes. Add IAP and raise timeoutSec for long turns."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-gateway-resources
+          - at: events->agent
+            text: "Eventarc Standard's GKE destinations are in Preview and reach only services in clusters with public endpoints. Scheduled and file-drop runs therefore arrive as Pub/Sub messages the agent pulls, or start from a Kubernetes CronJob."
+            url: https://docs.cloud.google.com/eventarc/standard/docs/gke/route-trigger-cloud-storage
+          - at: agent
+            text: "Nothing limits a Pod's outbound traffic until you configure it: by default every Pod can talk to every other Pod, GKE nodes have external IP addresses, and no network policy applies. The egress allowlist holds only with private nodes, network policy enforcement and the proxy route all in place."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+          - at: agent->gateway
+            text: "The agent's identity is its Kubernetes ServiceAccount only where Workload Identity Federation for GKE is on for the cluster and node pool (always on in Autopilot). Without it the node service account's credentials are exposed to workloads. adk deploy gke uses the default ServiceAccount in the default namespace, so give the agent its own."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+          - at: localTools
+            text: "Generated code still goes to Agent Platform Code Execution, outside the cluster, by choice: Google says the calling agent can run anywhere. Google's GKE guidance isolates untrusted code with GKE Sandbox instead, so running it in a Pod beside the agent needs a gVisor or microVM runtime (Agent Sandbox on GKE) and its own network policy."
+            url: https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+        alsoNeeded:
+          - service: "Workload Identity Federation for GKE"
+            role: identity
+            why: "Gives the agent's Pod its own Google identity; Cloud Run attached a service account to the service for you."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - service: "GKE Gateway (internal Application Load Balancer)"
+            role: ingress
+            why: "The private endpoint that callers of the agent use; Cloud Run gave every service an HTTPS endpoint."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gateway-api
+          - service: "Direct VPC egress on the Cloud Run front end"
+            role: network
+            why: "The front end stays on Cloud Run and reaches the agent's internal Gateway only through the VPC."
+            url: https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - service: "Private nodes, with Cloud NAT or Secure Web Proxy"
+            role: network
+            why: "Nodes without external addresses reach the internet only through NAT or a proxy that you add to the VPC."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+          - service: "Cloud Deploy"
+            role: other
+            why: "Runs the canary phases that Cloud Run revisions and traffic splitting provided."
+            url: https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary
+          - service: "Node pool service account that can pull from Artifact Registry"
+            role: registry
+            why: "GKE pulls the agent's image with the node pool's service account, even with Workload Identity Federation on."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - service: "Kubernetes RBAC with Google Groups"
+            role: identity
+            why: "Who may change the agent's Deployment or read its Secrets is now decided in the cluster as well as in IAM."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+        quickstart:
+          - title: "Deploy to Google Kubernetes Engine (GKE), Agent Development Kit"
+            url: https://adk.dev/deploy/gke/
+          - title: "Authenticate to Google Cloud APIs from GKE workloads"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+          - title: "Deploying Gateways"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways
+      - id: agentRuntime
+        kind: managed
+        name: "Agent Runtime on Gemini Enterprise Agent Platform"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolVertexAgentEngine
+        compare:
+          agentLoop: "Your agent code runs the loop inside a runtime Google manages; you hand over a framework agent, source files or a container, and Google deploys and scales it."
+          patching: "Google manages the runtime's underlying infrastructure; you keep the agent's pinned packages, or the container image you supply, up to date."
+          data: "The agent runs in a Google-owned tenant project in the region you pick; sessions and memories sit in Agent Platform Sessions and Memory Bank, with CMEK available."
+          network: "A Google-managed network with no access to your VPC; a Private Service Connect interface reaches your VPC, and VPC Service Controls blocks public internet access."
+          identity: "The AI Platform Reasoning Engine Service Agent by default, a custom service account, or an Agent Identity tied to the instance, which one page labels preview."
+          framework: "ADK in Python or Go with full integration; SDK templates for LangChain, LangGraph, AG2 and LlamaIndex; or any language in a container that meets the runtime contract."
+          longRunning: "A streamed query lasts 15 minutes at most; long-running query jobs run asynchronously for up to seven days; idle instances can scale down after 15 minutes."
+          portability: "ADK agents also deploy to Cloud Run or GKE; the runtime contract endpoints and the ReasoningEngine query API that callers use belong to Agent Runtime."
+          effort: "Your agent code, its deployment settings and its IAM grants; Google runs the infrastructure and scaling and supplies integrated logging, monitoring and tracing."
+          fits: "Google's guidance: when you require an opinionated, managed runtime with integrations for memory, evaluation, identity, governance and observability."
+        sources:
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/vertex-ai-name-changes
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/runtime-contract
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-agent-access
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/private-service-connect-interface
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-adk-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-custom-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-a2a-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-revisions-and-traffic
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions
+          - https://adk.dev/deploy/
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+        offers:
+          - name: "Agent Development Kit (ADK) agent"
+            what: "Full integration: features work across the framework, Agent Runtime and the wider Google Cloud ecosystem; Python deploys with the adk CLI and Go with the adkgo CLI."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-adk-agent
+          - name: "LangChain agent"
+            what: "Agent Platform SDK integration: a managed LangchainAgent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-langchain-agent
+          - name: "LangGraph agent"
+            what: "Agent Platform SDK integration: a managed LanggraphAgent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-langgraph-agent
+          - name: "AG2 agent"
+            what: "Agent Platform SDK integration: a managed AG2Agent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-ag2-agent
+          - name: "LlamaIndex Query Pipeline agent (Preview)"
+            what: "Agent Platform SDK integration through a managed template for LlamaIndex Query Pipeline; the page carries a Preview label."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-llamaindex-agent
+          - name: "Agent2Agent (A2A) agent (Preview)"
+            what: "An agent deployed as an A2aAgent instance that clients and other agents call over the Agent2Agent open protocol; the page carries a Preview label."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-a2a-agent
+          - name: "Custom agent (custom template)"
+            what: "A Python class template that you adapt to your own framework and deploy as a pickled object; the support level Google lists for CrewAI and custom frameworks."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-custom-agent
+          - name: "Custom container or Dockerfile"
+            what: "An agent in any language, deployed as a container image from Artifact Registry or built from your Dockerfile, that listens on port 8080 and follows the runtime contract."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/runtime-contract
+    # <<< hosting options
     settings:
       - iapCloudRun
       - cloudRunServiceIdentity
@@ -1170,6 +1436,202 @@ implementations:
       - { block: openWeb, service: Grounding with Google Search }
       - { block: sources, service: "Public registries (PyPI, npm)" }
       - { block: registry, service: Artifact Registry remote and virtual repos, note: "What the agent's image and tool builds install from; the Code Execution sandbox installs nothing." }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: cloudRun
+        kind: runtime
+        name: "Cloud Run"
+        url: https://docs.cloud.google.com/run/docs/overview/what-is-cloud-run
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop in your own container; Cloud Run starts, scales and stops the container instances."
+          patching: "Google manages the infrastructure and sandbox; you rebuild your image, unless a service uses a Google buildpacks base image with automatic updates."
+          data: "Instances are stateless and run in the region you choose in your project; prompts and state persist only in the stores you connect, such as Firestore."
+          network: "Direct VPC egress can route all outbound traffic into your VPC for firewall rules, NAT or a proxy; by default it leaves for the internet from a shared address pool."
+          identity: "A service account attached to each service or job, user-managed recommended over the Compute Engine default; Agent Identity is in Preview."
+          framework: "Any language and any agent framework that builds into a container image; Google's page names ADK, Dify, LangGraph and n8n as examples."
+          longRunning: "Service requests end at 5 minutes by default and 60 at most; jobs run tasks for up to 7 days, worker pools pull from queues, and Pub/Sub or schedules trigger services."
+          portability: "The agent is a container image, which Google says runs anywhere a container can run; the Cloud Run configuration around it is rewritten for the new host."
+          effort: "Your container image, the service's configuration and the data stores it uses; there is no cluster or server infrastructure for you to manage."
+          fits: "Google's guidance: when you require container deployment and portability with a balance of flexibility and control, running agents like any other service."
+        sources:
+          - https://docs.cloud.google.com/run/docs/overview/what-is-cloud-run
+          - https://docs.cloud.google.com/run/docs/ai-agents
+          - https://docs.cloud.google.com/run/docs/securing/security
+          - https://docs.cloud.google.com/run/docs/securing/service-identity
+          - https://docs.cloud.google.com/run/docs/ai/agent-platform-features
+          - https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - https://docs.cloud.google.com/run/docs/configuring/request-timeout
+          - https://docs.cloud.google.com/run/docs/configuring/task-timeout
+          - https://docs.cloud.google.com/run/docs/configuring/services/automatic-base-image-updates
+          - https://docs.cloud.google.com/run/docs/container-contract
+          - https://docs.cloud.google.com/run/docs/authenticating/overview
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+      - id: gke
+        kind: cluster
+        name: "Google Kubernetes Engine (GKE)"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in Pods you deploy; GKE schedules those Pods onto the nodes of your cluster."
+          patching: "Google patches the control plane and the node OS through auto-upgrades; you keep Standard node pools enrolled, upgrade by hand when delayed, and rebuild your images."
+          data: "Prompts and tool results are processed in Pods on nodes in your project and VPC; Pods are ephemeral, so state is kept in the stores or volumes you attach."
+          network: "Pods run in your VPC; private nodes, network policies, FQDN network policies and firewall rules limit traffic, but by default Pods talk freely and nodes get external IPs."
+          identity: "A Kubernetes ServiceAccount granted IAM roles through Workload Identity Federation for GKE, always on in Autopilot; Agent Identity for GKE is in Preview."
+          framework: "Any language and any framework packaged as a container; ADK documents a GKE deployment and an adk deploy gke command for Python agents."
+          longRunning: "Deployments keep Pods running, CronJobs create Jobs on a schedule, and Pods can pull from Pub/Sub; node auto-upgrades and scale-down can evict running Pods."
+          portability: "The agent is a container image plus Kubernetes manifests on a managed implementation of open source Kubernetes; GKE-specific resources and IAM bindings are redone."
+          effort: "The cluster's node pools, networking, scaling policies, upgrades and access control, plus your workloads; in Autopilot mode Google manages the nodes."
+          fits: "Google's guidance: when you require full control of the infrastructure, your platform team runs Kubernetes, or you already run applications on GKE."
+        sources:
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/shared-responsibility
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/protecting-cluster-metadata
+          - https://docs.cloud.google.com/kubernetes-engine/security/about-agent-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/network-policy
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/latest/network-isolation
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/cronjobs
+          - https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/autoscaling-metrics
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-workloads
+          - https://adk.dev/deploy/gke/
+          - https://adk.dev/deploy/
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+          - https://docs.cloud.google.com/pubsub/docs/subscriber
+          - https://docs.cloud.google.com/pubsub/docs/access-control
+          - https://docs.cloud.google.com/scheduler/docs/overview
+          - https://docs.cloud.google.com/secure-web-proxy/docs/quickstart
+          - https://docs.cloud.google.com/secure-web-proxy/docs/policies-and-rules-overview
+          - https://docs.cloud.google.com/secure-web-proxy/docs/deploy-swp-as-agent-gateway
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/ambient-egress-swp
+          - https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary
+          - https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary/gke/service-networking
+          - https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary/gke/gateway-api
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/gke-overview
+          - https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component
+        summary: "The agent runs as a Deployment in a GKE cluster you operate and pulls its triggers from Pub/Sub instead of receiving pushes; Apigee, the tool servers, the stores and Code Execution stay where they are. You now carry what Cloud Run did for you: the Pod's identity and the node's credentials, private nodes and network policy, the outbound proxy route, canary rollouts through Cloud Deploy, and cluster and node upgrades."
+        bindings:
+          - { block: planner, service: "Your agent in a Deployment on GKE", builtWith: "Agent Development Kit (ADK)", note: "A Deployment and ClusterIP Service in its own namespace, on its own Kubernetes ServiceAccount, from your manifests; adk deploy gke (Python only) uses the default ones.", url: https://adk.dev/deploy/gke/ }
+          - { block: events, service: "Pub/Sub pull subscription and Cloud Scheduler", note: "Push needs an HTTPS endpoint on the public web, so a subscriber beside the agent pulls. Cloud Scheduler publishes to the topic, and the operator's approval returns the same way.", url: https://docs.cloud.google.com/pubsub/docs/subscriber }
+        dropSettings: [pubsubPushAuth, cloudRunServiceIdentity, cloudRunTrafficSplit, swpEgress]
+        addSettings: [workloadIdentityGke, gkeNetworkPolicy, fqdnNetworkPolicy, pubsubPullAccess, gkeNodeServiceAccount, gkeSwpExplicitProxy, cloudDeployCanaryGke]
+        differences:
+          - at: events->planner
+            text: "Pub/Sub can push only to an HTTPS endpoint on the public web, so on a private cluster the agent pulls instead. No signed delivery names the caller: whoever holds Pub/Sub Publisher on the topic can start a run, so the topic's IAM policy is now the gate, and you build the subscriber that hands each message to the agent."
+            url: https://docs.cloud.google.com/pubsub/docs/subscriber
+          - at: planner
+            text: "Nothing limits a Pod's outbound traffic until you configure it: by default every Pod can talk to every other Pod, GKE nodes have external IP addresses, and no network policy applies. The egress allowlist holds only with private nodes, network policy enforcement and the proxy route all in place."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+          - at: planner->gateway
+            text: "The agent's identity is its Kubernetes ServiceAccount only where Workload Identity Federation for GKE is on for the cluster and node pool (always on in Autopilot). Without it the node service account's credentials are exposed to workloads. adk deploy gke uses the default ServiceAccount in the default namespace, so give the agent its own."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+          - at: localTools
+            text: "Generated code still goes to Agent Platform Code Execution, outside the cluster, by choice: Google says the calling agent can run anywhere. Google's GKE guidance isolates untrusted code with GKE Sandbox instead, so running it in a Pod beside the agent needs a gVisor or microVM runtime (Agent Sandbox on GKE) and its own network policy."
+            url: https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+          - at: gateway
+            text: "Agent Gateway reaches GKE as a Preview you run yourself: a GKE Gateway for inbound traffic and Secure Web Proxy for outbound, on GKE 1.37.2 or later from the Rapid channel, in europe-west1 and us-central1 only. Apigee remains the gateway in this mapping."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/gke-overview
+        alsoNeeded:
+          - service: "Workload Identity Federation for GKE"
+            role: identity
+            why: "Gives the agent's Pod its own Google identity; Cloud Run attached a service account to the service for you."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - service: "Private nodes, with Cloud NAT or Secure Web Proxy"
+            role: network
+            why: "Nodes without external addresses reach the internet only through NAT or a proxy that you add to the VPC."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+          - service: "Cloud Deploy"
+            role: other
+            why: "Runs the canary phases that Cloud Run revisions and traffic splitting provided."
+            url: https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary
+          - service: "Node pool service account that can pull from Artifact Registry"
+            role: registry
+            why: "GKE pulls the agent's image with the node pool's service account, even with Workload Identity Federation on."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - service: "Kubernetes RBAC with Google Groups"
+            role: identity
+            why: "Who may change the agent's Deployment or read its Secrets is now decided in the cluster as well as in IAM."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+          - service: "Cloud Logging and Cloud Monitoring on the cluster"
+            role: logging
+            why: "Google asks you to keep both enabled on the cluster; Cloud Run ingests container logs without setup."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/shared-responsibility
+        quickstart:
+          - title: "Deploy to Google Kubernetes Engine (GKE), Agent Development Kit"
+            url: https://adk.dev/deploy/gke/
+          - title: "Authenticate to Google Cloud APIs from GKE workloads"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+          - title: "Best practices for hardening your cluster's security"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+      - id: agentRuntime
+        kind: managed
+        name: "Agent Runtime on Gemini Enterprise Agent Platform"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolVertexAgentEngine
+        compare:
+          agentLoop: "Your agent code runs the loop inside a runtime Google manages; you hand over a framework agent, source files or a container, and Google deploys and scales it."
+          patching: "Google manages the runtime's underlying infrastructure; you keep the agent's pinned packages, or the container image you supply, up to date."
+          data: "The agent runs in a Google-owned tenant project in the region you pick; sessions and memories sit in Agent Platform Sessions and Memory Bank, with CMEK available."
+          network: "A Google-managed network with no access to your VPC; a Private Service Connect interface reaches your VPC, and VPC Service Controls blocks public internet access."
+          identity: "The AI Platform Reasoning Engine Service Agent by default, a custom service account, or an Agent Identity tied to the instance, which one page labels preview."
+          framework: "ADK in Python or Go with full integration; SDK templates for LangChain, LangGraph, AG2 and LlamaIndex; or any language in a container that meets the runtime contract."
+          longRunning: "A streamed query lasts 15 minutes at most; long-running query jobs run asynchronously for up to seven days; idle instances can scale down after 15 minutes."
+          portability: "ADK agents also deploy to Cloud Run or GKE; the runtime contract endpoints and the ReasoningEngine query API that callers use belong to Agent Runtime."
+          effort: "Your agent code, its deployment settings and its IAM grants; Google runs the infrastructure and scaling and supplies integrated logging, monitoring and tracing."
+          fits: "Google's guidance: when you require an opinionated, managed runtime with integrations for memory, evaluation, identity, governance and observability."
+        sources:
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/vertex-ai-name-changes
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/runtime-contract
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-agent-access
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/private-service-connect-interface
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-adk-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-custom-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-a2a-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-revisions-and-traffic
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions
+          - https://adk.dev/deploy/
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+        offers:
+          - name: "Agent Development Kit (ADK) agent"
+            what: "Full integration: features work across the framework, Agent Runtime and the wider Google Cloud ecosystem; Python deploys with the adk CLI and Go with the adkgo CLI."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-adk-agent
+          - name: "LangChain agent"
+            what: "Agent Platform SDK integration: a managed LangchainAgent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-langchain-agent
+          - name: "LangGraph agent"
+            what: "Agent Platform SDK integration: a managed LanggraphAgent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-langgraph-agent
+          - name: "AG2 agent"
+            what: "Agent Platform SDK integration: a managed AG2Agent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-ag2-agent
+          - name: "LlamaIndex Query Pipeline agent (Preview)"
+            what: "Agent Platform SDK integration through a managed template for LlamaIndex Query Pipeline; the page carries a Preview label."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-llamaindex-agent
+          - name: "Agent2Agent (A2A) agent (Preview)"
+            what: "An agent deployed as an A2aAgent instance that clients and other agents call over the Agent2Agent open protocol; the page carries a Preview label."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-a2a-agent
+          - name: "Custom agent (custom template)"
+            what: "A Python class template that you adapt to your own framework and deploy as a pickled object; the support level Google lists for CrewAI and custom frameworks."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-custom-agent
+          - name: "Custom container or Dockerfile"
+            what: "An agent in any language, deployed as a container image from Artifact Registry or built from your Dockerfile, that listens on port 8080 and follows the runtime contract."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/runtime-contract
+    # <<< hosting options
     settings:
       - pubsubPushAuth
       - cloudRunServiceIdentity
@@ -1320,6 +1782,204 @@ implementations:
       - { block: openWeb, service: Grounding with Google Search }
       - { block: sources, service: "Public registries (PyPI, npm)" }
       - { block: registry, service: Artifact Registry remote and virtual repos }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: cloudRun
+        kind: runtime
+        name: "Cloud Run"
+        url: https://docs.cloud.google.com/run/docs/overview/what-is-cloud-run
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop in your own container; Cloud Run starts, scales and stops the container instances."
+          patching: "Google manages the infrastructure and sandbox; you rebuild your image, unless a service uses a Google buildpacks base image with automatic updates."
+          data: "Instances are stateless and run in the region you choose in your project; prompts and state persist only in the stores you connect, such as Firestore."
+          network: "Direct VPC egress can route all outbound traffic into your VPC for firewall rules, NAT or a proxy; by default it leaves for the internet from a shared address pool."
+          identity: "A service account attached to each service or job, user-managed recommended over the Compute Engine default; Agent Identity is in Preview."
+          framework: "Any language and any agent framework that builds into a container image; Google's page names ADK, Dify, LangGraph and n8n as examples."
+          longRunning: "Service requests end at 5 minutes by default and 60 at most; jobs run tasks for up to 7 days, worker pools pull from queues, and Pub/Sub or schedules trigger services."
+          portability: "The agent is a container image, which Google says runs anywhere a container can run; the Cloud Run configuration around it is rewritten for the new host."
+          effort: "Your container image, the service's configuration and the data stores it uses; there is no cluster or server infrastructure for you to manage."
+          fits: "Google's guidance: when you require container deployment and portability with a balance of flexibility and control, running agents like any other service."
+        sources:
+          - https://docs.cloud.google.com/run/docs/overview/what-is-cloud-run
+          - https://docs.cloud.google.com/run/docs/ai-agents
+          - https://docs.cloud.google.com/run/docs/securing/security
+          - https://docs.cloud.google.com/run/docs/securing/service-identity
+          - https://docs.cloud.google.com/run/docs/ai/agent-platform-features
+          - https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - https://docs.cloud.google.com/run/docs/configuring/request-timeout
+          - https://docs.cloud.google.com/run/docs/configuring/task-timeout
+          - https://docs.cloud.google.com/run/docs/configuring/services/automatic-base-image-updates
+          - https://docs.cloud.google.com/run/docs/container-contract
+          - https://docs.cloud.google.com/run/docs/authenticating/overview
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+      - id: gke
+        kind: cluster
+        name: "Google Kubernetes Engine (GKE)"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in Pods you deploy; GKE schedules those Pods onto the nodes of your cluster."
+          patching: "Google patches the control plane and the node OS through auto-upgrades; you keep Standard node pools enrolled, upgrade by hand when delayed, and rebuild your images."
+          data: "Prompts and tool results are processed in Pods on nodes in your project and VPC; Pods are ephemeral, so state is kept in the stores or volumes you attach."
+          network: "Pods run in your VPC; private nodes, network policies, FQDN network policies and firewall rules limit traffic, but by default Pods talk freely and nodes get external IPs."
+          identity: "A Kubernetes ServiceAccount granted IAM roles through Workload Identity Federation for GKE, always on in Autopilot; Agent Identity for GKE is in Preview."
+          framework: "Any language and any framework packaged as a container; ADK documents a GKE deployment and an adk deploy gke command for Python agents."
+          longRunning: "Deployments keep Pods running, CronJobs create Jobs on a schedule, and Pods can pull from Pub/Sub; node auto-upgrades and scale-down can evict running Pods."
+          portability: "The agent is a container image plus Kubernetes manifests on a managed implementation of open source Kubernetes; GKE-specific resources and IAM bindings are redone."
+          effort: "The cluster's node pools, networking, scaling policies, upgrades and access control, plus your workloads; in Autopilot mode Google manages the nodes."
+          fits: "Google's guidance: when you require full control of the infrastructure, your platform team runs Kubernetes, or you already run applications on GKE."
+        sources:
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/shared-responsibility
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/protecting-cluster-metadata
+          - https://docs.cloud.google.com/kubernetes-engine/security/about-agent-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/network-policy
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/latest/network-isolation
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/cronjobs
+          - https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/autoscaling-metrics
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-workloads
+          - https://adk.dev/deploy/gke/
+          - https://adk.dev/deploy/
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+          - https://docs.cloud.google.com/pubsub/docs/subscriber
+          - https://docs.cloud.google.com/pubsub/docs/access-control
+          - https://docs.cloud.google.com/scheduler/docs/overview
+          - https://docs.cloud.google.com/secure-web-proxy/docs/quickstart
+          - https://docs.cloud.google.com/secure-web-proxy/docs/policies-and-rules-overview
+          - https://docs.cloud.google.com/secure-web-proxy/docs/deploy-swp-as-agent-gateway
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/ambient-egress-swp
+          - https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary
+          - https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary/gke/service-networking
+          - https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary/gke/gateway-api
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/gke-overview
+          - https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component
+          - https://docs.cloud.google.com/iam/docs/create-short-lived-credentials-direct
+          - https://docs.cloud.google.com/run/docs/configuring/request-timeout
+        summary: "The coordinator and its subagents run together in one Deployment in a GKE cluster you operate, pulling triggers and operator confirmations from Pub/Sub; Sessions still holds the journal. You now carry the Pod's identity and its right to mint each subagent's token, the node's credentials, private nodes and network policy, the outbound proxy route, canary rollouts through Cloud Deploy, and node upgrades that can evict a running workflow."
+        bindings:
+          - { block: harness, service: "Your multi-agent app in a Deployment on GKE", builtWith: "Agent Development Kit (ADK)", note: "Coordinator and subagents in one Pod, as in one process on Cloud Run: one Deployment, one Kubernetes ServiceAccount. adk deploy gke (Python only) builds and applies it.", url: https://adk.dev/deploy/gke/ }
+          - { block: events, service: "Pub/Sub pull subscription and Cloud Scheduler", note: "Push needs an HTTPS endpoint on the public web, so a subscriber beside the app pulls. It starts runs and carries the operator's confirmation that resumes a suspended step.", url: https://docs.cloud.google.com/pubsub/docs/subscriber }
+        dropSettings: [pubsubPushAuth, cloudRunServiceIdentity, cloudRunTrafficSplit, swpEgress]
+        addSettings: [workloadIdentityGke, gkeNetworkPolicy, fqdnNetworkPolicy, pubsubPullAccess, gkeNodeServiceAccount, gkeSwpExplicitProxy, cloudDeployCanaryGke]
+        differences:
+          - at: events->harness
+            text: "Pub/Sub can push only to an HTTPS endpoint on the public web, so on a private cluster the agent pulls instead. No signed delivery names the caller: whoever holds Pub/Sub Publisher on the topic can start a run, so the topic's IAM policy is now the gate, and you build the subscriber that hands each message to the agent."
+            url: https://docs.cloud.google.com/pubsub/docs/subscriber
+          - at: harness
+            text: "Nothing limits a Pod's outbound traffic until you configure it: by default every Pod can talk to every other Pod, GKE nodes have external IP addresses, and no network policy applies. The egress allowlist holds only with private nodes, network policy enforcement and the proxy route all in place."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+          - at: orchestration->subagents
+            text: "Each subagent's token is still minted for its own IAM service account, so the coordinator's Kubernetes ServiceAccount principal needs Service Account Token Creator on each one. All the agents share one Pod, so they share its ServiceAccount, its network policy and its node."
+            url: https://docs.cloud.google.com/iam/docs/create-short-lived-credentials-direct
+          - at: orchestration
+            text: "A run is no longer cut at Cloud Run's 60-minute request limit, but node auto-upgrades and scale-down evict Pods (Autopilot can protect a Pod for up to seven days), so a long workflow still has to resume from its session history."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview
+          - at: harness->gateway
+            text: "The agent's identity is its Kubernetes ServiceAccount only where Workload Identity Federation for GKE is on for the cluster and node pool (always on in Autopilot). Without it the node service account's credentials are exposed to workloads. adk deploy gke uses the default ServiceAccount in the default namespace, so give the agent its own."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+        alsoNeeded:
+          - service: "Workload Identity Federation for GKE"
+            role: identity
+            why: "Gives the agent's Pod its own Google identity; Cloud Run attached a service account to the service for you."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - service: "Private nodes, with Cloud NAT or Secure Web Proxy"
+            role: network
+            why: "Nodes without external addresses reach the internet only through NAT or a proxy that you add to the VPC."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+          - service: "Cloud Deploy"
+            role: other
+            why: "Runs the canary phases that Cloud Run revisions and traffic splitting provided."
+            url: https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary
+          - service: "Node pool service account that can pull from Artifact Registry"
+            role: registry
+            why: "GKE pulls the agent's image with the node pool's service account, even with Workload Identity Federation on."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - service: "Kubernetes RBAC with Google Groups"
+            role: identity
+            why: "Who may change the agent's Deployment or read its Secrets is now decided in the cluster as well as in IAM."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+          - service: "Cloud Logging and Cloud Monitoring on the cluster"
+            role: logging
+            why: "Google asks you to keep both enabled on the cluster; Cloud Run ingests container logs without setup."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/shared-responsibility
+        quickstart:
+          - title: "Deploy to Google Kubernetes Engine (GKE), Agent Development Kit"
+            url: https://adk.dev/deploy/gke/
+          - title: "Authenticate to Google Cloud APIs from GKE workloads"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+          - title: "Best practices for hardening your cluster's security"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+      - id: agentRuntime
+        kind: managed
+        name: "Agent Runtime on Gemini Enterprise Agent Platform"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolVertexAgentEngine
+        compare:
+          agentLoop: "Your agent code runs the loop inside a runtime Google manages; you hand over a framework agent, source files or a container, and Google deploys and scales it."
+          patching: "Google manages the runtime's underlying infrastructure; you keep the agent's pinned packages, or the container image you supply, up to date."
+          data: "The agent runs in a Google-owned tenant project in the region you pick; sessions and memories sit in Agent Platform Sessions and Memory Bank, with CMEK available."
+          network: "A Google-managed network with no access to your VPC; a Private Service Connect interface reaches your VPC, and VPC Service Controls blocks public internet access."
+          identity: "The AI Platform Reasoning Engine Service Agent by default, a custom service account, or an Agent Identity tied to the instance, which one page labels preview."
+          framework: "ADK in Python or Go with full integration; SDK templates for LangChain, LangGraph, AG2 and LlamaIndex; or any language in a container that meets the runtime contract."
+          longRunning: "A streamed query lasts 15 minutes at most; long-running query jobs run asynchronously for up to seven days; idle instances can scale down after 15 minutes."
+          portability: "ADK agents also deploy to Cloud Run or GKE; the runtime contract endpoints and the ReasoningEngine query API that callers use belong to Agent Runtime."
+          effort: "Your agent code, its deployment settings and its IAM grants; Google runs the infrastructure and scaling and supplies integrated logging, monitoring and tracing."
+          fits: "Google's guidance: when you require an opinionated, managed runtime with integrations for memory, evaluation, identity, governance and observability."
+        sources:
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/vertex-ai-name-changes
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/runtime-contract
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-agent-access
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/private-service-connect-interface
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-adk-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-custom-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-a2a-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-revisions-and-traffic
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions
+          - https://adk.dev/deploy/
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+        offers:
+          - name: "Agent Development Kit (ADK) agent"
+            what: "Full integration: features work across the framework, Agent Runtime and the wider Google Cloud ecosystem; Python deploys with the adk CLI and Go with the adkgo CLI."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-adk-agent
+          - name: "LangChain agent"
+            what: "Agent Platform SDK integration: a managed LangchainAgent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-langchain-agent
+          - name: "LangGraph agent"
+            what: "Agent Platform SDK integration: a managed LanggraphAgent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-langgraph-agent
+          - name: "AG2 agent"
+            what: "Agent Platform SDK integration: a managed AG2Agent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-ag2-agent
+          - name: "LlamaIndex Query Pipeline agent (Preview)"
+            what: "Agent Platform SDK integration through a managed template for LlamaIndex Query Pipeline; the page carries a Preview label."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-llamaindex-agent
+          - name: "Agent2Agent (A2A) agent (Preview)"
+            what: "An agent deployed as an A2aAgent instance that clients and other agents call over the Agent2Agent open protocol; the page carries a Preview label."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-a2a-agent
+          - name: "Custom agent (custom template)"
+            what: "A Python class template that you adapt to your own framework and deploy as a pickled object; the support level Google lists for CrewAI and custom frameworks."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-custom-agent
+          - name: "Custom container or Dockerfile"
+            what: "An agent in any language, deployed as a container image from Artifact Registry or built from your Dockerfile, that listens on port 8080 and follows the runtime contract."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/runtime-contract
+    # <<< hosting options
     settings:
       - pubsubPushAuth
       - cloudRunServiceIdentity
@@ -1949,6 +2609,195 @@ implementations:
       - { block: peerVendor, service: A vendor platform's agent, note: "Under an agreement and a SAML or OIDC federation with Cloud Identity." }
       - { block: provider, service: Gemini on Agent Platform }
       - { block: partner, service: A partner's A2A agent, note: "Agent identity only; no user federation." }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: cloudRun
+        kind: runtime
+        name: "Cloud Run"
+        url: https://docs.cloud.google.com/run/docs/overview/what-is-cloud-run
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop in your own container; Cloud Run starts, scales and stops the container instances."
+          patching: "Google manages the infrastructure and sandbox; you rebuild your image, unless a service uses a Google buildpacks base image with automatic updates."
+          data: "Instances are stateless and run in the region you choose in your project; prompts and state persist only in the stores you connect, such as Firestore."
+          network: "Direct VPC egress can route all outbound traffic into your VPC for firewall rules, NAT or a proxy; by default it leaves for the internet from a shared address pool."
+          identity: "A service account attached to each service or job, user-managed recommended over the Compute Engine default; Agent Identity is in Preview."
+          framework: "Any language and any agent framework that builds into a container image; Google's page names ADK, Dify, LangGraph and n8n as examples."
+          longRunning: "Service requests end at 5 minutes by default and 60 at most; jobs run tasks for up to 7 days, worker pools pull from queues, and Pub/Sub or schedules trigger services."
+          portability: "The agent is a container image, which Google says runs anywhere a container can run; the Cloud Run configuration around it is rewritten for the new host."
+          effort: "Your container image, the service's configuration and the data stores it uses; there is no cluster or server infrastructure for you to manage."
+          fits: "Google's guidance: when you require container deployment and portability with a balance of flexibility and control, running agents like any other service."
+        sources:
+          - https://docs.cloud.google.com/run/docs/overview/what-is-cloud-run
+          - https://docs.cloud.google.com/run/docs/ai-agents
+          - https://docs.cloud.google.com/run/docs/securing/security
+          - https://docs.cloud.google.com/run/docs/securing/service-identity
+          - https://docs.cloud.google.com/run/docs/ai/agent-platform-features
+          - https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - https://docs.cloud.google.com/run/docs/configuring/request-timeout
+          - https://docs.cloud.google.com/run/docs/configuring/task-timeout
+          - https://docs.cloud.google.com/run/docs/configuring/services/automatic-base-image-updates
+          - https://docs.cloud.google.com/run/docs/container-contract
+          - https://docs.cloud.google.com/run/docs/authenticating/overview
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+      - id: gke
+        kind: cluster
+        name: "Google Kubernetes Engine (GKE)"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in Pods you deploy; GKE schedules those Pods onto the nodes of your cluster."
+          patching: "Google patches the control plane and the node OS through auto-upgrades; you keep Standard node pools enrolled, upgrade by hand when delayed, and rebuild your images."
+          data: "Prompts and tool results are processed in Pods on nodes in your project and VPC; Pods are ephemeral, so state is kept in the stores or volumes you attach."
+          network: "Pods run in your VPC; private nodes, network policies, FQDN network policies and firewall rules limit traffic, but by default Pods talk freely and nodes get external IPs."
+          identity: "A Kubernetes ServiceAccount granted IAM roles through Workload Identity Federation for GKE, always on in Autopilot; Agent Identity for GKE is in Preview."
+          framework: "Any language and any framework packaged as a container; ADK documents a GKE deployment and an adk deploy gke command for Python agents."
+          longRunning: "Deployments keep Pods running, CronJobs create Jobs on a schedule, and Pods can pull from Pub/Sub; node auto-upgrades and scale-down can evict running Pods."
+          portability: "The agent is a container image plus Kubernetes manifests on a managed implementation of open source Kubernetes; GKE-specific resources and IAM bindings are redone."
+          effort: "The cluster's node pools, networking, scaling policies, upgrades and access control, plus your workloads; in Autopilot mode Google manages the nodes."
+          fits: "Google's guidance: when you require full control of the infrastructure, your platform team runs Kubernetes, or you already run applications on GKE."
+        sources:
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/shared-responsibility
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/protecting-cluster-metadata
+          - https://docs.cloud.google.com/kubernetes-engine/security/about-agent-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/network-policy
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/latest/network-isolation
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/cronjobs
+          - https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/autoscaling-metrics
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-workloads
+          - https://adk.dev/deploy/gke/
+          - https://adk.dev/deploy/
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+          - https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gateway-api
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-gateway-resources
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/gatewayclass-capabilities
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways
+          - https://docs.cloud.google.com/iap/docs/authentication-howto
+          - https://docs.cloud.google.com/iap/docs/enabling-kubernetes-howto
+          - https://docs.cloud.google.com/run/docs/authenticating/overview
+          - https://docs.cloud.google.com/run/docs/configuring/request-timeout
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/gke-overview
+          - https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component
+        summary: "The A2A agent runs as a Deployment behind an internal Gateway in a GKE cluster you operate; Apigee and its token endpoints, the front end and the peers are unchanged. You now carry the Pod's identity, including a linked IAM service account so that it can still mint Google-signed ID tokens for peers, authentication of callers at the Gateway, network policy around the agent, the node's credentials, and cluster and node upgrades."
+        bindings:
+          - { block: harness, service: "Your A2A agent in a Deployment on GKE", builtWith: "Agent Development Kit (ADK)", note: "A Deployment and ClusterIP Service behind an internal Gateway that the front end and Apigee call. Its Kubernetes ServiceAccount is linked to an IAM service account for ID tokens.", url: https://adk.dev/deploy/gke/ }
+        addSettings: [workloadIdentityGke, gkeNetworkPolicy, gkeNodeServiceAccount, gkeGatewayIap]
+        differences:
+          - at: harness->gateway
+            text: "A Kubernetes ServiceAccount's federated identity cannot get Google-signed ID tokens. To present one to a peer platform, link the ServiceAccount to an IAM service account that it impersonates. Agent Identity for GKE, which issues ID tokens to the Pod itself, is in Preview and needs GKE 1.37.0 or later."
+            url: https://docs.cloud.google.com/kubernetes-engine/security/about-agent-identity
+          - at: entry->harness
+            text: "Cloud Run services are private by default and check the caller's IAM permission on each request. A GKE Gateway applies no Identity-Aware Proxy until you set it in a GCPBackendPolicy, and its backend timeout defaults to 30 seconds against Cloud Run's 5 minutes. Add IAP and raise timeoutSec for long turns."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-gateway-resources
+          - at: harness
+            text: "ADK's manual GKE example exposes the agent through a Service of type LoadBalancer, which the guide says makes it accessible from the internet. Use a ClusterIP Service, the default of adk deploy gke, behind an internal Gateway, so that peers reach the agent only through Apigee."
+            url: https://adk.dev/deploy/gke/
+          - at: gateway
+            text: "Agent Gateway reaches GKE as a Preview you run yourself: a GKE Gateway for inbound traffic and Secure Web Proxy for outbound, on GKE 1.37.2 or later from the Rapid channel, in europe-west1 and us-central1 only. Apigee remains the gateway in this mapping."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/gke-overview
+        alsoNeeded:
+          - service: "Workload Identity Federation for GKE"
+            role: identity
+            why: "Gives the agent's Pod its own Google identity; Cloud Run attached a service account to the service for you."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - service: "GKE Gateway (internal Application Load Balancer)"
+            role: ingress
+            why: "The private endpoint that callers of the agent use; Cloud Run gave every service an HTTPS endpoint."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gateway-api
+          - service: "Direct VPC egress on the Cloud Run front end"
+            role: network
+            why: "The front end stays on Cloud Run and reaches the agent's internal Gateway only through the VPC."
+            url: https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - service: "Private nodes, with Cloud NAT or Secure Web Proxy"
+            role: network
+            why: "Nodes without external addresses reach the internet only through NAT or a proxy that you add to the VPC."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+          - service: "Node pool service account that can pull from Artifact Registry"
+            role: registry
+            why: "GKE pulls the agent's image with the node pool's service account, even with Workload Identity Federation on."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - service: "Kubernetes RBAC with Google Groups"
+            role: identity
+            why: "Who may change the agent's Deployment or read its Secrets is now decided in the cluster as well as in IAM."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+        quickstart:
+          - title: "Deploy to Google Kubernetes Engine (GKE), Agent Development Kit"
+            url: https://adk.dev/deploy/gke/
+          - title: "Authenticate to Google Cloud APIs from GKE workloads"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+          - title: "Deploying Gateways"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways
+      - id: agentRuntime
+        kind: managed
+        name: "Agent Runtime on Gemini Enterprise Agent Platform"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolVertexAgentEngine
+        compare:
+          agentLoop: "Your agent code runs the loop inside a runtime Google manages; you hand over a framework agent, source files or a container, and Google deploys and scales it."
+          patching: "Google manages the runtime's underlying infrastructure; you keep the agent's pinned packages, or the container image you supply, up to date."
+          data: "The agent runs in a Google-owned tenant project in the region you pick; sessions and memories sit in Agent Platform Sessions and Memory Bank, with CMEK available."
+          network: "A Google-managed network with no access to your VPC; a Private Service Connect interface reaches your VPC, and VPC Service Controls blocks public internet access."
+          identity: "The AI Platform Reasoning Engine Service Agent by default, a custom service account, or an Agent Identity tied to the instance, which one page labels preview."
+          framework: "ADK in Python or Go with full integration; SDK templates for LangChain, LangGraph, AG2 and LlamaIndex; or any language in a container that meets the runtime contract."
+          longRunning: "A streamed query lasts 15 minutes at most; long-running query jobs run asynchronously for up to seven days; idle instances can scale down after 15 minutes."
+          portability: "ADK agents also deploy to Cloud Run or GKE; the runtime contract endpoints and the ReasoningEngine query API that callers use belong to Agent Runtime."
+          effort: "Your agent code, its deployment settings and its IAM grants; Google runs the infrastructure and scaling and supplies integrated logging, monitoring and tracing."
+          fits: "Google's guidance: when you require an opinionated, managed runtime with integrations for memory, evaluation, identity, governance and observability."
+        sources:
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/vertex-ai-name-changes
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/runtime-contract
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-agent-access
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/private-service-connect-interface
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-adk-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-custom-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-a2a-agent
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-revisions-and-traffic
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions
+          - https://adk.dev/deploy/
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+          - https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+        offers:
+          - name: "Agent Development Kit (ADK) agent"
+            what: "Full integration: features work across the framework, Agent Runtime and the wider Google Cloud ecosystem; Python deploys with the adk CLI and Go with the adkgo CLI."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-adk-agent
+          - name: "LangChain agent"
+            what: "Agent Platform SDK integration: a managed LangchainAgent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-langchain-agent
+          - name: "LangGraph agent"
+            what: "Agent Platform SDK integration: a managed LanggraphAgent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-langgraph-agent
+          - name: "AG2 agent"
+            what: "Agent Platform SDK integration: a managed AG2Agent template in the SDK and documentation."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-ag2-agent
+          - name: "LlamaIndex Query Pipeline agent (Preview)"
+            what: "Agent Platform SDK integration through a managed template for LlamaIndex Query Pipeline; the page carries a Preview label."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-llamaindex-agent
+          - name: "Agent2Agent (A2A) agent (Preview)"
+            what: "An agent deployed as an A2aAgent instance that clients and other agents call over the Agent2Agent open protocol; the page carries a Preview label."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-an-a2a-agent
+          - name: "Custom agent (custom template)"
+            what: "A Python class template that you adapt to your own framework and deploy as a pickled object; the support level Google lists for CrewAI and custom frameworks."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-custom-agent
+          - name: "Custom container or Dockerfile"
+            what: "An agent in any language, deployed as a container image from Artifact Registry or built from your Dockerfile, that listens on port 8080 and follows the runtime contract."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/runtime-contract
+    # <<< hosting options
     settings:
       - serviceAccountIdTokens
       - workspaceSamlAppAccess
