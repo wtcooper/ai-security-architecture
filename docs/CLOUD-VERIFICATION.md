@@ -528,7 +528,8 @@ gateway, network, identity, keys, policy, logs or stores lives in the platform's
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Azure | Microsoft Foundry Agent Service, standard setup with private networking | Azure API Management (MCP servers), internal | 21 | 8 | 55 | 43 | 12 | 0 |
 | AWS | Amazon Bedrock AgentCore harness | AgentCore Gateway with Policy in AgentCore | 22 | 7 | 57 | 47 | 10 | 0 |
-GCPROW
+| Google Cloud | Agent Runtime on Gemini Enterprise Agent Platform | Agent Gateway (Google hosts its proxy) | 22 | 5 | 55 | 50 | 4 | 1 |
+| **Total** | | | | | **167** | **140** | **26** | **1** |
 
 Where each cloud does not follow the drawing, in the terms a builder would feel:
 
@@ -544,7 +545,18 @@ Where each cloud does not follow the drawing, in the terms a builder would feel:
   stores you bring. A model allowlist on Bedrock's invoke actions does not cover calls made
   through the newer inference endpoint, which needs its own deny. An invoke call can override
   the deployed definition.
-GCPDIFF
+- **Google Cloud.** You supply the agent loop: Agent Runtime hosts code or a container you
+  deploy, and the configuration-only Managed Agents API is pre-release. An agent has no private
+  endpoint of its own; only a VPC Service Controls perimeter closes the public API. State stays
+  in the service (Sessions and Memory Bank), under your key only if it was set at creation.
+  Once a gateway is bound, model, session and memory calls cross it too. Grounding with Google
+  Search supports none of data residency, your own keys or the service perimeter. Policy
+  constraints on the agent resource are Preview.
+
+The one wrong claim was on Google Cloud: Access Transparency does list Agent Runtime as
+supported, which the first draft denied. Two further points the checks could not settle either
+way are stated as such in the rows: on AWS, whether a harness accepts a resource-based policy;
+on Google Cloud, whether the organisation-wide key constraint covers an agent instance.
 
 ## Keeping it current
 

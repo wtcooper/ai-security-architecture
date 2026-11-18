@@ -13,9 +13,6 @@ id: cloudGcp
 name: Google Cloud
 short: Google Cloud
 
-notOffered:
-  - architecture: archCloudManagedAgent
-    why: "The mapping is being researched and checked."
 settings:
   # --- Identity & access ---------------------------------------------------------------
   - id: iapCloudRun
@@ -1132,6 +1129,169 @@ settings:
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/audit-logging
     verified: "2026-11-18"
   # <<< more hosting rows
+  # >>> managed agent service rows (the cloud controls around the provider's agent service)
+  - id: pscGoogleApisEndpoint
+    name: "Private Service Connect endpoint for Google APIs (VPC-SC bundle)"
+    where: "VPC network › Private Service Connect › endpoint for Google APIs, target bundle vpc-sc; Cloud DNS private zone for googleapis.com"
+    setVia: [apiCli, adminConsole]
+    area: network
+    default: "None. The Agent Platform API resolves to public addresses."
+    recommended: "Create an endpoint with the VPC-SC bundle in the front end's VPC and resolve REGION-aiplatform.googleapis.com to it, so the application invokes the agent over a private address."
+    why: "An agent has no private endpoint of its own. It is invoked through the Agent Platform API, and this gives that call a private route."
+    mitigations: [D3-NI]
+    url: https://docs.cloud.google.com/vpc/docs/configure-private-service-connect-apis
+    verified: "2026-11-18"
+  - id: vpcScAgentPerimeterRules
+    name: "Restricted services and ingress rules (VPC Service Controls service perimeter)"
+    where: "VPC Service Controls › service perimeter around the agent project › Restricted services (aiplatform.googleapis.com) and ingress rules"
+    setVia: [cloudPolicy, apiCli]
+    area: network
+    default: "No perimeter. The Agent Platform API is reachable from the internet with IAM."
+    requires: "The project must be in the perimeter before the Agent Runtime instance is created."
+    recommended: "Restrict aiplatform.googleapis.com. Add ingress rules only for the Agent Runtime service agent to Artifact Registry, and to Cloud Storage for pickle-based deployments. Attach no access level that admits the internet."
+    why: "Private Service Connect and Private Google Access leave the public route to the Agent Platform API open. The perimeter is what blocks it."
+    mitigations: [D3-NI]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+    verified: "2026-11-18"
+  - id: attachmentSubnetFirewall
+    name: "Cloud NGFW network firewall policy on the network attachment subnet"
+    where: "VPC network › dedicated subnet (minimum /28) of the Private Service Connect network attachment › network firewall policy rules with that subnet as source"
+    setVia: [apiCli, adminConsole]
+    area: network
+    recommended: "High-priority allow rules from the attachment subnet to your tool and proxy addresses only, with a low-priority rule that denies all other egress."
+    why: "Once agent traffic enters your VPC it can reach anything the VPC can route to. Rules on the attachment subnet are what narrow it."
+    mitigations: [D3-NI, cap-agent-egress-control]
+    url: https://docs.cloud.google.com/architecture/multi-agent-private-networking-patterns
+    verified: "2026-11-18"
+  - id: toolServiceInternalIngress
+    name: "Ingress: Internal (Cloud Run), with the run.allowedIngress constraint"
+    where: "Cloud Run › (MCP or tool service) › Networking › Ingress; Organization Policy › run.allowedIngress"
+    setVia: [apiCli, cloudPolicy]
+    area: network
+    recommended: "Set ingress to Internal on every tool service and keep authentication required. Set run.allowedIngress to internal on the folder so a public tool service cannot be deployed."
+    why: "Tool servers should answer only to calls that arrive through your VPC. The constraint applies to new deployments only, so audit existing services."
+    mitigations: [D3-NI, D3-ACH]
+    url: https://docs.cloud.google.com/run/docs/securing/ingress
+    verified: "2026-11-18"
+  - id: swpAgentRuntimeEgress
+    name: "Secure Web Proxy in explicit proxy routing mode (Agent Runtime internet egress)"
+    where: "Secure Web Proxy in an RFC 1918 subnet of the VPC the Private Service Connect interface attaches to; DNS peering for its hostname; proxy environment variables on the agent"
+    setVia: [apiCli, code]
+    area: network
+    requires: "psc_interface_config on the agent. With a Private Service Connect interface, direct internet egress from the runtime is disabled."
+    recommended: "Where an agent needs a public site, point it at Secure Web Proxy and allow only the destinations you approve in the proxy's policy. Give the attachment subnet no other route to the internet."
+    why: "Agent Runtime gives no internet egress of its own once it is attached to your VPC, so the proxy becomes the single place where public destinations are allowed."
+    mitigations: [cap-agent-egress-control]
+    url: https://docs.cloud.google.com/architecture/multi-agent-private-networking-patterns
+    verified: "2026-11-18"
+  - id: cloudKmsAgentKey
+    name: "Cloud KMS key for the Agent Runtime instance (CMEK)"
+    where: "Cloud KMS › key ring in the instance's region, in a separate key project › key IAM: Cloud KMS CryptoKey Encrypter/Decrypter for the Agent Platform service agents"
+    setVia: [apiCli, adminConsole]
+    area: data
+    default: "Google-owned and Google-managed keys."
+    recommended: "A single-region key in the same region as the instance, held in a project another team administers. Grant use only to the Agent Platform and Agent Runtime service agents. Disable the key version to cut off access."
+    why: "The key must exist before the instance and cannot be swapped afterwards, and it is the lever that makes sessions, memories and sandbox state unreadable."
+    mitigations: [AML.M0012]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/cmek
+    verified: "2026-11-18"
+  - id: restrictNonCmekServices
+    name: "Restrict which services may create resources without CMEK (with Restrict which projects may supply KMS CryptoKeys for CMEK)"
+    where: "Organization Policy › constraints/gcp.restrictNonCmekServices and constraints/gcp.restrictCmekCryptoKeyProjects, on the agent folder"
+    setVia: [cloudPolicy]
+    area: data
+    default: "Not set. Resources can be created without a customer-managed key."
+    recommended: "Deny aiplatform.googleapis.com, storage.googleapis.com and artifactregistry.googleapis.com in the first constraint, and allow only your key project in the second. Test that an agent instance without encryption_spec is refused."
+    why: "A key chosen at deployment can be left out of the next one. The constraint applies to new resources only, so existing instances keep the key they were created with."
+    mitigations: [AML.M0012, D3-ACH]
+    url: https://docs.cloud.google.com/kms/docs/cmek-org-policy
+    verified: "2026-11-18"
+  - id: agentArtifactsCmek
+    name: "Default Cloud KMS key on the staging bucket and Artifact Registry repository"
+    where: "Cloud Storage › (agent staging bucket) › default encryption key; Artifact Registry › (repository for agent and sandbox images) › encryption"
+    setVia: [apiCli, adminConsole]
+    area: data
+    recommended: "Set your Cloud KMS key as the default key of the staging bucket, and create the image repository with CMEK, in the same region as the agent."
+    why: "The instance key does not reach a bucket or repository you create yourself. Staged agent objects and custom sandbox images sit there."
+    mitigations: [AML.M0012]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/configure-cmek
+    verified: "2026-11-18"
+  - id: resourceLocationsEndpointUsage
+    name: "Resource Location Restriction, with Restrict endpoint usage"
+    where: "Organization Policy › constraints/gcp.resourceLocations and constraints/gcp.restrictEndpointUsage, on the agent folder"
+    setVia: [cloudPolicy]
+    area: data
+    default: "Not set. All locations and all API endpoints are allowed."
+    recommended: "Allow only the value groups of your regions for resource locations. In the endpoint constraint, deny the global aiplatform.googleapis.com endpoint and the locational endpoints outside your regions."
+    why: "Location restriction is not enforced for Agent Platform through the REST API or Gen AI SDKs, and the global endpoint gives no residency or CMEK, so both constraints are needed."
+    mitigations: [D3-ACH]
+    url: https://docs.cloud.google.com/organization-policy/reference/restrict-locations-supported-services
+    verified: "2026-11-18"
+  - id: allowedModelsConstraint
+    name: "Define access to models on Vertex AI (vertexai.allowedModels)"
+    where: "Organization Policy › constraints/vertexai.allowedModels, on the organisation, folder or project"
+    setVia: [cloudPolicy]
+    area: tools
+    default: "Not set. All models and actions are allowed."
+    recommended: "A custom allow list of the approved models with the predict action, in the form publishers/PUBLISHER/models/MODEL_NAME:predict. Every model not listed is then denied."
+    why: "Agent code picks its own model, so the definition review is not a limit. The policy covers Model Garden models only and applies to every principal."
+    mitigations: [D3-ACH]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/control-model-access
+    verified: "2026-11-18"
+  - id: groundingSourcesConstraint
+    name: "Control Grounding Sources in Vertex AI Generative APIs, and Disable Grounding with Google Search in generative AI APIs"
+    where: "Organization Policy › constraints/vertexai.genAIGroundingSources and constraints/vertexai.disableGenAIGoogleSearchGrounding"
+    setVia: [cloudPolicy]
+    area: tools
+    default: "Not set. All grounding sources are allowed and Grounding with Google Search is enabled."
+    recommended: "Enforce the disable constraint where web search is not approved. Elsewhere allow only the sources in use, for example VertexAiSearch, or EnterpriseWebSearch where a web tool is needed."
+    why: "Grounding runs inside the model call, outside your VPC and perimeter, so it does not follow the agent's network path. This is the switch for it."
+    mitigations: [cap-agent-egress-control, D3-ACH]
+    url: https://docs.cloud.google.com/organization-policy/reference/org-policy-constraints
+    verified: "2026-11-18"
+  - id: saApiKeyBindings
+    name: "Block service account API key bindings (iam.managed.disableServiceAccountApiKeyCreation)"
+    where: "Organization Policy › constraints/iam.managed.disableServiceAccountApiKeyCreation"
+    setVia: [cloudPolicy]
+    area: identity
+    recommended: "Keep the constraint enforced on the agent and application folders, so no Google Cloud API key bound to a service account can be created. Callers use Application Default Credentials."
+    why: "A standard Google Cloud API key for Agent Platform acts as one bound service account. It is long-lived, and audit logs cannot tell its callers apart."
+    mitigations: [D3-CH, D3-ACH]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/api-keys
+    verified: "2026-11-18"
+  - id: agentLogSink
+    name: "Aggregated sink to a central log bucket with locked retention"
+    where: "Cloud Logging › organisation or folder › aggregated sink to a log bucket in a logging project; bucket retention and lock; log views for readers"
+    setVia: [apiCli, adminConsole]
+    area: audit
+    default: "Data Access audit logs are off until you enable them. Once on, they, gateway request logs and the agent's stdout and stderr logs go to the _Default bucket with 30 days of retention."
+    recommended: "Route cloudaudit.googleapis.com logs, networkservices.googleapis.com/gateway_requests and the reasoning_engine_stdout and reasoning_engine_stderr logs to one bucket. Set retention, lock it, and grant read access through log views."
+    why: "The gateway's decisions, the audit trail and the agent's own output are separate logs. They need one store with your retention to be joined and kept."
+    mitigations: [cap-agent-tracing]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/optimize/observability/overview
+    verified: "2026-11-18"
+  - id: agentPlatformVendorReview
+    name: "Agent Platform assurance review (launch stages, security controls and data residency)"
+    where: "Your third-party risk process, before rollout and on a schedule, using Google's security controls, data residency and release notes pages"
+    setVia: [adminConsole]
+    area: sharing
+    recommended: "Record each feature's launch stage (Managed Agents API, revisions, ReasoningEngine custom constraints and the gateway's Cloud Trace integration are Preview), which tools lack VPC-SC or CMEK, and that global endpoints give no residency."
+    why: "The runtime sits in a Google tenant you cannot inspect, and Pre-GA features carry separate terms. Access Transparency lists Agent Runtime as supported, but not Agent Gateway or Grounding with Google Search."
+    mitigations: [cap-ai-vendor-assessment]
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/security-controls
+    verified: "2026-11-18"
+  - id: bigQueryRowLevelSecurity
+    name: "Row-level security (row access policies)"
+    where: "BigQuery › (table the agent's tools query) › row access policies"
+    setVia: [apiCli]
+    area: data
+    default: "No row access policy. Anyone with table access reads every row."
+    recommended: "Add row access policies whose grantee list or SESSION_USER() filter names the end users and groups, and have the tool query with the user's delegated credential and not the agent's own identity."
+    why: "A filter in the store holds whatever the agent asks for. A query run as the agent's identity returns everything that identity can read."
+    mitigations: [cap-data-access-governance]
+    url: https://docs.cloud.google.com/bigquery/docs/row-level-security-intro
+    verified: "2026-11-18"
+  # <<< managed agent service rows
 
 implementations:
   - architecture: archChatAgent
@@ -3628,3 +3788,113 @@ implementations:
       - sessionsTtl
       - adkCloudTrace
       - apigeeRevokeApp
+  # >>> managed agent service mapping (checked against the vendor's pages by two people)
+  - architecture: archCloudManagedAgent
+    asOf: "2026-11"
+    verified: "2026-11-18"
+    reference:
+      - title: "Multi-agent private networking patterns in Google Cloud"
+        url: https://docs.cloud.google.com/architecture/multi-agent-private-networking-patterns
+    summary:
+      - "On Google Cloud the pattern is built on Agent Runtime, a ReasoningEngine resource in your project that runs agent code you deploy. Each agent gets its own Agent Identity. Its outbound calls are forced through Agent Gateway, whose proxy Google hosts, and into your VPC over a Private Service Connect network attachment. Inbound, the Agent Platform API is closed with VPC Service Controls. Sessions and Memory Bank stay in the service under your Cloud KMS key, and organisation policy and Cloud Logging hold the baseline and the record."
+    bindings:
+      - { block: entry, service: "Cloud Run front end behind Identity-Aware Proxy", build: true, note: "Your application signs users in, then calls the agent's query or streamQuery method on the Agent Platform API as its own service account. A Client-to-Agent Agent Gateway can screen that call." }
+      - { block: agentDef, service: "Agent code and runtime config (ADK, Terraform)", build: true, note: "The definition is your agent code or container plus the instance config: identity_type, encryption_spec, psc_interface_config and agent_gateway_config. Your pipeline deploys it." }
+      - { block: memory, service: "Agent Platform Sessions and Memory Bank", note: "Child resources of the Agent Runtime instance in your project, reached through the Agent Platform API. Your key covers them only when the instance was created with encryption_spec." }
+      - { block: aiGateway, service: "Agent Gateway (Agent-to-Anywhere, Google-managed)", note: "You own the gateway resource, the Agent Registry entries and the access policies; Google hosts the proxy. A connectivity template sends its egress into your VPC through a network attachment." }
+      - { block: internalTools, service: "MCP servers on Cloud Run or GKE, internal ingress", build: true, note: "Your tool servers, registered in Agent Registry and reached from the gateway through the network attachment. Ingress is set to internal so they have no route from the internet." }
+      - { block: orgData, service: "BigQuery, Cloud SQL, Cloud Storage, Agent Search", note: "Systems of record behind your tool servers. Access is enforced in each store: IAM on the agent identity or the user's delegated token, row-level security, and data store access control." }
+      - { block: managedRuntime, service: "Agent Runtime (ReasoningEngine resource)", note: "Runs your agent code or container on Google-managed infrastructure outside your VPC. The loop is the code you deploy (ADK, LangGraph or custom), not a harness that Google supplies." }
+      - { block: nativeTools, service: "Agent Platform sandboxes; Gemini built-in tools", note: "Code Execution, Shell and Computer Use sandboxes run under gVisor in a Google tenant project. Grounding and model code execution are tools of the Gemini API call, not of the runtime." }
+      - { block: vendorTools, service: "Google Cloud remote MCP servers", note: "Google-hosted MCP servers for Google and Google Cloud services, controlled with IAM and managed in Agent Registry. Calls from an agent bound to an egress gateway still cross Agent Gateway." }
+      - { block: openWeb, service: "Grounding with Google Search; URL context", note: "Web tools of the model call. The search runs inside Google's service, and Grounding with Google Search supports neither VPC Service Controls nor CMEK. Organisation policy can disable it." }
+    sources:
+      entry: https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run
+      agentDef: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-terraform
+      memory: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions
+      aiGateway: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-managed-overview
+      internalTools: https://docs.cloud.google.com/run/docs/securing/ingress
+      orgData: https://docs.cloud.google.com/bigquery/docs/row-level-security-intro
+      managedRuntime: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime
+      nativeTools: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox
+      vendorTools: https://docs.cloud.google.com/mcp/overview
+      openWeb: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search
+    differences:
+      - at: managedRuntime
+        text: "You supply the loop. Agent Runtime hosts agent code or a container you deploy (ADK, LangGraph, custom), so tool-call decisions and retries are your code, not the provider's. The configuration-only Managed Agents API (Agents and Interactions APIs on the Antigravity harness) is Pre-GA, and Google says not to use it for production or with sensitive data."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents
+      - at: aiGateway
+        text: "The gateway on the agent's path is Agent Gateway, and Google hosts its proxy: you own the gateway resource, the Agent Registry entries and the access policies, not the machine. Egress is default deny once an agent is bound, and a custom organisation policy constraint can require the binding. All agents in one project and region must share one egress gateway."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-gateway-runtime-deploy
+      - at: managedRuntime->aiGateway
+        text: "Inference is not kept off the gateway. Agent code calls the model, Sessions and Memory Bank through the Agent Platform API, so once an enforcing gateway is bound those calls cross it too and must be allowlisted, or invocations fail with a 498 error. With no gateway, Private Service Connect interface or perimeter, the runtime has internet access by default."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-gateway-runtime-deploy
+      - at: entry->managedRuntime
+        text: "An agent has no private endpoint of its own. It is invoked through the Agent Platform API, which is reachable from the internet by default with IAM as the only gate. A Private Service Connect endpoint for Google APIs or Private Google Access adds a private route but leaves the public one open; only a VPC Service Controls perimeter around the project blocks it."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+      - at: memory
+        text: "State is not in stores you bring. Sessions and Memory Bank are child resources of the Agent Runtime instance, kept by the service. Your Cloud KMS key covers them only if encryption_spec was set when the instance was created, and never on the global endpoint. The key cannot be changed later, and display names, descriptions and environment variables stay on Google's keys."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions
+      - at: nativeTools->openWeb
+        text: "Grounding with Google Search is a tool of the model call and runs on Google's side. It supports none of data residency at rest, CMEK, VPC Service Controls or Access Transparency, and Google keeps query logs for up to three days. Organisation policy can disable it or limit grounding sources. Web Grounding for Enterprise supports VPC Service Controls and stores no customer data."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/security-controls
+      - at: nativeTools
+        text: "Sandboxes run in a Google tenant project under gVisor without the agent's credentials. Code Execution has no network access. Other sandbox templates have no domain allowlist: internet_access without a network attachment is unrestricted egress to public addresses, and filtering by domain needs a Private Service Connect interface into your VPC and controls there."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/configure-vpc-sc
+      - at: agentDef->managedRuntime
+        text: "Cloud policy on the deploy call is thinner than drawn. Custom constraints on the ReasoningEngine resource are in Preview and skip existing agents. There is no public-endpoint setting to refuse. Location restriction is not enforced through the REST API or Gen AI SDKs, so Google points to the Restrict endpoint usage constraint. Revisions and traffic splitting are Preview."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/custom-constraints
+    alsoNeeded:
+      - service: "Identity and Access Management (Agent Identity)"
+        role: identity
+        why: "Issues each agent's principal and holds the allow, deny and Principal Access Boundary policies on it, and the roles of the application and the pipeline."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/agent-identity-overview
+      - service: "Identity-Aware Proxy"
+        role: ingress
+        why: "Signs users in at the front end. It is also the engine that evaluates Agent Gateway's access policies on each outbound call."
+        url: https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run
+      - service: "VPC network with Private Service Connect and Cloud DNS"
+        role: network
+        why: "Holds the network attachment the runtime and gateway egress through, the endpoint for Google APIs the application calls, and the private zones both resolve."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/private-service-connect-interface
+      - service: "VPC Service Controls"
+        role: network
+        why: "The only control that blocks public access to the Agent Platform API. A perimeter also blocks the runtime's default internet access."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+      - service: "Cloud Key Management Service"
+        role: keys
+        why: "Holds the single-region key named in encryption_spec, kept in a separate project so that disabling it cuts off the agent's stored data."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/cmek
+      - service: "Secret Manager"
+        role: secrets
+        why: "Holds API keys and OAuth client secrets that agent code references, where the Agent Identity auth manager is not used for a tool."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-agent-access
+      - service: "Agent Registry"
+        role: registry
+        why: "The catalogue of agents, MCP servers and endpoints that Agent Gateway checks before it lets a call out; access policies are written against its entries."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/agent-registry
+      - service: "Artifact Registry"
+        role: registry
+        why: "Holds the container images you bring for agents and custom sandboxes. Inside a perimeter, source-based deployments also need an ingress rule to Artifact Registry for the runtime service agent."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime/setup
+      - service: "Cloud Logging and Cloud Trace"
+        role: logging
+        why: "why: Receive Cloud Audit Logs, Agent Gateway request logs, runtime stdout and stderr logs and OpenTelemetry traces. Google's audited-operations list names sessions, memories and sandboxes but no reasoningEngines method."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/optimize/observability/overview
+      - service: "Organization Policy Service"
+        role: other
+        why: "Holds the constraints that refuse unapproved models, regions, grounding sources, keyless storage and agent configurations before a deployment exists."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/custom-constraints
+      - service: "Model Armor"
+        role: other
+        why: "Screens prompts, tool responses and model payloads that pass Agent Gateway, through templates you attach to the gateway."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/configure-model-armor
+    quickstart:
+      - title: "Set up the environment (Agent Runtime)"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime/setup
+      - title: "Route Agent Runtime traffic through Agent Gateway"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-gateway-runtime-deploy
+      - title: "Using Private Service Connect interface with Agent Runtime"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/private-service-connect-interface
+    settings: [iapCloudRun, disableSaKeyCreation, agentRegistry, agentEvaluation, sessionsTtl, agentSearchAccessControl, vpcServiceControls, pscGoogleApisEndpoint, vpcScAgentPerimeterRules, attachmentSubnetFirewall, toolServiceInternalIngress, swpAgentRuntimeEgress, cloudKmsAgentKey, restrictNonCmekServices, agentArtifactsCmek, resourceLocationsEndpointUsage, allowedModelsConstraint, groundingSourcesConstraint, saApiKeyBindings, agentLogSink, agentPlatformVendorReview, bigQueryRowLevelSecurity]
+  # <<< managed agent service mapping

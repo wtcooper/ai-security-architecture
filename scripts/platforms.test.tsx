@@ -166,6 +166,28 @@ test("on a hosted pattern, where it runs and what it is built with are two choic
     const products = productsForArchetype(a.id);
     const platforms = products.filter((p) => p.kind === "cloud");
     const frameworks = products.filter((p) => p.kind === "tool");
+    // Where the pattern is a platform's own managed service, that service comes with the platform:
+    // it is not offered as a second choice, its settings are listed with the platform's rows, and
+    // its record sits beneath them.
+    const services = platforms.flatMap((p) => (p.kind === "cloud" && p.service ? [{ platform: p, service: p.service }] : []));
+    if (services.length) {
+      assert.equal(frameworks.length, 0, `${a.id}: the service is not a separate choice`);
+      assert.equal(services.length, platforms.length, `${a.id}: every platform it is mapped on has its service`);
+      for (const { platform: p, service } of services) {
+        assert.deepEqual(service.fills, ["managedRuntime"], `${service.id}: is the managed runtime`);
+        for (const st of service.settings ?? []) assert.ok(p.settings.includes(st), `${a.id} on ${p.cloud.short}: ${st.id} is listed with the platform's rows`);
+        assert.equal(new Set(p.settings.map((st) => st.id)).size, p.settings.length, `${a.id} on ${p.cloud.short}: no setting id is used twice`);
+        const html = renderToStaticMarkup(<ProductSettings archetype={a} products={products} selected={p.id} platform={p} onPick={() => {}} lit={null} onLight={() => {}} />);
+        assert.match(html, new RegExp(`data-platform-service="${service.id}"`), `${a.id} on ${p.cloud.short}: the service's record is shown`);
+        assert.equal([...html.matchAll(/data-setting-name/g)].length, p.settings.length, `${a.id} on ${p.cloud.short}: one list of settings`);
+      }
+      const chooseOnly = renderToStaticMarkup(
+        <ChooseBuild archetype={a} products={products} platform={null} framework={null} host={null} onPickPlatform={() => {}} onPickHost={() => {}} onPickFramework={() => {}} />,
+      );
+      assert.ok(chooseOnly.includes('data-choice="Where it runs"') && !chooseOnly.includes('data-choice="What you build it with"'), `${a.id}: one choice, where it runs`);
+      assert.match(chooseOnly, /data-not-offered="cloudOnPrem"/, `${a.id}: says why it is not offered on-premises`);
+      continue;
+    }
     assert.ok(frameworks.length, `${a.id}: has a catalogued framework or server`);
     // Every catalogued tool and every example says which box it fills.
     for (const p of frameworks) {

@@ -61,10 +61,12 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     if (linkedHost !== host) setHost(linkedHost);
   }
 
-  // A product of another pattern in the address belongs on that pattern's page.
+  // A product of another pattern in the address belongs on that pattern's page (a platform's own
+  // service, on that platform). The address is left alone meanwhile, or the forward would lose it.
+  const elsewhere = Boolean(tool0 && tool0.architecture !== archetype.id);
   useEffect(() => {
-    if (tool0 && tool0.architecture !== archetype.id) router.replace(patternHref(tool0.architecture, { tool: tool0.id }));
-  }, [tool0, archetype.id, router]);
+    if (elsewhere && tool0) router.replace(patternHref(tool0.architecture, tool0.platform ? { cloud: cloudSlug(tool0.platform) } : { tool: tool0.id }));
+  }, [elsewhere, tool0, router]);
 
   const walks = useMemo(
     () => [archetype.walkthrough, ...(archetype.scenarios ?? [])].filter(Boolean) as Scenario[],
@@ -97,7 +99,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
   // Deep links stay shareable. replaceState rather than router.push keeps the GitHub Pages basePath.
   useEffect(() => {
     // Not before the anchor has been read, or the address would lose it.
-    if (!arrived) return;
+    if (!arrived || elsewhere) return;
     const query = new URLSearchParams();
     if (tab !== "enable") query.set("tab", tab);
     if (cloud) query.set("cloud", cloudSlug(cloud));
@@ -107,7 +109,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     if (tab === "enable" && selected) query.set("tool", selected.tool);
     const open = tab === "enable" && highlight?.kind === "mitigation" ? `#control-${highlight.id}` : "";
     window.history.replaceState(null, "", `${window.location.pathname}${query.size ? `?${query}` : ""}${open}`);
-  }, [arrived, tab, selected, highlight, cloud, host]);
+  }, [arrived, elsewhere, tab, selected, highlight, cloud, host]);
 
   const onWalk = (i: number | null) => {
     setWalkIndex(i);

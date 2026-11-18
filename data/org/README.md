@@ -18,3 +18,7 @@ What appears on the site:
   options you have approved are marked.
 
 Identifiers (yours and the catalogue's) are for these files only. Pages show names.
+
+A cloud's own agent service (Microsoft Foundry Agent Service, Amazon Bedrock AgentCore, Google's
+Agent Runtime) is listed with that cloud on the managed agent service pattern. Record the status of
+one of its settings under the service's own product id; the page finds it when the cloud is chosen.

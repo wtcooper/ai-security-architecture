@@ -43,6 +43,7 @@ tools:
           network off by default; an interaction's tools and MCP servers replace the agent's for that turn.
     architecture: archCloudManagedAgent
     fills: [managedRuntime]
+    platform: cloudGcp
     status: ga
     asOf: "2026-09"
     summary:
@@ -714,6 +715,85 @@ tools:
           model tokens, tool calls or run time — a single query may run for up to 7 days — and model spend is bounded
           only by project quotas and billing alerts outside the runtime.
         verified: "2026-10-30"
+      # >>> cloud controls (added when the service moved to the hosted pattern)
+      - mitigation: D3-AA
+        coverage: native
+        mechanism: "identity_type=AGENT_IDENTITY gives each deployed agent its own SPIFFE-based principal, tied to its ReasoningEngine resource, with certificate-bound tokens and per-agent IAM allow, deny and Principal Access Boundary policies. Without the setting, agents share the Reasoning Engine service agent or a service account."
+        steps:
+          - title: "Deploy every agent with an agent identity"
+            body:
+              - "Set identity_type to AGENT_IDENTITY when the Agent Runtime instance is created. An instance without it keeps using a service account that other agents can share."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+          - title: "Grant roles to the one agent principal"
+            body:
+              - "Bind data and tool roles to the agent's principal:// identifier, and keep the project-wide principalSet for logging and quota roles only. Do not grant roles/aiplatform.user to an agent."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+          - title: "Refuse shared identities in policy"
+            body:
+              - "Add a custom organisation policy constraint on the ReasoningEngine resource that allows only identityType AGENT_IDENTITY. Custom constraints on this resource are in Preview."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/custom-constraints
+        verified: "2026-11-18"
+      - mitigation: D3-NI
+        coverage: partial
+        mechanism: "Outbound, psc_interface_config or an Agent Gateway connectivity template puts agent traffic on a network attachment in your VPC. Inbound there is no private endpoint for an agent: the Agent Platform API stays public until a VPC Service Controls perimeter, which is outside the service, closes it."
+        steps:
+          - title: "Attach the runtime and the gateway to your VPC"
+            body:
+              - "Create a network attachment on a dedicated subnet of at least /28 and name it in psc_interface_config or in the gateway's connectivity template. Add DNS peering so the agent resolves your private zones."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/private-service-connect-interface
+          - title: "Send all gateway egress through the VPC"
+            body:
+              - "Set vpcEgress to ALL_TRAFFIC in the AgentConnectivityTemplate. This is also what makes Agent Gateway work inside a service perimeter."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/set-up-vpc-connectivity
+          - title: "Close the public route with a perimeter"
+            body:
+              - "Put the project in a VPC Service Controls perimeter with aiplatform.googleapis.com restricted before creating the instance, and call the API from your VPC through a Private Service Connect endpoint for Google APIs."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+        verified: "2026-11-18"
+      - mitigation: AML.M0012
+        coverage: partial
+        mechanism: "encryption_spec.kms_key_name, set when the instance is created, encrypts agent source, built images, running instances, sessions, memories and sandbox disks and snapshots with your Cloud KMS key. It does not cover display names, descriptions, environment variables or service account emails, cannot be changed later, and is unavailable on the global endpoint."
+        steps:
+          - title: "Create the key and grant the service agents"
+            body:
+              - "Create a single-region key in the instance's region, in a separate key project, and grant Cloud KMS CryptoKey Encrypter/Decrypter on it to the Agent Platform service agents."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/cmek
+          - title: "Set the key when the instance is created"
+            body:
+              - "Pass encryption_spec with the key name on creation. Sessions, Memory Bank and sandboxes under the instance inherit it. A deployed runtime needs a single-region location."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-agent-access
+          - title: "Require the key in policy"
+            body:
+              - "Use a custom constraint on resource.encryptionSpec.kmsKeyName (Preview) so an instance without your key is refused."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/custom-constraints
+        verified: "2026-11-18"
+      - mitigation: cap-data-access-governance
+        coverage: partial
+        mechanism: "IAM Conditions on sessionUserId and memoryScope, with Memory Bank scopes, limit sessions and memories to the user they belong to. Lookups over your own data are not filtered by the runtime: each store enforces them, on the user's delegated token from the Agent Identity auth manager or on the agent identity's own roles."
+        steps:
+          - title: "Scope sessions and memories per user"
+            body:
+              - "Bind the session and memory roles with IAM Conditions on the session user ID and the memory scope, so a principal reaches only the users it is entitled to."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions/iam-conditions
+          - title: "Enforce entitlements in the data store"
+            body:
+              - "Have tools call the store with the signed-in user's delegated credential, and set row-level security or data store access control there. The runtime does not trim results for you."
+            url: https://docs.cloud.google.com/bigquery/docs/row-level-security-intro
+        verified: "2026-11-18"
+      - mitigation: D3-ACH
+        coverage: partial
+        mechanism: "Custom organisation policy constraints on aiplatform.googleapis.com/ReasoningEngine (Preview) can refuse an instance by identityType, encryptionSpec.kmsKeyName, pscInterfaceConfig.networkAttachment, agentGatewayConfig and environment variables. Models, regions, grounding and API keys are held by platform constraints, and there is no public-endpoint setting to deny."
+        steps:
+          - title: "Write the baseline as custom constraints"
+            body:
+              - "Create custom constraints on the ReasoningEngine resource for identity type, key, network attachment and approved gateways, and enforce them on the agent folder for CREATE and UPDATE."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/custom-constraints
+          - title: "Restrict agents to approved gateways"
+            body:
+              - "Use the documented constraint on agentGatewayConfig so an agent can only be bound to a gateway on your list. A new policy takes up to 15 minutes to apply."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-gateway-runtime-deploy
+        verified: "2026-11-18"
+      # <<< cloud controls
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # Most are fields of the ReasoningEngine deployment (client.runtimes.create / update, set in the deploying
     # pipeline's code) or Google Cloud IAM, org-policy and gateway resources in our organisation; none is a
@@ -813,7 +893,7 @@ tools:
         default: Google-managed encryption keys
         recommended: Google-managed keys; a Cloud KMS key only where a client contract requires key custody
         why: Data at rest is encrypted either way; CMEK adds revocable key custody at the cost of key operations.
-        mitigations: []
+        mitigations: [AML.M0012]
         url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent
         verified: "2026-10-30"
       - id: memoryTtl
@@ -1013,6 +1093,65 @@ tools:
         mitigations: [cap-agent-tracing]
         url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/audit-logging
         verified: "2026-10-30"
+      # >>> cloud settings (the service's own settings for the cloud controls)
+      - id: agentPrincipalRoleBinding
+        name: "IAM allow policy on the agent identity principal (Grant access to an agent)"
+        where: "IAM allow policy on the target resource › member principal://agents.global.org-ORGANIZATION_ID.system.id.goog/resources/aiplatform/projects/PROJECT_NUMBER/locations/LOCATION/reasoningEngines/AGENT_ENGINE_ID"
+        setVia: [apiCli, cloudPolicy]
+        area: identity
+        default: "Each agent identity holds roles/aiplatform.agentDefaultAccess and roles/aiplatform.agentContextEditor."
+        requires: "identity_type=AGENT_IDENTITY on the instance."
+        recommended: "Grant data and tool roles to the single agent principal and never roles/aiplatform.user. Use the project principalSet only for logging and quota roles. Re-apply bindings after a re-create, because the principal changes."
+        why: "A role granted to the principal set reaches every agent in the project, which removes the separation a per-agent identity gives."
+        mitigations: [D3-AA]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+        verified: "2026-11-18"
+      - id: reasoningEngineCustomConstraints
+        name: "Custom organization policy constraints on aiplatform.googleapis.com/ReasoningEngine (Preview)"
+        where: "Organization Policy › custom constraint › resource type aiplatform.googleapis.com/ReasoningEngine, methods CREATE and UPDATE"
+        setVia: [cloudPolicy]
+        area: identity
+        default: "No constraint. Any agent configuration is accepted."
+        requires: "Organization Policy Administrator on the organisation. Preview."
+        recommended: "Allow create and update only when resource.spec.identityType is AGENT_IDENTITY, resource.encryptionSpec.kmsKeyName is one of your keys, and resource.spec.deploymentSpec.pscInterfaceConfig.networkAttachment is an approved attachment."
+        why: "Refuses an agent on a shared service account, without your key or off your network at every deployment. Existing agents are not re-checked."
+        mitigations: [D3-ACH, D3-AA, AML.M0012, D3-NI]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/custom-constraints
+        verified: "2026-11-18"
+      - id: agentConnectivityTemplate
+        name: "Agent Gateway connectivity template (AgentConnectivityTemplate, vpcEgress)"
+        where: "Network Services › agentConnectivityTemplates › egressNetworkConfig (networkAttachment, dnsPeeringConfig, vpcEgress, tlsConfig), referenced by the Agent-to-Anywhere gateway"
+        setVia: [apiCli]
+        area: network
+        default: "No template. The gateway resolves names with public DNS and its egress does not enter your VPC."
+        requires: "A gateway created with the template. An existing gateway without one must be deleted and recreated."
+        recommended: "Attach a template with your network attachment and vpcEgress set to ALL_TRAFFIC, with DNS peering for your private zones and for googleapis.com. PRIVATE_RANGES_ONLY sends internet-bound traffic out directly from the gateway."
+        why: "Puts every outbound call on your network with a fixed source range for firewall rules. ALL_TRAFFIC is also required for the gateway to work inside a service perimeter."
+        mitigations: [D3-NI, cap-agent-egress-control]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/set-up-vpc-connectivity
+        verified: "2026-11-18"
+      - id: sandboxEgressControl
+        name: "egress_control_config (SandboxEnvironmentTemplate)"
+        where: "Agent Platform sandboxes › SandboxEnvironmentTemplate › egress_control_config (internet_access, customer_vpc_network, network_attachment)"
+        setVia: [apiCli, code]
+        area: network
+        recommended: "Leave internet_access off unless a sandbox needs a site. Then set internet_access to True together with customer_vpc_network and network_attachment, so egress enters your VPC, and filter it there. internet_access alone is unrestricted egress to public addresses."
+        why: "Sandboxes have no built-in domain allowlist, so the controls in your VPC behind the attachment are the only way to filter where sandbox code sends data."
+        mitigations: [D3-NI, cap-agent-egress-control]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/configure-vpc-sc
+        verified: "2026-11-18"
+      - id: sessionIamConditions
+        name: "IAM Conditions on aiplatform.googleapis.com/sessionUserId"
+        where: "Project IAM policy › binding of roles/aiplatform.sessionViewer, sessionEditor or sessionUser with a condition on api.getAttribute('aiplatform.googleapis.com/sessionUserId', '')"
+        setVia: [apiCli, adminConsole]
+        area: data
+        default: "Session permissions apply at project level, to every session in the project."
+        recommended: "Grant session roles with a condition on the session's user ID, so each principal reads only its users' sessions and events. ListSessions does not support conditions and needs an unconditional role, so keep that to trusted callers."
+        why: "Without a condition, anyone holding a session role in the project can read every user's conversation history."
+        mitigations: [cap-data-access-governance, AML.M0031]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions/iam-conditions
+        verified: "2026-11-18"
+      # <<< cloud settings
     advisories:
       - title: >-
           Unit 42 "Double Agents": code in a deployed Agent Engine agent read the Reasoning Engine service agent's
