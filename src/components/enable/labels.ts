@@ -56,6 +56,7 @@ export const SETTING_VIA_META: Record<SettingVia, { label: string; blurb: string
   apiCli: { label: "API / CLI", blurb: "Set through the vendor's admin API, PowerShell or a command-line flag." },
   identityProvider: { label: "IdP", blurb: "Configured in the identity provider: SSO, conditional access, SCIM." },
   cloudPolicy: { label: "Cloud policy", blurb: "A cloud resource setting or policy: IAM, network rules, Azure Policy, an org policy constraint." },
+  clusterPolicy: { label: "Cluster policy", blurb: "A policy applied across the cluster: admission rules, network policy, pod security." },
   code: { label: "Your code", blurb: "No setting exists: the organisation builds it into its own application." },
 };
 

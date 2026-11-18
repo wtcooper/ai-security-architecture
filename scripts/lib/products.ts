@@ -3,9 +3,12 @@ import { join } from "node:path";
 import { parse } from "yaml";
 import {
   ADOPTION_STATUSES,
+  CLOUD_ROLES,
   SETTING_AREAS,
   SETTING_VIAS,
+  checkCommandProblem,
   type Archetype,
+  type CloudImplementation,
   type CloudPlatform,
   type ProductSetting,
   type ProductStatusEntry,
@@ -42,6 +45,14 @@ export function checkSettings(
     if (s.verified && !ISO_DAY.test(s.verified)) ctx.fail(`${at}: verified must be YYYY-MM-DD`);
     if (s.url && !/^https:\/\//.test(s.url)) ctx.fail(`${at}: url must be https`);
     if (!SETTING_AREAS.includes(s.area)) ctx.fail(`${at}: area must be one of ${SETTING_AREAS.join(", ")}`);
+    if (s.check) {
+      // A check reads and never changes: this catalogue does not tell an organisation how to deploy.
+      const problem = checkCommandProblem(String(s.check.command ?? ""));
+      if (problem) ctx.fail(`${at}: check.command ${problem}`);
+      if (!String(s.check.expect ?? "").trim()) ctx.fail(`${at}: check needs expect: what a passing result looks like`);
+      if (!/^https:\/\//.test(s.check.url ?? "")) ctx.fail(`${at}: check needs the https address of the command's reference page`);
+      if (s.setVia?.length === 1 && s.setVia[0] === "code") ctx.fail(`${at}: a control built in your own code has no vendor command to check it`);
+    }
     if (!s.setVia?.length) ctx.fail(`${at}: needs setVia`);
     for (const v of s.setVia ?? []) if (!SETTING_VIAS.includes(v)) ctx.fail(`${at}: setVia ${v} is not one of ${SETTING_VIAS.join(", ")}`);
     if (!Array.isArray(s.mitigations)) ctx.fail(`${at}: mitigations must be a list (empty when it serves an area, not a pinned capability)`);
@@ -71,6 +82,8 @@ export async function loadClouds(
     const where = `clouds/${file}`;
     if (!/^cloud[A-Z]/.test(cloud.id ?? "")) ctx.fail(`${where}: id must match ^cloud[A-Z]`);
     if (!cloud.name?.trim() || !cloud.short?.trim()) ctx.fail(`${where}: needs a name and a short name`);
+    if (cloud.selfManaged !== undefined && typeof cloud.selfManaged !== "boolean") ctx.fail(`${where}: selfManaged must be true or false`);
+    if (cloud.boundary !== undefined && (!cloud.boundary.trim() || cloud.boundary.length > 26)) ctx.fail(`${where}: boundary is the title drawn on the organisation's own boundary: 1 to 26 characters`);
     cloud.settings ??= [];
     cloud.implementations ??= [];
     checkSettings(where, cloud.settings, { mitigationIds: ctx.mitigationIds, fail: ctx.fail });
@@ -101,6 +114,33 @@ export async function loadClouds(
         if (!b.service?.trim()) ctx.fail(`${at} ${b.block}: needs a service`);
       }
       for (const b of blocks) if (!bound.has(b.id)) ctx.fail(`${at}: block ${b.id} (${b.title}) has no binding — name the service or mark it build: true`);
+      // What the mapping was checked against. `sources` is authored as block id -> vendor page, so a
+      // re-verification rewrites one small map; it is folded onto the bindings here.
+      const authored = impl as CloudImplementation & { sources?: Record<string, string> };
+      if (impl.verified && !ISO_DAY.test(impl.verified)) ctx.fail(`${at}: verified must be YYYY-MM-DD`);
+      for (const [block, url] of Object.entries(authored.sources ?? {})) {
+        const binding = impl.bindings.find((b) => b.block === block);
+        if (!binding) ctx.fail(`${at}: sources names ${block}, which has no binding`);
+        else if (!/^https:\/\//.test(url ?? "")) ctx.fail(`${at}: source for ${block} must be an https address`);
+        else binding.url ??= url;
+      }
+      delete authored.sources;
+      if (impl.verified) for (const b of impl.bindings) if (b.url) b.verified = impl.verified;
+      // A difference names a real flow or box of the pattern; the drawing marks it there.
+      const edgeKeys = new Set(arch.edges.flatMap((e) => [`${e.from}->${e.to}`, `${e.to}->${e.from}`]));
+      for (const d of impl.differences ?? []) {
+        if (!arch.blocks.some((x) => x.id === d.at) && !edgeKeys.has(d.at)) ctx.fail(`${at}: difference at "${d.at}" is neither a block nor a flow of ${arch.id}`);
+        const text = d.text?.trim() ?? "";
+        if (!text) ctx.fail(`${at}: difference at ${d.at} needs text`);
+        else if (text.length > 380) ctx.fail(`${at}: difference at ${d.at} is ${text.length} characters; keep it to 380`);
+        if (d.url && !/^https:\/\//.test(d.url)) ctx.fail(`${at}: difference at ${d.at}: url must be https`);
+      }
+      for (const n of impl.alsoNeeded ?? []) {
+        if (!n.service?.trim() || !n.why?.trim()) ctx.fail(`${at}: an also-needed service needs a name and a reason`);
+        if (!CLOUD_ROLES.includes(n.role)) ctx.fail(`${at}: also-needed ${n.service}: role must be one of ${CLOUD_ROLES.join(", ")}`);
+        if (n.url && !/^https:\/\//.test(n.url)) ctx.fail(`${at}: also-needed ${n.service}: url must be https`);
+      }
+      for (const q of impl.quickstart ?? []) if (!q.title?.trim() || !/^https:\/\//.test(q.url ?? "")) ctx.fail(`${at}: a quickstart needs a title and an https address`);
       const pinned = new Set(arch.mitigations);
       for (const id of impl.settings ?? []) {
         const s = settingById.get(id);
@@ -126,6 +166,15 @@ export async function loadClouds(
 /** The organisation's product section of data/status.yaml: every key a tool or cloud, every setting one it lists. */
 export async function loadProductStatus(root: string, tools: Tool[], clouds: CloudPlatform[]): Promise<Record<string, ProductStatusEntry>> {
   const doc = parse(await readFile(join(root, "data/status.yaml"), "utf8")) as { products?: Record<string, ProductStatusEntry> | null };
+  return checkProductStatus(doc, tools, clouds);
+}
+
+/** The checks on the products section, apart from reading the file, so they can be run on any document. */
+export function checkProductStatus(
+  doc: { products?: Record<string, ProductStatusEntry> | null } | null,
+  tools: Tool[],
+  clouds: CloudPlatform[],
+): Record<string, ProductStatusEntry> {
   const settingsOf = new Map<string, Set<string>>([
     ...tools.map((t) => [t.id, new Set((t.settings ?? []).map((s) => s.id))] as const),
     ...clouds.map((c) => [c.id, new Set(c.settings.map((s) => s.id))] as const),
@@ -136,12 +185,27 @@ export async function loadProductStatus(root: string, tools: Tool[], clouds: Clo
     const known = settingsOf.get(id);
     check(known, `unknown product ${id} — use a tool id from data/tooling/ or a cloud id from data/clouds/`);
     check(entry && typeof entry === "object", `${id} needs a status, a note or settings`);
-    const extra = Object.keys(entry).filter((k) => !["status", "note", "settings"].includes(k));
+    const extra = Object.keys(entry).filter((k) => !["status", "note", "settings", "components"].includes(k));
     check(!extra.length, `${id} has unknown field ${extra.join(", ")}`);
     check(entry.status === undefined || ADOPTION_STATUSES.includes(entry.status), `${id} status must be one of ${ADOPTION_STATUSES.join(", ")}`);
     for (const [sid, s] of Object.entries(entry.settings ?? {})) {
       check(known!.has(sid), `${id} has no setting ${sid}`);
       check(s?.status === undefined || ADOPTION_STATUSES.includes(s.status), `${id}.${sid} status must be one of ${ADOPTION_STATUSES.join(", ")}`);
+      check(s?.link === undefined || /^https:\/\//.test(s.link), `${id}.${sid} link must be an https address`);
+    }
+    // What the organisation runs for a component in place of the reference service.
+    const cloud = clouds.find((c) => c.id === id);
+    check(!entry.components || cloud, `${id} is a tool; components are recorded on a cloud or on-premises entry`);
+    for (const [key, choice] of Object.entries(entry.components ?? {})) {
+      const [archId, blockId] = key.includes("/") ? key.split("/") : [null, key];
+      const impls = cloud!.implementations.filter((i) => !archId || i.architecture === archId);
+      check(impls.length, `${id}.components ${key}: ${archId} is not a pattern mapped onto ${id}`);
+      check(impls.some((i) => i.bindings.some((b) => b.block === blockId)), `${id}.components ${key}: no component "${blockId}" ${archId ? `on ${archId}` : "on any pattern mapped onto it"}`);
+      check(typeof choice?.uses === "string" && choice.uses.trim(), `${id}.components ${key} needs uses: what your organisation runs there`);
+      check(choice.uses.length <= 60, `${id}.components ${key}: uses is ${choice.uses.length} characters; keep it to 60, it is printed inside the box`);
+      check(choice.link === undefined || /^https:\/\//.test(choice.link), `${id}.components ${key} link must be an https address`);
+      const unknown = Object.keys(choice).filter((k) => !["uses", "link", "note"].includes(k));
+      check(!unknown.length, `${id}.components ${key} has unknown field ${unknown.join(", ")}`);
     }
     out[id] = entry;
   }

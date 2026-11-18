@@ -15,6 +15,8 @@ import type {
   DisplayStatus,
   AdoptionStatus,
   CloudImplementation,
+  ComponentChoice,
+  ProductStatusEntry,
   CloudPlatform,
   ProductSetting,
 } from "./types";
@@ -321,6 +323,19 @@ export const settingAdoptionFor = (productId: string, settingId: string): { stat
   const entry = productStatus[productId]?.settings?.[settingId];
   return { status: entry?.status ?? "notEnabled", set: Boolean(entry?.status), value: entry?.value, note: entry?.note };
 };
+
+/**
+ * What the organisation runs for one component on one platform, if it recorded a choice. An entry
+ * for the pattern ("archChatAgent/gateway") wins over one for the component everywhere ("gateway").
+ */
+export const componentChoiceIn = (status: Record<string, ProductStatusEntry>, platformId: string, archetypeId: string, blockId: string): ComponentChoice | undefined => {
+  const choices = status[platformId]?.components;
+  return choices?.[`${archetypeId}/${blockId}`] ?? choices?.[blockId];
+};
+export const componentChoiceFor = (platformId: string, archetypeId: string, blockId: string) => componentChoiceIn(productStatus, platformId, archetypeId, blockId);
+
+/** The organisation's own module, policy or runbook for one setting. */
+export const settingLinkFor = (productId: string, settingId: string): string | undefined => productStatus[productId]?.settings?.[settingId]?.link;
 
 /** The architectures a vendor's products instantiate, in catalogue order. */
 export const archetypesForVendor = (vendorId: string) =>

@@ -5,9 +5,11 @@
  * row and listed under an open control (with where each is set, the value and why), and the
  * side-by-side table of all three clouds under How it works.
  */
+import { Prose } from "@/components/Prose";
 import { SETTING_VIA_META } from "@/components/enable/labels";
 import type { Archetype, ProductSetting } from "@/lib/types";
-import { bindingFor, controlPlaneOptions, type CloudProduct } from "./model";
+import { CLOUD_ROLES } from "@/lib/types";
+import { bindingFor, controlPlaneOptions, differencesFor, platformWords, ROLE_LABEL, type CloudProduct } from "./model";
 
 /** A setting's name as a link to the vendor's page for it. */
 function SettingName({ setting }: { setting: ProductSetting }) {
@@ -113,6 +115,106 @@ export function CloudComparison({ archetype, products }: { archetype: Archetype;
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * How it works, with a platform chosen: where it does not follow the drawing, what else a
+ * builder has to stand up, and where to start. The drawing is shared by every cloud and by the
+ * organisation's own data centre, so this is where each says what is true only of itself.
+ */
+export function OnCloud({ archetype, product }: { archetype: Archetype; product: CloudProduct }) {
+  const { implementation: impl, cloud } = product;
+  const words = platformWords(cloud);
+  const own = words.own;
+  const differences = differencesFor(archetype, product);
+  const needed = impl.alsoNeeded ?? [];
+  const link = "font-semibold text-introduced hover:underline";
+  return (
+    <div className="max-w-4xl space-y-6" data-on-cloud={product.id}>
+      {impl.summary && <Prose blocks={impl.summary} size="sm" />}
+
+      <div>
+        <p className="eyebrow">Where {own ? "running it on-premises" : cloud.short} differs from the drawing</p>
+        {differences.length ? (
+          <>
+            <p className="mt-1 text-[12.5px] leading-snug text-ink-3">
+              The drawing is the same wherever the pattern runs. These are the places where {own ? "your own data centre" : cloud.short} does something else, each marked ≠ on the
+              drawing.
+            </p>
+            <ul className="mt-2 space-y-2.5">
+              {differences.map((d, i) => (
+                <li key={i} data-difference={d.key} className="text-[13px] leading-snug text-ink-2">
+                  <span className="font-semibold text-ink">{d.where}: </span>
+                  {d.text}
+                  {d.url && (
+                    <>
+                      {" "}
+                      <a href={d.url} target="_blank" rel="noreferrer" className={link}>
+                        Source ↗
+                      </a>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="mt-1 text-[13px] text-ink-2">Nothing recorded: the flows on the drawing hold {words.on} as drawn.</p>
+        )}
+      </div>
+
+      {needed.length > 0 && (
+        <div>
+          <p className="eyebrow">{own ? "Also yours to run" : `Also needed on ${cloud.short}`}</p>
+          <p className="mt-1 text-[12.5px] leading-snug text-ink-3">
+            {own
+              ? "What a cloud provider would otherwise run for you. None of it is a box on the drawing, and all of it is your team's to operate."
+              : "Services you stand up that are not boxes on the drawing."}
+          </p>
+          <dl className="mt-2 grid gap-x-6 gap-y-3 text-[13px] leading-snug sm:grid-cols-[max-content_minmax(0,1fr)]">
+            {CLOUD_ROLES.filter((role) => needed.some((n) => n.role === role)).map((role) => (
+              <div key={role} className="contents">
+                <dt className="text-ink-3">{ROLE_LABEL[role]}</dt>
+                <dd className="space-y-1.5">
+                  {needed.filter((n) => n.role === role).map((n) => (
+                    <p key={n.service} data-also-needed={n.service}>
+                      {n.url ? (
+                        <a href={n.url} target="_blank" rel="noreferrer" className="font-semibold text-ink hover:text-introduced hover:underline">
+                          {n.service} ↗
+                        </a>
+                      ) : (
+                        <span className="font-semibold text-ink">{n.service}</span>
+                      )}
+                      <span className="text-ink-2"> · {n.why}</span>
+                    </p>
+                  ))}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+
+      <div>
+        <p className="eyebrow">Where to start building</p>
+        <ul className="mt-1.5 space-y-1 text-[13px] leading-snug">
+          {[...(impl.quickstart ?? []), ...impl.reference].map((r) => (
+            <li key={r.url}>
+              <a href={r.url} target="_blank" rel="noreferrer" className={link}>
+                {r.title} ↗
+              </a>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[12px] text-ink-3">
+          {impl.verified ? `Components and flows checked against ${words.docs} on ${impl.verified}.` : `Mapping dated ${impl.asOf}; not yet re-checked component by component.`}{" "}
+          {own
+            ? "Open-source projects change their defaults, editions and licences: follow the links before you build."
+            : "Cloud services are renamed and reworked often: follow the links before you build."}
+        </p>
+      </div>
     </div>
   );
 }

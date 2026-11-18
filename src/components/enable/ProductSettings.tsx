@@ -15,7 +15,8 @@ import Link from "next/link";
 import { Fragment, useState } from "react";
 
 import { Prose } from "@/components/Prose";
-import { adoptionFor, archetypeById, capabilityName, settingAdoptionFor, vendorById, type Product } from "@/lib/data";
+import { SettingCheck } from "./SettingCheck";
+import { adoptionFor, archetypeById, capabilityName, settingAdoptionFor, settingLinkFor, vendorById, type Product } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
 import type { AdoptionStatus, Archetype, ProductSetting } from "@/lib/types";
 import { ADOPTION_META, SETTING_VIA_META } from "./labels";
@@ -122,6 +123,7 @@ export function SettingsTable({
               const controls = controlsDelivered(archetype, s);
               const expanded = open === s.id;
               const a = settingAdoptionFor(product.id, s.id);
+              const ourLink = settingLinkFor(product.id, s.id);
               return (
                 <li key={s.id} id={`setting-${product.id}-${s.id}`} className="scroll-mt-24">
                   <button
@@ -188,7 +190,24 @@ export function SettingsTable({
                         )}
                         <dt className="text-ink-3">Checked</dt>
                         <dd>Against the vendor&rsquo;s page on {s.verified}</dd>
+                        {(a.value || a.note || ourLink) && (
+                          <>
+                            <dt className="text-ink-3">Your organisation</dt>
+                            <dd data-setting-ours>
+                              {[a.value && `Set to ${a.value}`, a.note].filter(Boolean).join(" · ")}
+                              {ourLink && (
+                                <>
+                                  {(a.value || a.note) && " · "}
+                                  <a href={ourLink} target="_blank" rel="noreferrer" className="font-semibold text-introduced hover:underline">
+                                    Your module or runbook ↗
+                                  </a>
+                                </>
+                              )}
+                            </dd>
+                          </>
+                        )}
                       </dl>
+                      {s.check && <SettingCheck check={s.check} />}
                       <span className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
                         <a href={s.url} target="_blank" rel="noreferrer" className="text-[12px] font-semibold text-introduced hover:underline">
                           Vendor documentation ↗
@@ -222,7 +241,7 @@ function ProductHeader({ product, archetype }: { product: Product; archetype: Ar
           <span className="font-semibold text-ink">{cloud.name}</span> · {count} · verified {impl.asOf}
         </p>
         <details className="mt-1.5">
-          <summary className="cursor-pointer text-[12.5px] font-semibold text-ink-2">About this pattern on {cloud.short}</summary>
+          <summary className="cursor-pointer text-[12.5px] font-semibold text-ink-2">About this pattern {cloud.selfManaged ? "on-premises" : `on ${cloud.short}`}</summary>
           <div className="mt-2 max-w-3xl">
             {impl.summary && <Prose blocks={impl.summary} size="sm" />}
             {impl.reference.length > 0 && (

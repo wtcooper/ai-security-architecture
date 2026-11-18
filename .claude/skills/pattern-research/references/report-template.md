@@ -32,7 +32,7 @@ Window: <from> to <to>. Compared against <N> patterns.
   - Where the agent or model runs and what it reaches: <difference>
   - What crosses a boundary, through what: <difference>
   - Where the controls go and who holds them: <difference>
-- **Where it belongs:** <tools on your devices / AI services you subscribe to / applications you build>
+- **Where it belongs:** <tools on your devices / AI services you subscribe to / AI you host yourself>
 - **Confidence:** <high / medium / low, and why>
 - **Next step:** draw it with `pattern-author`.
 

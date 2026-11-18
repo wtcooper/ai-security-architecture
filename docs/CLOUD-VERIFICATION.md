@@ -1,0 +1,300 @@
+# Cloud mappings: what was checked, corrected and left open
+
+Each hosted pattern is mapped onto AWS, Azure and Google Cloud in `data/clouds/`. On 18 November
+2026 every one of the 24 pattern-and-cloud mappings was checked against the vendor's current
+documentation: each component row (does the service exist under that name, and does it play that
+role), each flow on the drawing (does traffic on that cloud go the way the drawing says), the
+supporting services a builder also needs, and a sample of at least ten settings per mapping.
+This file is the record. The on-premises mapping (`data/clouds/onprem.yaml`) was authored the
+same day, each row from the project's own documentation, and is listed at the end.
+
+## How to read the result
+
+- **The drawing is shared by every cloud, and that was the right call.** The trust boundaries,
+  the controls and where each control goes do not change with the vendor. No component row
+  named a service that does not exist.
+- **A renamed box is not the whole story.** On every cloud some flows do not run the way the
+  drawing shows unless the builder makes a deliberate choice: the model call goes direct by
+  default, web search is a feature of the model platform that bypasses the gateway, the code
+  sandbox is a separate service with no outbound network. Each mapping now lists these as
+  `differences`; the drawing marks each with ≠ and How it works lists them.
+- **A builder needs more than the boxes.** Identity, network and egress, keys, secrets,
+  registries, logging and ingress are listed per mapping as `alsoNeeded`.
+- **Settings drift.** Rows verified three weeks earlier had already moved: products renamed,
+  features retired or limited to some regions or editions, and several rows that claimed more
+  than the vendor's page supports. Those rows were corrected and re-dated.
+
+## What was checked
+
+### AWS
+
+| Pattern | Components | Confirmed | Outdated | Wrong | Differences recorded | Also needed | Setting rows questioned |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Single agent workflow | 11 | 10 | 1 | 0 | 3 | 10 | 4 |
+| Agent-to-agent federation across platforms | 12 | 12 | 0 | 0 | 8 | 10 | 5 |
+| Agent sandbox for RL & evaluation | 12 | 12 | 0 | 0 | 7 | 8 | 6 |
+| Multi-agent workflow | 13 | 13 | 0 | 0 | 8 | 11 | 6 |
+| Chat agent with tools | 12 | 12 | 0 | 0 | 8 | 11 | 6 |
+| Remote MCP server you publish | 6 | 6 | 0 | 0 | 10 | 11 | 5 |
+| Self-hosted model inference | 7 | 7 | 0 | 0 | 9 | 12 | 6 |
+| Model training & release pipeline | 9 | 9 | 0 | 0 | 6 | 8 | 4 |
+
+### Azure
+
+| Pattern | Components | Confirmed | Outdated | Wrong | Differences recorded | Also needed | Setting rows questioned |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Single agent workflow | 11 | 10 | 1 | 0 | 7 | 10 | 5 |
+| Agent-to-agent federation across platforms | 12 | 11 | 1 | 0 | 6 | 10 | 5 |
+| Agent sandbox for RL & evaluation | 12 | 12 | 0 | 0 | 7 | 9 | 3 |
+| Multi-agent workflow | 13 | 12 | 1 | 0 | 9 | 10 | 6 |
+| Chat agent with tools | 12 | 11 | 1 | 0 | 8 | 11 | 6 |
+| Remote MCP server you publish | 6 | 5 | 1 | 0 | 8 | 7 | 5 |
+| Self-hosted model inference | 7 | 7 | 0 | 0 | 7 | 10 | 4 |
+| Model training & release pipeline | 9 | 9 | 0 | 0 | 8 | 10 | 4 |
+
+### Google Cloud
+
+| Pattern | Components | Confirmed | Outdated | Wrong | Differences recorded | Also needed | Setting rows questioned |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Single agent workflow | 11 | 11 | 0 | 0 | 6 | 10 | 7 |
+| Agent-to-agent federation across platforms | 12 | 12 | 0 | 0 | 10 | 10 | 1 |
+| Agent sandbox for RL & evaluation | 12 | 12 | 0 | 0 | 9 | 10 | 8 |
+| Multi-agent workflow | 13 | 13 | 0 | 0 | 11 | 10 | 4 |
+| Chat agent with tools | 12 | 12 | 0 | 0 | 8 | 10 | 5 |
+| Remote MCP server you publish | 6 | 6 | 0 | 0 | 6 | 8 | 4 |
+| Self-hosted model inference | 7 | 7 | 0 | 0 | 7 | 9 | 6 |
+| Model training & release pipeline | 9 | 8 | 0 | 1 | 8 | 9 | 3 |
+
+## What was corrected
+
+Every finding was traced to a row and the row rewritten from the page cited; each corrected row
+carries `verified: "2026-11-18"`. Where a vendor feature does less than the row claimed, the row
+now says so and says what the builder adds.
+
+### AWS (`data/clouds/aws.yaml`): 26 rows corrected
+
+- `archActionAgent/planner`: The note called Amazon Bedrock Agents a current managed alternative; it now says AgentCore harness is the managed alternative and Bedrock Agents is Agents Classic, in maintenance mode and closed to new sign-ups (the cited harness page does not say this, the Bedrock agents page does). ([page](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html))
+- `gatewayRateLimits`: The row said 'calls per minute on tools' and only that limits fail open; it now names requests per minute per target and tool and tokens per minute on inference targets, and says limits fail open, are skipped when a dimension cannot be resolved and are approximate at low rates, so they are not a security boundary (also covers the first '?' finding). ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-rate-limits.html))
+- `agentRegistryApproval`: The row claimed only approved records become gateway targets; it now says approval only makes a record searchable, that the target gate is your pipeline plus IAM on CreateGatewayTarget, and that the registry sits under the agent-registry namespace with the preview bedrock-agentcore namespace ending 30 October 2026 (also covers the second '?' finding). ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry-create-manage.html))
+- `policyEngineEnforce`: The row named Cedar only; it now says policies are written in Cedar or in Dogwood, because the page keeps Cedar as the policy language and adds Dogwood as a second supported language rather than renaming it (third '?' finding). ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy.html))
+- `policyGuardrailPromptAttack`: The row promised checks on every request everywhere; it now says guardrails in policies run in seven Regions only and that elsewhere the builder calls Bedrock Guardrails from an interceptor or agent code. ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy-guardrails-in-policies.html))
+- `policyGuardrailOutput`: Same Region limit added: seven Regions only, not Frankfurt, Ireland or Paris, with the builder's fallback stated. ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy-guardrails-in-policies.html))
+- `gatewayOboExchange`: The row implied the gateway performs the exchange against any issuer; it now says AgentCore Identity only brokers it, the authorization server must support the token-exchange or JWT-bearer grant (Microsoft is preconfigured), and Cognito's token endpoint takes neither, so the exchange runs against the corporate IdP. ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/on-behalf-of-token-exchange.html))
+- `cognitoResourceBinding`: The row did not say binding works only through managed login; it now says so and that machine-to-machine clients such as peer agents cannot be bound and are limited by app client and scopes instead. ([page](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html))
+- `privateLinkEndpoints`: The row named bedrock-runtime and bedrock-agentcore for every pattern and linked the Bedrock-only page; it now asks for an endpoint per service the workload calls, lists the AgentCore, Bedrock, VPC-mode runtime and SageMaker cases, says OAuth callers of AgentCore need Principal * in the endpoint policy, and links the general PrivateLink page. ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html))
+- `containmentRedTeam`: The row had agents attack platform services under the AWS policy; it now scopes the red team to your own configuration and says the policy forbids assessing AWS services, lists AgentCore under services prohibited for outbound testing and does not permit SageMaker, so those need agreement from AWS Support first. ([page](https://aws.amazon.com/security/penetration-testing/))
+- `codeArtifactOrigin`: The row treated the repository with an external connection as a fixed mirror; it now states the real defaults (public packages get Upstream ALLOW, so new versions enter on request), adds package group origin controls, and says to set Upstream to BLOCK after review for a fixed mirror. ([page](https://docs.aws.amazon.com/codeartifact/latest/ug/package-origin-controls.html))
+- `networkFirewallDomains`: The row said anything not listed is dropped; it now says a plain Allow list trusts the stated server name or Host header, drops other HTTP and HTTPS only under default action order and leaves other protocols alone, and recommends adding the AWS_ROUTE_53_RESOLVED_DOMAIN target type and rules for other protocols. ([page](https://docs.aws.amazon.com/network-firewall/latest/developerguide/stateful-rule-groups-domain-names.html))
+- `runtimeStopSession`: The row said the runbook stops every live session; it now says StopRuntimeSession stops one session by ID, no API lists a runtime's live sessions, so the application must record session IDs, and browser and code interpreter sessions are stopped separately. ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_Operations.html))
+- `runtimeExecutionRole`: The row named gateway, memory and model actions for every pattern; it now starts from the documented role (ECR pull, logs, X-Ray, metrics), adds only what the workload calls, and says to remove the sample's bedrock:InvokeModel on all foundation models unless the agent calls Bedrock directly. ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html))
+- `lambdaInvokePolicy`: The row asked for a resource-based statement for the SQS mapping; it now asks for one statement for the EventBridge rule only and says Lambda polls the queue with the function's execution role, so the queue and mapping creation are what to restrict. ([page](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html))
+- `agentWorkloadIdentity`: The row implied tokens are fetched for the agent; it now says nothing delivers workload access tokens on Lambda, so each step calls GetWorkloadAccessTokenForJWT (or ForUserId) itself, with setVia gaining code and the link moved to the token page. ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/get-workload-access-token.html))
+- `runtimeVpcMode`: The link covered VPC mode but not enforcement; the row now names both condition keys and the four operations the SCP denies, and links the condition keys page. ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-vpc-condition.html))
+- `cognitoTokenLifetime`: The row recommended 15 minutes for all clients; it now recommends one hour for managed login user clients, because a shorter value does not shorten the one-hour sign-in cookie, 15 minutes for machine clients, and sending signed-out users to the logout endpoint (refresh token rotation was confirmed on the refresh tokens page). ([page](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-the-access-token.html))
+- `gatewayInboundJwt`: The row said allowedScopes per tool and denied only NONE; it now says allowed scopes are one list for the whole gateway with per-tool checks in the policy engine or an interceptor, that allowedAudience applies only where tokens carry aud, and that the SCP denies both NONE and AUTHENTICATE_ONLY. ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-inbound-auth.html))
+- `runtimeInboundJwt`: The row set allowedAudience for all callers; it now says Cognito puts aud only in user tokens that asked for resource binding, so runtimes called by machine-to-machine clients are limited by allowedClients and allowedScopes instead. ([page](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html))
+- `gatewayResponseInterceptor`: The row had the RESPONSE interceptor log request, completion and tenant; it now has the REQUEST interceptor log the request and tenant and the RESPONSE interceptor the completion, and states the buffered-mode and 6 MB limits, with the link moved to the interceptor types page. ([page](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-interceptors-types.html))
+- `vllmApiKey`: The row recommended --load-format safetensors and cited the security page for flags it does not cover; it now keeps --trust-remote-code at its default of off (confirmed on the CLI page), drops the load-format advice because the flag takes one value and S3 streaming uses it, and lists the path prefixes the key covers and the ones it leaves open. ([page](https://docs.vllm.ai/en/latest/usage/security.html))
+- `releaseDigestCheck`: The row implied S3 holds a SHA-256 checksum and a model signature; it now says S3's default checksum is CRC64NVME, SHA-256 must be requested at upload, and signature verification is entirely the loader's code. ([page](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html))
+- `smConditionStep`: The row named an evaluation step type that does not exist; it now says the evaluation is a Processing step whose report one Condition step reads, and that condition steps cannot be nested. ([page](https://docs.aws.amazon.com/sagemaker/latest/dg/build-and-manage-steps-types.html))
+- `smTrainingKms`: The row attributed inter-container traffic encryption to the storage encryption page; it now limits name and where to the volume and output keys and says traffic between nodes is a separate job setting, EnableInterContainerTrafficEncryption, which can lengthen training. ([page](https://docs.aws.amazon.com/sagemaker/latest/dg/encryption-at-rest-nbi.html))
+- `comprehendPii`: The row said Comprehend scans and redacts every record; it now says detection covers English and Spanish only, the real-time call only locates entities in documents up to 100 KB so the curation job redacts the spans itself, and Comprehend's own redaction is an asynchronous batch job. ([page](https://docs.aws.amazon.com/comprehend/latest/dg/how-pii.html))
+
+### Azure (`data/clouds/azure.yaml`): 30 rows corrected
+
+- `archActionAgent/events`: Service named Event Grid as a trigger; it now reads Azure Service Bus queues and Container Apps jobs, with a note that event-driven jobs run per queue message and scheduled jobs cover timers. ([page](https://learn.microsoft.com/en-us/azure/container-apps/jobs))
+- `archAgentFederation/memory`: Service used the old product name; it now reads Azure Cosmos DB and Foundry IQ (formerly Azure AI Search), with a note that the role is unchanged. ([page](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/what-is-foundry-iq))
+- `archAgentWorkflow/state`: Service and note used the old product name; they now name Foundry IQ as the new name for Azure AI Search (service shortened to fit under 70 characters). ([page](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/what-is-foundry-iq))
+- `archChatAgent/memory`: Service used the old product name; it now reads Azure Cosmos DB and Foundry IQ (formerly Azure AI Search), with a note that the role is unchanged. ([page](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/what-is-foundry-iq))
+- `archRemoteMcpServer/authServer`: Note said clients are only pre-registered; it now gives the oauth21/2026-08 authorization server address and says clients are pre-registered or, in public preview, named by a Client ID Metadata Document that Entra fetches (service kept, the long correction went into the note). ([page](https://learn.microsoft.com/en-us/entra/agent-id/client-id-metadata-documents))
+- `groundednessDetection`: Row did not mention retirement; name, recommended and why now say the feature retires on 30 April 2027 and point to Foundry evaluation tooling or your own grounding check. ([page](https://learn.microsoft.com/en-us/azure/ai-services/content-safety/concepts/groundedness))
+- `apimMcpServers`: Row promised per-tool policies; it now says policies apply to all tools of an MCP server and that per-tool rules need separate MCP servers or checks in the tool server (also covers the unnamed finding on archActionAgent). ([page](https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview))
+- `searchDocumentAccess`: Row used the old product name and assumed a user was always present; it now names Foundry IQ (Azure AI Search), REST API 2026-10-01, and says the filter needs a delegated user token so unattended runs need their own index or security filters in code (also covers the unnamed finding on archActionAgent). ([page](https://learn.microsoft.com/en-us/azure/search/search-document-level-access-overview))
+- `agentOperatorApproval`: Unnamed finding matched to this row: the name gave only the C# function; name and recommended now give ApprovalRequiredAIFunction for C# and approval_mode on the @tool decorator for Python. ([page](https://learn.microsoft.com/en-us/agent-framework/agents/tools/tool-approval))
+- `apiCenterInventory`: Row asked for registration with an owner; it now gives the Assets registration path and says the form has no owner field, so the owner goes in a custom metadata property. ([page](https://learn.microsoft.com/en-us/azure/api-center/register-discover-mcp-server))
+- `apimA2aApis`: Row claimed per-skill policies on each operation; it now says policies sit at the whole A2A agent API, only JSON-RPC agents are supported, and per-skill authorization is done in your agent code. ([page](https://learn.microsoft.com/en-us/azure/api-management/agent-to-agent-api))
+- `a2aPayloadRedaction`: Row claimed returned artifacts are redacted in policy and used the old service name; it now names Azure Language, limits gateway redaction to task requests and says response artifacts must be redacted in agent code because response bodies cannot be deserialized. ([page](https://learn.microsoft.com/en-us/azure/api-management/agent-to-agent-api))
+- `apimQuotaByKey`: Row did not mention tier limits; it now says the policy page lists only the classic tiers and tells the builder to confirm on a v2 tier or fall back to rate-limit-by-key, and gives the A2A Policies path. ([page](https://learn.microsoft.com/en-us/azure/api-management/quota-by-key-policy))
+- `entraAppRoles`: Url pointed at a page that does not cover member types or assignment; it now points at the identity platform app roles page, with the Create app role and API permissions assignment path and a note to define roles only for app-only access. ([page](https://learn.microsoft.com/en-us/entra/identity-platform/howto-add-app-roles-in-apps))
+- `entraAgentIdentity`: Button label was wrong; where now reads New agent identity (Preview). ([page](https://learn.microsoft.com/en-us/entra/agent-id/create-delete-agent-identities))
+- `firewallEgress`: Row described only a Container Apps subnet; where and recommended now also cover the AKS node subnet with outbound type userDefinedRouting and the AzureKubernetesService FQDN tag, so it is true on the sandbox pattern too (url kept on the Container Apps page used by three patterns). ([page](https://learn.microsoft.com/en-us/azure/aks/limit-egress-traffic))
+- `appInsightsOtel`: Row named the Azure Monitor OpenTelemetry Distro; name and where now name the Microsoft OpenTelemetry Distro (microsoft-opentelemetry) for new apps, with the Azure Monitor distro kept for Java and existing apps. ([page](https://learn.microsoft.com/en-us/azure/azure-monitor/app/opentelemetry-enable))
+- `aksWorkloadIdentity`: Row asked for a service account per rollout; it now asks for one per trust group or namespace and states the limit of 20 federated identity credentials per managed identity and the propagation delay. ([page](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview))
+- `piiRedaction`: Service was called Azure AI Language; name and where now say Azure Language (in Foundry Tools). ([page](https://learn.microsoft.com/en-us/azure/ai-services/language-service/personally-identifiable-information/overview))
+- `artifactsUpstream`: Row implied the default limits what enters the feed; default, recommended and why now say it only blocks public versions of names that already have a private version, and that the Collaborator role must be held only by a reviewed admission pipeline. ([page](https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-behavior))
+- `wafRateLimit`: Url and location were for Azure Front Door; they now point at Application Gateway WAF v2 rate limit rules, with the engine requirement and approximate thresholds stated. ([page](https://learn.microsoft.com/en-us/azure/web-application-firewall/ag/rate-limiting-overview))
+- `entraApplicationIdUri`: Row named requestedAccessTokenVersion and a canonical-URL rule the page no longer gives; it now says to set a URI that uniquely identifies the server, repeat it as the metadata resource value, v2.0 tokens only, and gives the oauth21/2026-08 authorization server. ([page](https://learn.microsoft.com/en-us/entra/agent-id/secure-mcp-server-with-entra-id))
+- `entraApiScopes`: Row presented per-operation scopes and Admins only consent as vendor guidance; it now says Microsoft only asks for the delegated scopes clients need (example mcp.access) and that scope splitting and consent rules are your own design. ([page](https://learn.microsoft.com/en-us/entra/agent-id/secure-mcp-server-with-entra-id))
+- `apimValidateToken`: Row said the gateway checks the role each operation needs; it now says one role check covers a whole MCP server and per-tool role checks belong in the tool server's handlers. ([page](https://learn.microsoft.com/en-us/azure/api-management/expose-existing-mcp-server))
+- `apimRateLimitByKey`: Row keyed the counter on appid and was located under MCP servers only; it now uses the v2.0 azp claim, covers the model API as well, and notes no Consumption tier and the v2 token bucket algorithm. ([page](https://learn.microsoft.com/en-us/entra/identity-platform/claims-validation))
+- `servingModelRecord`: Row read as if Azure enforced the registry reference; it now says the reference is your own convention that nothing in AKS or KAITO enforces, so the release pipeline must reject manifests without one. ([page](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-models))
+- `aksGpuNodeTaints`: Row did not cover KAITO; it now says taints apply to node pools you create and that Microsoft does not document taints on the pools KAITO provisions, so check them or run vLLM on your own tainted pools. ([page](https://learn.microsoft.com/en-us/azure/aks/use-node-taints))
+- `defenderMalwareScanning`: Row did not mention limits; it now says blobs over 50 GB are not scanned and long scans can time out, so large weight, checkpoint and dataset files need a check in your own promotion step. ([page](https://learn.microsoft.com/en-us/azure/defender-for-cloud/introduction-malware-scanning))
+- `foundryRedTeaming`: Row implied portal or cloud runs against your own endpoint; it now says to use the local Azure AI Evaluation SDK run (preview) with a callback, needs a Foundry project in a supported region, and the url points at the local-run page. ([page](https://learn.microsoft.com/en-us/azure/foundry/how-to/develop/run-ai-red-teaming-cloud))
+- `aksPodSandboxing`: Row did not fit the training pattern or mention Defender; it now says it is an AKS setting on Azure Linux node pools that in a training pipeline covers only model-generated-code steps run on the sandbox's node pools, and that Defender for Containers cannot assess Kata pods (kept on archTrainingPipeline because the build needs it for D3-EI). ([page](https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing))
+
+### Google Cloud (`data/clouds/gcp.yaml`): 28 rows corrected
+
+- `archTrainingPipeline/evaluation`: The binding named Agent Platform model evaluation, which scores only predictive image and tabular models; it now names the Gen AI evaluation service in a pipeline step, and the note says red teaming is builder-supplied. ([page](https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/evaluation/introduction))
+- `modelEvaluationGate`: The row cited the predictive model evaluation page; it now names the Gen AI evaluation service (renamed Gemini Enterprise Agent Platform Evals), links its overview, and says memorisation tests and red teaming are not features of the service and must be supplied. ([page](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/evaluation-overview))
+- `agentEvaluation`: Finding ? (rename) and the workflow finding: the name now gives Gemini Enterprise Agent Platform Evals with the former name, and where names the SDK and agents-cli the page documents instead of a console path. ([page](https://docs.cloud.google.com/gemini-enterprise-agent-platform/vertex-ai-name-changes))
+- `arVirtualRepoPriority`: Finding ? (upstream policies) and two others: dropped the term 'upstream policies', said each upstream has a priority value and the higher number wins, that clients read only from the virtual repository, and moved the url to the virtual repository overview. ([page](https://docs.cloud.google.com/artifact-registry/docs/repositories/virtual-overview))
+- `arPackageScanning`: Finding ? (scanning flag) and the sandbox finding: url moved to the page that documents --allow-vulnerability-scanning, and the row now says packages are scanned on push, only up to 100 files, and that scanning of remote-repository caches is not stated by Google. ([page](https://docs.cloud.google.com/artifact-analysis/docs/enable-automatic-scanning))
+- `apigeeVerifyIam`: Finding ? (hybrid) and two others: the row now says Google-hosted Apigee only, not Apigee hybrid, and not addable through the Apigee Operator on a GKE Gateway, where one proxy handles all traffic and callers are checked with VerifyAPIKey or OAuthV2. ([page](https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/verify-iam-policy))
+- `modelArmorFloorSettings`: The row gave one set of names; it now gives the gcloud and REST names side by side (VERTEX_AI and AI_PLATFORM, INSPECT_AND_BLOCK and inspectAndBlock), the INSPECT_ONLY default, and says only generateContent is covered, screening is skipped when Model Armor is unreachable and file uploads are not screened. ([page](https://docs.cloud.google.com/model-armor/model-armor-vertex-integration))
+- `swpEgress`: The overview page supported neither URL lists nor Direct VPC egress; where now uses the Cloud Run console wording and flag, the url points at the policies and rules page that covers gateway security policies and URL lists, and the row says Google has no guide joining Cloud Run to a next-hop proxy so the route must be tested. ([page](https://docs.cloud.google.com/secure-web-proxy/docs/policies-and-rules-overview))
+- `cloudRunServiceIdentity`: The row implied Google recommends one account per service; it now says Google recommends a user-managed account with minimal permissions and that one per service is this mapping's choice. ([page](https://docs.cloud.google.com/run/docs/securing/service-identity))
+- `modelArmorSanitizeApi`: The row implied Model Armor de-identifies the payload; it now says Model Armor returns masked text in deidentifyResult.data.text for the caller to substitute, and that streaming methods and file-based prompts are not de-identified. ([page](https://docs.cloud.google.com/model-armor/sanitize-prompts-responses))
+- `workloadSeparation`: The row presented a node pool per trust group as the wall between rollouts; it now presents it as an extra layer under GKE Sandbox and quotes Google's warning that it is not a primary security boundary. ([page](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-separation))
+- `fqdnNetworkPolicy`: The row had FQDN policies allow the in-cluster offline web; it now limits them to names outside the cluster, sends in-cluster Services to label-based NetworkPolicy, gives the v1alpha1 API, and notes shared-address and DNS limits. ([page](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies))
+- `agentSandboxPolicy`: The row did not say the policy is optional and gVisor-only; default and recommended now say it is not applied by default, rejects microVM sandboxes until edited, and that rejections for claims and warm pools show only in controller logs. ([page](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/how-install-agent-sandbox))
+- `gkeNetworkPolicy`: The recommended text spoke only of a gateway and serving nodes; it now covers both patterns and says Agent Sandbox's per-template policy allows internet egress and must be replaced in the SandboxTemplate, since a namespace default-deny does not remove it. ([page](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox))
+- `workloadIdentityGke`: The row omitted two conditions; it now says the sandbox's network policy must allow the GKE metadata server and that a warm pool shares one ServiceAccount, so one identity per run means one template and pool per run or no pool. ([page](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-workloads))
+- `disableServiceAccount`: The row assumed an IAM service account on every pattern; it now says the page covers IAM service accounts only and that a Kubernetes ServiceAccount identity is stopped by removing its IAM binding or deleting it, and it drops the unstated 'at once'. ([page](https://docs.cloud.google.com/iam/docs/service-accounts-disable-enable))
+- `runAutoStop`: Named in the disableServiceAccount finding: the stop now removes the IAM bindings of the run's Kubernetes ServiceAccounts instead of disabling service accounts that do not exist. ([page](https://docs.cloud.google.com/iam/docs/service-accounts-disable-enable))
+- `adkRemoteConfirmation`: The row ignored ADK's known limitations; it now says VertexAiSessionService and DatabaseSessionService are not supported, a custom store must be tested, the reply is a FunctionResponse to /run or /run_sse, and with resume on it must carry the invocation ID. ([page](https://adk.dev/tools-custom/confirmation/))
+- `adkToolConfirmation`: The row now says the database and Agent Platform session services are unsupported so confirmation must be tested with the custom Firestore store, and that the feature is experimental in TypeScript, Go and Kotlin. ([page](https://adk.dev/tools-custom/confirmation/))
+- `apigeeMcpDiscoveryProxy`: The row put the Discovery Proxy in front of your own MCP servers; it now says your servers sit behind an ordinary Apigee proxy with the server as target, the Discovery Proxy is only for REST APIs turned into tools, and tool definitions behind an ordinary proxy must be reviewed and pinned by you. ([page](https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/apigee-mcp-overview))
+- `authManager3lo`: The row gave an unverified console path and implied Cloud Run support; it now says Google describes the auth manager only with Agent Runtime, gives no console path, and that Cloud Run needs Agent Platform features (Preview) with Agent Identity, to be confirmed before relying on it. ([page](https://docs.cloud.google.com/iam/docs/auth-manager-overview))
+- `apigeeVerifyAccessToken`: The row put VerifyAccessToken first and cited the Discovery Proxy quickstart; it now puts ParsePayload first and the token check second, and cites the page that covers a proxy in front of your own MCP server. ([page](https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access))
+- `apigeeRevokeTokens`: The row named the InvalidateToken operation and a revoke API; it now names the RevokeOAuthV2 policy, requires tokens issued with AppEndUser, and says a revoked token can still pass for up to 180 seconds. ([page](https://docs.cloud.google.com/apigee/docs/api-platform/security/oauth/enable-retrieval-and-revocation-oauth-20-access-tokens-end-user-id-app-id-or-both))
+- `apigeeMessageLogging`: MessageLogging is unsupported through the Apigee Extension Processor; the row now says to use the load balancer's HTTP access logging (GCPBackendPolicy per InferencePool) on GKE Inference Gateway and keeps the policy for ordinary proxies. ([page](https://docs.cloud.google.com/apigee/docs/api-platform/service-extensions/extension-processor-overview))
+- `apigeeSpikeArrest`: The row described only a per-proxy PreFlow; it now adds that on a GKE Gateway SpikeArrest is a Kubernetes resource added through the Apigee Operator on the one proxy that handles all traffic, and that Quota is not addable there. ([page](https://docs.cloud.google.com/apigee/docs/api-platform/apigee-kubernetes/apigee-apim-operator-add-policies))
+- `vpcServiceControls`: The scope was written for agents and the url was the Agent Platform page; where now covers agent and self-hosted serving projects, the url is the VPC Service Controls overview, and the row says to check each service against the supported products list. ([page](https://docs.cloud.google.com/vpc-service-controls/docs/overview))
+- `modelVersionAliases`: The row had serving read the default alias; it now says only Agent Platform deployments fall back to it and that for vLLM on GKE the rollout step must resolve the alias to a bucket path. ([page](https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/model-alias))
+- `gcsUniformAccess`: The wording fitted only the serving pattern; where and recommended now cover weights, checkpoint, corpus and candidate buckets and their identities, and say public access prevention is a separate setting the linked page does not describe. ([page](https://docs.cloud.google.com/storage/docs/uniform-bucket-level-access))
+
+## Still open
+
+What the checks could not confirm from a vendor page. Treat each as a question to settle before
+relying on that part of the mapping.
+
+### AWS
+
+- *Single agent workflow:* EventBridge, SQS and Lambda as an AWS-documented way to start AgentCore Runtime.
+- *Agent-to-agent federation across platforms:* Whether a Policy in AgentCore policy can authorize individual A2A skills on a passthrough target: documented examples authorize by target name, HTTP method and path, and screen named request fields.
+- *Agent-to-agent federation across platforms:* AWS pages do not state outright that gateway calls to public peers bypass the customer VPC; this is inferred from the gateway VPC egress page.
+- *Agent-to-agent federation across platforms:* The two a2a-protocol.org pages load and the specification names AgentCardSignature, but they are not AWS documentation; the peer assessment checklist items were not found on the enterprise page.
+- *Agent-to-agent federation across platforms:* The peer agents themselves (vendor platform and partner) are outside AWS and could not be checked.
+- *Agent sandbox for RL & evaluation:* Whether a VPC-mode Runtime or Browser microVM resolves names through the VPC resolver, which is what makes Route 53 Resolver DNS Firewall apply; the VPC page only says DNS resolution must be enabled in the VPC.
+- *Agent sandbox for RL & evaluation:* Whether the AWS-managed browser (aws.browser.v1) can ever run in VPC mode; the Browser fundamentals page mentions only public network mode while the VPC page shows VPC mode on a custom browser.
+- *Agent sandbox for RL & evaluation:* Whether IAM 'Revoke sessions' reaches credentials already vended to running microVMs through the metadata service; the IAM page describes the general mechanism only.
+- *Agent sandbox for RL & evaluation:* The Prescriptive Guidance page 'Simulation and test-bed agents' loaded but names RoboMaker, ECS, EC2, Bedrock and SageMaker reinforcement learning; it does not mention AgentCore Runtime or HyperPod, so it does not confirm this mapping's service choices.
+- *Agent sandbox for RL & evaluation:* No AWS reference architecture was found that combines HyperPod with AgentCore Runtime sessions for reinforcement-learning rollouts; the mapping is assembled from separate service pages.
+- *Multi-agent workflow:* No AWS page was found that shows a Strands Agents graph running inside a Lambda durable function; the Lambda pages name agentic AI as a use, but the combination is the repository's design.
+- *Multi-agent workflow:* Whether Code Interpreter in Sandbox mode can reach a CodeArtifact repository: the documentation only says Sandbox mode reaches Amazon S3.
+- *Multi-agent workflow:* AWS pages do not state outright that gateway calls to public targets bypass the customer VPC; this is inferred from the gateway VPC egress page.
+- *Multi-agent workflow:* The Strands multi-agent pages loaded but were only checked to exist, not read in detail.
+- *Chat agent with tools:* Whether Code Interpreter in Sandbox mode can reach a CodeArtifact repository: the documentation only says Sandbox mode reaches Amazon S3.
+- *Chat agent with tools:* AWS pages do not state outright that gateway calls to public targets bypass the customer VPC; this is inferred from the gateway VPC egress page, which describes VPC entry only for private endpoints.
+- *Chat agent with tools:* The OWASP cheat sheet address for outputSanitisation loads, but it is not vendor documentation and its content was not checked against the row.
+- *Chat agent with tools:* The Strands interrupts page loads and names BeforeToolCallEvent and event.interrupt; the approval-queue behaviour for unattended runs is the builder's design and has no AWS page.
+- *Remote MCP server you publish:* Whether allowedWorkloadConfiguration also holds when the Runtime is attached as an MCP server target; the docs describe it for AgentCore Runtime (HTTP) targets, which cannot sit on an MCP-protocol gateway.
+- *Remote MCP server you publish:* Whether the Runtime or Gateway JWT authorizer checks Cognito token revocation; the pages list signature and claim checks only.
+- *Remote MCP server you publish:* Whether IAM Identity Center itself issues identity-assertion grants (ID-JAG); one search of AWS sites found only the Okta example.
+- *Remote MCP server you publish:* The sample repository page on github.com returned 403 through the proxy; its README was read from raw.githubusercontent.com instead. The guidance's PDF architecture diagram was not opened.
+- *Remote MCP server you publish:* The Prescriptive Guidance page 'Tool-based agents for servers' loaded but names API Gateway, App Runner, Lambda and ECS, not AgentCore, so it does not support this mapping's service choices either way.
+- *Self-hosted model inference:* Whether an inference provider target accepts a privateEndpoint (VPC Lattice) to a private vLLM address: AWS pages list only MCP and OpenAPI targets for private endpoints, and MCP, OpenAPI and HTTP passthrough for private certificate authorities.
+- *Self-hosted model inference:* Whether response interceptors and suppressOutput guardrails work on streamed completions from inference targets: the pages say buffered mode only and do not describe streaming for this target type.
+- *Self-hosted model inference:* The gateway's token limit policy (the page on gateway policies) was not opened; tokens-per-minute rate limits were confirmed.
+- *Self-hosted model inference:* The vLLM OpenAI-compatible server page redirected to a new address that was not opened; cache_salt and --api-key were confirmed on the vLLM security and CLI pages.
+- *Self-hosted model inference:* The statement that the vLLM security page omits --trust-remote-code and --load-format comes from a summarised read of the page, not a line-by-line check.
+- *Self-hosted model inference:* Whether GuardDuty Malware Protection for S3 detects unsafe model file formats such as pickle was not stated on the pages opened; its object size limit is 100 GB.
+- *Self-hosted model inference:* The Hugging Face Hub documentation and the GitHub implementation guide for the AWS EKS guidance were not opened.
+- *Self-hosted model inference:* The CloudTrail data events page was read only up to its first 100,000 characters.
+- *Model training & release pipeline:* Whether SageMaker Clarify foundation model evaluations (or the fmeval library) can run inside a pipeline step against a candidate read from S3: the page opened describes Studio jobs, JumpStart models and deployed endpoints.
+- *Model training & release pipeline:* Whether CodeArtifact's package formats could hold model checkpoints was not checked; the overview page names npm, Maven, NuGet and PyPI tooling.
+- *Model training & release pipeline:* SageMaker HyperPod was confirmed from the SageMaker training overview, not from its own page.
+- *Model training & release pipeline:* The two Well-Architected lens pages cited are short index pages; their best-practice sub-pages were not opened.
+- *Model training & release pipeline:* Whether GuardDuty Malware Protection for S3 detects unsafe model file formats such as pickle was not stated on the pages opened; its limits are 100 GB per object and 25 protected buckets per Region.
+- *Model training & release pipeline:* Whether training job and model approval calls appear as CloudTrail management or data events was not checked; the data events table lists SageMaker jobs, training sessions and endpoints.
+- *Model training & release pipeline:* The CloudTrail data events page was read only up to its first 100,000 characters.
+
+### Azure
+
+- *Single agent workflow:* Event Grid as a trigger for Container Apps.
+- *Single agent workflow:* A Microsoft page that hosts Agent Framework on Container Apps.
+- *Agent-to-agent federation across platforms:* Whether API Management A2A agent APIs support streamed tasks: the page opened does not mention streaming.
+- *Agent-to-agent federation across platforms:* Whether API Management serves an imported agent card from a stored copy or fetches it from the peer on each request.
+- *Agent-to-agent federation across platforms:* Whether quota-by-key and send-request are supported inside A2A agent API policies specifically: the A2A page does not list supported policies.
+- *Agent-to-agent federation across platforms:* Preview or general-availability status of the separate Azure AI Gateway product: the page opened only says it is a distinct resource type from API Management.
+- *Agent-to-agent federation across platforms:* How a partner in another organisation registers as a client in our Entra tenant with its own certificate: not covered by the pages opened.
+- *Agent sandbox for RL & evaluation:* Whether Cilium network policy, FQDN filtering and Azure Monitor container log collection behave the same for Kata pods; those pages do not mention Pod Sandboxing.
+- *Agent sandbox for RL & evaluation:* Whether Azure Artifacts offers a private endpoint; found no page saying so, and the allow-list page gives only public addresses.
+- *Agent sandbox for RL & evaluation:* A Microsoft page about vLLM by itself; only the AKS AI toolchain operator pages mention it (a guessed kaito-vllm address returned 404).
+- *Agent sandbox for RL & evaluation:* Whether a rollout pod can read an Azure Artifacts feed with a Workload ID token end to end; the documentation says Azure DevOps accepts managed identities but this was not tested.
+- *Multi-agent workflow:* Whether Azure Artifacts can pin packages by digest: the pages opened describe immutable versions and saved upstream copies, not digest pinning.
+- *Multi-agent workflow:* Whether the dynamic sessions pool endpoint can be reached privately: the pages opened only show the public dynamicsessions.io address.
+- *Multi-agent workflow:* Preview or general-availability status of the separate Azure AI Gateway product: the page opened only says it is a distinct resource type from API Management.
+- *Multi-agent workflow:* Whether one Container Apps process can keep each agent's Entra agent identity apart: the pages opened show the blueprint's managed identity obtaining tokens for its child identities.
+- *Multi-agent workflow:* Whether Event Grid can deliver directly to a self-hosted Container Apps worker: not checked beyond the Event Grid overview.
+- *Chat agent with tools:* Whether Azure Artifacts can pin packages by digest: the pages opened describe immutable versions and saved upstream copies, not digest pinning.
+- *Chat agent with tools:* Whether the dynamic sessions pool endpoint can be reached privately: the pages opened only show the public dynamicsessions.io address.
+- *Chat agent with tools:* Preview or general-availability status of the separate Azure AI Gateway product: the page opened only says it is a distinct resource type from API Management.
+- *Chat agent with tools:* Release status of Microsoft Agent Framework: the overview page still installs the .NET Foundry package with a prerelease flag.
+- *Chat agent with tools:* The OWASP cheat-sheet link for outputSanitisation loads but is not vendor documentation, so its content was not checked against Azure.
+- *Remote MCP server you publish:* ID-JAG: found no Microsoft Learn page saying Entra issues or accepts identity-assertion grants; a Microsoft Tech Community post on the subject returned HTTP 403 and could not be opened.
+- *Remote MCP server you publish:* Whether an API Management policy can read the tool name from the request body to authorize per tool; the documentation only says policies apply to all tools.
+- *Remote MCP server you publish:* Whether App Service's preview metadata document follows forwarded host headers when the app sits behind API Management; the page does not say.
+- *Remote MCP server you publish:* Portal paths in the settings were checked against documentation only, not in a live portal.
+- *Self-hosted model inference:* Whether the KAITO managed add-on can schedule onto existing, pre-tainted GPU node pools instead of provisioning its own; the Microsoft Learn pages opened only describe automatic provisioning.
+- *Self-hosted model inference:* Whether a KAITO workspace can be given a Blob-mounted model path while keeping the vLLM runtime; no Microsoft Learn page opened describes this.
+- *Self-hosted model inference:* The Well-Architected 'Architecture pattern for AI workloads' page loaded but does not describe this AKS, KAITO and API Management combination specifically; it is generic guidance.
+- *Model training & release pipeline:* Whether disabling shared key access on the workspace's own default storage account needs extra workspace configuration; the shared-key page opened does not cover Azure Machine Learning.
+- *Model training & release pipeline:* The exact host names Azure Artifacts needs in a managed network outbound rule; the managed network page only gives pypi.org as its example.
+- *Model training & release pipeline:* Whether one compute cluster with several user-assigned identities can give different jobs different identities; the page opened only says a cluster supports multiple user-assigned identities.
+
+### Google Cloud
+
+- *Single agent workflow:* Firestore as a session store for the agent kit.
+- *Single agent workflow:* Whether Apigee can front self-hosted tool servers.
+- *Single agent workflow:* Preview or general-availability status of Apigee's tool-server support and Agent Registry.
+- *Agent-to-agent federation across platforms:* No Apigee documentation page describing A2A-specific proxies or policies was found; the only Google page found shows an A2A agent behind a general Apigee proxy with OAuth. The Apigee AI solutions marketing page did not load its body.
+- *Agent-to-agent federation across platforms:* How a user's SAML or OIDC assertion from Cloud Identity would be attached to an outbound A2A call: no Google page opened describes it.
+- *Agent-to-agent federation across platforms:* Whether the Agent Identity auth manager's 3-legged OAuth for A2A agents applies to agents on Cloud Run: seen only in search results, not on a page opened.
+- *Agent-to-agent federation across platforms:* Pages were read through a summarising fetch tool, so launch stages of Agent Registry and Sessions could not be read from the page text.
+- *Agent-to-agent federation across platforms:* The ADK pages imply, but do not state in one sentence, that model calls go direct to the model platform when ApigeeLlm is not used.
+- *Agent sandbox for RL & evaluation:* Launch stage of GKE Sandbox microVMs and of FQDN network policies: neither page states Preview or GA.
+- *Agent sandbox for RL & evaluation:* Whether FQDN network policies are enforced for Pods running in GKE Sandbox (gVisor or microVM): the FQDN page does not mention GKE Sandbox.
+- *Agent sandbox for RL & evaluation:* Whether Artifact Analysis scans Python and npm packages that arrive through a remote repository cache rather than a push.
+- *Agent sandbox for RL & evaluation:* How vLLM picks up a new checkpoint (policy reload): no Google page I opened describes reloading weights into a running vLLM server.
+- *Agent sandbox for RL & evaluation:* The brief's line that Google publishes no reference for RL environments is now only partly true: no Architecture Center page was found, but Google has an RL blog for Agent Sandbox (30 Sept 2026), verl and NeMo RL tutorials and an RL monitoring guide. The NeMo RL tutorial was not opened.
+- *Agent sandbox for RL & evaluation:* The 'RL Sandbox' capability announced in preview at Next '26: no documentation page for it was found, so I could not tell whether it differs from Agent Sandbox.
+- *Multi-agent workflow:* Pages were read through a summarising fetch tool, so launch stages (Preview or GA) of Code Execution, Agent Registry and the Agent Identity auth manager could not be read from the page text.
+- *Multi-agent workflow:* Whether a custom role narrower than roles/aiplatform.user is enough for Code Execution and Sessions while still blocking direct model calls: no page opened states this.
+- *Multi-agent workflow:* Whether Grounding with Google Search works inside a VPC Service Controls perimeter: the grounding and VPC Service Controls pages opened do not say (only Web Grounding for Enterprise states support).
+- *Multi-agent workflow:* The ADK pages imply, but do not state in one sentence, that model calls go direct to the model platform when ApigeeLlm is not used.
+- *Multi-agent workflow:* Google's multi-agent reference does not say whether coordinator and subagents share one process; the one-process layout is this mapping's choice.
+- *Multi-agent workflow:* Whether a Pub/Sub push subscription can reach a Cloud Run service whose ingress is set to internal: not checked on a page opened in this session.
+- *Chat agent with tools:* Pages were read through a summarising fetch tool, so launch stages (Preview or GA) of Code Execution, Agent Registry and the Agent Identity auth manager could not be read from the page text.
+- *Chat agent with tools:* Whether a custom role narrower than roles/aiplatform.user is enough for Code Execution and Sessions while still blocking direct model calls: no page opened states this.
+- *Chat agent with tools:* Whether Grounding with Google Search works inside a VPC Service Controls perimeter: the grounding and VPC Service Controls pages opened do not say (only Web Grounding for Enterprise states support).
+- *Chat agent with tools:* The ADK pages imply, but do not state in one sentence, that model calls go direct to the model platform when ApigeeLlm is not used.
+- *Chat agent with tools:* Whether an Agent Runtime instance must exist as the parent of a Code Execution sandbox: the ADK page says a sandbox can be created from an agent engine resource name but the overview page does not spell it out.
+- *Remote MCP server you publish:* Whether Apigee's token endpoints can bind a token to this server (a resource or audience parameter) or support PKCE: the OAuthV2 policy reference I read mentions neither; binding appears to rest on the API product naming the proxy.
+- *Remote MCP server you publish:* Who must publish the protected-resource metadata document when the proxy fronts your own Cloud Run server: the troubleshooting page names the path and the 404 but not the set-up steps.
+- *Remote MCP server you publish:* The exact value of the Cloud Run flag: the tutorial and Agent Platform guide use --functional-type=mcp-server, the 'Host MCP servers' page prints MCP_SERVER, and the GA 'gcloud run deploy' reference page did not show the flag (guides use 'gcloud beta').
+- *Remote MCP server you publish:* Customer-managed keys for Apigee: the page I tried returned 404, so the keys role was not checked.
+- *Remote MCP server you publish:* Cloud Armor in front of Apigee: the networking page I opened describes the load balancer but does not mention Cloud Armor.
+- *Remote MCP server you publish:* The brief's statement that IAP and Agent Gateway serve only internal callers: the pages describe Google-identity and IAM-based access but do not state the caller scope in those words.
+- *Self-hosted model inference:* modelSignatureVerify: openssf.org/projects/model-signing loaded only its title, so the Sigstore and key-signing claims were not checked.
+- *Self-hosted model inference:* Whether a VerifyIAM policy works inside an Extension Processor proxy configured outside the Apigee Operator: the Extension Processor page neither lists it as supported nor as unsupported.
+- *Self-hosted model inference:* Whether Apigee and Model Armor must share one traffic extension resource: the Apigee page states a maximum of one traffic extension per load balancer, but no page opened shows the combined manifest.
+- *Self-hosted model inference:* The reference architecture page does not name vLLM, Cloud Storage or Model Registry; those bindings were checked on separate product pages, not against the reference.
+- *Self-hosted model inference:* Launch stage of GKE Inference Gateway is not stated on its overview page.
+- *Self-hosted model inference:* Page titles: the fetch tool returned page text without titles; quickstart titles come from the brief and from search results for the same addresses.
+- *Model training & release pipeline:* modelSigningAtPromotion: openssf.org/projects/model-signing loaded only its title, so the Sigstore and Cloud KMS key-signing claims were not checked.
+- *Model training & release pipeline:* Whether Model Registry copies imported artifacts into Google-managed storage or keeps reading the original bucket: the import page states neither.
+- *Model training & release pipeline:* Whether the blueprint promotes a model by copying the artifact or by re-running the pipeline in production: the page does not say.
+- *Model training & release pipeline:* Dataflow calling Sensitive Data Protection: seen only in search results for Google's provided Dataflow template; that page was not opened.
+- *Model training & release pipeline:* The --allow-vulnerability-scanning flag in arPackageScanning: the linked overview does not mention it; a second page confirmed only that Python and npm scanning is off by default and virtual repositories are not scanned.
+- *Model training & release pipeline:* Page titles: the fetch tool returned page text without titles; quickstart titles come from the brief and from search results for the same addresses.
+
+## Keeping it current
+
+A mapping is only as good as its last check. `verified` on each mapping and each setting says
+when that was. To re-check one: read the vendor's current page for every component and setting,
+update `sources`, `differences`, `alsoNeeded` and `quickstart`, correct what moved and re-date
+it. The `pattern-author` skill describes the fields; the tests fail a mapping with no date, a
+named component with no source page, or a difference that points at a flow the pattern does not
+have.

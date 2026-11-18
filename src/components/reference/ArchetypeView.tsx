@@ -9,14 +9,14 @@
  * tab never changes something the reader cannot see. On Enable every row is one of the chips:
  * opening a row lights its chip, and picking a chip opens its row.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EnablePanel } from "@/components/enable/EnablePanel";
 import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
 import { CrossingsRegister } from "@/components/drawing/CrossingsRegister";
 import { CloudSwitch } from "@/components/cloud/CloudSwitch";
-import { cloudProductFor, cloudProductsFor } from "@/components/cloud/model";
-import { cloudById, incidents } from "@/lib/data";
+import { cloudProductFor, cloudProductsFor, differenceMarks, platformWords } from "@/components/cloud/model";
+import { cloudById, componentChoiceFor, incidents } from "@/lib/data";
 import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
@@ -34,7 +34,23 @@ function servicesFor(cloudId: string, archetypeId: string) {
   const key = `${cloudId}|${archetypeId}`;
   if (!serviceMaps.has(key)) {
     const impl = cloudById.get(cloudId)?.implementations.find((i) => i.architecture === archetypeId);
-    serviceMaps.set(key, impl ? new Map(impl.bindings.map((b) => [b.block, { service: b.service, build: b.build, note: b.note }])) : null);
+    serviceMaps.set(
+      key,
+      impl
+        ? new Map(
+            impl.bindings.map((b): [string, BlockService] => {
+              // What the organisation recorded it runs there is drawn in place of the reference service.
+              const ours = componentChoiceFor(cloudId, archetypeId, b.block);
+              return [
+                b.block,
+                ours
+                  ? { service: ours.uses, ours: true, note: [ours.note, `Your organisation's choice. The reference here is ${b.service}.`].filter(Boolean).join(" ") }
+                  : { service: b.service, build: b.build, note: b.note },
+              ];
+            }),
+          )
+        : null,
+    );
   }
   return serviceMaps.get(key)!;
 }
@@ -73,6 +89,15 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   const cloudProducts = cloudProductsFor(archetype.id);
   const cloudProduct = cloudProductFor(archetype.id, cloud);
   const services = cloudProduct ? servicesFor(cloudProduct.id, archetype.id) : null;
+  // Where the chosen cloud does not follow the drawing: marked on the drawing, listed under How it works.
+  const differs = useMemo(() => (cloudProduct ? differenceMarks(archetype, cloudProduct) : null), [archetype, cloudProduct]);
+  const differCount = cloudProduct?.implementation.differences?.length ?? 0;
+  const moreCount = cloudProduct?.implementation.alsoNeeded?.length ?? 0;
+  const showOnCloud = () => {
+    go("overview");
+    // After the panel has rendered, bring the cloud's section into view.
+    requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById("on-cloud")?.scrollIntoView({ behavior: "smooth", block: "start" })));
+  };
   // A product picked in the settings step is the open product; a cloud is also the page's cloud.
   const pickProduct = (id: string | null) => {
     if (id && cloudById.has(id)) onCloud(id);
@@ -153,9 +178,32 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <CloudSwitch products={cloudProducts} cloud={cloudProduct?.id ?? null} onCloud={switchCloud} />
           <p className="text-[12.5px] leading-snug text-ink-3" data-cloud-caption>
-            {cloudProduct
-              ? `Shown as built on ${cloudProduct.cloud.name}: each box names the service that plays it, and Enable names ${cloudProduct.cloud.short}'s own setting for every control.`
-              : "Pick a cloud to see the service that plays each component and that cloud's own option for every control."}
+            {cloudProduct ? (
+              <>
+                Each box names the {platformWords(cloudProduct.cloud).service} that plays it.
+                {(differCount > 0 || moreCount > 0) && (
+                  <>
+                    {" "}
+                    <button type="button" onClick={showOnCloud} className="font-semibold text-introduced hover:underline" data-cloud-differs-link>
+                      {[
+                        differCount > 0 && `${differCount} ${differCount === 1 ? "place differs" : "places differ"} from this drawing`,
+                        moreCount > 0 &&
+                          (cloudProduct.cloud.selfManaged
+                            ? `${moreCount} more ${moreCount === 1 ? "thing is" : "things are"} yours to run`
+                            : `${moreCount} more ${moreCount === 1 ? "service is" : "services are"} needed`),
+                      ]
+                        .filter(Boolean)
+                        .join(" and ")}{" "}
+                      →
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              cloudProducts.some((p) => p.cloud.selfManaged)
+                ? "Pick a cloud, or your own data centre, to see what plays each component and its own setting for every control."
+                : "Pick a cloud to see the service that plays each component and that cloud's own setting for every control."
+            )}
           </p>
         </div>
       )}
@@ -171,10 +219,12 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               pins={tab === "risks" ? "risks" : "capabilities"}
               onPickMitigation={pickChip}
               services={services}
+              differs={differs}
+              ownBoundary={cloudProduct?.cloud.boundary ?? null}
               className="w-full"
             />
           </div>
-          <DrawingLegend className="mt-3 px-1" risks={tab === "risks"} cloud={cloudProduct?.cloud.short} />
+          <DrawingLegend className="mt-3 px-1" risks={tab === "risks"} cloud={cloudProduct?.cloud.short} differs={Boolean(differs?.size)} />
         </>
       )}
 

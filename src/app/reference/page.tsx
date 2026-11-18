@@ -57,10 +57,10 @@ const PAGES = [
   },
   {
     href: ROUTES.clouds,
-    label: "Clouds",
+    label: "Clouds & on-premises",
     count: `${clouds.length}`,
-    blurb: "AWS, Azure and Google Cloud: the patterns mapped onto each, the service that plays every component, and the cloud's own setting for every control.",
-    when: "To see what a cloud gives you for a control, or how a pattern is built on it.",
+    blurb: "AWS, Azure, Google Cloud and your own data centre: the patterns mapped onto each, what plays every component, and the platform's own setting for every control.",
+    when: "To see what a platform gives you for a control, or how a pattern is built on it.",
   },
 ];
 

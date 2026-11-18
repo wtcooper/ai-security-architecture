@@ -18,7 +18,7 @@ glosses and flow labels.
   every boundary, in the rows you give them.
 - **Endpoint, cloud and vendor** are boundaries drawn side by side, in the order their columns
   appear. Each hugs the boxes it holds. Which one leads depends on the surface: the endpoint
-  for a tool on a device, the cloud for an application you build, the vendor for a service
+  for a tool on a device, the cloud for AI you host yourself, the vendor for a service
   you subscribe to.
 - **External** boxes sit in a band beneath the boundaries, each placed under whatever reaches
   it. You do not position them; the flows do.

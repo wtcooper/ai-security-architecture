@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * The one switch for how a pattern is shown: cloud-neutral, or as built on one cloud. Choosing a
- * cloud names each component's service on the drawing and lists that cloud's own control
- * options beside every control. It appears above the drawing and again on Enable; both are the
- * same state.
+ * The one switch for how a pattern is shown: on no platform in particular, or as built on one
+ * cloud or in the organisation's own data centre. Choosing one names what plays each component
+ * on the drawing and lists that platform's own control options beside every control. It appears
+ * above the drawing and again on Enable; both are the same state.
  */
-import type { CloudProduct } from "./model";
+import { platformWords, type CloudProduct } from "./model";
 
 export function CloudSwitch({
   products,
@@ -23,7 +23,7 @@ export function CloudSwitch({
   size?: "md" | "sm";
 }) {
   if (!products.length) return null;
-  const options = [{ id: null as string | null, label: "Generic", title: "The cloud-neutral pattern" }, ...products.map((p) => ({ id: p.id, label: p.cloud.short, title: `As built on ${p.cloud.name}` }))];
+  const options = [{ id: null as string | null, label: "Generic", title: "The pattern itself, whatever it runs on" }, ...products.map((p) => ({ id: p.id, label: p.cloud.short, title: platformWords(p.cloud).asBuilt }))];
   const pad = size === "md" ? "px-3.5 py-1.5 text-[13px]" : "px-2.5 py-1 text-[12px]";
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5" data-cloud-switch>

@@ -9,6 +9,7 @@ const CLOUD_WORDS: Record<string, string> = {
   cloudAws: "aws amazon web services bedrock",
   cloudAzure: "azure microsoft foundry",
   cloudGcp: "gcp google cloud vertex",
+  cloudOnPrem: "on-prem on premises onprem on-premise self-hosted self hosted data centre datacenter private cloud sovereign kubernetes litellm vllm",
 };
 
 export const cloudsFor = (archetypeId: string) => clouds.filter((c) => c.implementations.some((i) => i.architecture === archetypeId));

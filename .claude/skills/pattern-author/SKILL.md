@@ -45,7 +45,7 @@ existing pattern before writing anything. That one exchange prevents most wasted
 Settle three things now, because everything else follows from them:
 
 - **Where it belongs:** `surfaceEndpoint` (tools on your devices), `surfaceSaas` (AI services
-  you subscribe to) or `surfaceCloud` (applications you build). This picks the drawing's
+  you subscribe to) or `surfaceCloud` (AI you host yourself: agents, model inference, MCP servers). This picks the drawing's
   template and the file's prefix.
 - **Its family and nearest sibling.** Patterns in a family share most of their drawing by
   rule (ONTOLOGY §6, "Families that must stay in step"). Your pattern should differ from its
@@ -109,10 +109,19 @@ A pattern is not complete with its drawing alone. In the same change:
    some walk.
 4. **Examples and sources**: dated `exemplars` (real products, each with a note and an
    `asOf` month) and `sources`. Read each page before citing it; do not cite from memory.
-5. **For a pattern the organisation builds** (`surfaceCloud`): its mapping onto each cloud in
-   `data/clouds/aws.yaml`, `azure.yaml` and `gcp.yaml`: which service plays each box, and a
-   setting that delivers every pinned control. If that is out of scope for now, say so
-   plainly when you report; the Enable tab will show the pattern without cloud settings.
+5. **For a pattern the organisation hosts** (`surfaceCloud`): its mapping onto each platform
+   in `data/clouds/aws.yaml`, `azure.yaml`, `gcp.yaml` and `onprem.yaml` (the organisation's own
+   data centre): which service or software plays each box, and a setting that delivers every
+   pinned control. Read the vendor's current page for every service and setting you name, and
+   record what you read: `verified` (the day), `sources` (block id to the page), `differences`
+   (each flow or box where that platform does not follow the drawing, in plain words, with the
+   page that shows it: does the model call really pass the gateway, is search a feature of the
+   model platform, does the sandbox have a network at all), `alsoNeeded` (identity, network,
+   keys, secrets, registry, logging and ingress services that are not boxes) and `quickstart`
+   (the vendor's own starting point). Do not write commands that create or change anything; a
+   setting may carry a read-only `check` taken from the vendor's command reference. If the
+   mapping is out of scope for now, say so plainly when you report; the Enable tab will show
+   the pattern without platform settings.
 6. **At least one catalogued product** via `tooling-onboard`, or a plain statement that none
    is catalogued yet.
 
@@ -149,9 +158,10 @@ At a 1366px-wide window, check: the eye can follow each flow end to end; related
 together; no label is ambiguous about which arrow it belongs to; every tab works (Enable shows
 a chip for every control, Risks a tag for every risk, Flows numbers each walk); the pattern
 appears on the home page finder and is found by its own title and by the words a reader would
-use. If the pattern has cloud mappings, set **Built on** to each cloud and confirm: no service
-name is cut on the drawing, the component table on Enable is complete, and every control row
-names an option for that cloud.
+use. If the pattern has platform mappings, set **Built on** to each cloud and to On-premises
+and confirm: no service name is cut on the drawing, every ≠ mark sits on the flow or box it is
+about, How it works lists the differences and the supporting services, and every control row
+names an option for that platform.
 
 ## 6. Finish the paperwork
 

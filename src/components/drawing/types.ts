@@ -27,4 +27,10 @@ export interface StepOverlay {
 }
 
 /** The cloud service that plays a block, or what the organisation builds where no service fills it. */
-export type BlockService = { service: string; build?: boolean; note?: string };
+export type BlockService = {
+  service: string;
+  build?: boolean;
+  note?: string;
+  /** True when this is the organisation's own recorded choice, drawn in place of the reference service. */
+  ours?: boolean;
+};

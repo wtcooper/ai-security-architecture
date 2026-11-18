@@ -47,6 +47,8 @@ export function BoxDiagram({
   overlay = null,
   pins = "capabilities",
   services = null,
+  differs = null,
+  ownBoundary = null,
   onPickMitigation,
   onPickRisk,
   onHover,
@@ -65,6 +67,10 @@ export function BoxDiagram({
   pins?: DrawingPins;
   /** Block id -> the cloud service that plays it; null draws the generic components. */
   services?: Map<string, BlockService> | null;
+  /** Flow key or block id -> how the chosen cloud differs there. Each is marked on the drawing. */
+  differs?: Map<string, string> | null;
+  /** The title of the organisation's own boundary when the pattern is shown somewhere other than a cloud ("Enterprise data centre"). */
+  ownBoundary?: string | null;
   onPickMitigation?: (id: string) => void;
   onPickRisk?: (id: string) => void;
   onHover?: (card: HoverCard | null) => void;
@@ -201,6 +207,21 @@ export function BoxDiagram({
     );
   };
 
+  /** The mark for a flow or box the chosen cloud does not follow: an amber "not equal" tag. */
+  // The organisation's own boundary is named for where the pattern runs: a pattern shown in its
+  // own data centre is not in "our cloud", so the title changes and the gloss drops those words.
+  const named = (b: { owner: string; title: string; gloss?: string }) =>
+    ownBoundary && b.owner === "cloud" ? { title: ownBoundary, gloss: b.gloss?.replace(/^our cloud[:,]?\s*/i, "") || undefined } : { title: b.title, gloss: b.gloss };
+
+  const differMark = (key: string, text: string, cx: number, cy: number) => (
+    <g key={`d-${key}`} data-differs={key} tabIndex={0} aria-label={`Differs here: ${text}`} style={{ cursor: "help" }} {...hover("Differs from the drawing here", text)}>
+      <rect x={cx - 9} y={cy - 8.5} width={18} height={17} rx={4} fill="#FFF4D6" stroke="#B7791F" strokeWidth={1.2} />
+      <text x={cx} y={cy + 4} textAnchor="middle" fontSize={12} fontWeight={700} fill="#8A5A0B">
+        ≠
+      </text>
+    </g>
+  );
+
   const stepDisc = (n: number, key: string, cx: number, cy: number, fill: string = STEP) => (
     <g key={`s-${key}-${n}`} aria-label={`Step ${n}`} data-step={n}>
       <rect x={cx - 8.5} y={cy - 8.5} width={17} height={17} rx={4} fill={fill} />
@@ -309,7 +330,7 @@ export function BoxDiagram({
               stroke={t.stroke}
               strokeWidth={b.primary ? 1.8 : 1.3}
               strokeDasharray={t.dash}
-              {...hover(`${b.title}${b.gloss ? ` · ${b.gloss}` : ""}`, zone?.note?.trim())}
+              {...hover(`${named(b).title}${named(b).gloss ? ` · ${named(b).gloss}` : ""}`, zone?.note?.trim())}
             />
           );
         })}
@@ -324,7 +345,7 @@ export function BoxDiagram({
             const sub = service ? service.service : summaryOf(block);
             // A long title takes a second line and the one-liner gives one up.
             const titleLines = wrap(block.title, bx.w - 22, 13.2, 2);
-            const room = Math.max(1, bx.lines - (titleLines.length - 1) - (service?.build ? 1 : 0));
+            const room = Math.max(1, bx.lines - (titleLines.length - 1) - (service?.build || service?.ours ? 1 : 0));
             const subLines = sub ? wrap(sub, bx.w - 24, 10.5, bx.tone === "container" ? bx.lines : bx.tone === "governance" ? 3 : room) : [];
             const subY = bx.y + 35 + (titleLines.length - 1) * 14;
             const accent = bx.tone === "actor" || bx.tone === "governance" ? null : blockTab(block);
@@ -350,9 +371,9 @@ export function BoxDiagram({
                     {s}
                   </text>
                 ))}
-                {service?.build && (
-                  <text x={bx.x + 12} y={subY + subLines.length * 12.5} fontSize={8.5} fontWeight={700} letterSpacing="0.06em" fill="var(--ink-3)">
-                    YOU BUILD THIS
+                {(service?.build || service?.ours) && (
+                  <text x={bx.x + 12} y={subY + subLines.length * 12.5} fontSize={8.5} fontWeight={700} letterSpacing="0.06em" fill="var(--ink-3)" data-box-tag={service.ours ? "ours" : "build"}>
+                    {service.ours ? "YOUR ORGANISATION'S CHOICE" : "YOU BUILD THIS"}
                   </text>
                 )}
               </g>
@@ -406,8 +427,8 @@ export function BoxDiagram({
           const t = BOUNDARY_TONE[b.tone];
           return (
             <text key={b.zone} x={b.x + 12} y={b.y + 18} fontSize={10.5} fill={t.ink} stroke={t.fill} strokeWidth={4} paintOrder="stroke" strokeLinejoin="round" pointerEvents="none">
-              <tspan fontWeight={700} letterSpacing="0.08em">{b.title.toUpperCase()}</tspan>
-              {b.gloss && <tspan fill="var(--ink-3)">{`  ${b.gloss}`}</tspan>}
+              <tspan fontWeight={700} letterSpacing="0.08em" data-boundary-title={b.zone}>{named(b).title.toUpperCase()}</tspan>
+              {named(b).gloss && <tspan fill="var(--ink-3)">{`  ${named(b).gloss}`}</tspan>}
             </text>
           );
         })}
@@ -415,7 +436,9 @@ export function BoxDiagram({
         {/* Pins on boxes */}
         {spec.boxes.map((bx) => {
           const mark = overlay?.marks[bx.id];
+          const differ = !overlay ? differs?.get(bx.id) : undefined;
           const items = [
+            ...(differ ? [{ w: 21, draw: (cx: number, cy: number) => differMark(bx.id, differ, cx, cy) }] : []),
             ...(mark !== undefined && phase ? [{ w: 19, draw: (cx: number, cy: number) => stepDisc(mark, bx.id, cx, cy, phase.stroke) }] : []),
             ...(showControls ? (controlsAt.get(bx.id) ?? []).map((id) => ({ w: 19, draw: (cx: number, cy: number) => chip(id, bx.id, cx, cy) })) : []),
             ...(showRisks ? (risksAt.get(bx.id) ?? []).map((id) => ({ w: TAG_W, draw: (cx: number, cy: number) => tag(id, bx.id, cx, cy, !boxLit(bx.id)) })) : []),
@@ -425,7 +448,9 @@ export function BoxDiagram({
 
         {/* Pins and step numbers on arrows */}
         {spec.lines.map((l) => {
+          const differ = !overlay ? differs?.get(l.key) : undefined;
           const items = [
+            ...(differ ? [{ w: 21, draw: (cx: number, cy: number) => differMark(l.key, differ, cx, cy) }] : []),
             ...(overlay ? [] : steps.get(l.key) ?? []).map((n) => ({ w: 19, draw: (cx: number, cy: number) => stepDisc(n, l.key, cx, cy) })),
             ...(showControls ? (controlsAt.get(l.key) ?? []).map((id) => ({ w: 19, draw: (cx: number, cy: number) => chip(id, l.key, cx, cy) })) : []),
             ...(showRisks ? (risksAt.get(l.key) ?? []).map((id) => ({ w: TAG_W, draw: (cx: number, cy: number) => tag(id, l.key, cx, cy, !lineLit(l.key)) })) : []),

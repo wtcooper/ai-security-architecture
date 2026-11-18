@@ -31,11 +31,11 @@ settings:
     setVia: [cloudPolicy, apiCli]
     area: identity
     default: Compute Engine default service account
-    recommended: A dedicated service account per agent service, granted only the roles that agent needs
+    recommended: "A user-managed service account, which Google recommends over the default, granted only the minimal permissions the service needs. One account per service is this mapping's choice, not Google's wording, so each agent or server is scoped and disabled on its own"
     why: The agent calls the gateway, the model and its stores on short-lived tokens the platform issues to its own identity — no key in its configuration to steal. Agent Identity (SPIFFE-based, Preview on Cloud Run) is the successor.
     mitigations: [D3-AA, D3-CH]
     url: https://docs.cloud.google.com/run/docs/securing/service-identity
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: disableSaKeyCreation
     name: Disable service account key creation
     where: Organization Policy › iam.disableServiceAccountKeyCreation (or the managed iam.managed.disableServiceAccountKeyCreation)
@@ -49,27 +49,27 @@ settings:
     verified: "2026-10-30"
   - id: apigeeVerifyIam
     name: VerifyIAM policy
-    where: Apigee › API proxies (model and MCP proxies) › request PreFlow
+    where: Apigee (Google-hosted, not Apigee hybrid) › API proxies (model and MCP proxies) › request PreFlow
     setVia: [cloudPolicy]
     area: identity
     default: No policy
-    recommended: On every model and MCP proxy, checking the calling agent's Google identity against IAM
+    recommended: "On every model and MCP proxy in Google-hosted Apigee, checking the calling workload's Google identity against IAM. It is not available on Apigee hybrid, and it is not among the policies the Apigee Operator for Kubernetes can add to a GKE Gateway: on that path one Apigee proxy handles all traffic, so check callers there with VerifyAPIKey or OAuthV2, as Google's Inference Gateway guide does with API keys"
     why: The gateway verifies which workload is calling before any model or tool call passes, and an identity without the IAM grant is refused.
     mitigations: [D3-AA]
     requires: Apigee (not available on Apigee hybrid)
     url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/verify-iam-policy
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: authManager3lo
     name: 3-legged OAuth auth provider (Agent Identity auth manager)
-    where: IAM › Agent Identity › Auth providers; the agent's ADK tools fetch tokens per call
+    where: Agent Identity auth manager › auth providers (3-legged OAuth); the agent's ADK tools request the credential from the vault per call. Google gives no console path
     setVia: [cloudPolicy, code]
     area: identity
     default: Not configured
-    recommended: Downstream OAuth tokens held by the auth manager per user; the agent never stores them
-    why: Calls to SaaS tools run on the signed-in user's own consented grant, brokered per call, so the agent cannot reuse one user's access for another. Agent Identity on Cloud Run is in Preview.
+    recommended: "Downstream OAuth tokens held in the auth manager's vault per user; the agent never stores them. Google's page describes the auth manager only with Agent Runtime. On Cloud Run, Agent Identity comes through Agent Platform features for Cloud Run (Preview, --identity-type=agent-identity), a new principal that does not inherit the service account's roles, so confirm the auth manager works for your Cloud Run agent or keep the tokens in a store you build"
+    why: Calls to SaaS tools run on the signed-in user's own consented grant, brokered per call, so the agent cannot reuse one user's access for another.
     mitigations: [D3-CTS]
     url: https://docs.cloud.google.com/iam/docs/auth-manager-overview
-    verified: "2026-10-30"
+    verified: "2026-11-18"
 
   - id: pubsubPushAuth
     name: Authentication for push subscriptions (Enable authentication)
@@ -108,15 +108,15 @@ settings:
     verified: "2026-10-30"
   - id: apigeeVerifyAccessToken
     name: OAuthV2 policy — VerifyAccessToken
-    where: Apigee › MCP proxy › ProxyEndpoint PreFlow, as the first step
+    where: Apigee › MCP proxy (your MCP server as the backend target) › ProxyEndpoint request PreFlow, straight after ParsePayload
     setVia: [cloudPolicy]
     area: identity
     default: No credential check — any caller can invoke a proxy that lacks one
-    recommended: VerifyAccessToken first in the PreFlow of every MCP proxy
-    why: A token passes only if it is unexpired, unrevoked and was issued to an app whose API product includes this proxy — a token minted for anything else is refused.
+    recommended: "In the request PreFlow of every MCP proxy: ParsePayload first, then VerifyAccessToken, then Quota. Apigee treats the check as optional, so nothing adds it for you"
+    why: A token passes only if it is unexpired, unrevoked and was issued to an app whose API product includes this proxy. Apigee says ParsePayload must come before any authentication or quota policy for per-tool access, so the token check is the second step.
     mitigations: [D3-CTS]
-    url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/apigee-mcp-quickstart
-    verified: "2026-10-30"
+    url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
+    verified: "2026-11-18"
   - id: apigeeKeyApproval
     name: Key approval (manual)
     where: Apigee › API products › (MCP product) › Access › approval type
@@ -152,15 +152,15 @@ settings:
     verified: "2026-10-30"
   - id: apigeeRevokeTokens
     name: Revoke OAuth 2.0 access tokens by end user ID, app ID, or both
-    where: Apigee › OAuthV2 policy InvalidateToken operation, or the revoke API by app ID or end user ID
+    where: Apigee › RevokeOAuthV2 policy in a revocation proxy, by end user ID, app ID or both; the token endpoint's OAuthV2 policy sets AppEndUser
     setVia: [cloudPolicy, apiCli]
     area: identity
-    default: Tokens valid until they expire
-    recommended: One-hour access tokens; revocation by end user ID wired to leaver and incident workflows
-    why: Apigee checks every token and its app on each request, so a revoked token, user or app stops working at once rather than at expiry.
+    default: Tokens valid until they expire, and issued without an end user ID
+    recommended: One-hour access tokens issued with the end user ID (AppEndUser in the OAuthV2 policy); a RevokeOAuthV2 proxy wired to leaver and incident workflows
+    why: A revoked user's or app's tokens stop passing the gateway without waiting for expiry. Apigee caches tokens for 180 seconds, so a revoked token can still succeed for up to three minutes.
     mitigations: [D3-CR]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/security/oauth/enable-retrieval-and-revocation-oauth-20-access-tokens-end-user-id-app-id-or-both
-    verified: "2026-10-30"
+    verified: "2026-11-18"
 
   - id: trainingServiceAccount
     name: Use a custom service account (custom training)
@@ -176,14 +176,14 @@ settings:
 
   - id: workloadIdentityGke
     name: Workload Identity Federation for GKE
-    where: GKE cluster and node pools › Workload Identity; a Kubernetes ServiceAccount per run, bound in IAM
+    where: GKE cluster and node pools › Workload Identity; a Kubernetes ServiceAccount per run, bound in IAM; a network policy in the SandboxTemplate that allows the GKE metadata server
     setVia: [cloudPolicy, configFile]
     area: identity
-    recommended: On, with one Kubernetes ServiceAccount per run granted only the platform calls that run needs
-    why: A rollout gets short-lived tokens for its own principal from the GKE metadata server, verified by every Google API it calls, and the node's credentials stay out of reach.
+    recommended: "On, with one Kubernetes ServiceAccount per run granted only the platform calls that run needs. All Pods in a SandboxWarmPool share one ServiceAccount, so keep a separate SandboxTemplate and warm pool per run, or create sandboxes on demand without a pool"
+    why: A rollout gets short-lived tokens for its own principal from the GKE metadata server, and the node's credentials stay out of reach. Agent Sandbox's default network policy blocks the metadata server, so this works only once the sandbox's own policy allows it.
     mitigations: [D3-AA]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: arReaderOnly
     name: Artifact Registry Reader (roles/artifactregistry.reader)
     where: Artifact Registry › (virtual repository) › Permissions, granted to rollout and job identities
@@ -289,14 +289,14 @@ settings:
 
   - id: gcsUniformAccess
     name: Uniform bucket-level access
-    where: Cloud Storage › (weights bucket) › Permissions; read granted to the serving workload's Workload Identity principal only
+    where: Cloud Storage › (weights, checkpoint, corpus or candidate bucket) › Permissions; access granted in IAM only to the identities that need the bucket
     setVia: [cloudPolicy, apiCli]
     area: data
-    recommended: "On, with public access prevention enforced; the promotion pipeline writes, only the serving identity reads"
-    why: IAM on the bucket is the only access path — no per-object ACL can quietly open one checkpoint — so weights are readable by the runtime and nothing else.
+    recommended: "On. IAM grants write to the pipeline that produces the objects and read only to the workload that loads them: the serving identity for weights and checkpoints, each training pipeline's service account for its corpus version and its own candidates. Also enforce public access prevention, a separate bucket setting (or the storage.publicAccessPrevention organisation policy) that this page does not describe"
+    why: Access control lists are disabled, so IAM on the bucket is the only access path and no per-object ACL can quietly open one checkpoint or dataset.
     mitigations: [AML.M0005]
     url: https://docs.cloud.google.com/storage/docs/uniform-bucket-level-access
-    verified: "2026-10-30"
+    verified: "2026-11-18"
 
   - id: sdpInspectionJobs
     name: Inspection jobs (Sensitive Data Protection)
@@ -346,14 +346,14 @@ settings:
     verified: "2026-10-30"
   - id: modelArmorFloorSettings
     name: Model Armor floor settings (inline enforcement on Agent Platform)
-    where: Security › Model Armor › Floor settings (project), integrated service VERTEX_AI
+    where: Security › Model Armor › Floor settings (project); the integrated service is named VERTEX_AI in gcloud (--add-integrated-services) and AI_PLATFORM in the REST API
     setVia: [cloudPolicy, apiCli]
     area: tools
-    recommended: Prompt injection and jailbreak detection on, enforcement type INSPECT_AND_BLOCK
-    why: Every Gemini generateContent call in the project is screened even when a caller skips the gateway. The integration lets requests through unscreened if Model Armor is unreachable, which is why the gateway check stays.
+    recommended: "Prompt injection and jailbreak detection on, and blocking on. The two interfaces name it differently: --vertex-ai-enforcement-type=INSPECT_AND_BLOCK in gcloud, inspectAndBlock true under aiPlatformFloorSetting in REST. The default is INSPECT_ONLY"
+    why: Gemini generateContent calls in the project are screened even when a caller skips the gateway; Google's page covers that method only. Screening is skipped when Model Armor is unreachable and file uploads are not screened, which is why the gateway check stays.
     mitigations: [cap-input-guardrails]
     url: https://docs.cloud.google.com/model-armor/model-armor-vertex-integration
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: apigeeLlmTokenQuota
     name: LLMTokenQuota policy
     where: Apigee › model proxies › request and response flow (with PromptTokenLimit for bursts)
@@ -366,16 +366,16 @@ settings:
     url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/llm-token-quota-policy
     verified: "2026-10-30"
   - id: apigeeMcpDiscoveryProxy
-    name: MCP Discovery Proxy (MCP in Apigee)
-    where: Apigee › MCP › MCP Discovery Proxy, tools generated from each API's OpenAPI specification
+    name: MCP in Apigee (a proxy in front of your MCP server, or an MCP Discovery Proxy)
+    where: Apigee › an API proxy with your own MCP server as the backend target; an MCP Discovery Proxy only where tools are generated from a REST API's OpenAPI specification and no MCP server runs
     setVia: [cloudPolicy]
     area: tools
     default: Agents call MCP servers directly
-    recommended: Every MCP tool the agent calls exposed only through Apigee, generated from the API's reviewed specification
-    why: Tool definitions come from the specification your API owners reviewed, not from whatever a server advertises, and each call crosses one gateway that authenticates, meters and logs it.
+    recommended: Every MCP tool the agent calls exposed only through Apigee. Put an ordinary Apigee proxy in front of each MCP server you run; use the MCP Discovery Proxy only for REST APIs whose reviewed OpenAPI specification should become the tools
+    why: Each tool call crosses one gateway that authenticates, meters and logs it. Only the Discovery Proxy takes tool definitions from the specification your API owners reviewed; behind an ordinary proxy the definitions are whatever your server advertises, so review and pin them in your own release process.
     mitigations: [cap-mcp-tool-integrity, cap-agent-action-policy-enforcement]
-    url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/apigee-mcp-overview
-    verified: "2026-10-30"
+    url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
+    verified: "2026-11-18"
   - id: apigeeMcpToolAccess
     name: API product MCP tool operations (payloadOperationGroup)
     where: Apigee › API products, with the ParsePayload policy on the MCP proxy
@@ -404,22 +404,22 @@ settings:
     setVia: [code]
     area: tools
     default: Tools run without confirmation
-    recommended: Confirmation required on every tool that writes to a system of record
-    why: A person confirms each consequential action in the conversation before it happens.
+    recommended: Confirmation required on every tool that writes to a system of record. ADK lists DatabaseSessionService and VertexAiSessionService as not supported by this feature, so test that confirmation works with the custom Firestore session store before relying on it
+    why: A person confirms each consequential action in the conversation before it happens. The feature is experimental in ADK TypeScript, Go and Kotlin.
     mitigations: [AML.M0029]
     url: https://adk.dev/tools-custom/confirmation/
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: adkRemoteConfirmation
     name: Advanced confirmation with remote confirmation (request_confirmation)
-    where: Your agent code — ADK tool_context.request_confirmation on high-value actions, answered through the ADK server's REST API
+    where: Your agent code, ADK tool_context.request_confirmation on high-value actions, answered with a FunctionResponse posted to the ADK server's /run or /run_sse endpoint
     setVia: [code]
     area: tools
     default: Tools run without confirmation
-    recommended: Actions above the value or irreversibility threshold park for an operator's approval; never the requester's
-    why: The step waits until an operator in a work queue approves that exact action and payload, so a run nobody watches cannot commit an irreversible change on its own.
+    recommended: Actions above the value or irreversibility threshold park for an operator's approval; never the requester's. ADK lists VertexAiSessionService and DatabaseSessionService as not supported, so do not keep the session in Agent Platform Sessions for runs that park, and test a custom store such as Firestore. With resume on, the reply must carry the invocation ID of the run that asked
+    why: The step waits until an operator in a work queue approves that exact action and payload, so a run nobody watches cannot commit an irreversible change on its own. The feature is experimental in ADK TypeScript, Go and Kotlin.
     mitigations: [AML.M0029]
     url: https://adk.dev/tools-custom/confirmation/
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: outputSanitisation
     name: Sanitise rendered model output
     where: Your front-end code
@@ -454,50 +454,50 @@ settings:
     url: https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration
     verified: "2026-10-30"
   - id: agentEvaluation
-    name: Agent evaluation (Gen AI evaluation service)
-    where: Agent Platform › Evaluation, run from the release pipeline
+    name: Agent evaluation (Gemini Enterprise Agent Platform Evals, formerly Gen AI evaluation service)
+    where: Agent Platform GenAI Evaluation SDK (client.evals.evaluate) or agents-cli eval, run from the release pipeline
     setVia: [code, apiCli]
     area: tools
     default: Not run
-    recommended: Task-success and safety evaluation on every agent, prompt, tool or model change, blocking the release on regression
-    why: Each change is scored against the same eval cases before it reaches users, instead of being discovered in production.
+    recommended: Task-success and safety evaluation of the agent's traces on every agent, prompt, tool or model change, blocking the release on regression
+    why: Each change is scored against the same eval cases before it reaches users, instead of being discovered in production. Google renamed the service; its agent evaluation page still uses the older name.
     mitigations: [cap-staged-rollout-gate]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/optimize/evaluation/agent-evaluation
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: arVirtualRepoPriority
     name: Virtual repository upstream priority
-    where: Artifact Registry › virtual repository › upstream policies (standard repository above the PyPI or npm remote repository)
+    where: Artifact Registry › virtual repository › upstream repositories, each with a priority value (your standard repository given a higher number than the PyPI or npm remote repository)
     setVia: [cloudPolicy, apiCli]
     area: tools
     default: Clients configured against public registries directly
-    recommended: Clients install only from a virtual repository that ranks your standard repository above the remote one
-    why: A public package cannot shadow an internal one — the dependency-confusion path Google's remote repository docs name.
+    recommended: Package managers and other tools read from the virtual repository only, and it gives your standard repository a higher priority value than the remote one (the higher number wins)
+    why: A public package cannot shadow an internal one, which is the dependency confusion attack Google's virtual repository page describes.
     mitigations: [D3-FA]
-    url: https://docs.cloud.google.com/artifact-registry/docs/repositories/remote-overview
-    verified: "2026-10-30"
+    url: https://docs.cloud.google.com/artifact-registry/docs/repositories/virtual-overview
+    verified: "2026-11-18"
   - id: arPackageScanning
     name: Package scanning (Artifact Analysis)
     where: Artifact Registry › (Python or npm repository) › --allow-vulnerability-scanning
     setVia: [cloudPolicy, apiCli]
     area: tools
     default: Disabled for Java, Python and Node.js repositories
-    recommended: Enabled on the Python and Node.js repositories behind the virtual repository (virtual repositories themselves are not scanned)
-    why: Packages are scanned for vulnerabilities, malicious software and secrets, and re-checked as new advisories arrive.
+    recommended: Enabled on the Python and Node.js repositories behind the virtual repository (virtual repositories themselves are not scanned). Packages are scanned when they are pushed, and only if they have 100 or fewer files. Google's pages do not say that packages cached by a remote repository are scanned, so do not rely on this for the public mirror; check those packages at intake
+    why: Pushed packages are scanned for vulnerabilities, malicious software and secrets, and their metadata is re-checked as new advisories arrive. Vulnerabilities and malicious software are detected only in publicly monitored packages.
     mitigations: [D3-FA]
-    url: https://docs.cloud.google.com/artifact-analysis/docs/package-scanning-overview
-    verified: "2026-10-30"
+    url: https://docs.cloud.google.com/artifact-analysis/docs/enable-automatic-scanning
+    verified: "2026-11-18"
 
   - id: apigeeSpikeArrest
     name: SpikeArrest policy
-    where: Apigee › API proxy (MCP or model) › PreFlow, Identifier set to the client app (and tenant)
+    where: Apigee › API proxy (MCP or model) › PreFlow, Identifier set to the client app (and tenant); on a GKE Gateway, a SpikeArrest resource added through the Apigee Operator for Kubernetes
     setVia: [cloudPolicy]
     area: tools
     default: No rate limit
-    recommended: Per-client and per-tenant rate, UseEffectiveCount true, alongside the API product's quotas
+    recommended: Per-client and per-tenant rate, UseEffectiveCount true, alongside the API product's quotas. On a GKE Gateway the policy is a Kubernetes resource placed by an ApimTemplate and ApigeeGatewayPolicy on the one Apigee proxy that handles all traffic, not on a per-model proxy, and Quota is not among the policies the operator can add
     why: A client that retries, loops or fans out is throttled at the gateway before it exhausts finite capacity for every other tenant.
     mitigations: [AML.M0004]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/spike-arrest-policy
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: toolDefinitionPinning
     name: Pin tool definitions to a reviewed version
     where: Your MCP service code — the loader checks each definition's hash against the release record
@@ -571,11 +571,11 @@ settings:
     setVia: [adminConsole, apiCli]
     area: tools
     default: The first version gets the default alias
-    recommended: Serving reads the version the default alias names; labels record publisher, format and the scan that cleared it; rollback moves the alias
+    recommended: The default alias names the approved version; labels record publisher, format and the scan that cleared it; rollback moves the alias. Only Agent Platform deployments fall back to the default alias. vLLM on GKE does not read it, so your rollout step must resolve the alias to that version's bucket path and point the deployment at it
     why: The question "what is serving" has one answer in the registry, and the previous approved version stays one alias move away.
     mitigations: [AML.M0023, cap-staged-rollout-gate]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/model-alias
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: inferencePoolRollout
     name: Weighted traffic splitting between InferencePools
     where: GKE Inference Gateway › HTTPRoute backendRefs weight, old and new InferencePool side by side
@@ -622,16 +622,16 @@ settings:
     url: https://openssf.org/projects/model-signing/
     verified: "2026-10-30"
   - id: modelEvaluationGate
-    name: Model evaluation in Agent Platform
-    where: Agent Platform Pipelines › evaluation component in front of the promotion step
+    name: Evaluation gate before promotion (Gen AI evaluation service, renamed Gemini Enterprise Agent Platform Evals)
+    where: Agent Platform Pipelines › a step in front of promotion that runs the Gen AI evaluation SDK against the candidate
     setVia: [code, apiCli]
     area: tools
     default: Not run
-    recommended: Capability, safety and memorisation evaluation on every candidate, blocking promotion on regression; benchmarks in a bucket the training identity cannot write
-    why: How the candidate behaves is examined before it can be promoted, against an answer key its authors cannot edit.
+    recommended: Capability and safety evaluation on every candidate with rubric-based and computation-based metrics, blocking promotion on regression; benchmarks in a bucket the training identity cannot write. The service lists no memorisation test and no red-teaming feature, so supply your own tooling for both
+    why: How the candidate behaves is examined before it can be promoted, against an answer key its authors cannot edit. Agent Platform's model evaluation page covers only predictive image and tabular models, so a language model is scored with the Gen AI evaluation service.
     mitigations: [AML.M0008]
-    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/evaluation/introduction
-    verified: "2026-10-30"
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/evaluation-overview
+    verified: "2026-11-18"
   - id: modelLabelsCard
     name: Apply model labels (approval state and model card)
     where: Agent Platform Model Registry › (model version) › labels, with the model card stored beside the artifact
@@ -660,34 +660,34 @@ settings:
     where: Agent Sandbox on GKE › ValidatingAdmissionPolicy and its binding, all non-system namespaces
     setVia: [configFile]
     area: tools
-    default: Agent Sandbox doesn't restrict the Pods that run sandboxes
-    recommended: Applied, with the binding enforcing it in every namespace that runs sandboxes
-    why: A sandbox that isn't gVisor, mounts a service-account token, runs as root, keeps Linux capabilities or lacks resource limits is rejected at admission.
+    default: Not applied. The policy is optional, and Agent Sandbox doesn't restrict the Pods that run sandboxes
+    recommended: Applied, with the binding enforcing it in every namespace that runs sandboxes. As published it requires runtimeClassName gvisor and the gVisor node selector and toleration, so it rejects microVM sandboxes; you own the policy, so edit it to admit the microVM runtime where you use one
+    why: A sandbox that isn't gVisor, mounts a service-account token, runs as root, keeps Linux capabilities or lacks resource limits is rejected at admission. For sandboxes made through claims or warm pools the rejection shows only in the controller logs, so watch them.
     mitigations: [D3-EI]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/how-install-agent-sandbox
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: workloadSeparation
     name: Workload separation (taints and tolerations)
     where: GKE › a node pool per trust group, tainted; each run's sandboxes tolerate only their group's taint
     setVia: [cloudPolicy, configFile]
     area: tools
     default: Pods schedule on any node with room
-    recommended: A node pool per trust group; rollouts that must not communicate never share a node
-    why: Rollouts from different trust groups never share a host, its cores or its cache, so co-residency is not a side channel between them.
+    recommended: A node pool per trust group as an extra layer under GKE Sandbox, so rollouts that must not communicate do not share a node. Never rely on it as the wall that keeps rollouts apart
+    why: Rollouts from different trust groups do not share a host, its cores or its cache, which narrows co-residency side channels. Google says workload separation should never be used as a primary security boundary and is not a method of isolating untrusted workloads, so the sandbox stays the boundary.
     mitigations: [D3-HBPI]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-separation
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: runAutoStop
     name: Automatic run stop in the orchestrator
-    where: Your run orchestrator — on a serious-risk alert, deletes the run's Sandbox and SandboxClaim resources and disables the run's service accounts
+    where: Your run orchestrator, which on a serious-risk alert deletes the run's Sandbox and SandboxClaim resources and removes the IAM bindings of the run's Kubernetes ServiceAccounts (or deletes them)
     setVia: [code]
     area: tools
     default: Runs continue until they finish
-    recommended: Automatic, triggered from monitors outside every sandbox; restarting or widening the run is a person's decision
+    recommended: Automatic, triggered from monitors outside every sandbox; restarting or widening the run is a person's decision. A run whose identity is a Kubernetes ServiceAccount granted roles directly has no IAM service account to disable, so the stop removes the binding; disable the service account only where a run uses one
     why: The stop is enforced from outside the rollouts, so an agent that has disabled what it could reach cannot keep its run alive.
     mitigations: [cap-agent-kill-switch]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: containmentRedTeam
     name: Containment red teaming against the hardened cluster
     where: Your run-approval process — agents attack the sandbox, the node network and the platform services before a run
@@ -702,15 +702,15 @@ settings:
 
   - id: modelArmorSanitizeApi
     name: Sanitize prompts and responses (Model Armor API)
-    where: Apigee A2A proxy or the agent's ADK callbacks — sanitizeUserPrompt on every inbound artifact, sanitizeModelResponse with a de-identify template on every outbound payload
+    where: Apigee A2A proxy or the agent's ADK callbacks, calling sanitizeUserPrompt on every inbound artifact and sanitizeModelResponse on every outbound payload, with a template that has Sensitive Data Protection inspect and de-identify templates
     setVia: [apiCli, code]
     area: tools
     default: Not called
-    recommended: Every inbound artifact, status message and card description screened; every outbound task payload and returned artifact de-identified
-    why: A peer's text is classified for injection before the harness reads it, and client data leaving for another organisation is masked at the boundary.
+    recommended: Every inbound artifact, status message and card description screened; every outbound task payload and returned artifact replaced by the de-identified text Model Armor returns in deidentifyResult.data.text, a substitution your code makes. Streamed artifacts and files are not de-identified, so send them unstreamed as text, mask them with Sensitive Data Protection yourself, or block them
+    why: A peer's text is classified for injection before the harness reads it, and client data leaving for another organisation is masked at the boundary. Model Armor returns the masked text in a result field and does not rewrite the payload, and its streaming methods and file-based prompts do not support de-identification.
     mitigations: [cap-input-guardrails, cap-sensitive-data-redaction]
     url: https://docs.cloud.google.com/model-armor/sanitize-prompts-responses
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: a2aSkillAuthorization
     name: Per-skill authorization on A2A requests
     where: Apigee A2A proxy — the skill named in the message metadata checked against the peer app's allowed skills before dispatch
@@ -758,27 +758,27 @@ settings:
 
   # --- Network -------------------------------------------------------------------------
   - id: swpEgress
-    name: Secure Web Proxy gateway security policy (Direct VPC egress, all-traffic)
-    where: Cloud Run › Networking › Direct VPC egress › Route all traffic to the VPC → Secure Web Proxy as next hop › URL lists
+    name: Secure Web Proxy gateway security policy with a URL list (Cloud Run Direct VPC egress, all traffic)
+    where: Cloud Run › (service) › Networking › Connect to a VPC for outbound traffic › Send traffic directly to a VPC › Route all traffic to the VPC (--vpc-egress=all-traffic); in that VPC, a route to Secure Web Proxy in next hop mode, whose gateway security policy rule matches a URL list (inUrlList)
     setVia: [cloudPolicy]
     area: network
     default: Outbound internet direct from Cloud Run
-    recommended: All outbound traffic from the workload through Secure Web Proxy, allowing only a URL list you maintain
-    why: Secure Web Proxy denies all outbound traffic until a rule allows it, so the workload reaches only the hosts you list — never a private or metadata address — and every request is logged.
+    recommended: All outbound traffic from the workload sent into the VPC and on through Secure Web Proxy, allowing only a URL list you maintain. Google documents Direct VPC egress, next hop routing and URL lists on separate pages and has no guide that joins them for Cloud Run, so test that the service's traffic reaches the proxy; its documented Cloud Run route is the Agent Gateway deployment (Preview), which uses explicit routing mode and authorization policies that do not support URL lists
+    why: A gateway security policy blocks every HTTP and HTTPS request until a rule allows it, so the workload reaches only the hosts you list. Matching a full URL path rather than a host needs TLS inspection, and a VPC network can have only one next-hop proxy per region.
     mitigations: [cap-agent-egress-control, D3-OTF]
-    url: https://docs.cloud.google.com/secure-web-proxy/docs/overview
-    verified: "2026-10-30"
+    url: https://docs.cloud.google.com/secure-web-proxy/docs/policies-and-rules-overview
+    verified: "2026-11-18"
   - id: vpcServiceControls
     name: VPC Service Controls service perimeter
-    where: Security › VPC Service Controls, around the agent's projects (Agent Platform, Agent Search, Firestore, Cloud Storage)
+    where: Security › VPC Service Controls, around the projects that hold the workload's Google services (for an agent, Agent Platform and its data stores; for self-hosted serving, the GKE, Cloud Storage and Artifact Registry projects)
     setVia: [cloudPolicy]
     area: network
     default: No perimeter
-    recommended: One enforced perimeter, reached from the VPC through Private Service Connect
-    why: The model, index and memory APIs answer only inside the perimeter, so a stolen token used from outside — or a copy to a project outside — is refused.
+    recommended: One enforced perimeter that restricts every supported service the workload uses, reached from the VPC over the restricted VIP with Private Google Access or Private Service Connect for Google APIs. Check each service against Google's supported products list, because support and limits differ by product
+    why: The protected APIs answer only inside the perimeter, so a stolen token used from an unauthorised network, or a copy to a resource outside the perimeter, is refused.
     mitigations: []
-    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
-    verified: "2026-10-30"
+    url: https://docs.cloud.google.com/vpc-service-controls/docs/overview
+    verified: "2026-11-18"
   - id: cloudRunIngress
     name: Ingress — Internal and Cloud Load Balancers, with the default URL disabled
     where: Cloud Run › (front-end service) › Networking; --ingress=internal-and-cloud-load-balancing --no-default-url
@@ -804,15 +804,15 @@ settings:
 
   - id: gkeNetworkPolicy
     name: Network policy enforcement (GKE Dataplane V2)
-    where: GKE cluster › network policy enforcement on; Kubernetes NetworkPolicy per namespace
+    where: GKE cluster › network policy enforcement on; Kubernetes NetworkPolicy per namespace, and for sandboxes the network policy defined in each SandboxTemplate
     setVia: [cloudPolicy, configFile]
     area: network
-    default: All pods can reach each other
-    recommended: Default-deny in every serving and sandbox namespace, allowing only the named peers — the gateway to the API, serving nodes to each other
-    why: A pod reaches only the peers its policy names, so vLLM's unauthenticated inter-node channels and one sandbox's neighbours are off limits to everything else.
+    default: All pods can reach each other; Agent Sandbox adds a policy per SandboxTemplate that still allows egress to the public internet
+    recommended: Default-deny in every serving and sandbox namespace, allowing only the named peers. For serving, that is the gateway and endpoint picker to the vLLM API and serving nodes to each other. For sandboxes, define your own policy in the SandboxTemplate that denies everything except named peers, because a namespace default-deny does not remove the internet egress the default template policy allows
+    why: A pod reaches only the peers its policies name, so vLLM's unauthenticated inter-node channels and one sandbox's neighbours are off limits to everything else. Network policies only add allowances, so the sandbox template's default policy must be replaced, not merely surrounded.
     mitigations: [D3-NI]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/network-policy
-    verified: "2026-10-30"
+    verified: "2026-11-18"
 
   - id: trainingPerimeterEgress
     name: VPC Service Controls with PSC interface (custom training)
@@ -828,15 +828,15 @@ settings:
 
   - id: fqdnNetworkPolicy
     name: FQDN network policies (FQDNNetworkPolicy)
-    where: GKE Dataplane V2 › FQDNNetworkPolicy per run namespace, with Kubernetes NetworkPolicy beside it
+    where: GKE Dataplane V2 › FQDNNetworkPolicy (networking.gke.io/v1alpha1) per run namespace for names outside the cluster, with label-based Kubernetes NetworkPolicy beside it for in-cluster Services
     setVia: [configFile]
     area: network
     default: Pods reach any destination
-    recommended: Each rollout allowed only the offline web, the mirror and the platform services its run needs
-    why: A policy that selects a rollout's pods denies every endpoint it does not name, so the egress list is enforced on the pod rather than asked of the agent.
+    recommended: Each rollout allowed only the external names its run needs, such as the package mirror. FQDN policies cannot allow egress to ClusterIP or headless Services, so allow the in-cluster offline web and vLLM API with label-based NetworkPolicy instead
+    why: A policy that selects a rollout's pods denies every endpoint it does not name, so the egress list is enforced on the pod rather than asked of the agent. Allowing a name on shared addresses such as Google APIs allows every other name there, and DNS lookups are not blocked, so add VPC Service Controls behind it.
     mitigations: [cap-agent-egress-control]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
-    verified: "2026-10-30"
+    verified: "2026-11-18"
 
   # --- Audit & monitoring --------------------------------------------------------------
   - id: adkCloudTrace
@@ -862,16 +862,16 @@ settings:
     url: https://docs.cloud.google.com/logging/docs/audit/configure-data-access
     verified: "2026-10-30"
   - id: apigeeMessageLogging
-    name: MessageLogging policy
-    where: Apigee › API proxy (MCP or model) › PostClientFlow, to Cloud Logging
+    name: MessageLogging policy (HTTP access logging on GKE Inference Gateway)
+    where: Apigee › API proxy (MCP or model) › PostClientFlow, to Cloud Logging; behind GKE Inference Gateway, a GCPBackendPolicy with logging enabled on each InferencePool
     setVia: [cloudPolicy]
     area: audit
     default: No message logging
-    recommended: Every call logged with the tool or model, client app, end user and tenant; personal data in payloads redacted
+    recommended: Every call logged with the tool or model, client app, end user and tenant; personal data in payloads redacted. MessageLogging is not supported when Apigee is reached through the Extension Processor, so on GKE Inference Gateway turn on the load balancer's HTTP access logging to Cloud Logging instead, with sampleRate 1000000 so every request is logged
     why: Each invocation is attributable to a tenant and a delegation where an incident can query it, recorded at the gateway rather than volunteered by the backend.
     mitigations: [AML.M0024]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/message-logging-policy
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: agentPlatformDataAccessLogs
     name: Data Access audit logs (aiplatform.googleapis.com)
     where: Project or organisation IAM policy › auditConfigs for aiplatform.googleapis.com
@@ -911,15 +911,98 @@ settings:
     setVia: [adminConsole, apiCli]
     area: audit
     default: Enabled
-    recommended: Enabled, with disable as the first step of your incident runbook
-    why: Disabling the agent's service account cuts its access to the gateway, the model and its stores at once, without a deploy — and re-enabling restores it.
+    recommended: Enabled, with disable as the first step of your incident runbook. This covers IAM service accounts only. Where a workload's identity is a Kubernetes ServiceAccount granted roles directly through Workload Identity Federation for GKE there is no account to disable, so the runbook removes its IAM binding or deletes the ServiceAccount
+    why: Once the account is disabled, applications no longer reach Google Cloud resources through it, so the agent loses the gateway, the model and its stores without a deploy, and re-enabling restores it.
     mitigations: [cap-agent-kill-switch]
     url: https://docs.cloud.google.com/iam/docs/service-accounts-disable-enable
-    verified: "2026-10-30"
+    verified: "2026-11-18"
 
 implementations:
   - architecture: archChatAgent
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      entry: https://docs.cloud.google.com/armor/docs/security-policy-overview
+      events: https://docs.cloud.google.com/scheduler/docs/overview
+      agent: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      localTools: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview
+      memory: https://docs.cloud.google.com/run/docs/ai-agents
+      gateway: https://docs.cloud.google.com/apigee/docs/api-platform/get-started/ai-capabilities
+      provider: https://docs.cloud.google.com/gemini-enterprise-agent-platform/overview
+      internalTools: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
+      openWeb: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search
+      registry: https://docs.cloud.google.com/artifact-registry/docs/repositories/remote-overview
+    differences:
+      - at: agent->gateway
+        text: "ADK sends model calls straight to Gemini with the agent's own service account unless you wrap the model in ApigeeLlm. To force the gateway, point model and MCP addresses at Apigee and remove direct model permission from the agent's account."
+        url: https://adk.dev/agents/models/apigee/
+      - at: gateway->provider
+        text: "Google's reference sends the model call from the agent through Model Armor to Gemini, with no Apigee. Here Apigee calls the model with its own service account, so also turn on Model Armor floor settings to catch calls that bypass Apigee."
+        url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      - at: gateway->internalTools
+        text: "Google's reference has the agent call MCP servers on Cloud Run directly, protected by IAP and IAM, or through Agent Gateway. To make Apigee the only door, allow only Apigee's service account to invoke the tool services."
+        url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      - at: gateway->openWeb
+        text: "Grounding with Google Search is a switch inside the model request: Google runs the search, and Apigee never sees or filters the pages. Google's page also says search cannot share one request with function calling, so they need separate model calls."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search
+      - at: localTools
+        text: "Code Execution is a separate Agent Platform service with no network, called by API. ADK says the agent's service account needs roles/aiplatform.user for it, the same role that permits direct model calls, which weakens the gateway-only rule unless narrowed."
+        url: https://adk.dev/integrations/code-exec-agent-runtime/
+      - at: agent
+        text: "Apigee is not the network exit. Cloud Run reaches the internet freely unless you send all outbound traffic into the VPC and through Secure Web Proxy with an allow list. Agent Gateway for Cloud Run uses that same proxy and is Limited Preview."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+      - at: memory
+        text: "ADK's built-in session stores are in-memory, SQL database and Agent Platform Sessions; Firestore needs a session store you write. ADK's confirmation page says confirmations do not work with the database or Agent Platform stores, so test approvals on yours."
+        url: https://adk.dev/sessions/session/
+      - at: events->agent
+        text: "IAP replaces the caller's identity, and Google warns that services using their own authentication may fail behind it. Scheduled and event triggers must call the agent service directly with their own service account, not the IAP-protected front end."
+        url: https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run
+    alsoNeeded:
+      - service: "IAM service accounts"
+        role: identity
+        why: "Each Cloud Run service, and Apigee's proxies, run as a service account you create and scope."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/security/google-auth/overview
+      - service: "VPC network with Direct VPC egress and Secure Web Proxy"
+        role: network
+        why: "The only way to control where Cloud Run workloads can connect on the internet."
+        url: https://docs.cloud.google.com/secure-web-proxy/docs/overview
+      - service: "Apigee networking (Private Service Connect or VPC peering)"
+        role: network
+        why: "Lets agents reach Apigee privately and lets Apigee reach tool services on Cloud Run."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/get-started/networking-options
+      - service: "Secret Manager"
+        role: secrets
+        why: "Google's recommended store for API keys and passwords that Cloud Run services need."
+        url: https://docs.cloud.google.com/run/docs/configuring/services/secrets
+      - service: "Cloud KMS"
+        role: keys
+        why: "Customer-managed encryption keys for stored conversations, sessions and logs, where policy requires them."
+        url: https://docs.cloud.google.com/kms/docs/cmek
+      - service: "Binary Authorization"
+        role: registry
+        why: "Allows only approved container images to deploy to Cloud Run; Google's reference names it."
+        url: https://docs.cloud.google.com/binary-authorization/docs/overview
+      - service: "Model Armor templates"
+        role: other
+        why: "Apigee's prompt policy and the platform floor settings both need a Model Armor template to exist."
+        url: https://docs.cloud.google.com/model-armor/model-armor-vertex-integration
+      - service: "Cloud Logging and Cloud Trace"
+        role: logging
+        why: "Cloud Run sends logs here by default; route them onward to your security monitoring."
+        url: https://docs.cloud.google.com/logging/docs/overview
+      - service: "Regional external Application Load Balancer with Cloud Armor"
+        role: ingress
+        why: "Fronts the Cloud Run front end once its default address is disabled; filters and rate-limits requests."
+        url: https://docs.cloud.google.com/armor/docs/security-policy-overview
+      - service: "Identity Platform or Firebase Authentication"
+        role: identity
+        why: "Signs in users outside the organisation; IAP covers staff only."
+        url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+    quickstart:
+      - title: "Build and deploy an AI agent to Cloud Run using the Agent Development Kit (ADK)"
+        url: https://docs.cloud.google.com/run/docs/ai/build-and-deploy-ai-agents/deploy-adk-agent
+    # <<< checked
     reference:
       - title: Single-agent AI system using ADK and Cloud Run
         url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
@@ -981,6 +1064,74 @@ implementations:
 
   - architecture: archActionAgent
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      events: https://docs.cloud.google.com/pubsub/docs/authenticate-push-subscriptions
+      localTools: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview
+      planner: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      stateRetrieval: https://docs.cloud.google.com/run/docs/ai-agents
+      gateway: https://docs.cloud.google.com/apigee/docs/api-platform/fundamentals/build-ai-gateway
+      internalTools: https://docs.cloud.google.com/architecture/agenticai-orchestrate-access-disparate-systems
+      provider: https://docs.cloud.google.com/gemini-enterprise-agent-platform/vertex-ai-name-changes
+      orgData: https://docs.cloud.google.com/architecture/agenticai-orchestrate-access-disparate-systems
+      registry: https://docs.cloud.google.com/artifact-registry/docs/repositories/remote-overview
+    differences:
+      - at: gateway->provider
+        text: "Google's reference sends model calls from the agent through Model Armor to the model, with Agent Gateway as an optional route. It does not use Apigee. Putting Apigee in front of the model is this mapping's choice, and you build it."
+        url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      - at: gateway->internalTools
+        text: "Google's reference connects the agent to tool servers on Cloud Run, signed in through Identity-Aware Proxy with Agent Gateway. Routing them through Apigee is this mapping's choice."
+        url: https://docs.cloud.google.com/architecture/agenticai-orchestrate-access-disparate-systems
+      - at: gateway->openWeb
+        text: "Grounding with Google Search is a built-in tool that the model platform runs. It does not pass through your gateway, so your gateway's rules and logs do not cover it."
+      - at: localTools->registry
+        text: "Generated code runs in Agent Platform Code Execution, a separate service with no network that installs nothing. This flow applies only to building the agent's own image."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview
+      - at: planner
+        text: "Outbound traffic from Cloud Run leaves through Secure Web Proxy, a separate exit from the gateway that is not drawn. The destination allowlist is enforced there."
+        url: https://docs.cloud.google.com/secure-web-proxy/docs/overview
+      - at: operator->events
+        text: "Google's agent kit returns an operator's approval as a direct call to the agent's run endpoint. Returning it as a queued message is not documented, so you build that."
+    alsoNeeded:
+      - service: "Agent Identity and IAM service accounts"
+        role: identity
+        why: "The agent's own identity; Google recommends its auth manager over stored secrets."
+        url: https://docs.cloud.google.com/run/docs/securing/service-identity
+      - service: "Identity-Aware Proxy"
+        role: identity
+        why: "Signs callers in to tool servers on Cloud Run in Google's reference."
+        url: https://docs.cloud.google.com/architecture/agenticai-orchestrate-access-disparate-systems
+      - service: "Application Load Balancer with Cloud Armor"
+        role: ingress
+        why: "Protects incoming webhooks."
+      - service: "Secure Web Proxy"
+        role: network
+        why: "The separate exit for outbound traffic."
+        url: https://docs.cloud.google.com/secure-web-proxy/docs/overview
+      - service: "VPC Service Controls and Private Service Connect"
+        role: network
+        why: "Keep the model and data services inside a perimeter."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
+      - service: "Cloud KMS"
+        role: keys
+        why: "Your own encryption keys for stored data."
+      - service: "Model Armor"
+        role: other
+        why: "Screens prompts and answers on the way to and from the model."
+        url: https://docs.cloud.google.com/model-armor/model-armor-vertex-integration
+      - service: "Agent Registry"
+        role: registry
+        why: "The approved list of agents and tool servers."
+        url: https://docs.cloud.google.com/agent-registry/overview
+      - service: "Binary Authorization"
+        role: registry
+        why: "Allows only approved container images to deploy."
+      - service: "Cloud Trace, Cloud Logging audit logs and Security Command Center"
+        role: logging
+        why: "The record of what the agent did, and findings on the project."
+        url: https://docs.cloud.google.com/logging/docs/audit/configure-data-access
+    # <<< checked
     reference:
       - title: Orchestrate access to disparate enterprise systems
         url: https://docs.cloud.google.com/architecture/agenticai-orchestrate-access-disparate-systems
@@ -1033,6 +1184,99 @@ implementations:
 
   - architecture: archAgentWorkflow
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      events: https://docs.cloud.google.com/pubsub/docs/push
+      harness: https://docs.cloud.google.com/architecture/multiagent-ai-system
+      localTools: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview
+      orchestration: https://adk.dev/runtime/resume/
+      subagents: https://docs.cloud.google.com/iam/docs/create-short-lived-credentials-direct
+      state: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions
+      gateway: https://docs.cloud.google.com/apigee/docs/api-platform/get-started/ai-capabilities
+      provider: https://docs.cloud.google.com/gemini-enterprise-agent-platform/overview
+      internalTools: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
+      openWeb: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search
+      registry: https://docs.cloud.google.com/artifact-registry/docs/repositories/remote-overview
+    differences:
+      - at: harness->gateway
+        text: "ADK sends model calls straight to Gemini with the agent's own service account unless you wrap the model in ApigeeLlm. To force the gateway, point model and MCP addresses at Apigee and remove direct model permission from the agent's account."
+        url: https://adk.dev/agents/models/apigee/
+      - at: gateway->provider
+        text: "Google's reference sends the model call from the agent through Model Armor to Gemini, with no Apigee. Here Apigee calls the model with its own service account, so also turn on Model Armor floor settings to catch calls that bypass Apigee."
+        url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      - at: gateway->internalTools
+        text: "Google's reference has the agent call MCP servers on Cloud Run directly, protected by IAP and IAM, or through Agent Gateway. To make Apigee the only door, allow only Apigee's service account to invoke the tool services."
+        url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      - at: gateway->openWeb
+        text: "Grounding with Google Search is a switch inside the model request: Google runs the search, and Apigee never sees or filters the pages. Google's page also says search cannot share one request with function calling, so they need separate model calls."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search
+      - at: orchestration->subagents
+        text: "Google's reference has agents talk over the A2A protocol, checked by Agent Gateway and Agent Registry, and lets each run as its own service. Here delegation stays inside one process, so nothing screens messages between agents unless your code does."
+        url: https://docs.cloud.google.com/architecture/multiagent-ai-system
+      - at: subagents
+        text: "A Cloud Run service runs as one service account. Per-subagent tokens exist only because the coordinator's account may impersonate the others, so a compromised process can mint them all. Google's reference gives each agent its own Agent Identity."
+        url: https://docs.cloud.google.com/iam/docs/create-short-lived-credentials-direct
+      - at: orchestration->state
+        text: "ADK resume is not a replaying engine. It restores finished steps from the session's events and re-runs the rest, and tools may run more than once. Make every write tool safe to repeat, and never change the agents while a run is stopped."
+        url: https://adk.dev/runtime/resume/
+      - at: state
+        text: "Sessions are child resources of an Agent Runtime instance, so you must create one (no code deployed) even though the agent runs on Cloud Run. Sessions live 365 days unless you set a shorter lifetime."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions/manage-with-api
+      - at: operator->events
+        text: "ADK's confirmation page lists Agent Platform Sessions (VertexAiSessionService) as not supported. The operator-approval step therefore conflicts with keeping the journal in Sessions; test it or use another store. The reply must be posted to the ADK server with the invocation ID."
+        url: https://adk.dev/tools-custom/confirmation/
+      - at: localTools
+        text: "Code Execution is a separate Agent Platform service with no network, called by API. ADK says the agent's service account needs roles/aiplatform.user for it, the same role that permits direct model calls, which weakens the gateway-only rule unless narrowed."
+        url: https://adk.dev/integrations/code-exec-agent-runtime/
+      - at: harness
+        text: "Apigee is not the network exit. Cloud Run reaches the internet freely unless you send all outbound traffic into the VPC and through Secure Web Proxy with an allow list. Agent Gateway for Cloud Run uses that same proxy and is Limited Preview."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+    alsoNeeded:
+      - service: "IAM service accounts"
+        role: identity
+        why: "Each Cloud Run service, and Apigee's proxies, run as a service account you create and scope."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/security/google-auth/overview
+      - service: "VPC network with Direct VPC egress and Secure Web Proxy"
+        role: network
+        why: "The only way to control where Cloud Run workloads can connect on the internet."
+        url: https://docs.cloud.google.com/secure-web-proxy/docs/overview
+      - service: "Apigee networking (Private Service Connect or VPC peering)"
+        role: network
+        why: "Lets agents reach Apigee privately and lets Apigee reach tool services on Cloud Run."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/get-started/networking-options
+      - service: "Secret Manager"
+        role: secrets
+        why: "Google's recommended store for API keys and passwords that Cloud Run services need."
+        url: https://docs.cloud.google.com/run/docs/configuring/services/secrets
+      - service: "Cloud KMS"
+        role: keys
+        why: "Customer-managed encryption keys for stored conversations, sessions and logs, where policy requires them."
+        url: https://docs.cloud.google.com/kms/docs/cmek
+      - service: "Binary Authorization"
+        role: registry
+        why: "Allows only approved container images to deploy to Cloud Run; Google's reference names it."
+        url: https://docs.cloud.google.com/binary-authorization/docs/overview
+      - service: "Model Armor templates"
+        role: other
+        why: "Apigee's prompt policy and the platform floor settings both need a Model Armor template to exist."
+        url: https://docs.cloud.google.com/model-armor/model-armor-vertex-integration
+      - service: "Cloud Logging and Cloud Trace"
+        role: logging
+        why: "Cloud Run sends logs here by default; route them onward to your security monitoring."
+        url: https://docs.cloud.google.com/logging/docs/overview
+      - service: "Agent Runtime instance"
+        role: other
+        why: "Agent Platform Sessions can only be created under one, even with no agent deployed to it."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions/manage-with-api
+      - service: "Cloud Run ingress restriction"
+        role: ingress
+        why: "Keeps the agent service off the public internet; this pattern's settings list has no ingress entry."
+        url: https://docs.cloud.google.com/run/docs/securing/ingress
+    quickstart:
+      - title: "Workflows: multi-agent, multi-node applications"
+        url: https://adk.dev/workflows/
+    # <<< checked
     reference:
       - title: Multi-agent AI system in Google Cloud
         url: https://docs.cloud.google.com/architecture/multiagent-ai-system
@@ -1093,6 +1337,72 @@ implementations:
 
   - architecture: archRemoteMcpServer
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      idp: https://docs.cloud.google.com/identity-platform/docs/multi-tenancy
+      gateway: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
+      authServer: https://docs.cloud.google.com/apigee/docs/api-platform/security/oauth/oauth-home
+      service: https://docs.cloud.google.com/run/docs/host-mcp-servers
+      orgData: https://docs.cloud.google.com/run/docs/configuring/services/secrets
+    differences:
+      - at: service->authServer
+        text: "The Cloud Run service never sees or checks the caller's token. Apigee checks it, then calls Cloud Run with its own Google identity token, and offers no token-exchange grant. Have Apigee pass the verified app, user and tenant on to the service."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/security/google-auth/overview
+      - at: callers->authServer
+        text: "Apigee does not host a sign-in or consent page. Its authorization-code flow redirects to a login app that you build and run; that app signs the user in (here with Identity Platform) and then asks Apigee to issue the code."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/security/oauth/oauth-v2-policy-authorization-code-grant-type
+      - at: callers->idp
+        text: "Identity Platform signs each customer's users in through their tenant's SAML or OIDC provider, but its documentation describes no identity assertion grant (ID-JAG) for agents. Plan on browser sign-in through your login app only, unless you add another identity product."
+        url: https://docs.cloud.google.com/identity-platform/docs/concepts-authentication
+      - at: gateway->service
+        text: "By default a Cloud Run service's run.app address can be reached from the internet. Require authentication, give the invoker role only to Apigee's proxy service account, and restrict ingress or disable the default address so callers cannot go round Apigee."
+        url: https://docs.cloud.google.com/run/docs/securing/ingress
+      - at: callers->gateway
+        text: "MCP clients find the authorization server through a metadata document at /.well-known/oauth-protected-resource/mcp; Apigee answers 404 when it is not configured. Make sure your proxy serves it, and put an external load balancer in front of Apigee for internet callers."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/troubleshoot-mcp-deployments
+      - at: service
+        text: "Deploying with the functional-type flag also lists the server in your organisation's Agent Registry, and the setting cannot be changed afterwards. It is a Preview feature. Google's own guides then protect such servers with IAP and Google sign-in, not Apigee."
+        url: https://docs.cloud.google.com/run/docs/ai/agent-platform-features
+    alsoNeeded:
+      - service: "External Application Load Balancer (with Private Service Connect to Apigee)"
+        role: ingress
+        why: "Internet callers reach Apigee through an external load balancer; Apigee is not directly exposed."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/get-started/networking-options
+      - service: "Apigee proxy service account (IAM)"
+        role: identity
+        why: "Apigee calls Cloud Run as a named service account that needs the Cloud Run invoker role."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/security/google-auth/overview
+      - service: "Login and consent app (your own, for example on Cloud Run)"
+        role: other
+        why: "Apigee's authorization-code flow needs a login app you host to sign users in and record consent."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/security/oauth/oauth-v2-policy-authorization-code-grant-type
+      - service: "Artifact Registry"
+        role: registry
+        why: "Holds the MCP server's container image that Cloud Run deploys and Artifact Analysis scans."
+        url: https://docs.cloud.google.com/artifact-analysis/docs/enable-automatic-scanning
+      - service: "Private Service Connect or VPC peering from Apigee to the backend"
+        role: network
+        why: "Apigee reaches backends in your network over VPC peering or Private Service Connect, which you set up."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/get-started/networking-options
+      - service: "Secret Manager"
+        role: secrets
+        why: "Holds each upstream credential the handlers use."
+        url: https://docs.cloud.google.com/run/docs/configuring/services/secrets
+      - service: "Secure Web Proxy with a VPC network"
+        role: network
+        why: "Filters the service's outbound traffic to an allowed list."
+        url: https://docs.cloud.google.com/secure-web-proxy/docs/overview
+      - service: "Cloud Logging"
+        role: logging
+        why: "Receives Apigee's per-call logs; the proxy's service account needs the log writer role."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/message-logging-policy
+    quickstart:
+      - title: "Build and deploy a remote MCP server on Cloud Run"
+        url: https://docs.cloud.google.com/run/docs/tutorials/deploy-remote-mcp-server
+      - title: "Manage MCP tool access"
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
+    # <<< checked
     reference:
       - title: Host MCP servers on Cloud Run
         url: https://docs.cloud.google.com/run/docs/host-mcp-servers
@@ -1137,6 +1447,81 @@ implementations:
 
   - architecture: archSelfHostedInference
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      consumers: https://docs.cloud.google.com/vpc/docs/private-service-connect
+      gateway: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-gke-inference-gateway
+      api: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/serve-with-gke-inference-gateway
+      runtime: https://docs.cloud.google.com/architecture/networking-for-ai-inference-gke
+      storage: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/cloud-storage-fuse-csi-driver
+      sources: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/serve-gemma-gpu-vllm
+      registry: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/introduction
+    differences:
+      - at: gateway
+        text: "The gateway is not one product. A regional internal load balancer runs GKE Inference Gateway and calls Apigee and Model Armor as side checks. The builder must attach both extensions and set them to block traffic when a check fails or times out."
+        url: https://docs.cloud.google.com/architecture/networking-for-ai-inference-gke
+      - at: gateway->api
+        text: "Google's walkthrough has Apigee check API keys, not Google identities. On this callout path Apigee message logging is unsupported and one Apigee proxy handles all traffic. The builder must plan tenant identity, quotas and logging within those limits."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/service-extensions/extension-processor-overview
+      - at: api->runtime
+        text: "The load balancer first asks an in-cluster endpoint picker which vLLM replica to use, then sends the request to that pod. The picker is an extra component in the path; network policy must let only the gateway and picker reach vLLM."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-gke-inference-gateway
+      - at: sources->storage
+        text: "Google's GKE tutorials have vLLM download weights directly from Hugging Face at start-up, using a token kept in the cluster. To match the drawing, the builder must add an intake job that copies vetted weights into the bucket and block Hugging Face from serving nodes."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/serve-with-gke-inference-gateway
+      - at: registry->storage
+        text: "Model Registry does not push weights into the bucket, and vLLM on GKE does not read its aliases. The registry only records a bucket path. The builder's promotion job must copy the weights and point the deployment at the aliased version."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/import-model
+      - at: storage->runtime
+        text: "Mounting the bucket with Cloud Storage FUSE hands the pod whatever files are there; the mount does not check a digest or signature. The builder must add a start-up check before vLLM opens the weights and grant the pod read-only access."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/cloud-storage-fuse-csi-driver
+      - at: runtime
+        text: "Google's reference draws no outbound exit. GKE nodes with only internal addresses cannot reach the internet unless Cloud NAT is added. The builder should keep it that way and serve the vLLM image from a private registry."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+    alsoNeeded:
+      - service: "Apigee instance and Apigee Operator for Kubernetes"
+        role: other
+        why: "The Apigee callout needs a same-region Apigee instance and the operator installed in the cluster."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-kubernetes/apigee-apim-operator-overview
+      - service: "Workload Identity Federation for GKE"
+        role: identity
+        why: "Gives vLLM pods a keyless identity to read the weights bucket; only named inside the bucket-access row."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+      - service: "Cloud KMS"
+        role: keys
+        why: "Customer-managed key for the weights bucket; in the component note but has no settings row."
+        url: https://docs.cloud.google.com/storage/docs/encryption/customer-managed-keys
+      - service: "Secret Manager"
+        role: secrets
+        why: "Holds the Hugging Face token for the intake job and other credentials, instead of plain cluster secrets."
+        url: https://docs.cloud.google.com/secret-manager/docs/overview
+      - service: "Artifact Registry"
+        role: registry
+        why: "Private home for the vLLM serving image; Settings cover only scanning of images."
+        url: https://docs.cloud.google.com/artifact-registry/docs/overview
+      - service: "Cloud NAT (only if egress is allowed)"
+        role: network
+        why: "Private nodes have no internet without NAT; decide explicitly whether any outbound path exists."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation
+      - service: "Cloud Logging (HTTP access logging through GCPBackendPolicy)"
+        role: logging
+        why: "Per-InferencePool access logs; replaces the Apigee MessageLogging row, which does not work on this path."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations
+      - service: "Cloud Armor"
+        role: ingress
+        why: "Google's reference lists it as optional edge protection in front of the gateway."
+        url: https://docs.cloud.google.com/architecture/networking-for-ai-inference-gke
+      - service: "llm-d Endpoint Picker"
+        role: other
+        why: "Runs in the cluster and picks the replica for every request; needs its own network policy."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-gke-inference-gateway
+    quickstart:
+      - title: "Serve an LLM with GKE Inference Gateway"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/serve-with-gke-inference-gateway
+      - title: "Serve Gemma open models using GPUs on GKE with vLLM"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/serve-gemma-gpu-vllm
+    # <<< checked
     reference:
       - title: Networking for AI inference model serving on GKE
         url: https://docs.cloud.google.com/architecture/networking-for-ai-inference-gke
@@ -1176,6 +1561,85 @@ implementations:
 
   - architecture: archTrainingPipeline
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      upstreamArtifacts: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-garden/use-models
+      pkgRegistry: https://docs.cloud.google.com/artifact-registry/docs/repositories/remote-overview
+      curation: https://docs.cloud.google.com/dataflow/docs/overview
+      corpus: https://docs.cloud.google.com/storage/docs/object-versioning
+      trainJob: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/overview
+      storage: https://docs.cloud.google.com/storage/docs/encryption/customer-managed-keys
+      evaluation: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/evaluation/introduction
+      registry: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/introduction
+    differences:
+      - at: trainJob
+        text: "Google's blueprint uses Managed Airflow as its main production orchestrator, with Pipelines as an alternative, and still calls the platform Vertex AI. Choosing Agent Platform Pipelines works, but the blueprint's code and diagrams will not match one-to-one."
+        url: https://docs.cloud.google.com/architecture/blueprints/genai-mlops-blueprint
+      - at: pkgRegistry->trainJob
+        text: "A serverless training job keeps Google-managed internet access by default, even with a Private Service Connect interface, so it can bypass the mirror. Internet is blocked only once the project is inside a VPC Service Controls perimeter. The builder must enforce that perimeter."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/psc-i-egress
+      - at: corpus->trainJob
+        text: "By default training code runs as a shared Google-managed service agent, not a per-pipeline identity. The builder must attach a dedicated service account to every job so it can read only its approved dataset version."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/custom-service-account
+      - at: trainJob->storage
+        text: "A training pipeline can create a Model resource by itself the moment training ends, skipping the candidate bucket and the evaluation gate. The builder should run plain jobs that only write to the bucket and deny the training identity permission to upload models."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/create-training-pipeline
+      - at: storage->evaluation
+        text: "The Gen AI evaluation service scores a model by calling it, not by reading files in a bucket. The builder must first serve the candidate on a temporary test endpoint, or run batch inference, and supply red-teaming tooling separately."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/evaluation-overview
+      - at: evaluation->registry
+        text: "In Google's blueprint the pipeline itself imports a validated model into Model Registry and a data scientist decides what goes to production. There is no signing step or separate promotion identity; the builder must add both."
+        url: https://docs.cloud.google.com/architecture/blueprints/genai-mlops-blueprint
+      - at: storage->registry
+        text: "Model Registry records a Cloud Storage folder path and a serving container image, not a digest or signature. The builder's promotion step must compute the digest, sign it, and keep both beside the artifact or as labels on the version."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/import-model
+      - at: upstreamArtifacts->pkgRegistry
+        text: "Model Garden lets users tune and deploy open models directly, without passing the mirror. With no organisation policy set, all models and actions are allowed. The builder must set the Model Garden policy to deny or list permitted models."
+        url: https://docs.cloud.google.com/vertex-ai/generative-ai/docs/control-model-access
+    alsoNeeded:
+      - service: "IAM service accounts (training, evaluation, promotion)"
+        role: identity
+        why: "Separate identities so the training job cannot sign or register its own output."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/custom-service-account
+      - service: "VPC network, network attachment and Private Service Connect endpoint for Google APIs"
+        role: network
+        why: "The PSC interface needs a subnet and attachment; inside the perimeter Google APIs resolve through a PSC endpoint."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/psc-i-egress
+      - service: "Cloud KMS"
+        role: keys
+        why: "CMEK keys in the same region as training resources, plus the asymmetric signing key."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/cmek
+      - service: "Secret Manager"
+        role: secrets
+        why: "Hub tokens and other credentials for intake and training jobs; part of Google's blueprint."
+        url: https://docs.cloud.google.com/secret-manager/docs/overview
+      - service: "Artifact Registry Docker repository"
+        role: registry
+        why: "Holds the training, evaluation and pipeline container images; the blueprint stores pipeline containers there."
+        url: https://docs.cloud.google.com/artifact-registry/docs/overview
+      - service: "Cloud Audit Logs and Cloud Logging"
+        role: logging
+        why: "Data Access logs for aiplatform.googleapis.com are off by default and must be enabled."
+        url: https://docs.cloud.google.com/vertex-ai/docs/general/audit-logging
+      - service: "Cloud Build"
+        role: other
+        why: "The blueprint uses it to build containers and deploy pipeline definitions from reviewed branches."
+        url: https://docs.cloud.google.com/architecture/blueprints/genai-mlops-blueprint
+      - service: "Temporary serving endpoint for candidates"
+        role: other
+        why: "Gen AI evaluation calls a running model, so each candidate must be served somewhere isolated first."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/evaluation-overview
+      - service: "Organization Policy (Model Garden model access)"
+        role: other
+        why: "Stops users tuning or deploying Model Garden models outside the approved intake path."
+        url: https://docs.cloud.google.com/vertex-ai/generative-ai/docs/control-model-access
+    quickstart:
+      - title: "Build a pipeline"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/pipelines/build-pipeline
+      - title: "Create a serverless training job"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/training/create-custom-job
+    # <<< checked
     reference:
       - title: Build and deploy generative AI and machine learning models in an enterprise
         url: https://docs.cloud.google.com/architecture/blueprints/genai-mlops-blueprint
@@ -1197,7 +1661,7 @@ implementations:
       - { block: corpus, service: Cloud Storage (versioned corpus bucket) }
       - { block: trainJob, service: Agent Platform serverless training, note: "Formerly Vertex AI custom training; GKE with GPU node pools is the self-managed alternative." }
       - { block: storage, service: Cloud Storage (candidate bucket) }
-      - { block: evaluation, service: Agent Platform model evaluation, note: "A pipeline component in front of promotion, run in its own project." }
+      - { block: evaluation, service: "Gen AI evaluation service (Agent Platform), in a pipeline step", note: "For tuned generative models, in its own project in front of promotion. Agent Platform model evaluation covers only predictive image and tabular models. Red teaming is builder-supplied." }
       - { block: registry, service: Agent Platform Model Registry }
     settings:
       - trainingServiceAccount
@@ -1218,6 +1682,94 @@ implementations:
 
   - architecture: archAgentSandbox
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      graders: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-separation
+      platform: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+      orchestrator: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox
+      sandbox: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-sandbox
+      storage: https://docs.cloud.google.com/storage/docs/uniform-bucket-level-access
+      inference: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/serve-gemma-gpu-vllm
+      registry: https://docs.cloud.google.com/artifact-registry/docs/repositories/virtual-overview
+      sources: https://docs.cloud.google.com/artifact-registry/docs/repositories/remote-overview
+    differences:
+      - at: localTools->offlineWeb
+        text: "Agent Sandbox's default network policy lets a sandbox reach the public internet; it blocks only private ranges, cluster DNS and the metadata server. To keep rollouts off the live web, define your own policy in the SandboxTemplate that denies everything except named peers."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox
+      - at: harness->inference
+        text: "FQDN network policies cannot allow traffic to in-cluster Services. The vLLM API and the offline web are in the cluster, so allow them with label-based NetworkPolicy; FQDN policies help only for names outside the cluster, such as Artifact Registry."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+      - at: localTools->registry
+        text: "Artifact Registry is a Google API outside the cluster. Allowing its name also allows every other service on the same shared Google addresses, and DNS lookups are never blocked. Add VPC Service Controls so that route cannot carry data elsewhere."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+      - at: localTools->platform
+        text: "Logs need no network path from the sandbox: an agent on each node reads container output and writes it with the node's service account. The metadata server is blocked by Agent Sandbox's default policy and must be allowed before Workload Identity works."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-logs
+      - at: sandbox
+        text: "gVisor sandboxes cannot read node metadata, but microVM sandboxes can unless you add a network policy blocking it. The recommended admission policy also demands gVisor, so it rejects microVM sandboxes until you edit it."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/sandbox-pods
+      - at: sandbox
+        text: "Google's generally available RL set-up for Agent Sandbox reuses warm Pods between episodes with an in-pod reset to save start-up time. The pattern wants a fresh sandbox per task, so do not use the recycle strategy across tasks that must stay separate."
+        url: https://cloud.google.com/blog/products/containers-kubernetes/accelerate-agentic-rl-with-gke-agent-sandbox
+      - at: sandbox
+        text: "Google now recommends Agent Substrate on GKE for most agent workloads, with outbound traffic blocked by default. Agent Sandbox is advised when each agent needs its own Pod, GPUs or Autopilot, and you install and upgrade its controller yourself."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-workloads
+      - at: graders->harness
+        text: "By default only the Sandbox Router may open connections into a sandbox. Graders cannot check a rollout's end state directly; send the checks through the orchestrator and router, or add an ingress rule for the grader namespace."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/how-install-agent-sandbox
+      - at: storage->inference
+        text: "In Google's RL-on-GKE tutorial the sampler (vLLM) runs inside the training workers, and one bucket holding weights, data and checkpoints is mounted on every node with Cloud Storage FUSE. Keep vLLM as a separate service and mount the bucket only on its nodes."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/scaling-rl-verl-gke
+    alsoNeeded:
+      - service: "VPC Service Controls"
+        role: network
+        why: "Stops allowed Google API routes (Artifact Registry, Cloud Storage) carrying data to other projects."
+        url: https://docs.cloud.google.com/artifact-registry/docs/securing-with-vpc-sc
+      - service: "Private GKE nodes"
+        role: network
+        why: "Nodes without external addresses, so a sandbox host has no direct internet route."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+      - service: "Cloud Storage FUSE CSI driver"
+        role: other
+        why: "Mounts the checkpoint bucket into the vLLM Pods, authenticated by Workload Identity."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/cloud-storage-fuse-csi-driver
+      - service: "Artifact Registry Docker repository (with GKE Image Streaming)"
+        role: registry
+        why: "Holds task, harness and vLLM container images; the component row covers language packages only."
+        url: https://docs.cloud.google.com/artifact-registry/docs/repositories/virtual-overview
+      - service: "GKE Gateway API"
+        role: ingress
+        why: "Reaches the Sandbox Router and orchestrator from outside the cluster; port-forwarding is for development only."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox
+      - service: "Cloud KMS"
+        role: keys
+        why: "Customer-managed keys for the checkpoint bucket."
+        url: https://docs.cloud.google.com/storage/docs/encryption/customer-managed-keys
+      - service: "Secret Manager"
+        role: secrets
+        why: "Google's hardening guide says to keep secrets there, not in Kubernetes Secrets."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
+      - service: "Managed OpenTelemetry for GKE"
+        role: logging
+        why: "Google's documented way to collect RL metrics and traces into Cloud Monitoring and Cloud Trace."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/monitor-reinforcement-learning-workloads
+      - service: "Workload Identity Federation for GKE (IAM)"
+        role: identity
+        why: "Gives each run's Pods their own Google Cloud identity without keys."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+      - service: "Cloud Logging log bucket"
+        role: logging
+        why: "Locked store for trajectory and host logs."
+        url: https://docs.cloud.google.com/logging/docs/buckets
+    quickstart:
+      - title: "Install Agent Sandbox on GKE"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/how-install-agent-sandbox
+      - title: "Isolating AI code execution with Agent Sandbox on GKE"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox
+      - title: "Accelerating agentic RL and evaluation research velocity with 45x faster GKE Agent Sandbox"
+        url: https://cloud.google.com/blog/products/containers-kubernetes/accelerate-agentic-rl-with-gke-agent-sandbox
+    # <<< checked
     reference:
       - title: About Agent Sandbox on GKE
         url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-sandbox
@@ -1263,6 +1815,96 @@ implementations:
 
   - architecture: archAgentFederation
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      idp: https://docs.cloud.google.com/identity/docs/overview
+      entry: https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run
+      authServer: https://docs.cloud.google.com/apigee/docs/api-platform/security/oauth/access-tokens
+      harness: https://docs.cloud.google.com/run/docs/ai/a2a-agents
+      localTools: https://adk.dev/tools-custom/function-tools/
+      memory: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions
+      gateway: https://docs.cloud.google.com/gemini/enterprise/docs/register-and-manage-an-a2a-agent
+      internalTools: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
+      provider: https://docs.cloud.google.com/gemini-enterprise-agent-platform/overview
+    differences:
+      - at: harness->gateway
+        text: "ADK sends model calls straight to Gemini with the agent's own service account unless you wrap the model in ApigeeLlm. To force the gateway, point model and MCP addresses at Apigee and remove direct model permission from the agent's account."
+        url: https://adk.dev/agents/models/apigee/
+      - at: gateway->provider
+        text: "Google's reference sends the model call from the agent through Model Armor to Gemini, with no Apigee. Here Apigee calls the model with its own service account, so also turn on Model Armor floor settings to catch calls that bypass Apigee."
+        url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      - at: gateway->internalTools
+        text: "Google's reference has the agent call MCP servers on Cloud Run directly, protected by IAP and IAM, or through Agent Gateway. To make Apigee the only door, allow only Apigee's service account to invoke the tool services."
+        url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      - at: gateway->authServer
+        text: "There is no separate authorization server: the token endpoints are proxies inside the same Apigee. Its OAuth policy supports client credentials, authorization code, password and implicit grants only, so exchanging a peer's token for an internal one must be hand-built."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/oauthv2-policy
+      - at: idp->authServer
+        text: "Apigee does not federate with Cloud Identity on its own. Google's guide for an A2A agent behind Apigee has the proxy check each user token itself: verify signed tokens against the issuer's keys, or call Google's tokeninfo endpoint for Google tokens."
+        url: https://docs.cloud.google.com/gemini/enterprise/docs/register-and-manage-an-a2a-agent
+      - at: gateway->peerVendor
+        text: "Google's references send outbound A2A through Agent Gateway and admit peers through Agent Registry; Apigee is not mentioned. Agent Gateway for Cloud Run is Limited Preview, so with Apigee the card, skill and artifact checks are policies you write yourself."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview
+      - at: peerVendor
+        text: "Google's custom SAML app is a browser sign-on: the user's browser carries the assertion to the vendor. No Google page opened shows a gateway attaching a user's SAML assertion to an agent call, so confirm how the user's identity reaches the vendor peer."
+        url: https://knowledge.workspace.google.com/admin/apps/set-up-your-own-custom-saml-app
+      - at: gateway->partner
+        text: "Inbound peers reach Apigee only if you arrange it: Google says to set the Agent Card address to the Apigee proxy, require OAuth there, and keep the Cloud Run agent private so only Apigee's service account can invoke it."
+        url: https://docs.cloud.google.com/gemini/enterprise/docs/register-and-manage-an-a2a-agent
+      - at: memory
+        text: "Cloud Run's A2A guide keeps task state in an A2A task store: in memory by default, lost on restart, or AlloyDB for production. Sessions holds conversation events, so multi-day tasks also need a persistent task store that you secure."
+        url: https://docs.cloud.google.com/run/docs/deploy-a2a-agents
+      - at: harness
+        text: "This pattern's settings list has no network exit control. Unless Cloud Run sends all outbound traffic into the VPC and through Secure Web Proxy, the agent can call a peer directly and skip Apigee's checks."
+        url: https://docs.cloud.google.com/secure-web-proxy/docs/overview
+    alsoNeeded:
+      - service: "IAM service accounts"
+        role: identity
+        why: "Each Cloud Run service, and Apigee's proxies, run as a service account you create and scope."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/security/google-auth/overview
+      - service: "VPC network with Direct VPC egress and Secure Web Proxy"
+        role: network
+        why: "Stops the agent calling peers or the internet directly, around Apigee."
+        url: https://docs.cloud.google.com/secure-web-proxy/docs/overview
+      - service: "Apigee networking and external load balancer"
+        role: ingress
+        why: "Peers reach Apigee through a load balancer; Apigee reaches the private agent through Private Service Connect."
+        url: https://docs.cloud.google.com/apigee/docs/api-platform/get-started/networking-options
+      - service: "Agent Runtime instance"
+        role: other
+        why: "Agent Platform Sessions can only be created under one, even with no agent deployed to it."
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sessions/manage-with-api
+      - service: "AlloyDB for PostgreSQL"
+        role: other
+        why: "Google's Cloud Run guide uses it as the persistent A2A task store; the default store is in memory."
+        url: https://docs.cloud.google.com/run/docs/deploy-a2a-agents
+      - service: "Secret Manager"
+        role: secrets
+        why: "Holds database passwords and any peer client secrets; the Cloud Run A2A guide uses it."
+        url: https://docs.cloud.google.com/run/docs/deploy-a2a-agents
+      - service: "Cloud KMS"
+        role: keys
+        why: "Customer-managed encryption keys for stored task data and sessions, where policy requires them."
+        url: https://docs.cloud.google.com/kms/docs/cmek
+      - service: "Artifact Registry and Binary Authorization"
+        role: registry
+        why: "Stores the agent's container image and allows only approved images to deploy."
+        url: https://docs.cloud.google.com/binary-authorization/docs/overview
+      - service: "Model Armor templates"
+        role: other
+        why: "The sanitize calls need a template, plus Sensitive Data Protection templates for de-identification."
+        url: https://docs.cloud.google.com/model-armor/sanitize-prompts-responses
+      - service: "Cloud Logging and Data Access audit logs"
+        role: logging
+        why: "Only tracing is in the settings; peer calls through Apigee and the platform also need audit logs."
+        url: https://docs.cloud.google.com/logging/docs/overview
+    quickstart:
+      - title: "Deploy A2A agents to Cloud Run"
+        url: https://docs.cloud.google.com/run/docs/deploy-a2a-agents
+      - title: "Register and manage A2A agents"
+        url: https://docs.cloud.google.com/gemini/enterprise/docs/register-and-manage-an-a2a-agent
+    # <<< checked
     reference:
       - title: Single-agent AI system using ADK and Cloud Run — A2A security considerations
         url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run

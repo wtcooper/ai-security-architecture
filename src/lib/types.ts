@@ -715,8 +715,8 @@ export interface ToolControl {
  * How a setting is applied — the channel an administrator uses. A setting reachable two ways
  * (an admin-console toggle that MDM can also push) lists both.
  */
-export type SettingVia = "mdm" | "adminConsole" | "configFile" | "apiCli" | "identityProvider" | "cloudPolicy" | "code";
-export const SETTING_VIAS: SettingVia[] = ["mdm", "adminConsole", "configFile", "apiCli", "identityProvider", "cloudPolicy", "code"];
+export type SettingVia = "mdm" | "adminConsole" | "configFile" | "apiCli" | "identityProvider" | "cloudPolicy" | "clusterPolicy" | "code";
+export const SETTING_VIAS: SettingVia[] = ["mdm", "adminConsole", "configFile", "apiCli", "identityProvider", "cloudPolicy", "clusterPolicy", "code"];
 
 /** The admin area a setting sits in, in the order a console is usually worked through. */
 export type SettingArea = "identity" | "data" | "tools" | "network" | "audit" | "sharing";
@@ -750,6 +750,44 @@ export interface ProductSetting {
   url: string;
   /** When the setting's name and url were checked, e.g. "2026-10-30". */
   verified: string;
+  /** A read-only command that shows whether the setting is at its recommended value. */
+  check?: SettingCheck;
+}
+
+/**
+ * How to look at a setting without changing it. The command only reads, is taken from the
+ * vendor's command reference, and has not been run by this project: a reader runs it in their own
+ * account. There is deliberately no command that creates or changes anything, because how an
+ * organisation deploys is its own decision.
+ */
+export interface SettingCheck {
+  /** One line to paste, with identifiers as <placeholders>. */
+  command: string;
+  /** What a passing result looks like. */
+  expect: string;
+  /** The reference page for the command. */
+  url: string;
+}
+
+/** The first word of an operation that only reads, and of one that does not. */
+export const READ_ONLY_VERB = /^(get|describe|list|show|view|lookup|search|batch-get|head|read)(-|$)/;
+export const CHANGING_VERB =
+  /^(create|delete|put|update|set|apply|remove|attach|detach|enable|disable|start|stop|run|add|modify|patch|replace|import|register|deregister|tag|untag|invoke|send|publish|terminate|reboot|revoke|grant|deploy|exec|edit|scale|rollout|restore|reset|rotate|associate|disassociate|rm|mv|cp)(-|$)/;
+
+/** Why a check's command is not acceptable, or null when it only reads. */
+export function checkCommandProblem(command: string): string | null {
+  const line = command.trim();
+  if (!line || /\n/.test(line)) return "is one line";
+  // Quoted values and <placeholders> are not shell syntax; what is left must have none.
+  if (/[|;&><`]|\$\(/.test(line.replace(/'[^']*'|"[^"]*"|<[A-Za-z0-9_-]+>/g, ""))) return "has no pipes, redirects or chained commands";
+  // The operation is among the bare words before the first option.
+  const words = line.split(/\s+/);
+  const firstOption = words.findIndex((w) => w.startsWith("-"));
+  const bare = (firstOption === -1 ? words : words.slice(0, firstOption)).slice(1);
+  const changing = bare.find((w) => CHANGING_VERB.test(w));
+  if (changing) return `only reads ("${changing}" changes something)`;
+  if (!bare.some((w) => READ_ONLY_VERB.test(w))) return "names an operation that only reads (get, describe, list, show)";
+  return null;
 }
 
 /** Whether the organisation has a product, a cloud or one of their settings switched on. */
@@ -760,7 +798,23 @@ export const ADOPTION_STATUSES: AdoptionStatus[] = ["enabled", "testing", "notEn
 export interface ProductStatusEntry {
   status?: AdoptionStatus;
   note?: string;
-  settings?: Record<string, { status?: AdoptionStatus; value?: string; note?: string }>;
+  /** `link` is the organisation's own module, policy or runbook that applies the setting. */
+  settings?: Record<string, { status?: AdoptionStatus; value?: string; note?: string; link?: string }>;
+  /**
+   * Clouds and on-premises only: what the organisation runs for a component in place of the
+   * reference service. Keyed by a block id (every pattern on this platform that has the block)
+   * or "<pattern id>/<block id>" (that pattern only, which wins).
+   */
+  components?: Record<string, ComponentChoice>;
+}
+
+/** The organisation's own approved service for one component, and where its module or runbook lives. */
+export interface ComponentChoice {
+  /** What the organisation runs there, as it should read on the drawing. */
+  uses: string;
+  /** The organisation's module, golden path or runbook for it. */
+  link?: string;
+  note?: string;
 }
 
 /** One block of a cloud architecture bound to the cloud service that plays it. */
@@ -768,10 +822,38 @@ export interface CloudBinding {
   block: string;
   /** The service, or for a block with no managed equivalent, what you run yourself. */
   service: string;
+  /** The vendor's page for the service, as checked on `verified`. Absent for what is not a cloud service. */
   url?: string;
+  /** The day the row was last checked against the vendor's documentation (YYYY-MM-DD). */
+  verified?: string;
   note?: string;
   /** True when no managed service fills the block: the organisation builds or runs it. */
   build?: boolean;
+}
+
+/** What a supporting service is for, in the words a builder would look for it under. */
+export const CLOUD_ROLES = ["identity", "network", "keys", "secrets", "registry", "logging", "ingress", "other"] as const;
+export type CloudRole = (typeof CLOUD_ROLES)[number];
+
+/**
+ * A place where a cloud does not follow the pattern's drawing: a flow the vendor routes another
+ * way, one that does not exist there, or one that holds only if the builder makes it so. The
+ * drawing is shared by every cloud, so a difference is stated, never hidden.
+ */
+export interface CloudDifference {
+  /** A flow as "from->to", or a block id. */
+  at: string;
+  /** What happens on this cloud instead, and what the builder does about it, in plain words. */
+  text: string;
+  url?: string;
+}
+
+/** A service a builder must also stand up on this cloud that is not a box on the drawing. */
+export interface CloudSupportingService {
+  service: string;
+  role: CloudRole;
+  why: string;
+  url?: string;
 }
 
 /** One first-party architecture as built on one cloud: its services, and the settings that secure it. */
@@ -784,6 +866,14 @@ export interface CloudImplementation {
   bindings: CloudBinding[];
   /** Ids into the cloud's settings, in the order they read on this architecture. */
   settings: string[];
+  /** The day the component rows and flows were last checked against the vendor's documentation. */
+  verified?: string;
+  /** Where this cloud does not follow the drawing. */
+  differences?: CloudDifference[];
+  /** Services needed on this cloud that are not boxes on the drawing. */
+  alsoNeeded?: CloudSupportingService[];
+  /** The vendor's own pages for building this: a quickstart, tutorial or reference implementation. */
+  quickstart?: GuidanceLink[];
 }
 
 /** A cloud platform: its security-relevant settings, and how each first-party architecture is built on it. */
@@ -792,6 +882,13 @@ export interface CloudPlatform {
   id: string;
   name: string;
   short: string;
+  /**
+   * True for infrastructure the organisation owns and operates itself (its own data centre): no
+   * provider runs any part, so a component is played by software the organisation deploys.
+   */
+  selfManaged?: boolean;
+  /** How the organisation's own boundary is titled on the drawing when this platform is chosen. */
+  boundary?: string;
   settings: ProductSetting[];
   implementations: CloudImplementation[];
 }

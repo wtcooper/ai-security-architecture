@@ -7,7 +7,7 @@ you; it shows the controls your organisation needs in place and the settings of 
 chose. Everything else in the app is the evidence behind those two lists.
 
 - **Patterns.** One for each kind of AI tool or application, 18 in all, grouped by where the AI
-  runs: tools on your devices, AI services you subscribe to, applications you build. Each is a
+  runs: tools on your devices, AI services you subscribe to, AI you host yourself. Each is a
   drawing of the components, data flows and trust boundaries, with every control numbered onto
   it where it goes.
 - **Enable, per pattern.** Two steps: the **enterprise controls** the pattern needs, grouped by
@@ -121,7 +121,7 @@ CoSAI controls, Components, Personas, Frameworks).
 
 | View | What it does |
 | --- | --- |
-| **Home** (`/`) and **Patterns** (`/patterns/`) | Home opens with what the site is for and the three steps of reading a pattern, then the pattern finder: one situation at a time (tools on your devices, AI services you subscribe to, applications you build), a short list of its patterns, and beside it a preview of the one the pointer is on — when it applies, its examples and its drawing. A click opens the pattern. The search box understands product, cloud and everyday words ("copilot", "azure", "chatbot") and searches every situation at once. |
+| **Home** (`/`) and **Patterns** (`/patterns/`) | Home opens with what the site is for and the three steps of reading a pattern, then the pattern finder: one situation at a time (tools on your devices, AI services you subscribe to, AI you host yourself), a short list of its patterns, and beside it a preview of the one the pointer is on — when it applies, its examples and its drawing. A click opens the pattern. The search box understands product, cloud and everyday words ("copilot", "azure", "chatbot") and searches every situation at once. |
 | **Reference › Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
 | **A pattern** (`/patterns/<slug>/`) | One page per pattern. A header says when it applies and gives examples; the drawing carries its numbered control chips; beneath it sit five tabs, each of which changes what the drawing shows and the panel under it: Enable, How it works, Risks, Flows and Incidents. **Enable** (default) opens as two folded steps and nothing else. (1) **Enterprise controls**: one row per control, under plain headings ("Check your suppliers", "Control who and what gets in") that follow the NIST CSF categories. A row leads with **what to do**, as one plain sentence starting with a verb, and **why**, written for whoever has to put it in place and not for a security architect; the control's catalogue name and where it goes on the drawing sit beside it as the reference. It opens to the settings that deliver it, the architect's precise note, the risks it reduces and the definition. (2) **Set it in your product** (your cloud or tool, where the pattern is built): one pill per product and, for the one picked, the same list as step 1 as settings. The rows have the same shape and sit under the same plain headings in the same order: the setting and the value to set it to, one line of why, and beside it the control it delivers, by number and name, and where it is set. A row opens to the full path, how it is set (MDM, admin console, config file, API/CLI, IdP, cloud policy or your own code), the default, what it requires and the vendor's page. Background on the product is one line and an "About" fold; a status column appears only once a status is recorded. Once a product is chosen, every control row in step 1 also names that product's settings for it, so the path reads: what to do → why → the exact setting and value. A step opens by itself when a chip is picked on the drawing or a link names a control or product. **How it works** is the long description, why it is its own pattern, and its sources. **Risks & flows** lists the risks that enter the pattern, where each enters and the controls here that reduce it, then the sequence flows numbered onto the drawing. **Incidents** lists the real incidents that happened on it. The tab, the open product and the open control ride in the address, so any view can be shared. |
 | **Incidents** | A list of real 2025–26 incidents, newest first, filtered by attack type and architecture. Each opens its own page: a step-by-step walk across its reference architecture, every step sourced, ending at the controls that would have broken the chain — each a link to its row on the pattern's Enable tab. |
@@ -129,7 +129,7 @@ CoSAI controls, Components, Personas, Frameworks).
 | **Reference › CoSAI controls** | The 35 CoSAI controls in six groups. A CoSAI control's status rolls up from the catalogue controls that deliver it. |
 | **Controls** (`/controls/`) | The full catalogue — 59 MITRE mitigations and 17 authored specialisations — as a matrix of NIST CSF category × deployment surface, tinted by status; one switch regroups the rows by CoSAI control group. Filter by pattern, risk category, stack layer or source. A control's detail shows the MITRE definition, the authored implementation scope, example technologies, its CSF category, the CoSAI controls it contributes to and the patterns that pin it. |
 | **Reference** (`/reference/`) | What each reference page is for, how risk is described, and where the data comes from. |
-| **Reference › Clouds** (`/reference/clouds/`) | One cloud at a time (AWS, Azure, Google Cloud): the patterns mapped onto it, each with the vendor reference architecture it follows, and the cloud's own setting for every control under its NIST CSF category, with where it is set, the value to set, why, and the patterns that use it. |
+| **Reference › Clouds & on-premises** (`/reference/clouds/`) | One platform at a time (AWS, Azure, Google Cloud, your own data centre): the patterns mapped onto it, each with the vendor reference architecture it follows, and the cloud's own setting for every control under its NIST CSF category, with where it is set, the value to set, why, and the patterns that use it. |
 | **Reference › Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. |
 | **Reference › Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Reference › Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / OWASP MCP / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
@@ -259,11 +259,15 @@ and a CoSAI control rolls up the controls that support it: Enabled only when eve
 when nothing is under way, In progress otherwise. A rollup describes deployment, not control
 compliance or mitigation effectiveness.
 
-The same file's `products:` section records the tools and clouds your organisation uses, keyed
-by tool id (`toolClaudeCode`) or cloud id (`cloudAzure`): a `status` (`enabled`, `testing` or
-`notEnabled`) colours the product's pill, and a `settings:` map gives each of its settings rows
-its own status (and, optionally, the `value` you actually set). Anything not listed reads
-**Not enabled**.
+The same file's `products:` section records the tools, clouds and data centres your
+organisation uses, keyed by tool id (`toolClaudeCode`) or platform id (`cloudAzure`,
+`cloudOnPrem`): a `status` (`enabled`, `testing` or `notEnabled`) colours the product's pill,
+and a `settings:` map gives each of its settings rows its own status and, optionally, the
+`value` you actually set and a `link` to your own module, policy or runbook that applies it.
+On a platform, a `components:` map records what you run for a component in place of the
+reference service (`gateway: { uses: Kong AI Gateway, link: https://… }`), for every pattern or
+for one (`archChatAgent/memory`). The drawing shows your choice in that box, marked as yours,
+and How it works lists it beside the reference. Anything not listed reads **Not enabled**.
 
 ### Control families: NIST CSF
 
@@ -321,7 +325,7 @@ separate when their control sets differ, not when their vendors do.
 | Surface | Architectures |
 | --- | --- |
 | **Endpoint** (5) | Third-party coding & desktop agents, first-party coding & desktop agents, personal autonomous agent (the OpenClaw class), local model runtime, browser AI agents & extensions |
-| **Cloud & hosted** (8) | Single agent workflow, multi-agent workflow, chat agent with tools, remote MCP server you publish, self-hosted model inference, model training & release pipeline, agent sandbox for RL & evaluation, agent-to-agent federation |
+| **AI you host yourself** (8; on a cloud or on-premises) | Single agent workflow, multi-agent workflow, chat agent with tools, remote MCP server you publish, self-hosted model inference, model training & release pipeline, agent sandbox for RL & evaluation, agent-to-agent federation |
 | **Third-party SaaS** (5) | Enterprise AI chat with connectors, and four managed agent runtimes: UI/low-code, coding & desktop sessions, API/SDK, and persistent agents |
 
 Every pattern has **one drawing**, the trust-boundary view: each zone is a labelled outline
@@ -349,17 +353,48 @@ pattern's file must carry. `npm run drawing:audit` scores every pattern against 
 tests fail if one slips. [`docs/PATTERN-FINDINGS.md`](docs/PATTERN-FINDINGS.md) lists the open
 questions about the patterns themselves that the audit and the review turned up.
 
-**A pattern you build can be read as built on a cloud.** The eight "applications you build"
-patterns are mapped onto AWS, Azure and Google Cloud in `data/clouds/`. A **Built on** switch
-above the drawing (Generic · AWS · Azure · Google Cloud) is one state, kept in the address as
-`?cloud=aws` on every tab, and it changes four things together: every box on the drawing names
-the service that plays it (or says "you build this"); every control row on Enable names that
-cloud's own settings for it, and the open row gives each one's place, value and reason; the
-settings step lists that cloud's settings; and How it works names the service that plays each
-component, with its note, and compares the three clouds side by side.
+**A pattern you host can be read as built on a cloud, or in your own data centre.** The eight
+"AI you host yourself" patterns (agents, model inference, MCP servers, pipelines) are mapped
+onto AWS, Azure, Google Cloud and an on-premises data centre in `data/clouds/`. A **Built on**
+switch above the drawing (Generic · AWS · Azure · Google Cloud · On-premises) is one state,
+kept in the address as `?cloud=aws` or `?cloud=onprem` on every tab, and it changes four things
+together: every box on the drawing names what plays it (or says "you build this"); every
+control row on Enable names that platform's own settings for it, and the open row gives each
+one's place, value and reason; the settings step lists that platform's settings; and How it
+works names what plays each component, with its note, and compares the platforms side by side.
 A control-plane box is a function, not one service, so it lists the settings that deliver its
-controls. The tests check, for all 24 pattern-and-cloud pairs, that every named component and
-every pinned control is covered.
+controls. The tests check, for all 32 pattern-and-platform pairs, that every named component
+and every pinned control is covered.
+
+*On-premises* is the pattern run on infrastructure the organisation owns and operates, where no
+provider runs any part: Kubernetes on its own servers, LiteLLM Proxy as the AI gateway, vLLM
+for inference, and self-hosted identity, secrets, registry, policy and logging. The
+organisation's boundary on the drawing then reads **Enterprise data centre**, and How it works
+lists what a cloud provider would otherwise have run for you. The stack is this catalogue's
+choice for each role; record what you run instead in `data/status.yaml`.
+
+**One drawing, and each platform says where it differs.** The drawing is the same on every
+platform, because the trust boundaries and the controls do not change with the vendor. What
+does change is stated, not hidden: each mapping lists the places where that platform does not
+follow the drawing (a model call that goes direct by default, a search feature that bypasses
+the gateway, a sandbox with no outbound network). Those places carry a **≠** mark on the
+drawing, and How it works has a section for the chosen platform with the differences, the
+supporting services you also need (identity, network, keys, registries, logging) that are not
+boxes on the drawing, and the vendor's own quickstart to start building from. Every named
+component links to the vendor page it was checked against, with the date.
+[`docs/CLOUD-VERIFICATION.md`](docs/CLOUD-VERIFICATION.md) records what was checked, what was
+corrected and what is still open.
+
+**How far the detail goes.** A pattern tells you what to build, which setting delivers each
+control and what value to set. It does not carry commands that create or change anything: how
+an organisation deploys (its landing zone, its modules, its pipelines) is its own, and a
+snippet copied from here would be stale or wrong for it. Two things close the gap. A setting
+may carry a **check**: one read-only command from the vendor's reference that shows the
+setting's current value, with what a pass looks like (piloted on the single agent workflow on
+AWS; the build refuses a check that is not read-only, and no check here has been run by this
+project). And an organisation records, in `data/status.yaml`, what it runs for a component in
+place of the reference and a link to its own module or runbook for a component or a setting;
+the drawing and the tables then show the organisation's choice beside the reference.
 
 Under **Flows**, a
 **boundary crossings** table lists every flow that crosses a trust boundary: what crosses, what
@@ -444,8 +479,8 @@ data/
 │   ├── BASELINE.md                 product × architecture, with per-control operator steps,
 │   ├── vendors.yaml                each security setting and its recommended baseline value
 │   └── <vendor>/<family>.yaml      (BASELINE.md is the rubric), dated and verified
-├── clouds/                       ★ Azure, AWS and Google Cloud: each cloud's security settings,
-│   └── <cloud>.yaml                and every first-party cloud architecture as built on it
+├── clouds/                       ★ AWS, Azure, Google Cloud and on-premises: each platform's security
+│   └── <cloud>.yaml                settings, and every hosted pattern as built on it (onprem.yaml is your own data centre)
 ├── status.yaml                   ★ YOUR status per control, product and setting (see "Adopt this" below)
 └── PROVENANCE.md                 pinned SHA, extraction record, what is original work
 
@@ -549,8 +584,9 @@ Everything is text. Clone the repository, and:
    (`cap-sensitive-data-redaction`) — with a `status` (`enabled`, `inProgress`, `gap`) and,
    where you have one, a `displayName`. Anything not listed reads **Not set**. Control status and
    MITRE parents roll up automatically. The `org-taxonomy-customize` skill walks through the
-   mapping. Under `products:`, record the tools and clouds you use and which of their settings
-   you have switched on.
+   mapping. Under `products:`, record the tools and platforms you use, which of their settings
+   you have switched on, what you run in place of a reference component, and links to your own
+   modules and runbooks.
 2. **Adjust the control families if you disagree with a fit.** `data/overlay/enablement.yaml`
    decides which NIST CSF category each control sits under and which controls are the baseline
    for every AI deployment; `data/overlay/patterns.yaml` holds each pattern's use-when line and

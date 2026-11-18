@@ -25,15 +25,15 @@ settings:
     verified: "2026-10-30"
   - id: cognitoResourceBinding
     name: Resource binding
-    where: Amazon Cognito › User pool › Resource servers; clients send resource= on the authorize request
+    where: Amazon Cognito › User pool › Resource servers; clients send resource= on the /oauth2/authorize request (managed login only)
     setVia: [identityProvider, apiCli]
     area: identity
     default: Not requested
-    recommended: A resource server per published service, named by its canonical URI, and every user grant bound to it
-    why: An access token names the one server it is for, so a token minted for another service is refused here. User grants only — client-credentials tokens cannot be bound.
+    recommended: "A resource server per published service, named by its canonical URI, and every user grant bound to it. Machine-to-machine clients such as peer agents cannot be bound, so limit those by app client and custom scopes"
+    why: "An access token names the one server it is for in its aud claim, so a user token minted for another service is refused here. Binding works only for user grants through managed login, never for client-credentials tokens."
     mitigations: [D3-CTS]
     url: https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: cognitoM2mClients
     name: Machine-to-machine application (client credentials grant)
     where: Amazon Cognito › User pool › App clients; custom scopes on the resource server
@@ -51,11 +51,11 @@ settings:
     setVia: [identityProvider, apiCli]
     area: identity
     default: One hour; token revocation on for new app clients
-    recommended: 15 minutes, with token revocation and refresh token rotation on
-    why: A revoked token stays valid wherever a JWT is verified locally, so a short lifetime is what makes revocation reach tokens already issued.
+    recommended: "One hour for user clients that sign in through managed login, which resource binding requires: a shorter value does not shorten the one-hour managed login cookie that re-issues tokens. 15 minutes for machine-to-machine clients. Token revocation and refresh token rotation on"
+    why: "A revoked token stays valid wherever a JWT is verified locally, so a short lifetime is what makes revocation reach tokens already issued. With managed login the floor is its one-hour sign-in cookie, so also send signed-out users to the logout endpoint, which clears it."
     mitigations: [D3-CR]
     url: https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-the-access-token.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: albAuthenticate
     name: authenticate-cognito action (OnUnauthenticatedRequest)
     where: Application Load Balancer › HTTPS listener › rule actions
@@ -73,11 +73,11 @@ settings:
     setVia: [cloudPolicy, apiCli]
     area: identity
     default: IAM (SigV4) inbound authorization
-    recommended: JWT from your Cognito user pool, allowedAudience set to this runtime's own resource and allowedClients to the clients admitted to it
-    why: Each session runs as the user whose token opened it, and a token minted for any other audience is refused before the code runs.
+    recommended: "JWT from your Cognito user pool, with allowedClients set to the clients admitted to it and, where callers are users, allowedAudience set to this runtime's own resource. Cognito puts an aud claim only in user tokens that asked for resource binding, so a runtime that machine-to-machine clients call is limited by allowedClients and allowedScopes instead"
+    why: "Each session runs as the caller whose token opened it, and a token from a client or audience that is not admitted is refused before the code runs. The authorizer checks every field you set, so an allowedAudience turns away machine tokens, which carry no aud claim."
     mitigations: [D3-APA, D3-CTS]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-oauth.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: runtimeResourcePolicy
     name: Resource-based policy on the agent runtime
     where: AgentCore Runtime › (agent runtime and its endpoint) › Resource-based policy
@@ -89,39 +89,47 @@ settings:
     mitigations: [D3-APA]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/resource-based-policies.html
     verified: "2026-10-30"
+    check:
+      command: "aws bedrock-agentcore-control get-resource-policy --resource-arn <agent-runtime-arn> --region <region> --query policy --output text"
+      expect: "The policy document allows bedrock-agentcore:InvokeAgentRuntime only for the ingress function's role and denies every other principal; an empty or missing policy is a fail."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/get-resource-policy.html
   - id: lambdaInvokePolicy
     name: Resource-based policy (aws:SourceArn)
     where: Lambda › (workflow function alias) › Configuration › Permissions › Resource-based policy statements
     setVia: [cloudPolicy, apiCli]
     area: identity
     default: No statements (only identities in the account with lambda:InvokeFunction)
-    recommended: One statement per trigger — the EventBridge rule or SQS mapping by its source ARN — and no others
+    recommended: "One statement for the EventBridge rule, limited by aws:SourceArn, and no others. The SQS mapping needs no statement: Lambda polls the queue with the function's execution role (AWSLambdaSQSQueueExecutionRole), so limit who may send to the queue and who may create event source mappings"
     why: A workflow starts only from the trigger that binds its grant, so nobody starts a days-long run sideways on their own authority.
     mitigations: [D3-APA]
     url: https://docs.aws.amazon.com/lambda/latest/dg/access-control-resource-based.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: runtimeExecutionRole
     name: Execution role and workload identity
     where: AgentCore Runtime › (agent runtime) › Permissions; AgentCore Identity › Agent identity directory
     setVia: [cloudPolicy]
     area: identity
     default: Workload identity created automatically; execution role as you scope it
-    recommended: One runtime per agent, its execution role granted only the gateway, memory and model actions it calls
+    recommended: "One runtime per agent. Start from the documented role (ECR pull, CloudWatch Logs, X-Ray, metrics) and add only the gateway, memory or other actions this workload calls. Remove the sample's bedrock:InvokeModel on all foundation models unless the agent calls Bedrock directly"
     why: The agent authenticates with platform-issued, expiring credentials under its own identity — no key in its configuration to steal or share.
     mitigations: [D3-AA, D3-CH]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
+    check:
+      command: "aws iam get-account-authorization-details --filter Role --query \"RoleDetailList[?RoleName=='<execution-role-name>'].{inline:RolePolicyList,attached:AttachedManagedPolicies}\""
+      expect: "For the role named in the runtime's roleArn, the inline and attached policies allow only the gateway, memory and model actions this one agent calls, with no wildcard actions or resources."
+      url: https://docs.aws.amazon.com/cli/latest/reference/iam/get-account-authorization-details.html
   - id: agentWorkloadIdentity
     name: Workload identity per agent
-    where: AgentCore Identity › Agent identity directory (CreateWorkloadIdentity); one OAuth client per agent in your user pool
-    setVia: [apiCli, cloudPolicy]
+    where: AgentCore Identity › Agent identity directory (CreateWorkloadIdentity); one OAuth client per agent in your user pool; the token calls in your step code
+    setVia: [apiCli, cloudPolicy, code]
     area: identity
-    default: None for agents hosted outside AgentCore Runtime
-    recommended: One workload identity and client per agent — supervisor and each specialist — with tokens fetched at step time from the token vault
+    default: None. Only AgentCore Runtime and Gateway obtain workload access tokens for an agent automatically
+    recommended: "One workload identity and client per agent (supervisor and each specialist). On Lambda nothing delivers the workload access token, so each step calls GetWorkloadAccessTokenForJWT itself (ForUserId only where no user JWT exists), then fetches the outbound token from the token vault"
     why: Each agent in the graph is attributable and revocable on its own, and holds a short-lived token for its step rather than a credential for the process's life.
     mitigations: [D3-AA, D3-CH]
-    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/creating-agent-identities.html
-    verified: "2026-10-30"
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/get-workload-access-token.html
+    verified: "2026-11-18"
   - id: secretsRotation
     name: Automatic rotation
     where: AWS Secrets Manager › (secret) › Rotation configuration
@@ -188,28 +196,36 @@ settings:
     mitigations: [D3-CH]
     url: https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys-permissions.html
     verified: "2026-10-30"
+    check:
+      command: "aws organizations describe-policy --policy-id <scp-id> --query Policy.Content --output text"
+      expect: "The policy content has a Deny statement whose Action lists both bedrock:CallWithBearerToken and bedrock-mantle:CallWithBearerToken."
+      url: https://docs.aws.amazon.com/cli/latest/reference/organizations/describe-policy.html
   - id: gatewayInboundJwt
     name: CUSTOM_JWT inbound authorizer
     where: AgentCore Gateway › (gateway) › Inbound Auth; SCP on bedrock-agentcore:GatewayAuthorizerType
     setVia: [cloudPolicy, apiCli]
     area: identity
-    default: Chosen at creation; NONE is allowed
-    recommended: CUSTOM_JWT with allowedAudience = this gateway, allowedClients = the agents and clients admitted to it, allowedScopes per tool; NONE denied by SCP
-    why: The gateway verifies who is calling, for which user and for which audience, before any model or tool call goes through — and no gateway can be created open.
+    default: Chosen at creation; NONE and AUTHENTICATE_ONLY, where the gateway makes no authorization decision, are allowed
+    recommended: "CUSTOM_JWT with allowedClients = the agents and clients admitted to it, allowedAudience = this gateway where tokens carry an aud claim, and allowedScopes, which is one list for the whole gateway. Per-tool checks go in the policy engine or an interceptor. NONE and AUTHENTICATE_ONLY denied by SCP"
+    why: "The gateway verifies who is calling and for which audience before any model or tool call goes through, and no gateway can be created without authorization. Scopes are not per tool, so which tool a caller may use is decided by the policy engine or an interceptor."
     mitigations: [D3-AA, AML.M0028, D3-CTS]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-inbound-auth.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
+    check:
+      command: "aws bedrock-agentcore-control get-gateway --gateway-identifier <gateway-id> --region <region> --query '{authorizerType:authorizerType,jwt:authorizerConfiguration.customJWTAuthorizer.{discoveryUrl:discoveryUrl,allowedAudience:allowedAudience,allowedClients:allowedClients,allowedScopes:allowedScopes}}'"
+      expect: "authorizerType is CUSTOM_JWT, allowedAudience lists this gateway's address, allowedClients lists only the agents and clients admitted to it, and allowedScopes is not empty."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/get-gateway.html
   - id: gatewayOboExchange
     name: OAuth (token exchange) — on-behalf-of
-    where: AgentCore Identity › OAuth credential provider (TOKEN_EXCHANGE); AgentCore Gateway › target › Outbound Auth
+    where: AgentCore Identity › OAuth credential provider (onBehalfOfTokenExchangeConfig, TOKEN_EXCHANGE or JWT_AUTHORIZATION_GRANT); AgentCore Gateway › target › Outbound Auth
     setVia: [cloudPolicy, apiCli]
     area: identity
     default: Chosen per target; token passthrough and no authorization are available
-    recommended: Token exchange on every target that acts as the user; token passthrough not used
-    why: The gateway swaps the user's token for one scoped to that tool, carrying user and agent both, so the inbound token is never forwarded or reused.
+    recommended: "On-behalf-of exchange on every target that acts as the user, against an authorization server that supports the token-exchange (RFC 8693) or JWT-bearer (RFC 7523) grant; Microsoft is the one preconfigured provider. Cognito's token endpoint takes neither grant, so run the exchange against your corporate IdP. Token passthrough not used"
+    why: "The user's token is swapped for one scoped to that tool, carrying user and agent both, so the inbound token is never forwarded or reused. AgentCore Identity only brokers the request, and your authorization server decides whether to grant it."
     mitigations: [D3-CTS]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/on-behalf-of-token-exchange.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
 
   # --- Data & retention ----------------------------------------------------------------
   - id: memoryEventExpiry
@@ -222,6 +238,10 @@ settings:
     mitigations: [AML.M0031]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory-create-a-memory-store.html
     verified: "2026-10-30"
+    check:
+      command: "aws bedrock-agentcore-control get-memory --memory-id <memory-id> --region <region> --query memory.eventExpiryDuration"
+      expect: "The output is 30, the number of days after which raw memory events expire."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/get-memory.html
   - id: tenantIsolation
     name: Tenant-scoped data access
     where: Your service code — tenant taken from the validated token, applied to every query and every upstream call
@@ -255,6 +275,10 @@ settings:
     mitigations: [cap-retrieval-grounding-checks]
     url: https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-contextual-grounding-check.html
     verified: "2026-10-30"
+    check:
+      command: "aws bedrock get-guardrail --guardrail-identifier <guardrail-id> --guardrail-version <guardrail-version> --region <region> --query contextualGroundingPolicy.filters"
+      expect: "The list has one filter of type GROUNDING and one of type RELEVANCE, each with a threshold, action BLOCK and enabled not set to false."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock/get-guardrail.html
   - id: guardrailPiiMask
     name: Sensitive information filters (Mask)
     where: Amazon Bedrock Guardrails › (guardrail) › Sensitive information filters, called with ApplyGuardrail before a turn or step result is stored
@@ -303,15 +327,15 @@ settings:
     verified: "2026-10-30"
   - id: releaseDigestCheck
     name: Verify the release digest at load
-    where: Your loader — an init container that checks the artifact's SHA-256 checksum and Model Signing signature against the registry record before the server starts
+    where: "Your loader: an init container that computes the artifact's SHA-256 and checks it, and the release signature, against the registry record before the server starts"
     setVia: [code]
     area: data
-    default: The server loads whatever files are at the path
-    recommended: Load refused unless the digest matches the approved release and its signature verifies
+    default: The server loads whatever files are at the path. S3's default checksum is CRC64NVME, not SHA-256
+    recommended: "Load refused unless the digest matches the approved release and its signature verifies. Request the SHA256 checksum algorithm at upload if S3 is to hold the digest; S3 has no part in model signatures, so verifying them is entirely your loader's code"
     why: A file swapped in storage, digest and all, does not load, because the approved digest lives in the registry outside the bucket's write path.
     mitigations: [AML.M0014]
     url: https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: eksGpuTaints
     name: Taint accelerated nodes
     where: Amazon EKS › GPU node groups or Karpenter NodePools › taints, with tolerations only on that tier's serving pods
@@ -326,15 +350,15 @@ settings:
 
   - id: comprehendPii
     name: Detecting PII entities
-    where: Amazon Comprehend PII detection, called from the curation processing job beside your quality and safety filters
+    where: Amazon Comprehend PII detection (English and Spanish text), called from the curation processing job beside your quality and safety filters
     setVia: [apiCli, code]
     area: data
     default: Not called
-    recommended: Every internal record scanned and redacted before it is written to a dataset version
-    why: Restricted personal data is removed while it is still a deletion, not something the model has already memorised.
+    recommended: "Every internal record scanned and its PII removed before it is written to a dataset version. The real-time call only locates entities, in documents up to 100 KB, so the curation job redacts the spans itself; Comprehend's own redaction is an asynchronous batch job"
+    why: "Restricted personal data is removed while it is still a deletion, not something the model has already memorised. Detection covers English and Spanish only, so text in other languages needs another detector."
     mitigations: [AML.M0007]
     url: https://docs.aws.amazon.com/comprehend/latest/dg/how-pii.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: smLineage
     name: Amazon SageMaker ML Lineage Tracking
     where: SageMaker AI › lineage entities for datasets, processing jobs, training jobs and model packages
@@ -348,15 +372,15 @@ settings:
     verified: "2026-10-30"
   - id: smTrainingKms
     name: ML storage volume and output encryption (KMS key)
-    where: SageMaker AI › CreateTrainingJob ResourceConfig VolumeKmsKeyId and OutputDataConfig KmsKeyId; inter-container traffic encryption on
+    where: SageMaker AI › CreateTrainingJob ResourceConfig VolumeKmsKeyId and OutputDataConfig KmsKeyId
     setVia: [cloudPolicy, apiCli]
     area: data
     default: AWS managed keys
-    recommended: Your customer managed key on every training volume, checkpoint and output, with inter-container traffic encryption for multi-node runs
+    recommended: "Your customer managed key on every training volume, checkpoint and output. Traffic between the nodes of a multi-node run is not covered by these keys: also set EnableInterContainerTrafficEncryption to True on the job, which can lengthen training"
     why: The checkpoints and candidates a run writes are readable only by principals your key policy names.
     mitigations: [AML.M0012]
     url: https://docs.aws.amazon.com/sagemaker/latest/dg/encryption-at-rest-nbi.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
 
   # --- Tools & extensions --------------------------------------------------------------
   - id: policyGuardrailPromptAttack
@@ -365,44 +389,56 @@ settings:
     setVia: [cloudPolicy]
     area: tools
     default: No guardrail condition
-    recommended: JAILBREAK and PROMPT_INJECTION checked on every request and on every tool and model response
+    recommended: "JAILBREAK and PROMPT_INJECTION checked on every request and on every tool and model response. Guardrails in policies run in seven Regions only (N. Virginia, Ohio, Oregon, Sydney, Tokyo, London, Stockholm); in any other Region call Amazon Bedrock Guardrails from a gateway interceptor or your agent code"
     why: Injected instructions in the user's turn, a tool result or a fetched page are refused or withheld at the gateway before the model reads them.
     mitigations: [cap-input-guardrails]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy-guardrails-in-policies.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
+    check:
+      command: "aws bedrock-agentcore-control list-policies --policy-engine-id <policy-engine-id> --region <region> --query 'policies[].{name:name,status:status,enforcementMode:enforcementMode,definition:definition}'"
+      expect: "ACTIVE policies include a forbid statement and a suppressOutput statement whose guardrails condition calls BedrockGuardrails::PromptAttack with JAILBREAK and PROMPT_INJECTION, on context.input and context.output respectively."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/list-policies.html
   - id: policyGuardrailOutput
     name: Guardrails in policies — ContentFilter and SensitiveInformation
     where: Policy in AgentCore › policy engine on the gateway › forbid on context.input and suppressOutput on context.output
     setVia: [cloudPolicy]
     area: tools
     default: No guardrail condition
-    recommended: Harmful-content and sensitive-information checks on every request and response that crosses the gateway
+    recommended: "Harmful-content and sensitive-information checks on every request and response that crosses the gateway. Guardrails in policies run in seven Regions only (N. Virginia, Ohio, Oregon, Sydney, Tokyo, London, Stockholm), not in Frankfurt, Ireland or Paris; in any other Region call Amazon Bedrock Guardrails from a gateway interceptor or the calling service"
     why: A completion, task payload or artifact that breaks content policy or carries personal data is refused or withheld at the crossing — the policy no provider applies for you.
     mitigations: [cap-output-guardrails, cap-sensitive-data-redaction]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy-guardrails-in-policies.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: policyEngineEnforce
     name: Policy engine enforcement mode
     where: AgentCore Gateway › policyEngineConfiguration.mode; bedrock-agentcore:UpdateGateway held by the platform team only
     setVia: [cloudPolicy, apiCli]
     area: tools
     default: No policy engine
-    recommended: ENFORCE, with Cedar policies per agent, tool and argument; new policies proved in LOG_ONLY first
+    recommended: ENFORCE, with policies per agent, tool and argument written in Cedar or in Dogwood, the open-source language AgentCore also accepts for session-aware and guardrail conditions; new policies proved in LOG_ONLY first
     why: Every tool call is decided outside the loop on who is calling, which tool and with what — and whoever can flip the gateway to LOG_ONLY is a short list.
     mitigations: [cap-agent-action-policy-enforcement, AML.M0028]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy-enforcement-modes.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
+    check:
+      command: "aws bedrock-agentcore-control get-gateway --gateway-identifier <gateway-id> --region <region> --query policyEngineConfiguration"
+      expect: "The output shows the arn of your policy engine and mode ENFORCE; null or mode LOG_ONLY is a fail."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/get-gateway.html
   - id: gatewayRateLimits
     name: Gateway rate limits
-    where: AgentCore Gateway › Rate limits (dimension keys on JWT claims or IAM identity)
+    where: AgentCore Gateway › Rate limits (dimension keys for target, tool, model, JWT claims or IAM identity)
     setVia: [cloudPolicy, apiCli]
     area: tools
     default: Service-managed limits only
-    recommended: Tokens per minute on inference targets and calls per minute on tools, per agent and per user
-    why: A looping turn or a retrying client hits a ceiling at the gateway before it runs up cost or action volume. Rate limits fail open, so they are a brake, not a boundary.
+    recommended: Tokens per minute on inference targets and requests per minute on each target and tool, bucketed per agent and per user by a JWT claim
+    why: A looping turn or a retrying client hits a ceiling at the gateway before it runs up cost or action volume. Rate limits fail open, are skipped when a dimension cannot be resolved and are approximate at low per-minute rates, so they are a brake, not a security boundary.
     mitigations: [AML.M0036, AML.M0004]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-rate-limits.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
+    check:
+      command: "aws bedrock-agentcore-control list-gateway-rate-limits --gateway-identifier <gateway-id> --region <region> --query 'rateLimits[].{id:rateLimitId,status:status,dimensionKeys:dimensionKeys,entries:entries}'"
+      expect: "The list has ACTIVE rate limits whose dimensionKeys include a JWT claim or the IAM principal, with entries that set tokens per minute for inference targets and requests per minute for tools."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/list-gateway-rate-limits.html
   - id: gatewayMcpToolSchema
     name: mcpToolSchema (static tool schema)
     where: AgentCore Gateway › MCP server target › CreateGatewayTarget / UpdateGatewayTarget
@@ -414,6 +450,10 @@ settings:
     mitigations: [cap-mcp-tool-integrity]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
     verified: "2026-10-30"
+    check:
+      command: "aws bedrock-agentcore-control get-gateway-target --gateway-identifier <gateway-id> --target-id <target-id> --region <region> --query targetConfiguration.mcp.mcpServer"
+      expect: "The output for each MCP server target includes mcpToolSchema, with an s3 uri or inlinePayload that matches the reviewed release, next to the endpoint."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/get-gateway-target.html
   - id: gatewayRequestInterceptor
     name: REQUEST interceptor
     where: AgentCore Gateway › Interceptors (a Lambda function); its execution role limited to that function
@@ -438,15 +478,19 @@ settings:
     verified: "2026-10-30"
   - id: agentRegistryApproval
     name: Auto-approval
-    where: AWS Agent Registry › (registry) › Record approval
+    where: AWS Agent Registry console › Registry › (registry) › Record approval. The registry now sits under the agent-registry namespace; AWS set 30 October 2026 as the end of support for the preview bedrock-agentcore namespace
     setVia: [adminConsole, apiCli]
     area: tools
     default: Chosen at creation
-    recommended: "Off — a curator approves every MCP server, agent and skill record; only approved records become gateway targets"
-    why: The list of tools an agent may be given is a governed registry with an owner per record, not whatever someone wired in.
+    recommended: "Off. A curator approves every MCP server, agent and skill record before it becomes searchable. Approval does not gate gateway targets, so create targets only from approved records in your own pipeline and limit bedrock-agentcore:CreateGatewayTarget to that pipeline's role"
+    why: The list of tools an agent may be given is a governed registry with an owner per record, not whatever someone wired in. AWS does not tie an approved record to a gateway target, so that link is yours to build.
     mitigations: [cap-agent-tool-registry]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry-create-manage.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
+    check:
+      command: "aws bedrock-agentcore-control get-registry --registry-id <registry-id> --region <region> --query approvalConfiguration.autoApproval"
+      expect: "The output is false (or null, since false is the default), meaning records need explicit approval."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/get-registry.html
   - id: a2aCardVerification
     name: AgentCardSignature verification and hash pin
     where: Your gateway interceptor — every peer card's JWS checked against the key pinned at admission, its hash against the approved registry record, on admission and each task
@@ -497,11 +541,11 @@ settings:
     setVia: [configFile]
     area: tools
     default: No authentication; runtime LoRA updating off unless VLLM_ALLOW_RUNTIME_LORA_UPDATING is set
-    recommended: Set, with VLLM_ALLOW_RUNTIME_LORA_UPDATING unset, --trust-remote-code off and --load-format safetensors
-    why: Only the gateway can call the server, and no caller can load an adapter or remote code into it. The key covers /v1-style paths only, so the network policy still matters.
+    recommended: "Set, with VLLM_ALLOW_RUNTIME_LORA_UPDATING unset and --trust-remote-code left at its default of off. Do not rely on --load-format safetensors: the flag takes one value, and loading from S3 with runai_streamer uses it, so check the weights format in the promotion pipeline"
+    why: "Only the gateway can call the /v1 API, and no caller can load an adapter or remote code into the server. The key covers only the /v1, /v2, /inference and /cohere prefixes and leaves paths such as /invocations, /pooling, /score, /tokenize and /metrics open, so the network policy that admits only the gateway still matters."
     mitigations: [D3-ACH]
     url: https://docs.vllm.ai/en/latest/usage/security.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: vllmCacheSalt
     name: cache_salt
     where: AgentCore Gateway REQUEST interceptor, setting the field on every inference request
@@ -535,6 +579,10 @@ settings:
     mitigations: [D3-EI, cap-agent-egress-control]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-management.html
     verified: "2026-10-30"
+    check:
+      command: "aws bedrock-agentcore-control get-code-interpreter --code-interpreter-id <code-interpreter-id> --region <region> --query networkConfiguration.networkMode"
+      expect: "The output is \"SANDBOX\", not PUBLIC."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/get-code-interpreter.html
   - id: gatewayWeightedRoute
     name: weightedRoute (gateway rules)
     where: AgentCore Gateway › Rules › model routing on the inference target
@@ -548,15 +596,15 @@ settings:
     verified: "2026-10-30"
   - id: smConditionStep
     name: Condition step (evaluation gate)
-    where: SageMaker Pipelines › evaluation step, then a condition step in front of RegisterModel
+    where: SageMaker Pipelines › a Processing step that runs the evaluation and writes its report, then one Condition step in front of the Register model step
     setVia: [code]
     area: tools
     default: Registration does not depend on evaluation
-    recommended: Capability, safety, backdoor and memorisation results must pass thresholds before the candidate is registered; benchmark data in a bucket the run's authors cannot write
-    why: A candidate that fails evaluation never reaches the registry, so promotion is blocked rather than advised.
+    recommended: Capability, safety, backdoor and memorisation results must pass thresholds before the candidate is registered; benchmark data in a bucket the run's authors cannot write. Put every threshold in one Condition step, because condition steps cannot be nested
+    why: A candidate that fails evaluation never reaches the registry, so promotion is blocked rather than advised. Pipelines has no evaluation step type, so the evaluation is a Processing job whose report the condition reads.
     mitigations: [AML.M0008]
     url: https://docs.aws.amazon.com/sagemaker/latest/dg/build-and-manage-steps-types.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: runtimeIsolatedSessions
     name: Isolated sessions (dedicated microVM per session)
     where: AgentCore Runtime › microVM compute type; a new runtimeSessionId per rollout, maxLifetime set to the task's budget
@@ -581,15 +629,15 @@ settings:
     verified: "2026-10-30"
   - id: containmentRedTeam
     name: Containment red team before each run
-    where: Your run checklist — agents attacking the sandbox, host network and platform services, within the AWS penetration testing policy
+    where: "Your run checklist: agents attacking your own sandbox configuration (network rules, roles, endpoint policies), inside the AWS penetration testing policy"
     setVia: [code]
     area: tools
     default: Not done
-    recommended: Required before any run that widens tools or egress; findings block the run until fixed
-    why: Escape routes through platform services are found by the red team, not by the model being trained.
+    recommended: Required before any run that widens tools or egress; findings block the run until fixed. AWS's policy forbids assessing AWS infrastructure or the services themselves and lists AgentCore under services prohibited for outbound testing, so attacks on the microVM boundary or platform services, and any test involving SageMaker, need agreement from AWS Support first
+    why: Escape routes through your own network rules, roles and endpoints are found by the red team, not by the model being trained. The platform's isolation boundary is not yours to attack without AWS's agreement.
     mitigations: [D3-SYSVA]
     url: https://aws.amazon.com/security/penetration-testing/
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: gatewayAbTesting
     name: A/B testing (target-based)
     where: AgentCore Gateway › A/B test scored by online evaluation; runtime endpoints pinned to versions
@@ -601,6 +649,10 @@ settings:
     mitigations: [cap-staged-rollout-gate]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/ab-testing.html
     verified: "2026-10-30"
+    check:
+      command: "aws bedrock-agentcore get-ab-test --ab-test-id <ab-test-id> --region <region> --query '{executionStatus:executionStatus,gatewayArn:gatewayArn,variants:variants[].{name:name,weight:weight,target:variantConfiguration.target.name},evaluationConfig:evaluationConfig}'"
+      expect: "gatewayArn is your gateway, variant C and variant T1 each name a gateway target, T1 carries a small weight, and evaluationConfig names an online evaluation configuration."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore/get-ab-test.html
   - id: agentCoreBatchEvaluation
     name: Batch evaluation
     where: AgentCore Evaluations › batch evaluation job, run from your release pipeline
@@ -636,28 +688,36 @@ settings:
     verified: "2026-10-30"
   - id: codeArtifactOrigin
     name: Package origin controls
-    where: AWS CodeArtifact › (repository) › (package) › Origin controls
+    where: AWS CodeArtifact › (repository) › (package) › Origin controls; package group origin controls for the whole domain
     setVia: [adminConsole, apiCli]
     area: tools
-    default: Set by how the first version arrives (internal packages get Upstream BLOCK)
-    recommended: Keep the defaults; Upstream BLOCK on every internal package name, installs only through the repository with its external connection
-    why: The agent's tools install from your repository, and a public package cannot shadow an internal one. Malware scanning of what is ingested is not a CodeArtifact feature — run it where packages are promoted.
+    default: "Set by how the first version arrives: a published package gets Publish ALLOW and Upstream BLOCK, a package first ingested from a public registry gets Publish BLOCK and Upstream ALLOW"
+    recommended: Upstream BLOCK on every internal package name, and a package group that limits EXTERNAL_UPSTREAM to the one ingest repository. A public package keeps Upstream ALLOW, so new public versions enter whenever a client asks; for a fixed mirror, set Upstream to BLOCK once the reviewed versions are in
+    why: The agent's tools install from your repository, and a public package cannot shadow an internal one. An external connection is not a pinned mirror, and malware scanning of what is ingested is not a CodeArtifact feature, so run it where packages are promoted.
     mitigations: [D3-FA]
     url: https://docs.aws.amazon.com/codeartifact/latest/ug/package-origin-controls.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
+    check:
+      command: "aws codeartifact describe-package --domain <domain> --repository <repository> --format <format> --package <internal-package-name> --region <region> --query package.originConfiguration.restrictions"
+      expect: "For each internal package name, upstream is BLOCK and publish is ALLOW."
+      url: https://docs.aws.amazon.com/cli/latest/reference/codeartifact/describe-package.html
 
   # --- Network -------------------------------------------------------------------------
   - id: runtimeVpcMode
     name: networkMode VPC
-    where: AgentCore Runtime › (agent runtime) › Network configuration; SCP on bedrock-agentcore:subnets
+    where: AgentCore Runtime › (agent runtime) › Network configuration (networkMode VPC, subnets, security groups); SCP on bedrock-agentcore:subnets and bedrock-agentcore:securityGroups
     setVia: [cloudPolicy, apiCli]
     area: network
     default: Chosen at creation (PUBLIC or VPC)
-    recommended: VPC, private subnets and security groups that reach only the services the workload needs, enforced for every runtime by the subnets condition key
+    recommended: VPC, private subnets and security groups that reach only the services the workload needs, enforced by an SCP that denies CreateAgentRuntime, UpdateAgentRuntime, CreateCodeInterpreter and CreateBrowser unless they name approved subnets and security groups
     why: The harness and its tools leave only through your VPC's routes and firewall, never straight to the internet or sideways to another workload.
     mitigations: [cap-agent-egress-control, D3-NI]
-    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
-    verified: "2026-10-30"
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-vpc-condition.html
+    verified: "2026-11-18"
+    check:
+      command: "aws bedrock-agentcore-control get-agent-runtime --agent-runtime-id <agent-runtime-id> --region <region> --query networkConfiguration"
+      expect: "networkMode is VPC and networkModeConfig lists your private subnets and the security groups meant for this workload."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/get-agent-runtime.html
   - id: lambdaVpcConfig
     name: VPC configuration (lambda:SubnetIds)
     where: Lambda › (function) › Configuration › VPC; SCP on lambda:VpcIds and lambda:SubnetIds
@@ -675,11 +735,15 @@ settings:
     setVia: [cloudPolicy]
     area: network
     default: Direct outbound through a NAT gateway
-    recommended: All outbound from agent subnets through Network Firewall, with an allowlist of the hosts the tools need
-    why: The agent and its tools reach only the hosts you list; anything else is dropped and logged.
+    recommended: All outbound from agent subnets through Network Firewall, with an Allow list of the hosts the tools need on TLS_SNI and HTTP_HOST, the AWS_ROUTE_53_RESOLVED_DOMAIN target type added, and stateful rules that drop every other protocol
+    why: The agent and its tools reach only the hosts you list. A plain Allow list trusts the server name or Host header the client states, drops other HTTP and HTTPS only under default action order, and leaves other protocols to your other rules.
     mitigations: [cap-agent-egress-control]
     url: https://docs.aws.amazon.com/network-firewall/latest/developerguide/stateful-rule-groups-domain-names.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
+    check:
+      command: "aws network-firewall describe-rule-group --rule-group-arn <rule-group-arn> --region <region> --query RuleGroup.RulesSource.RulesSourceList"
+      expect: "GeneratedRulesType is ALLOWLIST, TargetTypes has TLS_SNI and HTTP_HOST, and Targets lists only the hosts the tools need."
+      url: https://docs.aws.amazon.com/cli/latest/reference/network-firewall/describe-rule-group.html
   - id: metadataFetchSsrf
     name: Block private and metadata addresses on outbound fetches
     where: Your authorization service code — client metadata document fetches; its subnet egress through Network Firewall
@@ -726,15 +790,19 @@ settings:
     verified: "2026-10-30"
   - id: privateLinkEndpoints
     name: Interface VPC endpoints (AWS PrivateLink)
-    where: Amazon VPC › Endpoints — bedrock-runtime, bedrock-agentcore and the stores the agent uses, each with an endpoint policy
+    where: "Amazon VPC › Endpoints: one for each AWS service the workload calls from its VPC, each with an endpoint policy"
     setVia: [cloudPolicy]
     area: network
     default: Calls leave over public AWS endpoints
-    recommended: An interface endpoint per service, endpoint policy limited to your accounts
-    why: Model, gateway and memory calls stay on the AWS network from your VPC, and the endpoint policy refuses use from outside your organisation.
+    recommended: "An endpoint per service the workload calls, its policy limited to your accounts and resources. AgentCore: bedrock-agentcore and bedrock-agentcore.gateway. Bedrock models called directly: bedrock-runtime. VPC-mode runtimes: ecr.api, ecr.dkr, logs and an S3 gateway endpoint. SageMaker jobs: the SageMaker API and Runtime endpoints and those of the stores, registries and keys they use"
+    why: "Calls to AWS services stay on the AWS network from your VPC, and the endpoint policy limits what can be reached through it. Endpoint policies cannot restrict OAuth (JWT) callers of AgentCore, who need Principal * there, so the JWT authorizer is the control on that path."
     mitigations: []
-    url: https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html
-    verified: "2026-10-30"
+    url: https://docs.aws.amazon.com/vpc/latest/privatelink/privatelink-access-aws-services.html
+    verified: "2026-11-18"
+    check:
+      command: "aws ec2 describe-vpc-endpoints --filters Name=vpc-id,Values=<vpc-id> --region <region> --query 'VpcEndpoints[].{service:ServiceName,type:VpcEndpointType,state:State,policy:PolicyDocument}'"
+      expect: "There is an Interface endpoint for bedrock-runtime, bedrock-agentcore and each store the agent uses, and each policy document limits access to your own accounts instead of allowing everyone."
+      url: https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-vpc-endpoints.html
   - id: wafRateRule
     name: Rate-based rule statement
     where: AWS WAF web ACL on the load balancer, CloudFront distribution or AgentCore Gateway
@@ -759,6 +827,10 @@ settings:
     mitigations: [cap-agent-tracing, AML.M0024]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
     verified: "2026-10-30"
+    check:
+      command: "aws xray get-trace-segment-destination --region <region>"
+      expect: "Destination is CloudWatchLogs and Status is ACTIVE, which is what Transaction Search needs."
+      url: https://docs.aws.amazon.com/cli/latest/reference/xray/get-trace-segment-destination.html
   - id: bedrockInvocationLogging
     name: Model invocation logging
     where: Amazon Bedrock › Settings › Model invocation logging (S3 or CloudWatch Logs)
@@ -770,6 +842,10 @@ settings:
     mitigations: [cap-agent-tracing]
     url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html
     verified: "2026-10-30"
+    check:
+      command: "aws bedrock get-model-invocation-logging-configuration --region <region> --query loggingConfig"
+      expect: "loggingConfig is not null and s3Config.bucketName is the bucket in your log archive account."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock/get-model-invocation-logging-configuration.html
   - id: cloudTrailDataEvents
     name: CloudTrail data events
     where: AWS CloudTrail › organisation trail › Data events (AgentCore, Bedrock, SageMaker and S3 resource types)
@@ -781,17 +857,21 @@ settings:
     mitigations: [cap-agent-tracing, AML.M0024]
     url: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/logging-data-events-with-cloudtrail.html
     verified: "2026-10-30"
+    check:
+      command: "aws cloudtrail get-event-selectors --trail-name <trail-arn> --region <region> --query AdvancedEventSelectors"
+      expect: "The selectors include eventCategory Equals Data with a resources.type entry for each AgentCore, Bedrock, SageMaker and S3 resource type the workload uses."
+      url: https://docs.aws.amazon.com/cli/latest/reference/cloudtrail/get-event-selectors.html
   - id: gatewayResponseInterceptor
-    name: RESPONSE interceptor
-    where: AgentCore Gateway › Interceptors (a Lambda function writing to the log archive bucket)
+    name: REQUEST and RESPONSE interceptors (audit record)
+    where: AgentCore Gateway › Interceptors (Lambda functions writing to the log archive bucket)
     setVia: [code, cloudPolicy]
     area: audit
     default: No interceptor
-    recommended: Every request and completion written with its tenant identity, sensitive fields masked, to an archive the serving tier cannot write
-    why: The record of what was asked and answered comes from the crossing every caller shares, not from the callers' own logs.
+    recommended: The REQUEST interceptor writes each request with its tenant identity (passRequestHeaders on) and the RESPONSE interceptor writes the completion, the two joined on the gateway's REQUEST_ID. Sensitive fields masked, in an archive the serving tier cannot write
+    why: The record of what was asked and answered comes from the crossing every caller shares, not from the callers' own logs. For inference targets the RESPONSE interceptor receives no request and no caller identity, runs in buffered mode only, and must skip bodies that would pass Lambda's 6 MB limit.
     mitigations: [AML.M0024]
-    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-interceptors.html
-    verified: "2026-10-30"
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-interceptors-types.html
+    verified: "2026-11-18"
   - id: smModelApproval
     name: Model approval status
     where: Amazon SageMaker Model Registry › model package group › version › Update status
@@ -816,15 +896,15 @@ settings:
     verified: "2026-10-30"
   - id: runtimeStopSession
     name: StopRuntimeSession
-    where: AgentCore Runtime data plane API, called from your incident runbook
+    where: AgentCore Runtime data plane API, called from your incident runbook with the session IDs your application recorded
     setVia: [apiCli]
     area: audit
     default: Sessions run until they end or idle out
-    recommended: The runbook's first step stops every live session of the agent
-    why: Live conversations, and any streaming response mid-action, end at once without a deploy.
+    recommended: Your front end or orchestrator records every live runtimeSessionId, and the runbook's first step calls StopRuntimeSession for each. Browser and code interpreter sessions are stopped separately, with StopBrowserSession and StopCodeInterpreterSession
+    why: Live conversations, and any streaming response mid-action, end at once without a deploy. The call stops one session by its ID and no API lists a runtime's live sessions, so the stop is only as complete as your own record.
     mitigations: [cap-agent-kill-switch]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-stop-session.html
-    verified: "2026-10-30"
+    verified: "2026-11-18"
   - id: durableStopExecution
     name: StopDurableExecution
     where: Lambda API, called from your incident runbook for every running or suspended execution
@@ -862,6 +942,97 @@ settings:
 implementations:
   - architecture: archChatAgent
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      entry: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html
+      events: https://docs.aws.amazon.com/scheduler/latest/UserGuide/what-is-scheduler.html
+      agent: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+      localTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html
+      memory: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html
+      gateway: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html
+      provider: https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-bedrock.html
+      internalTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-supported-targets.html
+      openWeb: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-integrations.html
+      registry: https://docs.aws.amazon.com/codeartifact/latest/ug/welcome.html
+    differences:
+      - at: agent->gateway
+        text: "AWS's documented runtime role lets the agent call Bedrock models directly, and AWS samples do so. Model calls cross the gateway only if you add inference targets, point the model client at the gateway, and remove bedrock:InvokeModel from the agent's role."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+      - at: entry->agent
+        text: "A load balancer cannot forward to AgentCore Runtime. You need front-end code (Lambda or containers) behind it that calls the runtime with the user's token. AWS's cited reference solution uses CloudFront, API Gateway and Lambda instead."
+        url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html
+      - at: events->agent
+        text: "A runtime accepts either AWS-signed (IAM) calls or JWT tokens, never both. With JWT sign-in for users, the scheduled Lambda cannot call with its IAM role; it must obtain a Cognito machine token, or you deploy a second, IAM-authorised runtime."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-oauth.html
+      - at: provider
+        text: "Amazon Nova models can search the web themselves (Web Grounding) inside the Bedrock call, where no gateway policy sees it. It needs bedrock:InvokeTool on the nova_grounding system tool; leave that permission out of the agent's role."
+        url: https://docs.aws.amazon.com/nova/latest/nova2-userguide/web-grounding.html
+      - at: gateway->openWeb
+        text: "AWS also has its own web search. As a gateway connector it stays behind the gateway, but the InvokeWebSearch API and AgentCore Browser are called directly with IAM and skip it. Do not grant those permissions to the agent's role."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/web-search-api.html
+      - at: gateway->openWeb
+        text: "The gateway is AWS-managed and reaches public targets itself; it enters your VPC only for targets given a private endpoint. Your Network Firewall therefore does not filter gateway calls. Control them through the target list, policies and who may create targets."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+      - at: localTools
+        text: "Code Interpreter is a separate managed service, not in-process, and runs outside your VPC unless you choose VPC mode. Sandbox mode is not fully closed: it still allows Amazon S3 access, so scope its execution role tightly."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-management.html
+      - at: localTools->registry
+        text: "Packages are normally installed when the agent's container image is built, not at run time. Code Interpreter in Sandbox mode is documented as reaching only Amazon S3, so run-time installs from CodeArtifact would need VPC mode."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-management.html
+    alsoNeeded:
+      - service: "Amazon Cognito"
+        role: identity
+        why: "User pool that signs users in and issues the JWTs the runtime and gateway validate."
+        url: https://docs.aws.amazon.com/cognito/latest/developerguide/what-is-amazon-cognito.html
+      - service: "AgentCore Identity"
+        role: identity
+        why: "Workload identity for each agent and credential providers for outbound tokens."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity.html
+      - service: "Front-end compute (AWS Lambda or Amazon ECS)"
+        role: other
+        why: "Runs the chat application behind the load balancer and calls InvokeAgentRuntime with the user's token."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-invoke-agent.html
+      - service: "Amazon VPC with NAT gateway"
+        role: network
+        why: "VPC-mode runtimes get no internet from public subnets; private subnets need a NAT route."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+      - service: "AWS Network Firewall"
+        role: network
+        why: "The egress filter for traffic leaving the runtime's subnets."
+        url: https://docs.aws.amazon.com/network-firewall/latest/developerguide/what-is-aws-network-firewall.html
+      - service: "AWS KMS"
+        role: keys
+        why: "Customer managed keys for gateway, memory and token vault; defaults are AWS-owned keys."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-encryption.html
+      - service: "AWS Secrets Manager"
+        role: secrets
+        why: "AgentCore Identity credential providers keep OAuth client secrets and API keys there."
+        url: https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html
+      - service: "Amazon ECR"
+        role: registry
+        why: "Holds the agent's container image; the documented runtime role pulls from it."
+        url: https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html
+      - service: "AWS Certificate Manager"
+        role: ingress
+        why: "Load balancer sign-in actions work only on HTTPS listeners, which need a certificate."
+        url: https://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html
+      - service: "AWS WAF"
+        role: ingress
+        why: "Web ACL on the load balancer; the gateway takes one web ACL too."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-waf.html
+      - service: "Amazon CloudWatch and AWS CloudTrail"
+        role: logging
+        why: "Transaction Search must be switched on once; data events are off by default."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+    quickstart:
+      - title: "Get started with AgentCore Runtime using the AgentCore CLI"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-get-started-cli.html
+      - title: "Get started with AgentCore Gateway"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-quick-start.html
+      - title: "Getting started with Policy in AgentCore"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy-getting-started.html
+    # <<< checked
     reference:
       - title: Generative AI Application Builder on AWS
         url: https://aws.amazon.com/solutions/implementations/generative-ai-application-builder-on-aws/
@@ -921,6 +1092,72 @@ implementations:
 
   - architecture: archActionAgent
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      events: https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/pattern-agentic-ai-orchestration.html
+      planner: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-vs-runtime.html
+      localTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-management.html
+      stateRetrieval: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory-create-a-memory-store.html
+      gateway: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html
+      internalTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-add-target-lambda.html
+      provider: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-inference-connector.html
+      orgData: https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-patterns/tool-based-agents-for-calling-functions.html
+      openWeb: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-integrations.html
+      registry: https://docs.aws.amazon.com/codeartifact/latest/ug/package-origin-controls.html
+    differences:
+      - at: gateway->provider
+        text: "AWS's own samples have the agent call Amazon Bedrock directly, and the documented runtime role allows it. To send model calls through the gateway, point the model client at a gateway inference target and remove the direct model permission from the runtime's role."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+      - at: events->planner
+        text: "AWS recommends a gateway in front of the runtime as its governed way in. This mapping has a function start the runtime directly, so that function's role is the control on who may start a run."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-security-best-practices.html
+      - at: localTools
+        text: "The code sandbox is AgentCore Code Interpreter, a separate managed service the agent calls, not something inside the agent's own process. The agent calls it and AgentCore Memory directly, not through the gateway."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-management.html
+    alsoNeeded:
+      - service: "AgentCore Identity, with an identity provider such as Amazon Cognito"
+        role: identity
+        why: "Gives each agent its own identity and checks callers' tokens."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/creating-agent-identities.html
+      - service: "IAM roles and AWS Organizations policies"
+        role: identity
+        why: "The runtime's role and organisation-wide guardrails on what it may call."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+      - service: "Amazon VPC with interface endpoints (ECR, S3, CloudWatch Logs) and a NAT gateway"
+        role: network
+        why: "Required when the runtime runs inside your network."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+      - service: "AWS Network Firewall"
+        role: network
+        why: "The separate exit for outbound traffic, where the destination allowlist is enforced."
+        url: https://docs.aws.amazon.com/network-firewall/latest/developerguide/stateful-rule-groups-domain-names.html
+      - service: "AWS KMS"
+        role: keys
+        why: "Your own keys for AgentCore Memory and the registry."
+      - service: "AWS Secrets Manager"
+        role: secrets
+        why: "Holds credentials the gateway presents to the services behind it."
+      - service: "Amazon ECR"
+        role: registry
+        why: "Holds the agent's container image."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+      - service: "AWS Agent Registry"
+        role: registry
+        why: "The approved list of agents, tool servers and skills."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry-create-manage.html
+      - service: "Policy in AgentCore and Amazon Bedrock Guardrails"
+        role: other
+        why: "Decide each call at the gateway and screen prompts and answers."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy-guardrails-in-policies.html
+      - service: "AgentCore Observability on CloudWatch, and AWS CloudTrail"
+        role: logging
+        why: "The record of what the agent did and who changed its settings."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+    quickstart:
+      - title: "Amazon Bedrock AgentCore Gateway quick start"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-quick-start.html
+    # <<< checked
     reference:
       - title: "Building serverless architectures for agentic AI on AWS — Pattern 2: Agentic AI orchestration with Amazon Bedrock"
         url: https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/pattern-agentic-ai-orchestration.html
@@ -939,7 +1176,7 @@ implementations:
         as an event.
     bindings:
       - { block: events, service: "Amazon EventBridge, SQS and Lambda", note: "The ingress function validates the message and invokes the runtime under the run's grant: its own role, or an on-behalf-of token carried on the message." }
-      - { block: planner, service: Your agent on AgentCore Runtime (Strands), note: "Amazon Bedrock Agents and AgentCore harness are the managed alternatives." }
+      - { block: planner, service: Your agent on AgentCore Runtime (Strands), note: "AgentCore harness is the managed alternative. Amazon Bedrock Agents is now Agents Classic, in maintenance mode and closed to new sign-ups." }
       - { block: localTools, service: AgentCore Code Interpreter }
       - { block: stateRetrieval, service: AgentCore Memory and Knowledge Bases, note: "Case state keyed by case id as the memory session." }
       - { block: gateway, service: Amazon Bedrock AgentCore Gateway, note: "Inference targets broker model calls; tool targets broker the action catalogue; Policy in AgentCore decides each call." }
@@ -977,6 +1214,98 @@ implementations:
 
   - architecture: archAgentWorkflow
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      events: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-what-is.html
+      harness: https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html
+      orchestration: https://docs.aws.amazon.com/lambda/latest/dg/durable-basic-concepts.html
+      subagents: https://strandsagents.com/latest/documentation/docs/user-guide/concepts/multi-agent/agents-as-tools/
+      localTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html
+      state: https://docs.aws.amazon.com/lambda/latest/dg/durable-configuration.html
+      gateway: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html
+      provider: https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-bedrock.html
+      internalTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-supported-targets.html
+      openWeb: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-integrations.html
+      registry: https://docs.aws.amazon.com/codeartifact/latest/ug/welcome.html
+    differences:
+      - at: harness->gateway
+        text: "Strands calls Amazon Bedrock directly with the function's IAM role unless told otherwise. To send model calls through the gateway, add inference targets, point the model client at the gateway, and leave bedrock:InvokeModel out of the function's role."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-targets-inference.html
+      - at: events->harness
+        text: "Started from an SQS queue mapping, the whole run must finish within 15 minutes, so it cannot wait days for approval. Put a small ordinary Lambda between the queue and the workflow to start it asynchronously; EventBridge rules already start it that way."
+        url: https://docs.aws.amazon.com/lambda/latest/dg/durable-invoking-esm.html
+      - at: operator->events
+        text: "Approvals do not return through EventBridge or SQS. The approval service calls Lambda's SendDurableExecutionCallbackSuccess API directly with the callback ID, so that IAM permission, not the trigger path, is what you must restrict."
+        url: https://docs.aws.amazon.com/lambda/latest/dg/durable-security.html
+      - at: subagents
+        text: "All agents run in one function under one IAM role, so AWS itself cannot tell them apart. Separate identities exist only as per-agent OAuth clients whose tokens your code attaches; nothing on AWS stops one agent's code using another's token."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/creating-agent-identities.html
+      - at: provider
+        text: "Amazon Nova models can search the web themselves (Web Grounding) inside the Bedrock call, where no gateway policy sees it. It needs bedrock:InvokeTool on the nova_grounding system tool; leave that permission out of the agent's role."
+        url: https://docs.aws.amazon.com/nova/latest/nova2-userguide/web-grounding.html
+      - at: gateway->openWeb
+        text: "AWS also has its own web search. As a gateway connector it stays behind the gateway, but the InvokeWebSearch API and AgentCore Browser are called directly with IAM and skip it. Do not grant those permissions to the agent's role."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/web-search-api.html
+      - at: gateway->openWeb
+        text: "The gateway is AWS-managed and reaches public targets itself; it enters your VPC only for targets given a private endpoint. Your Network Firewall therefore does not filter gateway calls. Control them through the target list, policies and who may create targets."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+      - at: localTools->registry
+        text: "Lambda code and its packages are fixed at deployment (zip, layer or container image), not installed at run time. Code Interpreter in Sandbox mode is documented as reaching only Amazon S3, so it cannot pull from CodeArtifact without VPC mode."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-management.html
+    alsoNeeded:
+      - service: "Amazon Cognito"
+        role: identity
+        why: "Issues the per-agent machine tokens that the gateway's JWT authorizer validates."
+        url: https://docs.aws.amazon.com/cognito/latest/developerguide/what-is-amazon-cognito.html
+      - service: "AgentCore Identity"
+        role: identity
+        why: "Workload identity for each agent and credential providers for outbound tokens."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity.html
+      - service: "Intermediary AWS Lambda function"
+        role: other
+        why: "Needed between SQS and the durable function for any run longer than 15 minutes."
+        url: https://docs.aws.amazon.com/lambda/latest/dg/durable-invoking-esm.html
+      - service: "Operator notification and approval service (for example Amazon SNS plus your own app)"
+        role: other
+        why: "Something must notify the operator and send the callback; AWS's example leaves it to you."
+        url: https://docs.aws.amazon.com/lambda/latest/dg/durable-examples.html
+      - service: "Amazon SQS dead-letter queue"
+        role: other
+        why: "Durable functions support dead-letter queues, not Lambda destinations, for failed invocations."
+        url: https://docs.aws.amazon.com/lambda/latest/dg/durable-invoking.html
+      - service: "Amazon VPC with NAT gateway and AWS Network Firewall"
+        role: network
+        why: "Lambda in private subnets needs a NAT route; the firewall filters what leaves."
+        url: https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
+      - service: "AWS KMS"
+        role: keys
+        why: "Customer managed key for durable execution data, plus gateway, memory and token vault."
+        url: https://docs.aws.amazon.com/lambda/latest/dg/durable-encryption.html
+      - service: "AWS Secrets Manager"
+        role: secrets
+        why: "AgentCore Identity credential providers keep OAuth client secrets and API keys there."
+        url: https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html
+      - service: "Amazon ECR"
+        role: registry
+        why: "Holds the function's container image if Strands and its dependencies ship as an image."
+        url: https://docs.aws.amazon.com/lambda/latest/dg/images-create.html
+      - service: "AWS WAF on the gateway"
+        role: ingress
+        why: "Only if the gateway endpoint is reachable from outside; one web ACL per gateway."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-waf.html
+      - service: "Amazon CloudWatch and AWS CloudTrail"
+        role: logging
+        why: "Transaction Search must be switched on once; data events are off by default."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+    quickstart:
+      - title: "Creating Lambda durable functions"
+        url: https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started.html
+      - title: "Examples and use cases"
+        url: https://docs.aws.amazon.com/lambda/latest/dg/durable-examples.html
+      - title: "Get started with AgentCore Gateway"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-quick-start.html
+    # <<< checked
     reference:
       - title: Workflow orchestration agents (AWS Prescriptive Guidance)
         url: https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-patterns/workflow-orchestration-agents.html
@@ -1037,6 +1366,97 @@ implementations:
 
   - architecture: archRemoteMcpServer
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      idp: https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html
+      gateway: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html
+      authServer: https://docs.aws.amazon.com/cognito/latest/developerguide/token-endpoint.html
+      service: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-mcp.html
+      toolDefs: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry-supported-record-types.html
+      orgData: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/on-behalf-of-token-exchange.html
+    differences:
+      - at: gateway->service
+        text: "A Runtime keeps its own public address, so a caller holding a valid token can skip the gateway, its WAF, rate limits and interceptors. Set allowedWorkloadConfiguration on the Runtime's JWT authorizer so it accepts calls only from your gateway."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-security-best-practices.html
+      - at: gateway->service
+        text: "The gateway does not pass the caller's token to an MCP server target. It signs in again with client credentials, token exchange, SigV4 or an API key. Only token exchange keeps the user and tenant in the token your service sees; Cognito cannot do it."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
+      - at: service->authServer
+        text: "Runtime's inbound authorizer checks the token's signature, issuer, client, audience and scopes before your code runs. Your handlers see the token only if Authorization is on the request header allowlist. Add that if handlers must read the tenant or check revocation."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-header-allowlist.html
+      - at: callers->authServer
+        text: "Gateway and Runtime each trust one token issuer, given as a single discovery URL. Tokens minted by your own auth service for the grant types Cognito lacks come from a second issuer. Make one of them the only issuer callers receive tokens from."
+        url: https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/API_CustomJWTAuthorizerConfiguration.html
+      - at: callers->authServer
+        text: "AWS's Runtime tutorial switches from Cognito to Auth0 when it needs dynamic client registration, and AWS's sample requires clients pre-configured in Cognito. Pre-create each MCP client as a Cognito app client listed in allowedClients, or have your auth service register them."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-mcp.html
+      - at: authServer
+        text: "The guidance page still draws a separate MCP auth service that issues its own tokens. The sample code it links to removed that service, token storage and client registration in version 2.0.0; there Cognito is the authorization server and servers publish protected-resource metadata."
+        url: https://raw.githubusercontent.com/aws-solutions-library-samples/guidance-for-deploying-model-context-protocol-servers-on-aws/main/README.md
+      - at: callers->idp
+        text: "In AWS's worked example the identity-assertion grant is issued by Okta and redeemed at Okta's authorization server; AgentCore Identity does the redeeming with its JWT_AUTHORIZATION_GRANT setting. Cognito plays no part, so plan for an authorization server that accepts that grant."
+        url: https://aws.amazon.com/blogs/machine-learning/govern-ai-agent-access-with-okta-cross-app-access-and-amazon-bedrock-agentcore-part-1/
+      - at: toolDefs->service
+        text: "Callers receive tool names and descriptions from the gateway's stored catalogue, not from your service. A hash check inside the service does not cover what callers see. Load the reviewed schema into mcpToolSchema on every release; a static schema cannot be re-synchronised."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
+      - at: toolDefs
+        text: "The gateway renames every tool to targetName___toolName, so the names a caller's model sees differ from the ones in your repository. Review and version the names as the gateway publishes them."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-rate-limits-dimensions.html
+      - at: callers->gateway
+        text: "The gateway advertises an AWS-owned hostname in its OAuth metadata. For your own domain, put a proxy such as CloudFront in front, set domainOverride, and have the proxy overwrite the domain header. The resource address clients request tokens for must match."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-inbound-auth.html
+    alsoNeeded:
+      - service: "Amazon Bedrock AgentCore Identity"
+        role: identity
+        why: "Stores the gateway's and service's outbound OAuth clients and API keys and performs on-behalf-of token exchange."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity.html
+      - service: "Amazon VPC (Runtime VPC network mode)"
+        role: network
+        why: "AWS's Runtime example deploys with public networking; VPC mode is needed to reach private systems of record."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+      - service: "AWS PrivateLink interface endpoints"
+        role: network
+        why: "Private path from your VPC to AgentCore and the stores the service reads."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html
+      - service: "AWS KMS"
+        role: keys
+        why: "Customer managed key for the gateway, which otherwise uses a service-managed key."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-encryption.html
+      - service: "AWS Secrets Manager"
+        role: secrets
+        why: "Holds upstream credentials and Cognito client secrets."
+        url: https://docs.aws.amazon.com/secretsmanager/latest/userguide/rotate-secrets_turn-on-for-other.html
+      - service: "Amazon ECR"
+        role: registry
+        why: "Stores the container image the Runtime pulls, unless you use direct code deployment."
+        url: https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html
+      - service: "Amazon CloudWatch and AWS CloudTrail"
+        role: logging
+        why: "Traces need CloudWatch Transaction Search switched on once; gateway calls are CloudTrail data events."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+      - service: "AWS WAF"
+        role: ingress
+        why: "Regional web ACL attached to the gateway; it fails closed by default if WAF is unreachable."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-waf.html
+      - service: "Amazon CloudFront"
+        role: ingress
+        why: "Needed only for a custom public domain in front of the gateway."
+        url: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html
+      - service: "AWS Lambda"
+        role: other
+        why: "Runs the gateway's request interceptor."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-interceptors.html
+      - service: "AWS Fargate, Application Load Balancer and Amazon DynamoDB"
+        role: other
+        why: "Host and session store for your MCP auth service, as the guidance page draws it."
+        url: https://docs.aws.amazon.com/solutions/deploying-model-context-protocol-servers-on-aws/
+    quickstart:
+      - title: "Get started with AgentCore Gateway"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-quick-start.html
+      - title: "Guidance for Deploying Model Context Protocol Servers on AWS"
+        url: https://docs.aws.amazon.com/solutions/deploying-model-context-protocol-servers-on-aws/
+    # <<< checked
     reference:
       - title: Guidance for Deploying Model Context Protocol Servers on AWS
         url: https://aws.amazon.com/solutions/guidance/deploying-model-context-protocol-servers-on-aws/
@@ -1084,6 +1504,100 @@ implementations:
 
   - architecture: archSelfHostedInference
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      gateway: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html
+      api: https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-load-serve-model.html
+      runtime: https://docs.aws.amazon.com/eks/latest/userguide/ml-inference.html
+      storage: https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html
+      sources: https://docs.aws.amazon.com/eks/latest/userguide/ml-inference.html
+      registry: https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html
+    differences:
+      - at: gateway->api
+        text: "AWS documents the gateway's private route into a VPC for MCP and OpenAPI targets, not for inference provider targets. Test that an inference provider target accepts a private endpoint; otherwise use an HTTP passthrough target of type INFERENCE."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-egress-private-endpoints.html
+      - at: gateway->api
+        text: "The gateway only calls an HTTPS address, and vLLM serves plain HTTP unless given certificates. Put a certificate on the internal load balancer; trusting a private certificate authority is listed for MCP, OpenAPI and passthrough targets only."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+      - at: consumers->gateway
+        text: "Nothing on AWS forces applications through the gateway. AWS's own EKS walkthrough has the chat app call vLLM directly inside the cluster with a dummy key. The builder must block that path with network policy and a real vLLM key."
+        url: https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-load-serve-model.html
+      - at: consumers->gateway
+        text: "The gateway address is an AWS-hosted endpoint, not inside your network. For private access create the gateway's own interface endpoint (bedrock-agentcore.gateway). With JWT callers its endpoint policy cannot name principals, so restrict by gateway resource and security group."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html
+      - at: gateway
+        text: "Gateway rate limits fail open by default: if the limit service is unavailable or a caller's identity field cannot be read, the request is allowed. AWS says not to rely on them alone, so keep a concurrency cap on vLLM too."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-rate-limits.html
+      - at: api->runtime
+        text: "vLLM's API server and runtime are one process in one pod. Its API key protects only paths under /v1, /v2, /inference and /cohere; other paths such as /invocations and /metrics stay open. Block those at the load balancer or network policy."
+        url: https://docs.vllm.ai/en/latest/usage/security.html
+      - at: sources->storage
+        text: "In AWS's walkthrough one Kubernetes Job, using the same service account as the model server, downloads from Hugging Face and writes to the bucket. Use a separate ingest role and bucket, and give that job the only outbound internet route."
+        url: https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-load-serve-model.html
+      - at: storage->runtime
+        text: "AWS's pattern streams weights from S3 straight into GPU memory, skipping local disk. An init container therefore cannot hash the bytes the server loads; it must compare S3's stored checksum and version ID with the registry record, or load from disk."
+        url: https://docs.aws.amazon.com/eks/latest/userguide/ml-inference.html
+      - at: registry->storage
+        text: "Model Registry holds a record that points at an S3 location; it does not copy files into the serving bucket or roll out to EKS. Approval can start a deployment pipeline, which you build to copy the artifact and update the cluster."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry-approve.html
+    alsoNeeded:
+      - service: "OIDC identity provider (for example Amazon Cognito)"
+        role: identity
+        why: "Issues the tokens the gateway's JWT authorizer checks; must exist before the gateway is created."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-inbound-auth.html
+      - service: "AWS IAM with EKS Pod Identity"
+        role: identity
+        why: "Gives each serving and ingest pod its own role for S3 access."
+        url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+      - service: "Amazon VPC Lattice resource gateway"
+        role: network
+        why: "The path the gateway uses to reach a private address in your VPC."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-egress-private-endpoints.html
+      - service: "Internal load balancer with a TLS certificate (Elastic Load Balancing, AWS Certificate Manager)"
+        role: network
+        why: "Gives vLLM the HTTPS address the gateway requires."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-egress-private-endpoints.html
+      - service: "Outbound internet route for the model download job (NAT gateway or egress proxy)"
+        role: network
+        why: "The Hugging Face download needs internet; serving pods should have none."
+        url: https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-load-serve-model.html
+      - service: "Interface VPC endpoint for AgentCore Gateway"
+        role: ingress
+        why: "Lets internal applications reach the gateway without the public internet."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html
+      - service: "AWS KMS"
+        role: keys
+        why: "Your own keys for the weights bucket and secrets, and the public key that verifies release signatures."
+        url: https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html
+      - service: "AWS Secrets Manager"
+        role: secrets
+        why: "Holds the vLLM API key; the gateway's API key credential provider reads it from there."
+        url: https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/API_CreateApiKeyCredentialProvider.html
+      - service: "Amazon ECR"
+        role: registry
+        why: "Private copy of the vLLM serving image, scanned before the cluster pulls it."
+        url: https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-scanning-enhanced.html
+      - service: "Amazon Bedrock Guardrails"
+        role: other
+        why: "Performs the content checks the gateway policy calls; the gateway role needs permission to invoke it."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy-guardrails-in-policies.html
+      - service: "AWS Lambda"
+        role: other
+        why: "Runs the request and response interceptors that set the cache salt and write the log."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-interceptors.html
+      - service: "Prometheus and Grafana monitoring stack for the cluster"
+        role: logging
+        why: "vLLM and GPU metrics live here; CloudTrail does not see inside the cluster."
+        url: https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-load-serve-model.html
+    quickstart:
+      - title: "Load & Serve Models on Amazon EKS"
+        url: https://docs.aws.amazon.com/eks/latest/userguide/ml-inference-load-serve-model.html
+      - title: "Inference provider targets"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-inference-provider.html
+      - title: "Guidance for Scalable Model Inference and Agentic AI on Amazon EKS"
+        url: https://docs.aws.amazon.com/solutions/scalable-model-inference-and-agentic-ai-on-amazon-eks/
+    # <<< checked
     reference:
       - title: Guidance for Scalable Model Inference and Agentic AI on Amazon EKS
         url: https://aws.amazon.com/solutions/guidance/scalable-model-inference-and-agentic-ai-on-amazon-eks/
@@ -1128,6 +1642,75 @@ implementations:
 
   - architecture: archTrainingPipeline
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      dataOrigins: https://docs.aws.amazon.com/sagemaker/latest/dg/sms.html
+      pkgRegistry: https://docs.aws.amazon.com/codeartifact/latest/ug/welcome.html
+      curation: https://docs.aws.amazon.com/sagemaker/latest/dg/processing-job.html
+      corpus: https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html
+      trainJob: https://docs.aws.amazon.com/sagemaker/latest/dg/how-it-works-training.html
+      storage: https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html
+      evaluation: https://docs.aws.amazon.com/sagemaker/latest/dg/define-pipeline.html
+      registry: https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html
+    differences:
+      - at: pkgRegistry->trainJob
+        text: "With network isolation on, the training container cannot call any service, including CodeArtifact and S3. Packages must be installed into the container image at build time and stored in Amazon ECR; the base checkpoint must arrive as an S3 input that SageMaker copies in."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/mkt-algo-model-internet-free.html
+      - at: corpus->trainJob
+        text: "With network isolation on, the training code never talks to the dataset bucket and gets no AWS credentials. SageMaker itself downloads the data and uploads the result using the job's role, so that role's S3 permissions are the control."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/mkt-algo-model-internet-free.html
+      - at: upstreamArtifacts->pkgRegistry
+        text: "CodeArtifact fetches a package from the public repository the first time someone asks for it, so admission is on demand, not reviewed. There is no managed mirror for Hugging Face weights; you copy them into S3 and scan them yourself."
+        url: https://docs.aws.amazon.com/codeartifact/latest/ug/welcome.html
+      - at: storage->evaluation
+        text: "There is no ready-made evaluation step. AWS's tutorial uses a Processing job that SageMaker feeds with the candidate copied from S3, writes a results file, and a Condition step reads it. You write the evaluation script and thresholds."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/define-pipeline.html
+      - at: evaluation->registry
+        text: "AWS's approval page says code or a pipeline step can set a version to Approved, so a run could approve itself. Register every version as PendingManualApproval and deny the pipeline and training roles permission to change approval status; only the approver role may."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry-approve.html
+      - at: storage->registry
+        text: "The registry records where the artifact sits in S3 and its ETag, not a SHA-256 digest, and the default field expects a single tar.gz file. Store your own digest and signature with the version, and copy the release out of the candidate bucket."
+        url: https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageContainerDefinition.html
+    alsoNeeded:
+      - service: "Amazon ECR"
+        role: registry
+        why: "Holds the training, processing and evaluation container images, which CodeArtifact cannot store."
+        url: https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-scanning-enhanced.html
+      - service: "An image build step that installs packages through CodeArtifact (for example AWS CodeBuild)"
+        role: other
+        why: "Network-isolated jobs cannot install packages at run time, so they are built into the image."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/mkt-algo-model-internet-free.html
+      - service: "AWS IAM execution roles"
+        role: identity
+        why: "One role per stage; SageMaker uses it to read and write S3 for the job."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-roles.html
+      - service: "Amazon VPC with private subnets and an S3 gateway endpoint"
+        role: network
+        why: "Routes SageMaker's data downloads and uploads through your network."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/mkt-algo-model-internet-free.html
+      - service: "AWS KMS"
+        role: keys
+        why: "Encryption key for volumes and outputs, and a separate signing key for releases."
+        url: https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html
+      - service: "Amazon CloudWatch Logs"
+        role: logging
+        why: "Processing and training job logs and metrics are written here; they can contain training data."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/processing-job.html
+      - service: "AWS CloudTrail"
+        role: logging
+        why: "Records who started runs, changed approval status and used the signing key."
+        url: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/logging-data-events-with-cloudtrail.html
+      - service: "A promotion job triggered by approval (your CI/CD)"
+        role: other
+        why: "Approval only changes a status; copying, documenting and signing the release is a job you build."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry-approve.html
+    quickstart:
+      - title: "Define a pipeline"
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/define-pipeline.html
+      - title: "Add a step"
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/build-and-manage-steps-types.html
+    # <<< checked
     reference:
       - title: Well-Architected Generative AI Lens — Model customization
         url: https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/genops05.html
@@ -1171,6 +1754,83 @@ implementations:
 
   - architecture: archAgentSandbox
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      graders: https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints.html
+      platform: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+      orchestrator: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html
+      sandbox: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html
+      harness: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+      localTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-tool.html
+      storage: https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html
+      inference: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-model-deployment-deploy-ftm.html
+      offlineWeb: https://docs.aws.amazon.com/opensearch-service/latest/developerguide/what-is.html
+      registry: https://docs.aws.amazon.com/codeartifact/latest/ug/welcome.html
+      sources: https://docs.aws.amazon.com/codeartifact/latest/ug/external-connection.html
+    differences:
+      - at: sources->registry
+        text: "A CodeArtifact repository with an external connection fetches any missing public package the moment a client asks for it. A rollout could pull in unreviewed packages that way. Give rollouts a repository with no external connection upstream, filled by a separate admission pipeline."
+        url: https://docs.aws.amazon.com/codeartifact/latest/ug/external-connection.html
+      - at: localTools->offlineWeb
+        text: "The browser is not inside the rollout's microVM. The rollout drives a separate AgentCore Browser session through the AgentCore API. Create a custom browser in VPC mode on the sandbox subnets, grant the rollout role only browser actions, and stop that session with the episode."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-tool.html
+      - at: localTools->platform
+        text: "Every session receives the runtime's execution-role credentials from a metadata endpoint that any code in the microVM, including the model, can read. That role can write the runtime's own logs. Keep it minimal, scope it by session ID, and record trajectories from the orchestrator side."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-credentials-management.html
+      - at: orchestrator->harness
+        text: "The orchestrator never connects to a sandbox directly. It calls the AgentCore API (InvokeAgentRuntime, InvokeAgentRuntimeCommand) with a session ID. Default quotas are 25 new sessions a second and 5,000 active sessions per account in two US regions, 2,500 elsewhere; request increases early."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html
+      - at: graders->harness
+        text: "When a session stops, its microVM and disk are destroyed. End-state checks must run through InvokeAgentRuntimeCommand before StopRuntimeSession, or the orchestrator must copy the state out. Do not attach shared file systems, which every session can see; session storage persists under a reused session ID."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-filesystem-configurations.html
+      - at: harness->inference
+        text: "HyperPod publishes the vLLM deployment as a SageMaker endpoint. The episode loop calls it through a SageMaker Runtime interface endpoint, signed with the rollout role, so that role needs invoke permission on that one endpoint and nothing else in SageMaker."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-model-deployment-deploy-ftm.html
+      - at: sandbox
+        text: "In VPC mode AWS shares network interfaces across all runtimes that use the same subnets and security groups. Firewall and flow logs may therefore not tell one rollout from another. Use separate subnets and security groups for each trust level or experiment."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+    alsoNeeded:
+      - service: "Amazon ECR"
+        role: registry
+        why: "Holds the rollout container image; VPC-mode runtimes need ECR and S3 endpoints to pull it."
+        url: https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html
+      - service: "SageMaker Runtime interface endpoint (AWS PrivateLink)"
+        role: network
+        why: "Private path from the sandbox subnets to the vLLM endpoint; the listed endpoints name Bedrock instead."
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/interface-vpc-endpoint.html
+      - service: "Amazon VPC with AWS Network Firewall and Route 53 Resolver DNS Firewall"
+        role: network
+        why: "Private subnets in supported Availability Zones, with no NAT route for rollouts."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+      - service: "IAM roles and EKS Pod Identity"
+        role: identity
+        why: "Separate roles for rollouts, orchestrator, inference and graders."
+        url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+      - service: "AWS IAM Identity Center"
+        role: identity
+        why: "Workforce sign-in for the researchers who submit runs and read results."
+        url: https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html
+      - service: "AWS KMS"
+        role: keys
+        why: "Customer managed keys for checkpoint and trajectory buckets and log groups."
+        url: https://docs.aws.amazon.com/kms/latest/developerguide/overview.html
+      - service: "Amazon CloudWatch Logs and AWS CloudTrail"
+        role: logging
+        why: "Runtime logs and traces, plus data events for every session call."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+      - service: "AWS Organizations service control policy"
+        role: other
+        why: "Carries the deny rule that forces approved subnets and security groups on every runtime and browser."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-vpc-condition.html
+    quickstart:
+      - title: "Get started with AgentCore Runtime using the AgentCore CLI"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-get-started-cli.html
+      - title: "Amazon SageMaker HyperPod quickstart"
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-quickstart.html
+      - title: "Deploy models from Amazon S3, Amazon FSx, or Hugging Face Hub using kubectl"
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-model-deployment-deploy-ftm.html
+    # <<< checked
     reference:
       - title: Simulation and test-bed agents (AWS Prescriptive Guidance)
         url: https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-patterns/simulation-and-test-bed-agents.html
@@ -1217,6 +1877,90 @@ implementations:
 
   - architecture: archAgentFederation
     asOf: "2026-10"
+    # >>> checked against the vendor's documentation
+    verified: "2026-11-18"
+    sources:
+      idp: https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html
+      entry: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html
+      authServer: https://docs.aws.amazon.com/cognito/latest/developerguide/what-is-amazon-cognito.html
+      harness: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-a2a.html
+      localTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+      memory: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html
+      gateway: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-http-passthrough.html
+      internalTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-supported-targets.html
+      provider: https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-bedrock.html
+    differences:
+      - at: harness->gateway
+        text: "AWS's documented runtime role lets the agent call Bedrock models directly, and AWS samples do so. Model calls cross the gateway only if you add inference targets, point the model client at the gateway, and remove bedrock:InvokeModel from the agent's role."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html
+      - at: entry->harness
+        text: "A load balancer cannot forward to AgentCore Runtime. You need front-end code (Lambda or containers) behind it that calls the runtime with the user's token. AWS's cited reference solution uses CloudFront, API Gateway and Lambda instead."
+        url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html
+      - at: gateway->authServer
+        text: "AgentCore Identity only brokers the user-token exchange; the exchange itself is done by an authorization server that supports token-exchange or JWT-bearer grants. Cognito's token endpoint offers neither, so it must run against your corporate IdP or the vendor's."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/on-behalf-of-token-exchange.html
+      - at: authServer
+        text: "Cognito cannot bind a machine (client-credentials) token to one resource; resource binding works only for user sign-ins. A peer's token is limited only by its client ID and custom scopes, so define a scope per skill."
+        url: https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html
+      - at: gateway
+        text: "A gateway has one inbound authorizer with one token issuer. Users' tokens and peer agents' tokens must come from the same Cognito user pool, told apart by client ID and scopes, or you run a separate gateway for peers."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-inbound-auth.html
+      - at: gateway->peerVendor
+        text: "Inbound peer tasks cross the gateway only if you lock the runtime to it. Otherwise a caller with a valid token can invoke the runtime's own endpoint and skip policy. Set allowedWorkloadConfiguration so only the gateway is accepted."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-security-best-practices.html
+      - at: gateway->partner
+        text: "Calls to peers leave from the AWS-managed gateway, not your VPC, so a VPC firewall never sees them. The list of reachable peers is the gateway's passthrough targets; restrict who may create or change targets."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+      - at: gateway
+        text: "AWS Agent Registry is a searchable catalogue only. Approving or deprecating a record neither adds nor removes a gateway target, and nothing checks card signatures; your own pipeline and interceptor must link the registry to the gateway."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry.html
+    alsoNeeded:
+      - service: "Front-end compute (AWS Lambda or Amazon ECS)"
+        role: other
+        why: "Runs the chat application behind the load balancer and calls InvokeAgentRuntime with the user's token."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-invoke-agent.html
+      - service: "Amazon VPC with NAT gateway and AWS Network Firewall"
+        role: network
+        why: "VPC-mode runtime needs private subnets and NAT; no VPC or firewall setting is listed here."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+      - service: "AWS KMS"
+        role: keys
+        why: "Customer managed keys for gateway, memory and token vault; defaults are AWS-owned keys."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-encryption.html
+      - service: "AWS Secrets Manager"
+        role: secrets
+        why: "AgentCore Identity credential providers keep OAuth client secrets and API keys there."
+        url: https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html
+      - service: "Amazon ECR"
+        role: registry
+        why: "Holds the agent's container image; the documented runtime role pulls from it."
+        url: https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html
+      - service: "AWS WAF"
+        role: ingress
+        why: "Named in the front-end row but no setting configures it; the gateway peers call takes one web ACL."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-waf.html
+      - service: "Gateway custom domain (Amazon CloudFront, AWS Certificate Manager, Amazon Route 53)"
+        role: ingress
+        why: "Gives peers a stable public hostname for the gateway endpoint the agent card advertises."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-custom-domains.html
+      - service: "AWS Lambda interceptor on the gateway"
+        role: other
+        why: "The card-signature and hash check is code you write and attach to the gateway."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-interceptors.html
+      - service: "Amazon Bedrock model invocation logging"
+        role: logging
+        why: "Records prompts and replies of our own model calls; not in this pattern's settings."
+        url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html
+      - service: "Amazon CloudWatch and AWS CloudTrail"
+        role: logging
+        why: "Transaction Search must be switched on once; data events are off by default."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+    quickstart:
+      - title: "HTTP passthrough targets"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-http-passthrough.html
+      - title: "Get started with AWS Agent Registry"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry-get-started.html
+    # <<< checked
     reference:
       - title: Getting started with A2A (AWS Prescriptive Guidance)
         url: https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-frameworks/getting-started-with-a2-a.html

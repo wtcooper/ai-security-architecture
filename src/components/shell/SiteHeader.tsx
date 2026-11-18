@@ -28,7 +28,7 @@ const NAV: NavItem[] = [
       { href: "/reference/components", label: "Components" },
       { href: "/reference/personas", label: "Personas" },
       { href: "/reference/frameworks", label: "Frameworks" },
-      { href: "/reference/clouds", label: "Clouds" },
+      { href: "/reference/clouds", label: "Clouds & on-premises" },
     ],
   },
 ];

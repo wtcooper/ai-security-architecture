@@ -15,7 +15,7 @@ import { SETTING_VIA_META } from "@/components/enable/labels";
 import { capabilityName, clouds, enablement, mitigationById } from "@/lib/data";
 import { cloudHref, controlHref, patternHref } from "@/lib/routes";
 import type { Paragraph } from "@/lib/types";
-import { cloudFromSlug, cloudOptionsForControl, patternsOn } from "./model";
+import { cloudFromSlug, cloudOptionsForControl, patternsOn, platformWords } from "./model";
 
 const first = (blocks?: Paragraph[]) => {
   const b = blocks?.[0];
@@ -26,6 +26,7 @@ export function CloudsBrowser() {
   const params = useSearchParams();
   const cloud = cloudFromSlug(params.get("cloud")) ?? clouds[0];
   const patterns = patternsOn(cloud);
+  const words = platformWords(cloud);
   // Every control this cloud has an option for, under its CSF category, in CSF order.
   const groups = enablement.groups
     .map((g) => ({
@@ -45,11 +46,11 @@ export function CloudsBrowser() {
   return (
     <>
       <PageHeader
-        eyebrow="Reference · Clouds"
-        title="Patterns and controls, cloud by cloud"
-        lead="For each cloud: the patterns mapped onto it, with the service that plays each component, and the cloud's own setting for every control, with the value to set. A pattern shows the same thing for itself when you choose Built on."
+        eyebrow="Reference · Clouds & on-premises"
+        title="Patterns and controls, platform by platform"
+        lead="For each cloud, and for your own data centre: the patterns mapped onto it, with what plays each component, and the platform's own setting for every control, with the value to set. A pattern shows the same thing for itself when you choose Built on."
       >
-        <div className="mt-5 flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-line bg-mist p-1" role="tablist" aria-label="Cloud">
+        <div className="mt-5 flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-line bg-mist p-1" role="tablist" aria-label="Platform">
           {clouds.map((c) => (
             <Link
               key={c.id}
@@ -69,10 +70,12 @@ export function CloudsBrowser() {
 
       <div className="mx-auto w-full max-w-5xl px-6 py-8" data-cloud-page={cloud.id}>
         <h2 className="display text-[18px] font-bold text-ink">
-          Patterns built on {cloud.short} <span className="ml-1 text-[12px] font-normal text-ink-3">{patterns.length}</span>
+          {words.own ? "Patterns run on-premises" : `Patterns built on ${cloud.short}`} <span className="ml-1 text-[12px] font-normal text-ink-3">{patterns.length}</span>
         </h2>
         <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-ink-2">
-          Each opens the pattern drawn with {cloud.short}&rsquo;s services on every component and {cloud.short}&rsquo;s option beside every control.
+          {words.own
+            ? "Each opens the pattern drawn with the software that plays every component and its setting beside every control."
+            : `Each opens the pattern drawn with ${cloud.short}'s services on every component and ${cloud.short}'s option beside every control.`}
         </p>
         <ul className="mt-4 grid gap-3 md:grid-cols-2">
           {patterns.map((a) => {
@@ -105,14 +108,14 @@ export function CloudsBrowser() {
         </ul>
 
         <h2 className="display mt-12 text-[18px] font-bold text-ink">
-          {cloud.short}&rsquo;s own option for each control{" "}
+          {words.own ? "The on-premises option for each control" : `${cloud.short}'s own option for each control`}{" "}
           <span className="ml-1 text-[12px] font-normal text-ink-3">
             {controlCount} controls · {cloud.settings.length} settings
           </span>
         </h2>
         <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-ink-2">
-          Grouped by NIST CSF category. Each setting links to {cloud.short}&rsquo;s documentation and names the patterns that use it; where{" "}
-          {cloud.short} has no managed option, the row says what you build.
+          Grouped by NIST CSF category. Each setting links to {words.docs} and names the patterns that use it; where{" "}
+          {words.own ? "no product has a setting" : `${cloud.short} has no managed option`}, the row says what you build.
         </p>
 
         <div className="mt-4 overflow-hidden rounded-xl border border-line bg-paper">

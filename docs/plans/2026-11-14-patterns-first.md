@@ -141,7 +141,7 @@ Replaces a landing page that leads with frameworks and "Start with the risks".
 - One line of purpose, then a search box that matches pattern titles, example products, tools,
   clouds and a short synonym list (RAG, chatbot, assistant, copilot, M365, MCP).
 - Three columns, one per surface, worded as the reader's situation: **Tools on your devices**
-  (endpoint), **AI services you subscribe to** (SaaS), **Applications you build** (cloud).
+  (endpoint), **AI services you subscribe to** (SaaS), **AI you host yourself** (cloud or on-premises; first named "Applications you build").
 - One card per pattern: title, a one-line "use this when…", three or four example products, a
   buy / build tag (from the guidance file's `mode`, authored for all 18 and not shown today),
   and counts of controls and tools.

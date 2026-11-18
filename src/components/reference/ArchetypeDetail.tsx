@@ -10,11 +10,29 @@
 import { useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
-import { CloudComparison } from "@/components/cloud/CloudViews";
-import { bindingFor, cloudProductsFor, type CloudProduct } from "@/components/cloud/model";
+import { CloudComparison, OnCloud } from "@/components/cloud/CloudViews";
+import { bindingFor, cloudProductsFor, platformWords, type CloudProduct } from "@/components/cloud/model";
 import { summaryOf } from "@/components/drawing/layout";
-import { capabilityName, guidanceByArchetype } from "@/lib/data";
-import type { Archetype } from "@/lib/types";
+import { capabilityName, componentChoiceFor, guidanceByArchetype } from "@/lib/data";
+import type { Archetype, ComponentChoice } from "@/lib/types";
+
+/** What the organisation recorded it runs for a component (data/status.yaml), with its own module or runbook. */
+function OurChoice({ choice }: { choice?: ComponentChoice }) {
+  if (!choice) return null;
+  return (
+    <span className="mt-0.5 block text-ink" data-component-ours>
+      <span className="font-semibold">Your organisation uses: </span>
+      {choice.link ? (
+        <a href={choice.link} target="_blank" rel="noreferrer" className="hover:text-introduced hover:underline">
+          {choice.uses} <span className="text-[11px] text-introduced">↗</span>
+        </a>
+      ) : (
+        choice.uses
+      )}
+      {choice.note && <span className="block text-[12px] text-ink-3">{choice.note}</span>}
+    </span>
+  );
+}
 
 export function ArchetypeDetail({ archetype, cloud = null }: { archetype: Archetype; /** The cloud the pattern is shown as built on. */ cloud?: CloudProduct | null }) {
   const cloudProducts = cloudProductsFor(archetype.id);
@@ -27,14 +45,22 @@ export function ArchetypeDetail({ archetype, cloud = null }: { archetype: Archet
 
       <Section key={`components-${cloud?.id ?? "generic"}`} title="Components" count={archetype.blocks.length} defaultOpen={Boolean(cloud)}>
         <p className="mb-3 text-[12.5px] leading-snug text-ink-3">
-          Every box on the drawing, by the boundary it sits in, with what it holds{cloud ? ` and the ${cloud.cloud.short} service that plays it` : ""}.
+          Every box on the drawing, by the boundary it sits in, with what it holds{cloud ? ` and the ${platformWords(cloud.cloud).service} that plays it` : ""}.
         </p>
         <ComponentList archetype={archetype} cloud={cloud} />
       </Section>
 
+      {cloud && (
+        <div id="on-cloud" className="scroll-mt-28">
+          <Section key={`on-${cloud.id}`} title={cloud.cloud.selfManaged ? "On-premises: what differs and what else you run" : `On ${cloud.cloud.name}: what differs and what else you need`} count={null} defaultOpen>
+            <OnCloud archetype={archetype} product={cloud} />
+          </Section>
+        </div>
+      )}
+
       {cloudProducts.length > 0 && (
         // Open when a cloud is chosen: the reader has asked how the pattern is built.
-        <Section key={cloud?.id ?? "generic"} title="On each cloud" count={cloudProducts.length} defaultOpen={Boolean(cloud)}>
+        <Section key={cloud?.id ?? "generic"} title={cloudProducts.some((p) => p.cloud.selfManaged) ? "On each platform" : "On each cloud"} count={cloudProducts.length} defaultOpen={Boolean(cloud)}>
           <p className="mb-3 max-w-3xl text-[12.5px] leading-snug text-ink-3">
             What plays each component on {cloudProducts.map((p) => p.cloud.short).join(", ")}, side by side. A control-plane box is a
             function, so its row lists the settings that deliver its controls; their values are on Enable.
@@ -140,7 +166,7 @@ export function ComponentList({ archetype, cloud = null }: { archetype: Archetyp
                   {summaryOf(b) && <span className="text-ink-3"> · {summaryOf(b)}</span>}
                 {cloud && bindingFor(cloud, b.id) && (
                   <span className="mt-0.5 block text-ink" data-component-service>
-                    <span className="font-semibold">On {cloud.cloud.short}: </span>
+                    <span className="font-semibold">{cloud.cloud.selfManaged ? "On-premises: " : `On ${cloud.cloud.short}: `}</span>
                     {bindingFor(cloud, b.id)!.url ? (
                       <a href={bindingFor(cloud, b.id)!.url} target="_blank" rel="noreferrer" className="hover:text-introduced hover:underline">
                         {bindingFor(cloud, b.id)!.service}
@@ -149,9 +175,11 @@ export function ComponentList({ archetype, cloud = null }: { archetype: Archetyp
                       bindingFor(cloud, b.id)!.service
                     )}
                     {bindingFor(cloud, b.id)!.build && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-3">You build this</span>}
+                    {bindingFor(cloud, b.id)!.url && <span className="ml-1 text-[11px] text-introduced">↗</span>}
                     {bindingFor(cloud, b.id)!.note && <span className="block text-[12px] text-ink-3">{bindingFor(cloud, b.id)!.note}</span>}
                   </span>
                 )}
+                {cloud && <OurChoice choice={componentChoiceFor(cloud.id, archetype.id, b.id)} />}
                   {b.note && <span className="mt-0.5 block">{b.note.trim()}</span>}
                   {b.items?.length ? (
                     <ul className="mt-1.5 space-y-1 border-l border-line pl-3">

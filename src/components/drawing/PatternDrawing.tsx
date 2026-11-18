@@ -37,6 +37,8 @@ export function PatternDrawing({
   pins = "capabilities",
   onPickMitigation,
   services = null,
+  differs = null,
+  ownBoundary = null,
   minScale = MIN_SCALE,
   className,
 }: {
@@ -52,6 +54,10 @@ export function PatternDrawing({
   onPickMitigation?: (id: string) => void;
   /** Block id -> the cloud service that plays it; null draws the generic components. */
   services?: Map<string, BlockService> | null;
+  /** Flow key or block id -> how the chosen cloud differs there. */
+  differs?: Map<string, string> | null;
+  /** The title of the organisation's own boundary, when the chosen platform is not a cloud. */
+  ownBoundary?: string | null;
   /** The smallest share of natural size to draw at inline before scrolling sideways. Lower where seeing the whole drawing matters more than reading it. */
   minScale?: number;
   className?: string;
@@ -222,6 +228,8 @@ export function PatternDrawing({
       overlay={overlay}
       pins={pins}
       services={services}
+      differs={differs}
+      ownBoundary={ownBoundary}
       onPickMitigation={onPickMitigation}
       onPickRisk={(id) => onHighlight?.(highlight?.kind === "risk" && highlight.id === id ? null : { kind: "risk", id })}
       onHover={setCard}
@@ -315,12 +323,15 @@ export function DrawingLegend({
   className = "",
   risks = false,
   cloud,
+  differs = false,
 }: {
   className?: string;
   /** True where the coded risk tags are showing instead of the controls. */
   risks?: boolean;
   /** The cloud the drawing is shown as built on, by its short name. */
   cloud?: string;
+  /** True when the chosen cloud differs from the drawing somewhere, so the mark is explained. */
+  differs?: boolean;
 }) {
   const swatch = (tone: keyof typeof BOUNDARY_TONE) => {
     const t = BOUNDARY_TONE[tone];
@@ -378,6 +389,14 @@ export function DrawingLegend({
         <span aria-hidden className="inline-block h-3 w-[3px] rounded-sm" style={{ background: "var(--ink-2)" }} />
         {REF_LAYERS.map((l) => l.label).join(" · ")} · Control point
       </span>
+      {cloud && differs && (
+        <span className="flex items-center gap-1.5" data-legend-differs>
+          <span aria-hidden className="inline-flex h-[15px] w-[16px] items-center justify-center rounded-[4px] border text-[11px] font-bold" style={{ background: "#FFF4D6", borderColor: "#B7791F", color: "#8A5A0B" }}>
+            ≠
+          </span>
+          Differs on {cloud} · hover for how
+        </span>
+      )}
       {cloud && (
         <span className="flex items-center gap-1.5" data-legend-cloud>
           <span aria-hidden className="text-[11px] font-semibold text-ink">Service name</span>
