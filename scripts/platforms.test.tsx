@@ -270,7 +270,9 @@ test("a platform's hosting options are compared on the same rows; a variant keep
       assert.equal([...choose.matchAll(/data-hosting-option="/g)].length, options.length, `${where}: a card per option`);
       assert.equal([...choose.matchAll(/data-compare-row="/g)].length, HOSTING_COMPARE.length, `${where}: every comparison row`);
       for (const o of options.filter((x) => x.kind === "managed")) assert.match(choose, new RegExp(`data-hosting-pattern="${o.pattern}"`), `${where}: ${o.id} links to its pattern`);
-      assert.doesNotMatch(choose, /recommended|best choice|we recommend/i, `${where}: compared, not ranked`);
+      // The page compares and does not rank: it says so, and marks no option as the one to pick. (A cell may quote the vendor's own guidance.)
+      assert.match(choose, /Nothing here ranks the options/, `${where}: says it does not rank`);
+      assert.doesNotMatch(choose, /data-recommended|data-rank/, `${where}: no option is marked as the one to pick`);
     }
   }
 });
