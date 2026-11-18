@@ -558,6 +558,21 @@ supported, which the first draft denied. Two further points the checks could not
 way are stated as such in the rows: on AWS, whether a harness accepts a resource-based policy;
 on Google Cloud, whether the organisation-wide key constraint covers an agent instance.
 
+
+### Azure AI Search is now Foundry IQ
+
+Microsoft renamed Azure AI Search to Foundry IQ in November 2026; the name reads "Foundry IQ
+(Azure AI Search)" in the portals and the documentation, and the service is unchanged
+([What's new](https://learn.microsoft.com/en-us/azure/search/whats-new)). On 18 November 2026
+every row of the Azure file and of the Foundry Agent Service record that named the service was
+brought into line: seven component names and notes, three setting locations and four
+comparison cells. Two things keep the old name on purpose, because Microsoft's page says they
+do: the built-in policy definitions ("Azure AI Search services should disable public network
+access" and "…should use customer-managed keys to encrypt data at rest", checked against the
+[policy list](https://learn.microsoft.com/en-us/azure/search/policy-reference)) and the
+resource names a builder types (the `Microsoft.Search/searchServices` resource type, the
+`searchService` private endpoint sub-resource, the Search roles and the REST API).
+
 ## Keeping it current
 
 A mapping is only as good as its last check. `verified` on each mapping and each setting says
