@@ -83,7 +83,7 @@ test("the settings step reads like the controls step: same headings, same order,
           assert.ok(cell.includes(esc(capName(id))) || cell.includes(`>${arch.mitigations.indexOf(id) + 1}<`), `${where} ${st.id}: names ${id}`);
         }
       }
-      // Nothing is recorded in data/status.yaml, so there is no status column; the detail waits for a row to be opened.
+      // Nothing is recorded in data/org/controls.yaml, so there is no status column; the detail waits for a row to be opened.
       assert.doesNotMatch(html, />Not enabled<|data-setting-detail/, `${where}: no empty status column, no open detail`);
     }
   }
@@ -143,7 +143,7 @@ test("the Enable tab opens as folded steps; a lit control opens the controls, ba
       const row = html.slice(html.indexOf(`id="control-${id}"`));
       assert.ok(row.slice(0, row.indexOf("</li>")).includes(`>${i + 1}</span>`), `${arch.id}: ${id} is chip ${i + 1}`);
     }
-    // Nothing is recorded in data/status.yaml, so the rows carry no status column of "Not set".
+    // Nothing is recorded in data/org/controls.yaml, so the rows carry no status column of "Not set".
     assert.doesNotMatch(html, />Not set</, `${arch.id}: no empty status column`);
     assert.equal([...html.matchAll(/data-baseline/g)].length, isBaseline(arch.mitigations[0]) ? 1 : 0, `${arch.id}: the open row says when every AI deployment needs it`);
   }
