@@ -1,0 +1,1385 @@
+# Microsoft Foundry Agent Service — one entity per product × reference architecture. Facts are dated (asOf)
+# and cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Exclusions: Foundry workflows (the portal's visual low-code builder) are in preview and retire on 2026-12-01, so
+# they are recorded as a fact here and not onboarded on the low-code drawing. Microsoft Agent Framework (the SDK
+# Microsoft names as the workflow replacement) is an SDK the customer hosts or packs into a hosted agent, not this
+# runtime. Classic agents and Azure OpenAI Assistants are the predecessor surface (a tag disables them; recorded as
+# a setting). Microsoft Copilot Studio is its own entity (toolCopilotStudio). Foundry Models, Foundry IQ (Azure AI
+# Search), Foundry Memory, Toolbox, guardrails (RAI policies), Foundry governance (formerly Foundry Control Plane),
+# Microsoft Entra Agent ID, Microsoft Agent 365 and AI Gateway are components or planes recorded on this entity's
+# rows, not entities. Foundry Canvas (preview, a GitHub Copilot App extension) and the Foundry Toolkit for Visual
+# Studio Code are authoring tools with no admin surface of their own. Autopilots (an agent with its own Entra agent
+# user account through Agent 365) and routines (one trigger, one agent) are recorded as facts.
+# Rating convention used in this file: a row is native only where a mechanism Microsoft documents without a preview
+# label meets the architecture's rule; where the deciding mechanism is preview-only (Memory, cost controls, agent
+# guardrails at tool call and tool response, project tool controls, tool and agent-kind policies) the row is partial
+# and says so.
+# 2026-11-18: onboarded. About 120 pages read as markdown (Accept: text/markdown) from the docs tree listed in
+# learn.microsoft.com/en-us/azure/foundry/toc.json, all 200 unless listed here. Redirects and misses:
+# /azure/ai-foundry/agents/overview -> /azure/foundry/agents/overview (the whole tree moved from ai-foundry to
+# foundry; older links inside pages still say ai-foundry); agents/concepts/foundry-agent-canvas (as the table of
+# contents links it) -> agents/concepts/foundry-canvas; how-to/configure-capability-settings ->
+# agents/environment-setup; foundry/how-to/disable-local-auth 404 (the page is /azure/ai-services/disable-local-auth);
+# azure.microsoft.com/pricing/details/foundry-agent-service/ -> /en-us/pricing/details/foundry-agent-service/ and
+# pricing/details/ai-foundry/ -> /en-us/pricing/details/microsoft-foundry/ (pricing pages not read for rates).
+# msrc.microsoft.com/update-guide pages render client-side; the four advisories were read from
+# msrc.microsoft.com/csaf/advisories/2026/msrc_cve-<id>.json. servicetrust.microsoft.com answers 200 but its reports
+# need sign-in, so no certification list is asserted. Pages disagree on traffic splitting between agent versions:
+# agents/how-to/deploy-hosted-agent-production (2026-09-21) walks through a 90/10 canary on versionSelector, while
+# agents/concepts/hosted-agents (2026-11-09), agents/how-to/manage-hosted-agent (2026-10-15) and
+# agents/how-to/configure-agent (2026-10-15) say traffic splitting isn't supported; recorded on the rollout row.
+# The hosted agents and prompt agents pages carry no preview label and no explicit GA sentence; status rests on the
+# limits page ("Foundry Agent Service is generally available (GA). Some sub-features are in public preview").
+vendor: microsoft
+family: Microsoft Foundry Agent Service
+tools:
+  - id: toolFoundryAgentService
+    name: Microsoft Foundry Agent Service (prompt agents, hosted agents, Responses API)
+    surfaceClasses:
+      - managedRuntime
+    variants:
+      - name: Prompt agents (configuration only — model, instructions, tools; Foundry runs the loop)
+        class: managedRuntime
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/prompt-agents
+        note: >-
+          Authored in the Foundry portal, the SDK, the REST API or azd; a saved, versioned resource in a Foundry
+          project invoked through the agent's Responses endpoint. No preview label on the page.
+      - name: Prompt agents on the Microsoft Copilot harness (preview)
+        class: managedRuntime
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness
+        note: >-
+          Public preview. Still a prompt agent, but Foundry runs a harness with file read, file write, shell, web
+          fetch and subagent tools (all five on by default) in a service-managed sandbox and a workspace per
+          conversation. Chosen only at creation; no bring-your-own model and no Foundry Memory.
+      - name: Voice-based prompt agents (real-time voice through Voice Live)
+        class: managedRuntime
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/prompt-voice-agent
+        note: >-
+          Generally available, with GPT-Live, inline subagents and handoff, SIP, telephony campaigns and post-call
+          delivery in preview behind the VoiceAgents=V1Preview opt-in. Sessions last at most 60 minutes.
+      - name: Hosted agents (your code as a container image or a .zip of source, in a VM-isolated sandbox per session)
+        class: managedRuntime
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents
+        note: >-
+          Agent Framework, LangGraph, OpenAI Agents SDK, Anthropic Agent SDK, Copilot SDK or custom code in Python or
+          C#; Foundry supplies the endpoint, a dedicated Entra agent identity, scaling and session state. No preview
+          label on the page; draft versions and the long-running resilience features are preview.
+      - name: Responses API without a saved agent (ephemeral agent defined per request)
+        class: managedRuntime
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/responses-api
+        note: >-
+          The definition lives in the calling application and can change on every request; there is no agent
+          resource to create, update or delete in Foundry, so no harness and no prompt-agent optimizer.
+    architecture: archManagedAgentRuntime
+    status: ga
+    asOf: "2026-11"
+    summary:
+      - >-
+        Microsoft's managed agent runtime inside Microsoft Foundry (documentation now under /azure/foundry/, moved
+        from /azure/ai-foundry/; policy definitions and CVE records still say Azure AI Foundry, Azure AI Services or
+        Cognitive Services). Microsoft states the service is generally available with some sub-features in public
+        preview. An application calls an agent's own endpoint — Responses, Invocations, Invocations (WebSocket),
+        Activity for Teams and Microsoft 365, or A2A — with a Microsoft Entra token; API keys are not accepted on
+        agent endpoints. As documented on 2026-11-18 it offers three agent types: prompt agents (configuration only —
+        a model, instructions and tools — authored in the Foundry portal, SDK, REST API or azd and run by Foundry),
+        voice-based prompt agents (generally available, some features in preview) and hosted agents (the
+        customer's own code, shipped as a container image or as a .zip of source that Foundry builds, run in a
+        VM-isolated sandbox per session). A prompt agent can instead be created on the Microsoft Copilot harness
+        (preview), and an application can call the project's Responses API with no saved agent at all.
+      - >-
+        Workflow, multi-agent and low-code: workflows — the portal's visual, declarative builder for sequential,
+        group-chat and human-in-the-loop orchestration of agents — are in preview and retire on 2026-12-01;
+        Microsoft says to use Microsoft Agent Framework for new workflows, and hosted agents were never supported
+        in the workflow designer. What remains for multi-agent work is orchestration written in hosted-agent code,
+        the A2A tool and A2A endpoint (v1.0 generally available, v0.3 preview), subagents in the Copilot harness
+        (preview) and in voice agents (inline subagents in preview), routines (one timer, schedule or event trigger
+        invoking one agent) and autopilots (an agent with its own Entra agent user account through Agent 365). No
+        other low-code builder is documented for the service: Foundry Canvas (preview) is a GitHub Copilot App side
+        panel for creating hosted agents and harness prompt agents, not a runtime.
+      - >-
+        Governance is Azure's own control plane: Azure RBAC at project or single-agent scope, a Microsoft Entra agent
+        identity and blueprint per agent, connections that hold tool credentials and inject them service-side,
+        guardrails (RAI policies) for content and for hosted-agent network egress, Azure Policy definitions for
+        tools, agent kinds, container images and egress, and traces in the customer's own Application Insights. The
+        gaps are defaults and preview status rather than missing parts: tracing is off, a hosted agent has no
+        guardrail and public egress unless a policy is attached, the endpoint follows the latest version, a
+        guardrail that names a missing policy fails open, and the tenant floors (project tool controls, tool,
+        agent-kind, image and egress policies, cost controls) are preview, several only in three regions.
+    facts:
+      - label: Plans
+        value: >-
+          Pay per use on an Azure subscription: per-call model inference and tool usage for prompt agents, plus
+          container compute (CPU and memory during active sessions) for hosted agents; Code Interpreter per
+          session, file search by vector storage, Voice Live and telephony for voice agents. Service stated as GA
+          with some sub-features in public preview; rates were not read.
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+      - label: Inference & routing
+        value: >-
+          Models from the Foundry model catalog deployed in the customer's Foundry resource (Azure OpenAI models and
+          several Foundry Models sold by Azure; availability varies by region and tool). Hosted-agent code calls the
+          project endpoint's Responses API. Bring-your-own models behind Azure AI Gateway, Azure API Management or a
+          supported non-Azure gateway are allowed (not with the Copilot harness) and are Non-Microsoft Products.
+          Deployment types labelled Global or DataZone may process outside the resource's region.
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions
+      - label: Data leaving the device
+        value: >-
+          Everything runs in Azure: prompts, tool inputs and outputs, files, conversations and session state in the
+          Foundry resource's region (endpoints are regional). Data leaves Microsoft's boundary when an agent calls a
+          non-Microsoft MCP server, tool, model or endpoint; Grounding with Bing is a Microsoft-as-controller service
+          outside the Data Protection Addendum; Claude models can be hosted on Anthropic infrastructure, with
+          Anthropic an independent processor; publishing to Teams and Microsoft 365 stores data in those services.
+        url: https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/agents/data-privacy-security
+      - label: Retention & training
+        value: >-
+          Conversations, responses, files and vector stores persist until deleted. Basic setup keeps them in
+          Microsoft-managed storage; standard setup in the customer's own Azure Storage, Cosmos DB and Foundry IQ
+          (Azure AI Search). A hosted session's state is deleted after 30 days of inactivity; stored voice
+          conversations and Microsoft-managed audio are kept 60 days; traces follow the connected Application
+          Insights retention. Prompts and outputs are not available to other customers or model providers and are
+          not used to train models.
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/faq
+      - label: Docs index
+        value: What is Microsoft Foundry Agent Service? (agent types, tools and toolboxes, identity, networking, publishing)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+      - label: Agent types
+        value: >-
+          Prompt agents (configuration, portal or code; no preview label). Prompt agents on the Microsoft Copilot
+          harness (public preview). Voice-based prompt agents (GA, some features preview). Hosted agents (your code
+          as a container image or source .zip; no preview label). Responses API without a saved agent. Workflows
+          (visual low-code multi-agent builder): preview, retiring 2026-12-01 in favour of Microsoft Agent
+          Framework. Routines and autopilots are documented without a preview label; routines need preview SDK
+          packages.
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+      - label: Workflow retirement
+        value: >-
+          "Microsoft Foundry is retiring workflows on December 1, 2026"; the page carries a migration guide, and
+          code-based orchestration inside hosted agents is not affected.
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/workflow
+      - label: Setup modes
+        value: >-
+          Basic setup: Microsoft-managed storage and Microsoft-managed keys only. Standard setup: the customer's
+          own storage resources, where customer-managed keys can be set on each. A hosted session's $HOME is always
+          on platform-managed storage and is not encrypted with a customer-managed key; routines do not support
+          customer-managed keys.
+        url: https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
+      - label: Network modes
+        value: >-
+          Default is fully public: the endpoint is reachable from the internet and agents egress publicly. Options
+          are a private endpoint for inbound, and for outbound a bring-your-own virtual network (a subnet delegated
+          to Microsoft.App/environments, /27 or larger) or a managed virtual network. Memory stores do not support
+          virtual networks; Work IQ and browser automation are not supported in network-isolated projects.
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
+      - label: Sovereign cloud
+        value: >-
+          Azure Government (US Gov Virginia, US Gov Arizona): prompt agents yes, workflows preview, voice-based and
+          hosted agents no, with a reduced tool list.
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/azure-government
+      - label: Predecessor
+        value: >-
+          Classic agents and Azure OpenAI Assistants are the earlier surface; Microsoft documents migration to the
+          new agent service and a resource tag that blocks creating them. Agent applications are an earlier
+          publishing model with their own stop and start operations.
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/disable-classic-agents
+    items:
+      - title: Change four defaults before production
+        body:
+          - >-
+            Connect Application Insights (tracing is off by default), pin the agent endpoint to a version (the
+            default routing policy is Always use latest), attach a guardrail to every hosted agent and test it (an
+            agent with no rai_config has no content safety guardrail, and one that names a missing policy deploys
+            as active with no filtering), and give hosted agents an egress policy with default action Deny (there
+            is none by default).
+        links:
+          - title: Set up tracing for AI agents
+            url: https://learn.microsoft.com/en-us/azure/foundry/observability/how-to/trace-agent-setup
+          - title: Configure and share your agent (traffic routing)
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-agent
+          - title: Add guardrails to a hosted agent
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails
+      - title: Separate who builds from who calls
+        body:
+          - >-
+            Foundry User at project scope can create and update every agent in the project, call them all and read
+            every user's sessions. Give applications and end users Foundry Agent Consumer on the single agent they
+            call, keep Foundry User for builders and the delivery pipeline, and disable key-based authentication on
+            the Foundry resource, because a key grants full access without role restrictions.
+        links:
+          - title: Role-based access control for Microsoft Foundry
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry
+          - title: Agent endpoint authorization
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-endpoint-authorization
+    riskNotes:
+      - risk: riskPromptInjection
+        note: >-
+          The default guardrail screens user prompts for jailbreak attempts only; indirect-attack screening of what a
+          tool returns is a preview intervention point that works for a listed set of tools which does not include
+          MCP. Microsoft says remote MCP servers are not tested or verified and their tool descriptions are
+          untrusted input; Copilot harness agents fetch web content and run shell commands by default.
+      - risk: riskRogueActions
+        note: >-
+          A harness prompt agent starts with file write, shell, web and subagents enabled, and during the preview
+          the service, not the customer, sets the approval policy for those tools. A hosted agent is the customer's
+          own code: tool policies do not inspect it, and require_approval on a toolbox tool is enforced only if the
+          agent's runtime honours it.
+      - risk: riskAgenticDelegationConfusedDeputy
+        note: >-
+          Legacy agents share one project agent identity. A tool connection using the project managed identity or a
+          stored key gives every caller the same downstream authority. A middle tier holding the
+          UserIdentityImpersonation action names the end user in a header the platform does not validate, and
+          delegated users are not fenced from each other's sessions.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Traces capture prompts, responses, system instructions and tool arguments and results into Application
+          Insights, readable by anyone with Log Analytics Reader until the content table is set to Protected.
+          People with access to a project can read an API key stored in a project connection. Code Interpreter
+          containers are not isolated per agent or per user within a project.
+      - risk: riskShadowAndUnknownAgents
+        note: >-
+          Ephemeral agents built on the Responses API have no agent resource, so they appear in no agent inventory.
+          Classic agents and Azure OpenAI assistants are not in the Fleet inventory, and agents created before
+          2026-10-23 16:00 UTC keep running when their Entra identity is blocked.
+      - risk: riskToolSourceProvenance
+        note: >-
+          MCP servers are declared by URL; an empty allowed_tools list admits every tool the server exposes, now
+          and later. A toolbox version is an immutable snapshot of the tool configuration, not of what a remote
+          server serves, and the consumer endpoint always serves the default version.
+      - risk: riskInsecureIntegratedComponent
+        note: >-
+          Hosted agents run a customer-built image from a registry (projects created before 2026-06-25 need the
+          registry reachable publicly); the image allowlist policy is preview and in three regions. Skills are
+          instructions, scripts and assets Microsoft says to treat as code and review before attaching.
+    controls:
+      - mitigation: cap-agent-tool-registry
+        coverage: native
+        mechanism: >-
+          Agents and immutable agent versions as project resources (list agents, list versions); the Manage > Fleet
+          > Agents inventory across projects in a subscription; a Microsoft Entra agent identity and blueprint per
+          agent in the tenant-wide Entra inventory, with Agent 365 registry sync for published agents; Azure RBAC on
+          agents/write; Azure Policy definitions for agent kinds, hosted-agent container images and approved tools
+          (preview)
+        steps:
+          - title: Read the inventory
+            body:
+              - >-
+                In the Foundry portal select Manage > Fleet > Agents: prompt agents, workflows and hosted agents in
+                every project you can access are discovered automatically, with status and policy impact.
+            url: https://learn.microsoft.com/en-us/azure/foundry/control-plane/how-to-manage-agents
+          - title: Restrict who can create or change a definition
+            body:
+              - >-
+                Creating an agent or a version needs Microsoft.CognitiveServices/accounts/AIServices/agents/write at
+                project scope (Foundry User, Foundry Project Manager, Foundry Owner); assign those roles to builders
+                and the delivery pipeline only.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agent-permissions
+          - title: Deny unapproved agent kinds and images
+            body:
+              - >-
+                Assign "[Preview]: Microsoft Foundry agents should not use denied agent kinds" and "[Preview]:
+                Microsoft Foundry hosted agents should only use allowed container images" with effect Deny after an
+                Audit period.
+            url: https://learn.microsoft.com/en-us/azure/foundry/how-to/agent-deployment-policy
+          - title: Govern the identities in Entra
+            body:
+              - >-
+                Review each agent's identity and blueprint in the Microsoft Entra admin center, where Foundry agents
+                sit beside agents from other services, and set owners and sponsors.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+        note: >-
+          Native on the registry rule (as on toolBedrockAgentcore and toolVertexAgentEngine): a listable inventory
+          of agents, versions and identities, and the tenant gates create and update by Azure RBAC. Not an approval
+          workflow: nothing approves a definition before it runs, and any Foundry User in the project can create or
+          update an agent. Outside the inventory: ephemeral agents (a Responses API call with no agent resource),
+          classic agents and Azure OpenAI assistants, and hosted-agent code, which no policy inspects. The
+          agent-kind and container-image policies are preview, a deny list and an allow list respectively, and
+          available only in Canada Central, Spain Central and Korea Central; the Fleet overview page is labelled
+          preview.
+        verified: "2026-11-18"
+      - mitigation: cap-staged-rollout-gate
+        coverage: partial
+        mechanism: >-
+          Immutable agent versions (any change creates one; up to 1,000 per agent); the agent endpoint's
+          version_selector — Always use latest (default) or pinned with one FixedRatio rule at 100% — as the rollback
+          pointer; candidate sessions pinned by version_ref; draft versions (preview); toolbox versions with a
+          default_version promoted by hand; scheduled and continuous evaluation rules beside the release
+        steps:
+          - title: Pin production to a version
+            body:
+              - >-
+                In the agent's Publish dropdown choose a specific version, or PATCH agent_endpoint.version_selector
+                with one FixedRatio rule (agent_version, traffic_percentage 100); when pinned, new versions do not
+                change what is served.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-agent#select-the-active-agent-version
+          - title: Release a candidate without changing production
+            body:
+              - >-
+                Record and pin production, create the candidate, wait for status active, test a fresh session
+                created with a version_indicator of type version_ref, then move the selector; restoring the previous
+                selector is the rollback.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-agent
+          - title: Score the candidate
+            body:
+              - >-
+                Create scheduled or continuous evaluation rules so the candidate's traces and responses are scored
+                on the Evaluations page before a person moves the selector.
+            url: https://learn.microsoft.com/en-us/azure/foundry/observability/how-to/continuous-scheduled-evaluation
+        note: >-
+          Partial (as on toolClaudeManagedAgents): versioning and pointer-flip rollback are met, progressive release
+          is not. Two Microsoft pages disagree: the azd production guide (2026-09-21) shows a 90/10 canary with two
+          FixedRatio rules, while the hosted agents concept page, the manage and configure pages (October and
+          November 2026) say traffic splitting isn't supported and the endpoint routes 100% to one version — prefer
+          the reference pages and set one rule at 100% explicitly. Evaluation scores beside the release and blocks
+          nothing; a person moves the selector. The default routing follows the latest version, so an unpinned
+          endpoint ships every save at once. Existing hosted sessions stay bound to their version, a running
+          Copilot harness environment keeps the previous version until it goes idle, and the selector rolls back
+          neither toolboxes, connections, guardrail contents nor role assignments.
+        verified: "2026-11-18"
+      - mitigation: D3-CTS
+        coverage: native
+        mechanism: >-
+          Project connections carry the authentication type per tool target — custom keys, project managed identity,
+          agent identity, OAuth identity passthrough (oauth2) or a user Entra token — and Agent Service acquires,
+          refreshes and injects the credential service-side; agent identity tokens are requested per audience;
+          on-behalf-of-user delegation; for hosted-agent egress, managedIdentityRef and secretRef header transforms
+          applied by the egress proxy (preview)
+        steps:
+          - title: Put the credential on the connection, not in the agent
+            body:
+              - >-
+                Create each MCP or A2A target as a connection with its own auth type (azd ai connection create
+                --kind remote-tool --auth-type ...), so Foundry injects the credential for that target only.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/tool-authentication
+          - title: Use per-user access for user data
+            body:
+              - >-
+                Choose OAuth identity passthrough or Microsoft Entra client user delegation so each downstream call
+                carries the signed-in user's authority; keep key-based connections for shared, non-user data.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/mcp-authentication
+          - title: Scope the agent's own identity
+            body:
+              - >-
+                For application-only calls select agent identity authentication with the downstream audience, and
+                grant that identity roles at resource or resource-group scope, not subscription scope.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+        note: >-
+          Native on the credential-scoping rule (as on toolClaudeManagedAgents; toolBedrockAgentcore is native only
+          on its gateway): on the connection and toolbox path the credential is held outside the agent, presented
+          only to the target it is keyed to, and per-user scoping is available. Paths outside it: hosted-agent code
+          obtains tokens for its own agent identity from the token service and can read values placed in
+          environment variables or resolved from ${{connections.<name>.credentials.<field>}} placeholders; MCP
+          headers passed at runtime instead of a connection; a key-based or project-managed-identity connection is
+          one shared authority for every caller. The agent identity acting on behalf of the user is preview and
+          needs the AgentBlueprint scheme; secretRef headers are preview in two regions and cannot reach a Key
+          Vault behind a private endpoint.
+        verified: "2026-11-18"
+      - mitigation: cap-agent-action-policy-enforcement
+        coverage: partial
+        mechanism: >-
+          Project tool controls (properties.toolControls: defaultAction Deny, allowedTools by tool type, MCP
+          serverUrl or connectorId) enforced at runtime (preview); Azure Policy "[Preview]: Microsoft Foundry agents
+          and toolboxes should only use approved tools" on create and update; guardrail controls at the tool call
+          intervention point and Task Adherence (both preview classifiers); gateway policies on MCP traffic routed
+          through AI Gateway or Azure API Management
+        steps:
+          - title: Set a runtime tool allow list on the project
+            body:
+              - >-
+                PATCH the project's properties.toolControls with defaultAction Deny and an allowedTools array naming
+                each approved tool type and each MCP serverUrl or connectorId; test in a non-production project,
+                because there is no audit mode.
+            url: https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-tools
+          - title: Block unapproved tool configurations at save time
+            body:
+              - >-
+                Assign the approved-tools policy at the Foundry account scope with approvedToolTypes,
+                approvedMcpEndpoints and approvedMcpConnectors, in Audit first and then Deny.
+            url: https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-tools
+          - title: Put argument-level rules in a gateway
+            body:
+              - >-
+                Configure the MCP route in AI Gateway or Azure API Management, enter the gateway-routed endpoint as
+                the tool's server URL, and apply the gateway's policies; Foundry no longer registers the route
+                itself.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/governance
+        note: >-
+          Partial on the architecture rule (toolBedrockAgentcore and toolVertexAgentEngine are native on a
+          declarative per-call policy at a provider gateway): Foundry's deterministic controls decide which tools
+          and MCP servers may be used, as a project floor a builder without ARM write on the project cannot lower,
+          but they do not evaluate a call's arguments or target resource, and both are preview. The policy checks
+          toolboxes and prompt agents without the Copilot harness; harness prompt agents are not evaluated and
+          hosted-agent code is never inspected. Tool-call guardrail controls and Task Adherence are classifiers, not
+          authorisation, and Microsoft's own page says content safety guardrails don't determine whether an agent
+          is authorised to call a tool. Policy changes take up to 30 minutes and project controls several minutes.
+          Argument and resource rules belong in the organisation's gateway or in the tool itself.
+        verified: "2026-11-18"
+      - mitigation: AML.M0031
+        coverage: partial
+        mechanism: >-
+          Memory (preview): memory stores with a scope per request or per tool ({{$userId}} resolved from the
+          x-memory-user-id header or the caller's Entra tenant and object ID), default_ttl_seconds on the store,
+          item-level create, read, update, list and delete, and remember-or-forget commands; outside Memory,
+          conversations and hosted sessions are isolated per caller identity and the hosted state store partitions
+          per end user
+        steps:
+          - title: Scope memory to the end user
+            body:
+              - >-
+                Set scope to "{{$userId}}" on the memory search tool so the service resolves the user from the Entra
+                token, and send x-memory-user-id only from a trusted backend.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/memory-usage#understand-scope
+          - title: Expire memories
+            body:
+              - >-
+                Create the store with default_ttl_seconds (for example 2592000 for 30 days); 0 means no expiration,
+                and the setting applies only to stores created after TTL support was introduced.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/memory-usage#create-a-memory-store
+          - title: Remove a poisoned or personal record
+            body:
+              - >-
+                Use the memory item operations to list, inspect, update or delete individual records in a scope.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/memory-usage#manage-memory-items
+        note: >-
+          Partial: scope, expiry and deletion are all settable, which is what earns native on toolVertexAgentEngine,
+          but Memory and the Memory Store API are public preview here, so the row is not rated native. The memory
+          search tool lets the agent read and write the store, and no read-only attachment is documented. Contents
+          are LLM-extracted and consolidated and are not validated; Microsoft puts memory poisoning on the customer
+          (validate prompts with Azure AI Content Safety, run adversarial tests). Scope is a request field for the
+          low-level APIs and x-memory-user-id is caller-supplied. Memory stores do not support virtual networks and
+          are not available to Copilot harness agents. Limits: 100 scopes per store, 10,000 memories per scope.
+        verified: "2026-11-18"
+      - mitigation: cap-ai-vendor-assessment
+        coverage: external
+        mechanism: >-
+          Microsoft's data-handling pages for Agent Service and models, the Azure security baseline and the Service
+          Trust Portal feed the buyer's TPRM platform
+        evidence:
+          - title: Data, privacy, and security for Foundry Agent Service
+            url: https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/agents/data-privacy-security
+          - title: Customer-managed key encryption in Microsoft Foundry
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
+          - title: Data, privacy, and security for Claude models in Microsoft Foundry
+            url: https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/claude-models/data-privacy
+          - title: Azure security baseline for Azure AI Foundry
+            url: https://learn.microsoft.com/en-us/security/benchmark/azure/baselines/azure-ai-foundry-security-baseline
+          - title: Microsoft Service Trust Portal
+            url: https://servicetrust.microsoft.com/
+        note: >-
+          External: the assessment, its evidence expiry and the reassessment trigger live in the organisation's
+          TPRM platform; Microsoft supplies the evidence. The Data Protection Addendum governs Agent Service but not
+          the external tools it calls: Grounding with Bing is a Microsoft-as-controller service outside the DPA,
+          bring-your-own models and third-party MCP servers are Non-Microsoft Products, and Anthropic is an
+          independent processor for Claude models, which can run on Anthropic infrastructure outside the Azure
+          geography. Product findings to record: basic setup has Microsoft-managed keys only, a hosted session's
+          $HOME is never under a customer-managed key, and the Copilot harness, Memory, workflows, agent guardrails,
+          tool governance and cost controls are previews without a service-level agreement. Azure Government runs
+          prompt agents only, and its preview features may not carry FedRAMP, DoD IL5 or CJIS commitments. Which
+          audit reports name Agent Service was not verified: the Service Trust Portal needs sign-in. Re-assess on
+          the 2026 cloud-service CVEs and on the 2026-12-01 workflow retirement.
+        verified: "2026-11-18"
+      - mitigation: D3-EI
+        coverage: native
+        mechanism: >-
+          Hosted agents: a dedicated VM-isolated sandbox per session with its own persistent $HOME, provisioned on
+          demand, deprovisioned at the idle timeout (idle_timeout_seconds 120–14,400, default 900) and deleted
+          after 30 days of inactivity; sessions scoped to the caller's Entra identity by default. Copilot harness: a
+          service-managed sandbox and a workspace per conversation. Code Interpreter: Azure Container Apps dynamic
+          sessions behind a Hyper-V boundary with no outbound network
+        steps:
+          - title: Keep one session per user
+            body:
+              - >-
+                Leave isolation_key_source.kind at Entra so each authenticated caller gets a private session; when a
+                middle tier sends x-ms-user-identity, give every end user their own session ID.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/isolate-sessions-per-user
+          - title: Bound the sandbox's life
+            body:
+              - >-
+                Set session_configuration.idle_timeout_seconds on the agent version (sessionConfiguration
+                idleTimeoutSeconds in azure.yaml); omitted, the server default is 900 seconds.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-sessions
+          - title: Keep uploads away from trusted code
+            body:
+              - >-
+                Uploads land in the session's $HOME; for Python images set PYTHONNOUSERSITE to "1" and do not load
+                code, configuration or instructions from upload-writable paths.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-hosted-agent-env-variables
+        note: >-
+          Native on the isolation rule (as on toolBedrockAgentcore: a sandbox per session around the loop,
+          reclaimed after). Inside the hosted sandbox: the customer's whole agent loop, its files and anything it
+          executes; outside: inference, toolbox tools, the token service and the egress proxy. Boundaries: several
+          users can be multiplexed into one session and then share the sandbox, and the platform does not fence one
+          delegated end user from another; state persists across idle periods for up to 30 days; the sandbox
+          technology is not named beyond VM-isolated. Default prompt agents have no customer sandbox — the loop
+          and tools run in Microsoft's service. Code Interpreter containers are not isolated per agent or per user
+          within a project, and through a toolbox in a hosted agent all users in the project share one container
+          context. The harness sandbox's CPU, memory and lifecycle are not configurable.
+        verified: "2026-11-18"
+      - mitigation: cap-agent-egress-control
+        coverage: native
+        mechanism: >-
+          Network egress controls in a guardrail (RAI policy egressPolicy): ordered host and path rules with Allow,
+          Deny, Rewrite and Transform (preview) actions, a default action, Audit or Enforce mode, evaluated by a
+          proxy outside the hosted agent's sandbox and fail-closed; Azure Policy definitions that require a
+          compliant egress policy (preview); a bring-your-own or managed virtual network for the project
+        steps:
+          - title: Attach an egress policy with default Deny
+            body:
+              - >-
+                Under Build > Guardrails create a Network control with Outbound requests default Deny and allow
+                rules for the hosts the agent needs, run it in Audit, read the Network egress decision spans, then
+                switch to Enforce and attach the policy's full ARM ID to the agent version.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails#network-egress-controls
+          - title: Require it by Azure Policy
+            body:
+              - >-
+                Assign "Microsoft Foundry hosted agents should enforce resolved RAI egress restrictions" with the
+                three RAI-policy definitions, permittedDestinations and effect Deny, and allow 30–60 minutes to
+                propagate.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/govern-hosted-agent-egress-azure-policy
+          - title: Cover the Copilot harness
+            body:
+              - >-
+                For a harness prompt agent attach a guardrail whose Network rules use default Deny in Enforce mode,
+                then start a new conversation and test an allowed and a denied host with Shell and curl.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness#control-network-egress
+          - title: Keep the project's traffic private
+            body:
+              - >-
+                Deploy the Foundry resource with a bring-your-own or managed virtual network so agent and tool
+                traffic stays behind the firm's firewall as well.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+        note: >-
+          Native on the architecture rule, for hosted agents: an exact-host (and path) allow list enforced by
+          Microsoft outside the sandbox, default-deny when so configured, logged, fail-closed, and generally
+          available (Transform rules and secret-backed headers are preview). There is no egress policy by default,
+          so a hosted agent starts with public egress. Not seen by the rules: model inference, toolbox and declared
+          Foundry tools (they keep their own service network behaviour — web search uses Microsoft-managed public
+          endpoints), and the foundational domains the runtime allow-lists for itself. Default prompt agents have
+          no sandbox egress to govern. The harness controls are preview and have no Azure Policy governance. The
+          policy floor is preview in Canada Central, Spain Central and Korea Central, and neither a new Deny
+          assignment nor a compliance change stops a running session. Anyone who can write the RAI policy can
+          change the rules, and the proxy inspects HTTPS with a CA it injects into the sandbox.
+        verified: "2026-11-18"
+      - mitigation: AML.M0028
+        coverage: native
+        mechanism: >-
+          The agent definition's tools list (at most 128), allowed_tools on each MCP tool, toolboxes that curate
+          tools behind one MCP endpoint with a connection and identity per tool, Azure RBAC and data-plane roles on
+          the agent identity at each downstream resource, harness tool toggles (microsoft_copilot_toolset_preview),
+          project toolControls and the approved-tools Azure Policy (both preview)
+        steps:
+          - title: Name the tools an MCP server may offer
+            body:
+              - >-
+                Set allowed_tools to a nonempty list of tool names on every MCP tool; an empty list allows every
+                tool the server exposes.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/model-context-protocol
+          - title: Curate shared tools in a toolbox
+            body:
+              - >-
+                Publish tools as a toolbox version, test it on the version-specific endpoint, and promote it to
+                default_version only after review; agents on the consumer endpoint then get exactly that set.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/toolbox
+          - title: Grant the agent identity only what it needs
+            body:
+              - >-
+                Assign the agent identity's object ID the narrowest role on each downstream resource; a new agent
+                identity starts with no resource permissions.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+          - title: Switch off harness tools the agent does not need
+            body:
+              - >-
+                Add one microsoft_copilot_toolset_preview entry with defaultConfig enabled false and enable only
+                filesystem_read, filesystem_write, shell, web or subagents as required.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness
+        note: >-
+          Native on the permissions rule (as on toolBedrockAgentcore and toolVertexAgentEngine): per-tool enablement
+          in the definition and per-principal permission by operation and resource through the agent identity and
+          the downstream service's own authorisation, both enforced outside the model. Arguments are not in any
+          Foundry policy. Boundaries: the definition is content the next version can widen, and any Foundry User can
+          save one; an ephemeral Responses API call sets its tools per request; the tenant restrictions on that
+          (toolControls, approved-tools policy) are preview and do not cover harness prompt agents or hosted-agent
+          code; approving the mcp type approves every MCP server; Microsoft does not test or verify remote MCP
+          servers, and nothing pins what a declared server serves. Legacy agents share the project's agent identity.
+        verified: "2026-11-18"
+      - mitigation: D3-CH
+        coverage: partial
+        mechanism: >-
+          Microsoft Entra tokens only on agent endpoints (API keys aren't supported there); a per-agent Entra agent
+          identity whose blueprint uses a federated identity credential, with no client secret or certificate held
+          by the project or the agent code; connection secrets in a Microsoft-managed Key Vault or the customer's
+          own; disableLocalAuth on the Foundry resource; customer-managed keys on standard-setup resources; no
+          tunnel — private tools are reached through the project's delegated subnet or private endpoints
+        steps:
+          - title: Disable key-based authentication on the Foundry resource
+            body:
+              - >-
+                Set disableLocalAuth to true (Bicep or ARM, or Set-AzCognitiveServicesAccount -DisableLocalAuth
+                $true) once every caller uses Entra tokens; the change does not take effect immediately.
+            url: https://learn.microsoft.com/en-us/azure/ai-services/disable-local-auth
+          - title: Prefer Entra authentication to stored keys
+            body:
+              - >-
+                Where the MCP server or downstream service accepts Entra tokens, choose agent identity
+                authentication, which needs no secret and rotates tokens itself.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/mcp-authentication#use-agent-identity-authentication
+          - title: Hold connection secrets in your own Key Vault
+            body:
+              - >-
+                Create the Azure Key Vault connection on the Foundry resource before any other connection exists;
+                without it, connection details are stored in a Microsoft-managed Key Vault outside the subscription.
+            url: https://learn.microsoft.com/en-us/azure/foundry/how-to/set-up-key-vault-connection
+        note: >-
+          Partial on the vault rule applied to every vendor (as on toolBedrockAgentcore and toolVertexAgentEngine):
+          custody and federation are strong — keyless agent endpoints, a federated agent identity with no secret in
+          the sandbox, short-lived audience-scoped tokens — but the connection store is not write-only. Microsoft
+          states that people who have access to the project can access an API key stored in a project connection,
+          and hosted agents can resolve connection credentials into their own configuration. A rotated key reaches
+          tool calls after a cache of about two minutes. The Foundry resource still accepts API keys, which grant
+          full access without role restrictions, until disableLocalAuth is set. Only one Key Vault connection per
+          resource, no secret migration, and deleting the vault breaks the resource. Tunnel story: Microsoft
+          documents no outbound-only tunnel; a private MCP server is reached through the virtual network, so there
+          is no tunnel token to rotate.
+        verified: "2026-11-18"
+      - mitigation: AML.M0029
+        coverage: partial
+        mechanism: >-
+          require_approval ("always" or "never") on MCP tools: for prompt agents the response returns an
+          mcp_approval_request and the tool runs only after an mcp_approval_response naming that request's id;
+          function tools return to the application to execute; a toolbox passes require_approval in
+          _meta.tool_configuration for the hosted agent's runtime to enforce; multi-turn task chains that suspend
+          for a person's reply in hosted agents
+        steps:
+          - title: Require approval on MCP tools that write
+            body:
+              - >-
+                Set require_approval to "always" on the MCP tool, show the requested server, tool and arguments to a
+                person, and send the mcp_approval_response in the same conversation.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/model-context-protocol
+          - title: Enforce toolbox approvals in the hosted runtime
+            body:
+              - >-
+                Read _meta.tool_configuration.require_approval from tools/list and pause before every call marked
+                always; the toolbox MCP endpoint does not block tools/call.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/use-toolbox-hosted-agent
+          - title: Pause a hosted agent for a decision
+            body:
+              - >-
+                Return a turn that asks for the decision from a @multi_turn_task handler; the chain suspends under
+                its task_id and resumes when the application starts the next turn with the person's answer.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-human-in-the-loop
+        note: >-
+          Partial on the approval rule: a pause bound to the exact call is enforced by the service only for MCP
+          tools on prompt agents (toolClaudeManagedAgents is native because its per-tool policy covers the built-in
+          toolset as well). No ask mode is documented for OpenAPI, Azure Functions, A2A, Code Interpreter, browser
+          automation or the other built-in tools; during the harness preview the service, not the customer, manages
+          the approval policy for shell, file and web tools; for hosted agents the approval is the deployer's own
+          code, and Microsoft says to use never unless the runtime can pause and resume that exact call. The
+          service cannot tell a person's approval from the application's, so that a human decides is the front
+          end's to guarantee. The hosted human-in-the-loop page was announced as preview in the August 2026 notes.
+        verified: "2026-11-18"
+      - mitigation: cap-input-guardrails
+        coverage: partial
+        mechanism: >-
+          Guardrails (RAI policies) with controls per intervention point — user input, tool call (preview), tool
+          response (preview), output — for user prompt attacks and indirect attacks, annotate and block; the
+          Microsoft.DefaultV2 policy on model deployments (jailbreak detection on prompts); rai_config on a hosted
+          agent version; policies.rai_config.rai_policy_name on a toolbox version
+        steps:
+          - title: Create a guardrail and assign it to the agent
+            body:
+              - >-
+                Under Build > Guardrails select Create Guardrail, add the User input attacks control at user input
+                and the Indirect attack control at tool response with Annotate and block, then Add agents.
+            url: https://learn.microsoft.com/en-us/azure/foundry/guardrails/how-to-create-guardrails
+          - title: Attach it to every hosted agent and test it
+            body:
+              - >-
+                Set rai_config.rai_policy_name to the policy's full ARM resource ID, add invocations_moderation for
+                the Invocations protocol, and send a test prompt: a missing policy fails open.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails
+          - title: Screen tool traffic at the toolbox
+            body:
+              - >-
+                Set policies.rai_config.rai_policy_name when creating a toolbox version so the guardrail runs on
+                tool inputs and outputs at the toolbox layer.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/toolbox#configure-guardrails
+        note: >-
+          Partial on the guardrail rule (toolVertexAgentEngine is native because returned tool content is classified
+          at its gateway in a GA path): Foundry can classify what a tool returns for indirect attacks with a block,
+          but agent guardrails are preview, and the tool call and tool response points work only for tools that
+          support moderation — Foundry IQ, Azure Functions, OpenAPI, SharePoint grounding, Fabric data agent, Bing
+          grounding, Bing custom search and browser automation — a list without MCP, Code Interpreter or the harness
+          tools. What is on by default is the model deployment's policy: jailbreak detection on user prompts only.
+          An agent's guardrail fully overrides its model's, so a weaker agent guardrail lowers the floor, and the
+          built-in Azure Policy definitions that mandate content filtering for agents are preview with Audit and
+          Disabled effects only, so they report and cannot deny. A hosted agent has no agent-level guardrail unless rai_config is
+          set, the Invocations protocol screens nothing without invocations_moderation, and Invocations WebSocket
+          has no moderation. Whether a toolbox guardrail includes indirect-attack screening of MCP results is not
+          stated on the pages read.
+        verified: "2026-11-18"
+      - mitigation: cap-agent-tracing
+        coverage: native
+        mechanism: >-
+          Server-side tracing, logged automatically for prompt agents, hosted agents and workflows once an
+          Application Insights resource is connected to the project (OpenTelemetry generative-AI conventions: model
+          calls, tool calls with arguments and results, intermediate steps, latency, token usage, errors); hosted
+          agents emit OpenTelemetry through the protocol libraries; Network egress decision spans; a dedicated
+          AppGenAIContent table for sensitive content
+        steps:
+          - title: Connect Application Insights to every project
+            body:
+              - >-
+                In the project select Build > Agents > Traces > Connect (or Manage > Project details > Connected
+                resources > Add connection > Application Insights); tracing is off until this is done.
+            url: https://learn.microsoft.com/en-us/azure/foundry/observability/how-to/trace-agent-setup
+          - title: Protect prompt and tool content in traces
+            body:
+              - >-
+                Register the protectGenAISensitiveData feature flag, set the AppGenAIContent table to Protected and
+                grant Privileged Monitoring Data Reader only to the people who need content.
+            url: https://learn.microsoft.com/en-us/azure/foundry/observability/how-to/traces-sensitive-content
+          - title: Instrument hosted-agent code
+            body:
+              - >-
+                Use the protocol libraries or a framework integration so the container emits OpenTelemetry traces to
+                the injected Application Insights connection string, and add your own exporter where needed.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-hosted-agent-telemetry
+        note: >-
+          Native on the tracing rule: model inputs and outputs, tool calls and intermediate steps land in the
+          organisation's own Application Insights and Log Analytics workspace, from where Azure Monitor can export
+          them. Tracing is off by default and past runs are not captured retroactively. For prompt agents the
+          record is produced by Microsoft's service; a hosted agent's trace of its own logic is only as complete as
+          its code's instrumentation. Voice traces use a single trace view without a response id, and during the
+          harness egress preview a Network egress decision span might not appear. Retention, access and
+          tamper-resistance are the workspace's settings: anyone with Log Analytics Reader reads trace content until
+          the content table is Protected. Agent 365 observability for hosted agents needs additional setup.
+        verified: "2026-11-18"
+      - mitigation: cap-agent-kill-switch
+        coverage: partial
+        mechanism: >-
+          Hosted sessions: POST .../endpoint/sessions/{id}:stop terminates the session's running compute, and delete
+          removes it; POST .../agents/{name}:disable takes the agent endpoint offline; Block (Agent 365) or Disable
+          in this tenant (Microsoft Entra) on the agent identity or blueprint; /responses/{id}/cancel and
+          /invocations/{id}/cancel for one turn; a routine can be disabled
+        steps:
+          - title: Stop the running session
+            body:
+              - >-
+                Call the session's :stop action (REST, or azd ai agent sessions stop <session-id> --agent-name
+                <agent>); a Foundry User on the project can act on every user's sessions.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-sessions
+          - title: Refuse new requests
+            body:
+              - >-
+                POST to the agent's :disable action, or open the agent's Details tab and edit Status; the agent
+                rejects requests while its configuration and versions stay intact.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-agent
+          - title: Block the agent from the tenant
+            body:
+              - >-
+                As AI Administrator, Global Administrator, owner or sponsor, choose Block in Agent 365 or Disable in
+                this tenant in Microsoft Entra; the effective state can take up to 10 minutes to change.
+            url: https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-agent-infrastructure-entra-admin
+        note: >-
+          Partial on the kill-switch rule (toolBedrockAgentcore is native on StopRuntimeSession): for hosted agents
+          stop, block and revoke are each documented — stopping a session ends its container, and a turn that does
+          not reach a checkpoint in the grace period is forcibly ended — but prompt agents have no documented
+          operation that interrupts a response already running, and what disable does to in-flight work is not
+          stated (the agent "rejects requests"). An Entra block takes up to 10 minutes, and agents created before
+          2026-10-23 16:00 UTC bypass Entra-state enforcement entirely, so only the Foundry-side disable stops
+          them. Cancel is cooperative and works only on background responses; the Invocations cancel route does
+          nothing unless the agent's code registers a handler; the .NET StopSession method in
+          Azure.AI.Projects.Agents 2.1.0-beta.4 fails at runtime, so use REST. No policy or compliance change stops
+          a running session, and whether tokens already issued to an agent identity are revoked by a block is not
+          documented.
+        verified: "2026-11-18"
+      - mitigation: D3-APA
+        coverage: native
+        mechanism: >-
+          Azure RBAC with Foundry built-in roles (Foundry Agent Consumer, Foundry User, Foundry Project Manager,
+          Foundry Account Owner, Foundry Owner) at Foundry resource, project or individual agent scope; agent
+          endpoint authorization schemes AzureRbac (default), AgentBlueprint (preview) and BotServiceRbac /
+          BotServiceTenant for Teams and Microsoft 365; isolation_key_source; Microsoft Entra Conditional Access
+          and governance on agent identities
+        steps:
+          - title: Authorise callers per agent
+            body:
+              - >-
+                Assign Foundry Agent Consumer at the individual agent's scope to each user, group or service
+                principal that calls it, in place of Foundry User on the project.
+            url: https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry
+          - title: Choose the endpoint's authorization schemes
+            body:
+              - >-
+                Keep AzureRbac for direct callers and use BotServiceRbac for Teams and Microsoft 365; do not
+                configure the legacy BotService scheme, which applies no user authorization rule.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-agent-endpoint-authorization
+          - title: Limit who may speak for an end user
+            body:
+              - >-
+                Put the UserIdentityImpersonation data action in a custom role held only by the middle tier's
+                identity; no built-in role includes it.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agent-permissions
+        note: >-
+          Native on the authorisation rule (as on toolVertexAgentEngine and toolBedrockAgentcore): Azure RBAC
+          administers who may create, change and call each agent, per resource, and Microsoft enforces it at the
+          endpoint. Boundaries: agent-scope assignments are evaluated only for endpoint access; Foundry User at
+          project scope can create, update and call every agent in the project and read and write every user's
+          sessions; Owner and Contributor cannot create agents but can create connections.
+          AgentBlueprint (preview) authorises without Azure RBAC, on token-validation rules. The isolation key
+          partitions sessions and is not authorisation, and the platform does not validate a header-supplied key.
+          Key-based authentication to the Foundry resource grants full access without role restrictions until it is
+          disabled. Which end user a middle tier acts for is the application's to authorise.
+        verified: "2026-11-18"
+      - mitigation: AML.M0036
+        coverage: partial
+        mechanism: >-
+          Hosted sessions: idle_timeout_seconds per agent version (default 900), deletion after 30 days of
+          inactivity, a CPU and memory size per session, and a per-subscription, per-region quota of concurrent
+          sessions (1,000 or 2,000); rate limits on the model deployment; voice sessions capped at 60 minutes; cost
+          controls (preview) with a spending or token budget per project, agent or hosted session and a Block usage
+          threshold
+        steps:
+          - title: Keep the idle timeout short
+            body:
+              - >-
+                Set session_configuration.idle_timeout_seconds no higher than the work needs (120 to 14,400
+                seconds); compute is released when it elapses.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-sessions
+          - title: Set a budget that blocks
+            body:
+              - >-
+                Under Manage > Cost > Cost Control create a cost control with a Tokens or Spending budget, a budget
+                per Agent or per Session, a Send alert threshold at 80% and Block usage at 100%.
+            url: https://learn.microsoft.com/en-us/azure/foundry/how-to/create-cost-controls
+          - title: Know the service limits
+            body:
+              - >-
+                Plan against the fixed limits (128 tools per agent, 100,000 messages per thread) and the concurrent
+                hosted-session quota; rate limiting for model calls is set on the model deployment.
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions
+        note: >-
+          Partial on the resource-consumption rule: what is generally available bounds idle compute, sandbox size,
+          concurrent sessions and model request rate (as on toolVertexAgentEngine), with no turn, iteration or
+          wall-clock ceiling on a running response documented. A per-agent and per-session budget that blocks does
+          exist, which is the test toolClaudeManagedAgents passes, but cost controls are preview: the running total
+          is not reconciled with the bill, the request that crosses the threshold still completes, changes take up
+          to 15 minutes, blocking refuses new requests with 429 and does not stop one in flight, and the
+          deployment filter lists only GPT model deployments. Token limits by Azure API Management apply only to
+          model traffic routed through it and are no longer edited in Foundry.
+        verified: "2026-11-18"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Rows are fields of the agent, toolbox, project or Foundry resource set over the Foundry data-plane or Azure
+    # Resource Manager APIs (apiCli), Foundry portal pages (adminConsole), Azure RBAC role assignments and Azure
+    # Policy assignments (cloudPolicy), Microsoft Entra or Agent 365 actions (identityProvider) and the deployer's own
+    # code. Verified 2026-11-18.
+    settings:
+      - id: endpointAuthorizationScheme
+        name: Agent endpoint authorization schemes (AzureRbac, AgentBlueprint, BotServiceRbac, BotServiceTenant, BotService)
+        where: Agent › agent_endpoint › authorization schemes (Publish dropdown in the Foundry portal, or PATCH /agents/{name})
+        setVia: [adminConsole, apiCli]
+        area: identity
+        default: AzureRbac
+        recommended: AzureRbac for direct callers and BotServiceRbac for Teams and Microsoft 365; the legacy BotService scheme never
+        why: Every caller is authorised by an Azure role on the agent, and a Teams user cannot reach it through a scheme that applies no user authorization rule.
+        mitigations: [D3-APA]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-agent-endpoint-authorization
+        verified: "2026-11-18"
+      - id: agentConsumerRole
+        name: Foundry Agent Consumer
+        where: Azure portal › the agent, project or Foundry resource › Access control (IAM) › Add role assignment
+        setVia: [cloudPolicy]
+        area: identity
+        recommended: Assigned at the individual agent's scope to the groups and service principals that call it; Foundry User kept for builders
+        why: A caller can invoke one agent without being able to create, change or call every other agent in the project.
+        mitigations: [D3-APA]
+        url: https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry
+        verified: "2026-11-18"
+      - id: agentWriteRoles
+        name: Foundry User / Foundry Project Manager / Foundry Owner (agents/write)
+        where: Azure portal › Foundry project › Access control (IAM)
+        setVia: [cloudPolicy]
+        area: identity
+        recommended: Held by named builders in development projects and by the delivery pipeline's identity in production projects
+        why: Only a reviewed pipeline can create or change an agent definition in production, and Foundry User's cross-user session access stays with a named few.
+        mitigations: [cap-agent-tool-registry, D3-APA]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agent-permissions
+        verified: "2026-11-18"
+      - id: disableLocalAuth
+        name: disableLocalAuth
+        where: Foundry resource (Microsoft.CognitiveServices/accounts) › properties.disableLocalAuth (Bicep, ARM or Set-AzCognitiveServicesAccount)
+        setVia: [apiCli, cloudPolicy]
+        area: identity
+        default: Key-based authentication available
+        recommended: "true, with the built-in policy that requires key access to be disabled assigned to the subscription"
+        why: A static key that grants full access to the resource without role restrictions or per-user traceability cannot be used; agent endpoints already refuse keys.
+        mitigations: [D3-CH]
+        url: https://learn.microsoft.com/en-us/azure/ai-services/disable-local-auth
+        verified: "2026-11-18"
+      - id: isolationKeySource
+        name: isolation_key_source.kind
+        where: Agent endpoint › authorization scheme › isolation_key_source (Entra or Header)
+        setVia: [apiCli]
+        area: identity
+        default: Entra
+        recommended: Entra; Header only for a trusted middle tier that authenticates its own users
+        why: Sessions, conversations and stored data are partitioned by the caller's own token, not by a value the caller chooses.
+        mitigations: [D3-EI, D3-APA]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-agent-endpoint-authorization
+        verified: "2026-11-18"
+      - id: userIdentityImpersonation
+        name: Microsoft.CognitiveServices/accounts/AIServices/agents/endpoints/UserIdentityImpersonation/action
+        where: Azure RBAC › custom role assigned on the agent to the middle tier's identity
+        setVia: [cloudPolicy]
+        area: identity
+        default: In no built-in role
+        recommended: Granted only to the one service identity that fronts users; never to people or to the agent itself
+        why: Only the trusted front end can name an end user in x-ms-user-identity, so a caller cannot open another user's sessions by sending their identifier.
+        mitigations: [D3-APA]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/isolate-sessions-per-user
+        verified: "2026-11-18"
+      - id: connectionAuthTypeAgentIdentity
+        name: Microsoft Entra - agent identity (authType agentic-identity)
+        where: Project connection › authentication type, with the downstream audience
+        setVia: [adminConsole, apiCli]
+        area: identity
+        recommended: Used for every Entra-protected tool that is not user-specific, in place of a stored key or the project managed identity
+        why: The tool call carries the one agent's own short-lived token, so there is no shared secret to leak and access can be scoped and audited per agent.
+        mitigations: [D3-CH, D3-CTS]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/mcp-authentication#use-agent-identity-authentication
+        verified: "2026-11-18"
+      - id: connectionAuthTypeUserDelegation
+        name: OAuth identity passthrough / Microsoft Entra client user delegation (authType oauth2, user-entra-token)
+        where: Project connection › authentication type
+        setVia: [adminConsole, apiCli]
+        area: identity
+        recommended: Used for every tool that returns user-specific data (mail, files, records)
+        why: The downstream service sees the signed-in user and applies their permissions, so the agent cannot return one user's data to another.
+        mitigations: [D3-CTS]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/tool-authentication
+        verified: "2026-11-18"
+      - id: keyVaultConnection
+        name: Azure Key Vault connection
+        where: Foundry resource › connection of category AzureKeyVault (created before any other connection)
+        setVia: [apiCli]
+        area: identity
+        default: Connection secrets in a Microsoft-managed Key Vault outside your subscription
+        recommended: The firm's own Key Vault, with access to it and to project connections limited to a named few
+        why: Stored API keys and OAuth client secrets sit in a vault the firm controls, logs and can cut off.
+        mitigations: [D3-CH]
+        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/set-up-key-vault-connection
+        verified: "2026-11-18"
+      - id: mcpAllowedTools
+        name: allowed_tools
+        where: Agent definition or toolbox version › MCP tool › allowed_tools
+        setVia: [adminConsole, apiCli]
+        area: tools
+        default: All tools the server exposes (an empty list also allows all)
+        recommended: A nonempty list of the named tools the agent needs, reviewed when the server changes
+        why: A server that adds or renames a tool does not hand the agent a new capability until someone lists it.
+        mitigations: [AML.M0028]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/model-context-protocol
+        verified: "2026-11-18"
+      - id: mcpRequireApproval
+        name: require_approval
+        where: Agent definition › MCP tool › require_approval (always or never)
+        setVia: [apiCli]
+        area: tools
+        recommended: "always for tools that write data or change resources; never for read-only tools"
+        why: A prompt agent returns an mcp_approval_request and the tool runs only after an approval response naming that request.
+        mitigations: [AML.M0029]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/model-context-protocol
+        verified: "2026-11-18"
+      - id: toolboxRequireApproval
+        name: require_approval (toolbox tool)
+        where: Toolbox version › tool › require_approval, returned to clients in _meta.tool_configuration
+        setVia: [apiCli, code]
+        area: tools
+        recommended: "always on consequential tools, and only where the hosted agent's runtime pauses, collects the decision and resumes that exact call"
+        why: The toolbox endpoint does not block tools/call, so the setting stops nothing unless the agent's own runtime enforces it.
+        mitigations: [AML.M0029]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/use-toolbox-hosted-agent
+        verified: "2026-11-18"
+      - id: projectToolControls
+        name: toolControls (defaultAction, allowedTools)
+        where: Foundry project (Azure Resource Manager) › properties.toolControls
+        setVia: [apiCli]
+        area: tools
+        default: Absent, so runtime tool use is not restricted
+        recommended: defaultAction Deny, with allowedTools naming each approved tool type and each MCP serverUrl or connectorId
+        why: A tool or MCP server nobody approved is refused at run time in that project, whatever an agent definition or a per-request call asks for.
+        mitigations: [AML.M0028, cap-agent-action-policy-enforcement]
+        requires: Preview (api-version 2026-09-15-preview)
+        url: https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-tools
+        verified: "2026-11-18"
+      - id: approvedToolsPolicy
+        name: "[Preview]: Microsoft Foundry agents and toolboxes should only use approved tools"
+        where: Azure Policy › Definitions › assign at the Foundry account scope (approvedToolTypes, approvedMcpEndpoints, approvedMcpConnectors)
+        setVia: [cloudPolicy]
+        area: tools
+        default: Not assigned; the definition's effect defaults to Audit
+        recommended: Deny after an Audit period, with MCP servers approved by endpoint or connector and the broad mcp type left out
+        why: A builder cannot save a prompt agent or toolbox that uses an unapproved tool or MCP server.
+        mitigations: [AML.M0028, cap-agent-action-policy-enforcement, cap-agent-tool-registry]
+        requires: Preview; does not evaluate Copilot harness prompt agents or hosted-agent code
+        url: https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-tools
+        verified: "2026-11-18"
+      - id: deniedAgentKindsPolicy
+        name: "[Preview]: Microsoft Foundry agents should not use denied agent kinds"
+        where: Azure Policy › Definitions › assign at subscription, resource group or Foundry account scope (deniedAgentKinds)
+        setVia: [cloudPolicy]
+        area: tools
+        default: Not assigned; effect Audit and an empty deniedAgentKinds list
+        recommended: Deny, listing the agent kinds the firm has not approved for that scope
+        why: A project cannot gain an agent of a kind (for example hosted, which runs arbitrary code) that the firm has no review process for.
+        mitigations: [cap-agent-tool-registry]
+        requires: Preview; Canada Central, Spain Central and Korea Central
+        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/agent-deployment-policy
+        verified: "2026-11-18"
+      - id: allowedContainerImagesPolicy
+        name: "[Preview]: Microsoft Foundry hosted agents should only use allowed container images"
+        where: Azure Policy › Definitions › assign at subscription, resource group or Foundry account scope (allowedContainerImages)
+        setVia: [cloudPolicy]
+        area: tools
+        default: Not assigned; effect Audit and an empty allowedContainerImages list
+        recommended: Deny, with the firm's registry image references or patterns
+        why: A hosted agent can run only an image from the registry the firm's pipeline builds and scans.
+        mitigations: [cap-agent-tool-registry]
+        requires: Preview; Canada Central, Spain Central and Korea Central
+        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/agent-deployment-policy
+        verified: "2026-11-18"
+      - id: harnessTools
+        name: Harness tools (microsoft_copilot_toolset_preview)
+        where: Prompt agent › Tools › Harness tools (File system read, File system write, Shell, Web, Subagents)
+        setVia: [adminConsole, apiCli]
+        area: tools
+        default: All five enabled
+        recommended: defaultConfig enabled false, enabling only the capabilities the task needs; Shell off unless required
+        why: A prompt injection cannot reach a shell or write files in an agent that was only meant to read and answer.
+        mitigations: [AML.M0028]
+        requires: Microsoft Copilot harness (preview)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness
+        verified: "2026-11-18"
+      - id: toolboxDefaultVersion
+        name: default_version (toolbox)
+        where: Toolbox › Promote a version to default (SDK, REST, or azd ai toolbox publish)
+        setVia: [apiCli]
+        area: tools
+        default: The first version becomes the default; later versions are not promoted automatically
+        recommended: Promoted only after the new version is tested on its version-specific endpoint and reviewed
+        why: Agents on the consumer endpoint keep the reviewed tool set until someone deliberately moves the pointer, and moving it back is the rollback.
+        mitigations: [cap-staged-rollout-gate, AML.M0028]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/toolbox
+        verified: "2026-11-18"
+      - id: versionSelector
+        name: version_selector (Always use latest / pinned to a specific version)
+        where: Agent › Publish dropdown › version selector, or PATCH agent_endpoint.version_selector.version_selection_rules
+        setVia: [adminConsole, apiCli]
+        area: tools
+        default: Always use latest
+        recommended: Pinned to a specific tested version (one FixedRatio rule at 100%) for every production agent
+        why: Saving a new version does not change what users and Teams channels are served until someone moves the pin.
+        mitigations: [cap-staged-rollout-gate]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-agent#select-the-active-agent-version
+        verified: "2026-11-18"
+      - id: agentGuardrail
+        name: Guardrail assignment (controls for User input attacks and Indirect attack)
+        where: Foundry portal › Build › Guardrails › Create Guardrail › Add controls › Add agents
+        setVia: [adminConsole, apiCli]
+        area: tools
+        default: The agent inherits its model deployment's guardrail (Microsoft.DefaultV2 screens user prompts for jailbreaks)
+        recommended: A custom guardrail with User input attacks at user input and Indirect attack at tool response, both Annotate and block
+        why: Injected instructions in a prompt or in what a supported tool returns are blocked before the agent acts on them.
+        mitigations: [cap-input-guardrails]
+        requires: Agent guardrails (preview); tool response and tool call points only for tools that support moderation
+        url: https://learn.microsoft.com/en-us/azure/foundry/guardrails/how-to-create-guardrails
+        verified: "2026-11-18"
+      - id: hostedAgentRaiConfig
+        name: rai_config.rai_policy_name
+        where: Hosted agent version definition › rai_config (policies list in azure.yaml), plus invocations_moderation for the Invocations protocol
+        setVia: [apiCli]
+        area: tools
+        default: Omitted, so no content safety guardrail at the hosted agent boundary
+        recommended: The full ARM resource ID of the firm's guardrail on every hosted agent, confirmed by a blocked test prompt
+        why: A hosted agent is screened at its own boundary, and a wrong policy ID, which deploys as active with no filtering, is caught before release.
+        mitigations: [cap-input-guardrails]
+        requires: Agent guardrails (preview)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails
+        verified: "2026-11-18"
+      - id: toolboxGuardrail
+        name: policies.rai_config.rai_policy_name (toolbox version)
+        where: Toolbox version › policies › rai_config
+        setVia: [apiCli]
+        area: tools
+        default: None
+        recommended: The firm's guardrail policy on every shared toolbox
+        why: Tool inputs and outputs are filtered at the toolbox for every agent that uses it, independently of each agent's own guardrail.
+        mitigations: [cap-input-guardrails]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/toolbox#configure-guardrails
+        verified: "2026-11-18"
+      - id: sessionIdleTimeout
+        name: session_configuration.idle_timeout_seconds
+        where: Hosted agent version › session_configuration (sessionConfiguration.idleTimeoutSeconds in azure.yaml)
+        setVia: [apiCli]
+        area: tools
+        default: "900"
+        recommended: "900"
+        why: A session's sandbox, and whatever it holds in memory, is released fifteen minutes after its last request instead of living for up to four hours.
+        mitigations: [AML.M0036, D3-EI]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-sessions
+        verified: "2026-11-18"
+      - id: pythonNoUserSite
+        name: PYTHONNOUSERSITE
+        where: Hosted agent version › environment_variables (env in azure.yaml)
+        setVia: [apiCli]
+        area: tools
+        recommended: "1"
+        why: A file uploaded into the session's $HOME cannot become a Python package the agent imports on its next start.
+        mitigations: [D3-EI]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-hosted-agent-env-variables
+        verified: "2026-11-18"
+      - id: costControl
+        name: Cost control (Send alert / Block usage)
+        where: Foundry portal › Manage › Cost › Cost Control › Create (or the project's Monitor › Cost Control)
+        setVia: [adminConsole, apiCli]
+        area: tools
+        default: None
+        recommended: A Tokens or Spending budget per Agent, per Session for hosted agents, with Send alert at 80% and Block usage at 100%
+        why: A looping or hijacked agent is refused further requests once it reaches its own budget instead of drawing on the whole project.
+        mitigations: [AML.M0036]
+        requires: Preview
+        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/create-cost-controls
+        verified: "2026-11-18"
+      - id: egressPolicy
+        name: Network egress controls (egressPolicy mode, defaultAction, rules)
+        where: Foundry portal › Build › Guardrails › Create › Network › Egress rules; attached to the hosted agent version as its RAI policy
+        setVia: [adminConsole, apiCli]
+        area: network
+        default: No egress policy
+        recommended: Enforce with default action Deny and Allow rules for the hosts the agent needs, after a period in Audit
+        why: Code in the hosted agent's sandbox can reach only the hosts the firm allows, enforced by a proxy outside the sandbox that denies when it cannot evaluate.
+        mitigations: [cap-agent-egress-control]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails#network-egress-controls
+        verified: "2026-11-18"
+      - id: egressPolicyFloor
+        name: Microsoft Foundry hosted agents should enforce resolved RAI egress restrictions
+        where: Azure Policy › Cognitive Services category › assign with the three RAI-policy egress definitions (permittedDestinations, deniedDestinations, effect)
+        setVia: [cloudPolicy]
+        area: network
+        default: Not assigned; effect Audit
+        recommended: Deny, with permittedDestinations set to the firm's approved hosts
+        why: A builder cannot create a hosted agent version without a compliant egress policy; it does not stop sessions already running.
+        mitigations: [cap-agent-egress-control]
+        requires: Preview; Canada Central, Spain Central and Korea Central
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/govern-hosted-agent-egress-azure-policy
+        verified: "2026-11-18"
+      - id: harnessEgressPolicy
+        name: Network egress controls (Copilot harness prompt agent)
+        where: Foundry portal › Build › Guardrails › Create › Network; assigned to the harness prompt agent (policies in azure.yaml)
+        setVia: [adminConsole, apiCli]
+        area: network
+        default: No egress policy
+        recommended: Enforce with default action Deny, tested from a new conversation
+        why: Shell commands and the harness Web tool reach only allowed hosts; a running environment does not reload changed rules.
+        mitigations: [cap-agent-egress-control]
+        requires: Microsoft Copilot harness (preview)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness#control-network-egress
+        verified: "2026-11-18"
+      - id: agentVirtualNetwork
+        name: Bring-your-own virtual network / managed virtual network
+        where: Foundry resource deployment › networking (subnet delegated to Microsoft.App/environments, or a Microsoft-managed virtual network)
+        setVia: [apiCli]
+        area: network
+        default: Public egress
+        recommended: A bring-your-own virtual network behind the firm's firewall for projects that hold client data
+        why: Agent and tool traffic to the firm's data and to private MCP servers stays on the private network and passes the firm's own firewall.
+        mitigations: [cap-agent-egress-control]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+        verified: "2026-11-18"
+      - id: publicNetworkAccess
+        name: Public network access
+        where: Azure portal › Foundry resource › Networking › public access (Disabled, or Selected networks)
+        setVia: [adminConsole, apiCli]
+        area: network
+        default: Reachable from the public internet
+        recommended: Disabled, with a private endpoint in the firm's virtual network
+        why: Only callers on the firm's network can present a token to the project and its agent endpoints.
+        mitigations: []
+        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+        verified: "2026-11-18"
+      - id: memoryScope
+        name: scope (memory search tool)
+        where: Prompt agent › memory search tool › scope
+        setVia: [apiCli]
+        area: data
+        recommended: "{{$userId}}"
+        why: Each end user's memories are kept and recalled in their own partition, resolved from their Entra identity.
+        mitigations: [AML.M0031]
+        requires: Memory (preview)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/memory-usage#understand-scope
+        verified: "2026-11-18"
+      - id: memoryDefaultTtl
+        name: default_ttl_seconds
+        where: Memory store › options, at store creation
+        setVia: [apiCli]
+        area: data
+        recommended: "2592000 (30 days)"
+        why: What the agent learned about a person, or was tricked into remembering, expires instead of steering every later conversation; 0 means no expiration.
+        mitigations: [AML.M0031]
+        requires: Memory (preview)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/memory-usage#create-a-memory-store
+        verified: "2026-11-18"
+      - id: standardAgentSetup
+        name: Standard agent setup (bring your own Azure Storage, Azure Cosmos DB and Foundry IQ)
+        where: Foundry account and project › capability host and connections
+        setVia: [apiCli]
+        area: data
+        default: Basic setup (Microsoft-managed, logically separated storage)
+        recommended: Standard setup for projects that hold client-confidential conversations and files
+        why: Conversation history, files and vector stores sit in the firm's own resources, where its retention, network rules and keys apply.
+        mitigations: []
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+        verified: "2026-11-18"
+      - id: customerManagedKeys
+        name: Customer-managed keys
+        where: The standard-setup Azure Cosmos DB, Storage and Foundry IQ resources, and the Foundry resource › Encryption
+        setVia: [adminConsole, apiCli]
+        area: data
+        default: Microsoft-managed keys
+        recommended: Microsoft-managed keys; customer-managed keys on the standard-setup resources where a client contract asks for key custody
+        why: Key custody is available where it is owed, knowing a hosted session's $HOME, basic setup and routines are never covered.
+        mitigations: []
+        url: https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
+        verified: "2026-11-18"
+      - id: traceContentProtection
+        name: protectGenAISensitiveData (AppGenAIContent table set to Protected)
+        where: Subscription preview feature (Microsoft.Insights), then the Log Analytics table's protection level
+        setVia: [apiCli]
+        area: data
+        default: Prompt and tool content readable with Log Analytics Reader
+        recommended: Registered, the table Protected, and Privileged Monitoring Data Reader granted to a named few
+        why: Prompts, responses and tool arguments in traces are not readable by everyone who can see telemetry.
+        mitigations: [cap-agent-tracing]
+        url: https://learn.microsoft.com/en-us/azure/foundry/observability/how-to/traces-sensitive-content
+        verified: "2026-11-18"
+      - id: applicationInsightsTracing
+        name: Application Insights connection (tracing)
+        where: Foundry project › Build › Agents › Traces › Connect, or Manage › Project details › Connected resources
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: "Off"
+        recommended: On for every project that runs agents, with the Log Analytics workspace exported to the SIEM
+        why: Every model call, tool call and egress decision is recorded in the firm's own workspace; nothing is captured for runs before it is connected.
+        mitigations: [cap-agent-tracing]
+        url: https://learn.microsoft.com/en-us/azure/foundry/observability/how-to/trace-agent-setup
+        verified: "2026-11-18"
+      - id: classicAgentsTag
+        name: MS-AOAI-Feature-Assistants
+        where: Foundry or Azure OpenAI account › resource tag
+        setVia: [apiCli]
+        area: audit
+        recommended: Disabled
+        why: Nobody can create classic agents or assistants, which the Fleet inventory does not list and which have no per-agent identity.
+        mitigations: [cap-agent-tool-registry]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/disable-classic-agents
+        verified: "2026-11-18"
+      - id: agentDisable
+        name: Disable an agent (:disable)
+        where: Foundry portal › agent › Details › Status › Edit, or POST /agents/{name}:disable
+        setVia: [adminConsole, apiCli]
+        area: audit
+        recommended: The SOC playbook's step for taking an agent out of service, rehearsed and reversible with :enable
+        why: The agent's endpoint rejects every new request while its definition and versions are kept for investigation.
+        mitigations: [cap-agent-kill-switch]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-agent
+        verified: "2026-11-18"
+      - id: sessionStop
+        name: Stop a session (:stop)
+        where: POST /agents/{name}/endpoint/sessions/{session-id}:stop, or azd ai agent sessions stop
+        setVia: [apiCli]
+        area: audit
+        recommended: The SOC playbook's first step for a hosted agent, run by an identity with Foundry User on the project
+        why: The session's running container is terminated, which ends work in flight instead of only refusing new requests.
+        mitigations: [cap-agent-kill-switch]
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-sessions
+        verified: "2026-11-18"
+      - id: entraAgentBlock
+        name: Block (Agent 365) / Disable in this tenant (Microsoft Entra)
+        where: Microsoft 365 admin center (Agent 365) or Microsoft Entra admin center › the agent identity or blueprint
+        setVia: [identityProvider]
+        area: audit
+        recommended: Available to the SOC through an AI Administrator role, with agents created before 2026-10-23 listed for Foundry-side disable instead
+        why: A tenant administrator can stop an agent without Azure access to its project; it takes up to 10 minutes and older agents ignore it.
+        mitigations: [cap-agent-kill-switch]
+        url: https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-agent-infrastructure-entra-admin
+        verified: "2026-11-18"
+    advisories:
+      - title: "CVE-2026-85889 — Azure AI Foundry elevation of privilege (missing authentication, CVSS 10.0); mitigated by Microsoft, no customer action; the record names Azure AI Foundry, not Agent Service"
+        url: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-85889
+        date: "2026-09"
+      - title: "CVE-2026-85917 — Azure AI Foundry elevation of privilege (server-side request forgery, CVSS 7.5); mitigated by Microsoft, no customer action"
+        url: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-85917
+        date: "2026-09"
+      - title: "CVE-2026-35435 — Azure AI Foundry elevation of privilege (improper access control, CVSS 8.6); mitigated by Microsoft, no customer action"
+        url: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-35435
+        date: "2026-05"
+      - title: "CVE-2026-32213 — Azure AI Foundry elevation of privilege (improper authorization, CVSS 10.0); mitigated by Microsoft, no customer action"
+        url: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-32213
+        date: "2026-04"
+    sources:
+      - title: What is Microsoft Foundry Agent Service?
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+      - title: Prompt agents in Foundry Agent Service
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/prompt-agents
+      - title: Hosted agents in Foundry Agent Service
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents
+      - title: Use the Microsoft Copilot harness with prompt agents (preview)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness
+      - title: Build a workflow in Microsoft Foundry (preview, retiring 2026-12-01)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/workflow
+      - title: Quotas and limits for Microsoft Foundry Agent Service
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions
+      - title: Foundry Agent Service frequently asked questions
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/faq
+      - title: Identity and access overview for Foundry Agent Service
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/identity-access-overview
+      - title: Agent endpoint authorization
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-endpoint-authorization
+      - title: Agent identity concepts
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+      - title: Role-based access control for Microsoft Foundry
+        url: https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry
+      - title: What is Toolbox in Microsoft Foundry?
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/toolbox-overview
+      - title: Govern tools in Microsoft Foundry (preview)
+        url: https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-tools
+      - title: Connect agents to MCP server endpoints
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/model-context-protocol
+      - title: Guardrails and controls overview
+        url: https://learn.microsoft.com/en-us/azure/foundry/guardrails/guardrails-overview
+      - title: Intervention points (tools that support moderation)
+        url: https://learn.microsoft.com/en-us/azure/foundry/guardrails/intervention-points
+      - title: Hosted agent content safety overview
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agent-guardrails
+      - title: Add guardrails to a hosted agent (content safety and network egress controls)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails
+      - title: Networking options for Foundry Agent Service
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
+      - title: What is Memory? (preview)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/what-is-memory
+      - title: Manage hosted agent sessions
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-sessions
+      - title: Cancel a hosted agent turn
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/cancel-hosted-agent-turn
+      - title: Promote hosted agents to production with the Azure Developer CLI (canary walkthrough the reference pages contradict)
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/deploy-hosted-agent-production
+      - title: Microsoft Foundry governance (formerly Foundry Control Plane)
+        url: https://learn.microsoft.com/en-us/azure/foundry/control-plane/overview
+      - title: Cost controls overview (preview)
+        url: https://learn.microsoft.com/en-us/azure/foundry/concepts/cost-controls
+      - title: Microsoft Foundry tracing and data handling
+        url: https://learn.microsoft.com/en-us/azure/foundry/observability/concepts/trace-data
+      - title: Built-in Azure Policy definitions for Foundry Tools
+        url: https://learn.microsoft.com/en-us/azure/ai-services/policy-reference
+      - title: Foundry Agent Service feature availability in Azure Government
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/azure-government
