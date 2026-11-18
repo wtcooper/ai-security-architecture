@@ -8,7 +8,7 @@ import { bandFor } from "@/lib/bands";
 import { BAND_TOKENS } from "@/lib/map-layout";
 import {
   archetypesForMitigation,
-  capabilityName,
+  controlName,
   componentsForMitigation,
   mitigationById,
   specializationsOf,
@@ -25,7 +25,7 @@ import { StatusHeading, StatusPill } from "@/components/StatusPill";
 import { cloudOptionsForControl } from "@/components/cloud/model";
 import { cloudHref, controlHref, cosaiControlHref, riskHref, componentHref } from "@/lib/routes";
 
-export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitigation: Mitigation; onClose?: () => void; framed?: boolean }) {
+export function ControlDetail({ mitigation, onClose, framed = true }: { mitigation: Mitigation; onClose?: () => void; framed?: boolean }) {
   const controls = controlsForMitigation(mitigation.id);
   const risks = risksForMitigation(mitigation.id);
   const components = componentsForMitigation(mitigation.id);
@@ -39,7 +39,7 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="display text-[24px] font-bold leading-tight text-ink">
-            {capabilityName(mitigation.id)}
+            {controlName(mitigation.id)}
           </h2>
           <p className="mt-2 flex items-center gap-2 text-xs text-ink-3">
             <StatusHeading className="font-semibold text-ink-2" />
@@ -47,7 +47,7 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
             {own?.note && <span>{own.note}</span>}
           </p>
           <p className="mt-2 text-xs text-ink-3">
-            {mitigation.parent ? `Authored here, as a more specific form of ${capabilityName(mitigation.parent)}` : `From ${mitigation.origin.framework} ${mitigation.origin.version}`}
+            {mitigation.parent ? `Authored here, as a more specific form of ${controlName(mitigation.parent)}` : `From ${mitigation.origin.framework} ${mitigation.origin.version}`}
           </p>
           <div className="mt-3">
             <OrgControlList controlId={mitigation.id} />
@@ -74,7 +74,7 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
       <p className="mt-2 text-xs text-ink-3">{categoryTitle} · {mitigation.kind === "support" ? "Governance support" : "Defensive function"} · {mitigation.origin.entityType}</p>
       {mitigation.origin.url && <a href={mitigation.origin.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-introduced hover:underline">Read the official {mitigation.title} definition ↗</a>}
       <div className="mt-4">
-        <p className="eyebrow">{mitigation.parent ? `Upstream definition of ${capabilityName(mitigation.parent)} · unmodified` : "Upstream definition · unmodified"}</p>
+        <p className="eyebrow">{mitigation.parent ? `Upstream definition of ${controlName(mitigation.parent)} · unmodified` : "Upstream definition · unmodified"}</p>
         <Prose blocks={mitigation.description} className="mt-2 whitespace-pre-line" />
       </div>
       <div className="mt-4 rounded-lg bg-mist p-4">

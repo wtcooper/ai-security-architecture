@@ -11,7 +11,7 @@ import { OnCloud } from "../src/components/cloud/CloudViews";
 import { IncidentWalkthrough } from "../src/components/incidents/IncidentWalkthrough";
 import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor, hostedAs, hostingOptionsFor } from "../src/components/cloud/model";
 import { SettingCheck } from "../src/components/enable/SettingCheck";
-import { CapabilityTable } from "../src/components/enable/CapabilityTable";
+import { ControlTable } from "../src/components/enable/ControlTable";
 import { controlGroups } from "../src/components/enable/model";
 import { ChooseBuild } from "../src/components/enable/ChooseBuild";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
@@ -201,7 +201,7 @@ test("on a hosted pattern, where it runs and what it is built with are two choic
     assert.equal([...alone.matchAll(/data-setting-source="framework"/g)].length, tagged, `${a.id}: ${tagged} framework rows are marked`);
 
     // The control rows name both products' settings.
-    const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(a)} archetype={a} open={null} onOpen={() => {}} products={[platform, framework]} />);
+    const table = renderToStaticMarkup(<ControlTable groups={controlGroups(a)} archetype={a} open={null} onOpen={() => {}} products={[platform, framework]} />);
     const expected = a.mitigations.reduce((n, id) => n + [platform, framework].filter((p) => p.settings.some((st) => st.mitigations.includes(id))).length, 0);
     assert.equal([...table.matchAll(/data-option-names/g)].length, expected, `${a.id}: each control names the platform's and the framework's settings`);
 
@@ -334,7 +334,7 @@ test("pages show names, never identifiers: no control id reaches the text of a p
     for (const q of ["", "tab=overview", "tab=risks", "tab=flows", "tab=incidents"]) {
       assert.deepEqual(leak(page(a.id, q)), [], `${a.id} ${q || "enable"}: shows a control id`);
     }
-    const open = renderToStaticMarkup(<CapabilityTable groups={controlGroups(a)} archetype={a} open={a.mitigations[0]} onOpen={() => {}} />);
+    const open = renderToStaticMarkup(<ControlTable groups={controlGroups(a)} archetype={a} open={a.mitigations[0]} onOpen={() => {}} />);
     assert.deepEqual(leak(open), [], `${a.id}: an open control row shows an id`);
     assert.doesNotMatch(visible(open), /\b(GV|ID|PR|DE|RS|RC)\.[A-Z]{2}\b/, `${a.id}: a category shows its framework code`);
   }

@@ -103,7 +103,7 @@ function Preview({ pattern }: { pattern: Archetype }) {
       </div>
       {/* The pattern's own drawing, small: the shape of it, not something to read. */}
       <div className="pointer-events-none mt-3 h-[270px] border-t border-line bg-mist/60 px-4 py-3" aria-hidden inert>
-        <BoxDiagram archetype={pattern} spec={spec} pins="capabilities" className="h-full w-full" />
+        <BoxDiagram archetype={pattern} spec={spec} pins="controls" className="h-full w-full" />
       </div>
     </Link>
   );

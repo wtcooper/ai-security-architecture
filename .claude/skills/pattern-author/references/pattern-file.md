@@ -310,7 +310,7 @@ For a hosted pattern (`surfaceCloud`), each file under `data/clouds/` (`aws.yaml
     quickstart:                     # the vendor's own starting point
       - { title: "…", url: https://… }
     hosting:                        # optional: the ways this platform can host the pattern
-      - id: containerRuntime        # camelCase; the key in ?host= and in data/status.yaml
+      - id: containerRuntime        # camelCase; the key in ?host= and in data/org/products.yaml
         kind: runtime               # cluster | runtime | managed
         name: "The service, as the vendor names it"
         mapped: true                # exactly one: the option the bindings and settings above describe

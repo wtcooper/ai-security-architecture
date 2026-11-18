@@ -17,10 +17,10 @@
  */
 import { useState, type ReactNode } from "react";
 
-import { capabilityName, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
+import { controlName, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
 import { hostingInEffect, productShort, type CloudProduct } from "@/components/cloud/model";
-import { BASELINE_HELP, CapabilityTable } from "./CapabilityTable";
+import { BASELINE_HELP, ControlTable } from "./ControlTable";
 import { baselineNotPinned, controlGroups } from "./model";
 import { ChooseBuild } from "./ChooseBuild";
 import { ProductSettings } from "./ProductSettings";
@@ -28,10 +28,10 @@ import { ProductSettings } from "./ProductSettings";
 const anyStatus = Object.values(status).some((s) => s.status);
 
 /** "3 of 5 enabled", once the organisation has set any status at all. */
-function Progress({ capabilities }: { capabilities: Mitigation[] }) {
-  if (!anyStatus || !capabilities.length) return null;
-  const enabled = capabilities.filter((m) => statusFor(m.id) === "enabled").length;
-  return <span className="text-[12px] font-normal text-ink-3">{enabled} of {capabilities.length} enabled</span>;
+function Progress({ controls }: { controls: Mitigation[] }) {
+  if (!anyStatus || !controls.length) return null;
+  const enabled = controls.filter((m) => statusFor(m.id) === "enabled").length;
+  return <span className="text-[12px] font-normal text-ink-3">{enabled} of {controls.length} enabled</span>;
 }
 
 type StepId = "controls" | "choose" | "tools";
@@ -118,7 +118,7 @@ export function EnablePanel({
   onHost?: (optionId: string | null) => void;
 }) {
   const groups = controlGroups(archetype);
-  const controls = groups.flatMap((g) => g.capabilities);
+  const controls = groups.flatMap((g) => g.controls);
   const shared = controls.filter((m) => isBaseline(m.id)).length;
   const alsoNeeded = baselineNotPinned(archetype);
   const products = productsForArchetype(archetype.id);
@@ -176,7 +176,7 @@ export function EnablePanel({
         aside={
           <>
             {count(`${controls.length} controls`)}
-            <Progress capabilities={controls} />
+            <Progress controls={controls} />
           </>
         }
         expanded={isOpen("controls")}
@@ -191,7 +191,7 @@ export function EnablePanel({
             for the settings that deliver it, the detail and the risks it reduces.
           </p>
         )}
-        <CapabilityTable
+        <ControlTable
           groups={groups}
           archetype={archetype}
           open={open}
@@ -205,7 +205,7 @@ export function EnablePanel({
         {alsoNeeded.length > 0 && (
           <p className="mt-2 text-[12px] leading-snug text-ink-3" title={BASELINE_HELP}>
             <span className="font-semibold text-ink-2">Also needed by every AI deployment, not drawn here: </span>
-            {alsoNeeded.map((m) => capabilityName(m.id)).join(" · ")}
+            {alsoNeeded.map((m) => controlName(m.id)).join(" · ")}
           </p>
         )}
       </Step>

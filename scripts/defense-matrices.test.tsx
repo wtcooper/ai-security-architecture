@@ -7,8 +7,8 @@ import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks
 import { DefenseMatrix } from "../src/components/defenses/DefenseMatrix";
 import { matrixHref } from "../src/components/defenses/DefenseNavigation";
 import { GROUPING_META, mitigationMatrixItem, matchesMatrixFilters } from "../src/components/defenses/model";
-import { CapabilitiesBrowser } from "../src/components/capabilities/CapabilitiesBrowser";
-import { ControlsBrowser } from "../src/components/browse/ControlsBrowser";
+import { ControlsBrowser } from "../src/components/controls/ControlsBrowser";
+import { CosaiControlsBrowser } from "../src/components/browse/CosaiControlsBrowser";
 import { controls, controlStatusFor, enablement, enableGroupFor, mitigations, mitigationAliases, mitigationsForControl, orgControls, orgControlsFor, status, statusFor } from "../src/lib/data";
 
 const all = { category: "", surface: "" };
@@ -16,7 +16,7 @@ const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRe
 function page(path: string, query = "") {
   return renderToStaticMarkup(<AppRouterContext.Provider value={router}>
     <PathnameContext.Provider value={path}><SearchParamsContext.Provider value={new URLSearchParams(query)}>
-      {path === "/reference/cosai-controls" ? <ControlsBrowser /> : <CapabilitiesBrowser />}
+      {path === "/reference/cosai-controls" ? <CosaiControlsBrowser /> : <ControlsBrowser />}
     </SearchParamsContext.Provider></PathnameContext.Provider>
   </AppRouterContext.Provider>);
 }
@@ -77,7 +77,7 @@ test("CoSAI controls is a master-detail page under Reference; the control catalo
   assert.match(detail, /Contributes to CoSAI controls/);
 });
 
-test("specialisations narrow their MITRE parent and restore retired capabilities", () => {
+test("specialisations narrow their MITRE parent and restore retired control ids", () => {
   const specialisations = mitigations.filter((m) => m.parent);
   assert.ok(specialisations.length >= 15);
   for (const s of specialisations) {
@@ -133,7 +133,7 @@ test("status comes from the status file: unset reads Not set, parents and contro
 
 test("status tints matrix chips without changing them, and a display name renames everywhere", () => {
   const items = mitigations.map((m) => mitigationMatrixItem(m, "cosai"));
-  const render = () => renderToStaticMarkup(<DefenseMatrix items={items} {...all} label="Capabilities" onSelect={() => {}} statusFor={statusFor} />);
+  const render = () => renderToStaticMarkup(<DefenseMatrix items={items} {...all} label="Controls" onSelect={() => {}} statusFor={statusFor} />);
   const names = (html: string) => [...html.matchAll(/<button[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
   const before = render();
   assert.doesNotMatch(before, / — Enabled/);

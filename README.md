@@ -266,9 +266,9 @@ least one has a status, In progress otherwise. A MITRE parent with none of yours
 up its specialisations, and a CoSAI control rolls up the controls that support it, by the same
 rule. A rollup describes deployment, not control compliance or mitigation effectiveness.
 
-A second file, [`data/org/products.yaml`](data/org/products.yaml), records the tools, clouds and data centres your
-organisation uses, under `products:`, keyed by tool id (`toolClaudeCode`) or platform id (`cloudAzure`,
-`cloudOnPrem`): a `status` (`enabled`, `testing` or `notEnabled`) colours the product's pill,
+A second file, [`data/org/products.yaml`](data/org/products.yaml), records the tools, clouds
+and data centres your organisation uses, under `products:`, keyed by tool id
+(`toolClaudeCode`) or platform id (`cloudAzure`, `cloudOnPrem`): a `status` (`enabled`, `testing` or `notEnabled`) colours the product's pill,
 and a `settings:` map gives each of its settings rows its own status and, optionally, the
 `value` you actually set and a `link` to your own module, policy or runbook that applies it.
 On a platform, a `components:` map records what you run for a component in place of the
@@ -552,10 +552,10 @@ src/
     ├── patterns/                 ★ the finder (browse with a preview), the pattern page, its risk and incident panels
     ├── map/RiskMap.tsx           the SVG map
     ├── tour/TourExplorer.tsx     the three-phase walkthrough
-    ├── browse/                   components, risks, controls, personas, frameworks;
+    ├── browse/                   components, risks, CoSAI controls, personas, frameworks;
     │                               CataloguePage.tsx is the shared master-detail shell
-    ├── capabilities/             the control catalogue (CSF category × surface) and a control's detail;
-    │                               the folder keeps its older name, and it is the page at /controls
+    ├── controls/                 the control catalogue (CSF category × surface) and a control's detail
+    ├── OrgControls.tsx           an organisation's own controls, shown by name beside the control they map to
     ├── drawing/                  ★ the boundary drawing: automatic layout, crossings, the crossings table
     ├── cloud/                    ★ a pattern as built on a cloud: the switch, the component table, options per control, the Clouds page
     ├── reference/                ★ the pattern view (drawing, tabs, panels), sequence flows, switcher, per-block styling
@@ -618,7 +618,7 @@ Everything is text. Clone the repository, and:
 1. **Record your own controls, and their status.** List your organisation's controls in
    [`data/org/controls.yaml`](data/org/controls.yaml), one row each: an `id` of your own (never
    shown on a page), the `name` people see, a `status` (`enabled`, `inProgress`, `gap`) where
-   you have assessed it, and `maps`, the catalogue controls it delivers — a MITRE mitigation
+   you have assessed it, and `maps`, the catalogue controls it delivers: each a MITRE mitigation
    (`D3-MFA`, `AML.M0020`) or a `cap-*` specialisation (`cap-sensitive-data-redaction`). One of
    yours can map to several, and several of yours can map to one. A catalogue control with none
    of yours mapped reads **Not set**. Catalogue control status, MITRE parents and CoSAI controls

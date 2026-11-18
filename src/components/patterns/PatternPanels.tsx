@@ -8,7 +8,7 @@
 import Link from "next/link";
 
 import { formatMonth, incidentsNewestFirst } from "@/components/incidents/model";
-import { capabilityName, mitigationsForArchetype, riskCategories, riskCode, risksForArchetype } from "@/lib/data";
+import { controlName, mitigationsForArchetype, riskCategories, riskCode, risksForArchetype } from "@/lib/data";
 import { categoryById } from "@/lib/incident-categories";
 import { ROUTES, incidentHref, riskHref } from "@/lib/routes";
 import type { Archetype } from "@/lib/types";
@@ -63,7 +63,7 @@ export function PatternRisks({
                 <span className="col-start-2 text-[12px] leading-snug text-ink-3 md:col-start-auto">{where.join(" · ")}</span>
                 <span className="col-start-2 flex flex-wrap gap-1 md:col-start-auto" aria-label="Controls here that reduce it">
                   {reducedBy.map((m) => (
-                    <span key={m.id} title={capabilityName(m.id)} className="flex h-[19px] w-[19px] items-center justify-center rounded-full border border-chip bg-chip-soft text-[10px] font-bold text-chip">
+                    <span key={m.id} title={controlName(m.id)} className="flex h-[19px] w-[19px] items-center justify-center rounded-full border border-chip bg-chip-soft text-[10px] font-bold text-chip">
                       {number.get(m.id)}
                     </span>
                   ))}
@@ -85,7 +85,7 @@ export function PatternRisks({
                             className="inline-flex items-center gap-1.5 rounded-full border border-line bg-paper py-0.5 pl-1 pr-2.5 text-[12px] text-ink-2 hover:border-chip hover:text-ink"
                           >
                             <span className="flex h-[19px] w-[19px] items-center justify-center rounded-full border border-chip bg-chip-soft text-[10px] font-bold text-chip">{number.get(m.id)}</span>
-                            {capabilityName(m.id)}
+                            {controlName(m.id)}
                           </button>
                         ))}
                       </div>

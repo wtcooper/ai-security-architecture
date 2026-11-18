@@ -37,7 +37,7 @@ pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are 
 - **The first step's URL is the configure link.** `steps[0].url` must be the page an
   administrator performs the step on; the product record links each step title to it.
 - **The grid and the record share one id set.** The Enable Tools grid's rows are the
-  capabilities pinned on the architecture — MITRE mitigations and `cap-*` specialisations of
+  controls pinned on the architecture — MITRE mitigations and `cap-*` specialisations of
   them, the same ids your `controls[]` rows name — grouped by Enable security domain. A cell collapses
   `coverage` to three words: `native` → Built-in, `partial` → Partial, `external`/`none` → Not
   in tool; `notApplicable` → N/A and `unknown` or a missing row → Unverified. Keep the finer
@@ -50,5 +50,6 @@ pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are 
 - **Header comment** of each file: the two-line schema pointer, then exclusions specific to the
   family, then a short fetch log of URLs that redirected or failed during the last verification.
 - **Ids are stable**: guidance documents reference them, `/patterns/<slug>/?tool=<id>` opens
-  them, and old `/reference?tool=<id>` links forward there. The organisation records no per-tool status; its capability
-  status lives in `data/status.yaml`.
+  them, and old `/reference?tool=<id>` links forward there. The organisation records no status on a `controls[]` row here: its own
+  controls and their status live in `data/org/controls.yaml`, and which products and settings it
+  has switched on in `data/org/products.yaml`.

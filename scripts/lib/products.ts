@@ -22,8 +22,8 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * One product's (or one cloud's) settings, checked to the rubric in data/tooling/BASELINE.md:
  * every row names where it lives, how it is set, its baseline value and why, and the page that
- * documents it; every capability it claims must exist, and — when `pinned` is given — be pinned
- * on the drawing the row is shown on, so the Capability column never names a chip that is not there.
+ * documents it; every control it claims must exist, and — when `pinned` is given — be pinned
+ * on the drawing the row is shown on, so the Control column never names a chip that is not there.
  */
 export function checkSettings(
   where: string,
@@ -222,7 +222,7 @@ export async function loadClouds(
         if (s.mitigations.length && off.length === s.mitigations.length)
           ctx.fail(`${at}: setting ${id} delivers nothing pinned here (${off.join(", ")})`);
       }
-      // Every pinned capability has at least one row: a cloud setting or a line of our own code.
+      // Every pinned control has at least one row: a cloud setting or a line of our own code.
       const delivered = new Set((impl.settings ?? []).flatMap((id) => settingById.get(id)?.mitigations ?? []));
       for (const id of arch.mitigations) if (!delivered.has(id)) ctx.fail(`${at}: pinned control ${id} has no setting or code row`);
     }

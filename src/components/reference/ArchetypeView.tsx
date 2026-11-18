@@ -71,10 +71,10 @@ interface ArchetypeViewProps {
   onWalk: (index: number | null) => void;
   highlight: Highlight | null;
   onHighlight: (h: Highlight | null) => void;
-  /** The product open on the Enable tab's tools step, and the capability it is opened on. */
+  /** The product open on the Enable tab's tools step, and the control it is opened on. */
   tool: string | null;
   focus: string | null;
-  onPickTool: (toolId: string | null, capabilityId?: string) => void;
+  onPickTool: (toolId: string | null, controlId?: string) => void;
   /** The cloud the pattern is shown as built on, or null for the cloud-neutral pattern. */
   cloud: string | null;
   onCloud: (cloudId: string | null) => void;
@@ -234,7 +234,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               highlight={highlight}
               onHighlight={onHighlight}
               // One kind of marker at a time: risk tags on Risks, a walk's steps on Flows, control chips everywhere else.
-              pins={tab === "risks" ? "risks" : "capabilities"}
+              pins={tab === "risks" ? "risks" : "controls"}
               onPickMitigation={pickChip}
               services={services}
               differs={differs}

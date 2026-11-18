@@ -266,7 +266,7 @@ async function main() {
     componentIds,
   });
   // Authored specialisations narrow a MITRE entry that is too coarse to pin or report on. They
-  // join the capability list here so pins, tool rows and org records resolve to them like any other.
+  // join the control list here so pins, tool rows and org records resolve to them like any other.
   const specializations = await loadSpecializations(ROOT, mitigationsDoc.mitigations, {
     controls: controlIds,
     risks: riskIds,
@@ -382,7 +382,7 @@ async function main() {
     }
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(inc.date ?? "")) fail(`${where}: date "${inc.date}" must be YYYY-MM (the latest event)`);
     if (incidents.filter((i) => i.id === inc.id).length > 1) fail(`${where}: duplicate incident id`);
-    // The last step lights these on the drawing, so each must be a capability pinned there.
+    // The last step lights these on the drawing, so each must be a control pinned there.
     const pinnedHere = new Set(archetypes.find((a) => a.id === inc.archetype)?.mitigations ?? []);
     if (!inc.breaks?.length || inc.breaks.length > 6) fail(`${where}: needs 1–6 breaks (controls that stop the chain)`);
     for (const b of inc.breaks ?? []) {
@@ -504,8 +504,8 @@ async function main() {
   const authored = overlays.filter((o) => o.source === "authored").length;
   console.log(
     `dataset.json: ${risks.length} risks (${overlays.length - authored} SAIF-seeded, ` +
-      `${authored} authored), ${controls.length} controls, ${components.length} components, ` +
-      `${incidents.length} incidents, ${mitigationsDoc.mitigations.length} mitigations, ` +
+      `${authored} authored), ${controls.length} CoSAI controls, ${components.length} components, ` +
+      `${incidents.length} incidents, ${mitigationsDoc.mitigations.length} controls in the catalogue, ` +
       `${archetypes.length} archetypes, ${guidance.length} guidance docs, ` +
       `${tools.length} tools, ${orgControls.length} of your own controls recorded`,
   );
@@ -1367,7 +1367,7 @@ function checkVocabulary(archs: Archetype[]) {
       names.add(b.title);
       for (const i of b.items ?? []) names.add(i.label);
     }
-    // An absorption is recorded per capability: the deviation has to name the capability id it absorbs.
+    // An absorption is recorded per control: the deviation has to name the control id it absorbs.
     const deviationTexts = (arch.deviations ?? []).map((d) => `${d.subject} ${d.reason}`);
     // Zone 2 of the three-zone rule (ONTOLOGY.md §3): pins anchored on or toward a
     // provider-kind block are customer configuration of a vendor surface — the inline
@@ -1384,7 +1384,7 @@ function checkVocabulary(archs: Archetype[]) {
           `${arch.id}: inline mitigation ${pin.mitigation} pinned at ${pin.at} with no embodying component (${embodiments.join(", ")}) and no recorded absorption`,
         );
     }
-    // One governance group per capability: cited under its own group's call-out wherever
+    // One governance group per control: cited under its own group's call-out wherever
     // that block is drawn, and never under another.
     const groupOf = new Map(Object.entries(vocab.governanceGroups ?? {}).flatMap(([g, ids]) => ids.map((id) => [id, g] as const)));
     const gov = new Map(arch.blocks.filter((b) => b.kind === "governance").map((b) => [b.id, b.mitigations ?? []]));
@@ -1633,8 +1633,8 @@ function checkTooling(
       if (!item.body?.length) fail(`${where} item "${item.title}": needs a body`);
       checkLinks(`${where} item "${item.title}"`, item.links);
     }
-    // The settings table: rows to the baseline rubric, each capability it names pinned on the
-    // tool's drawing. Once a tool has its table, every capability it rates Built-in or Partial
+    // The settings table: rows to the baseline rubric, each control it names pinned on the
+    // tool's drawing. Once a tool has its table, every control it rates Built-in or Partial
     // must be backed by at least one row, so the rating and the table cannot drift apart.
     checkSettings(where, tool.settings, { mitigationIds: ctx.mitigationIds, pinned, fail });
     if (tool.settings?.length) {

@@ -35,17 +35,19 @@ A control is a MITRE mitigation or an authored specialisation of one. The MITRE 
 the citable identifier and carries the CoSAI controls it supports, the risks it addresses and
 an authored decision per surface with the reason. A specialisation (`cap-*`, in
 `specializations.yaml`) narrows one MITRE parent to a single actionable countermeasure where
-the parent is too coarse to pin or report on; it inherits the parent's definition, CoSAI controls and
-surfaces unless it overrides them (its CoSAI controls must be a subset of the parent's), is the pin
-unit where it exists, and lists the retired home-grown ids it restores. In data and code the
-record is called `mitigation`; the app calls the layer Controls. Status is authored only on
+the parent is too coarse to pin or report on; it inherits the parent's definition, CoSAI
+controls and surfaces unless it overrides them (its CoSAI controls must be a subset of the
+parent's), is the pin unit where it exists, and lists the retired home-grown ids it restores.
+In data and code the record is called `mitigation`; the app calls the layer Controls. Status
+is authored only on
 the organisation's own controls, in `data/org/controls.yaml`: each row has the organisation's
 `id` and `name`, an optional status, and `maps`, the controls it delivers. The mapping is many
 to many. A control's status is worked out from the rows mapped to it: enabled only when all
-are enabled, a gap when all are a gap or unset with at least one set, otherwise in progress. A parent
-with no row mapped rolls up its specialisations, and CoSAI control status is the rollup of the controls that
-support it. Pages show a control's name, never its id. Products carry vendor coverage only;
-which products the organisation uses is recorded separately, in `data/org/products.yaml`.
+are enabled, a gap when all are a gap or unset with at least one set, otherwise in progress.
+A parent with no row mapped rolls up its specialisations, and CoSAI control status is the
+rollup of the controls that support it. Pages show a control's name, never its id. Products
+carry vendor coverage only; which products the organisation uses is recorded separately, in
+`data/org/products.yaml`.
 
 Related controls, architectures, and incidents are navigational paths, not inherited coverage
 or posture. CoSAI remains canonical; NIST AI RMF is retained verbatim and NIST CSF is an

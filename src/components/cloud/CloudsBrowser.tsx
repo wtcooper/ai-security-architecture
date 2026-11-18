@@ -12,7 +12,7 @@ import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/Panel";
 import { SETTING_VIA_META } from "@/components/enable/labels";
-import { capabilityName, clouds, enablement, mitigationById } from "@/lib/data";
+import { controlName, clouds, enablement, mitigationById } from "@/lib/data";
 import { cloudHref, controlHref, patternHref } from "@/lib/routes";
 import type { Paragraph } from "@/lib/types";
 import { cloudFromSlug, cloudOptionsForControl, patternsOn, platformWords } from "./model";
@@ -131,7 +131,7 @@ export function CloudsBrowser() {
                   <li key={id} className="grid gap-x-6 gap-y-2 px-4 py-3 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]" data-cloud-control={id}>
                     <div>
                       <Link href={controlHref(id)} className="text-[13.5px] font-semibold leading-snug text-ink hover:text-introduced hover:underline">
-                        {capabilityName(id)}
+                        {controlName(id)}
                       </Link>
                     </div>
                     <ul className="space-y-3">

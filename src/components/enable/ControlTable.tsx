@@ -18,7 +18,7 @@ import { Fragment } from "react";
 
 import { OrgControlList, OrgControlNames } from "@/components/OrgControls";
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
-import { capabilityName, isBaseline, riskCode, risksForMitigation, status as statusFile, statusFor, type Product } from "@/lib/data";
+import { controlName, isBaseline, riskCode, risksForMitigation, status as statusFile, statusFor, type Product } from "@/lib/data";
 import type { Archetype } from "@/lib/types";
 import { NativeOptions, OptionNames } from "@/components/cloud/CloudViews";
 import { optionsFor, productShort } from "@/components/cloud/model";
@@ -31,7 +31,7 @@ const GRID = anyStatus ? "md:grid-cols-[28px_minmax(0,2.3fr)_minmax(0,1fr)_104px
 
 export const BASELINE_HELP = "Needed by every AI deployment, whatever the pattern: set up once and reused.";
 
-export function CapabilityTable({
+export function ControlTable({
   groups,
   archetype,
   open,
@@ -46,7 +46,7 @@ export function CapabilityTable({
   product?: Product | null;
   /** On a hosted pattern, both choices: the platform it runs on and the framework it is built with. */
   products?: Product[];
-  /** The capability whose row is open, which is also the one lit on the drawing. */
+  /** The control whose row is open, which is also the one lit on the drawing. */
   open: string | null;
   onOpen: (id: string | null) => void;
   /** Brings the drawing back into view; offered in an open row. */
@@ -70,13 +70,13 @@ export function CapabilityTable({
               <span className="text-[11px] text-ink-3" title={`NIST CSF 2.0 · ${group.function}`}>{group.title}</span>
               {anyStatus && (
                 <span className="text-[11px] text-ink-3">
-                  {group.capabilities.filter((m) => statusFor(m.id) === "enabled").length} of {group.capabilities.length} enabled
+                  {group.controls.filter((m) => statusFor(m.id) === "enabled").length} of {group.controls.length} enabled
                 </span>
               )}
             </p>
           </div>
           <ul className="divide-y divide-line border-b border-line last:border-b-0">
-            {group.capabilities.map((m) => {
+            {group.controls.map((m) => {
           const expanded = open === m.id;
           const where = placementsFor(archetype.id, m.id);
           const reduces = risksForMitigation(m.id).filter((r) => pinnedRisks.has(r.id));
@@ -111,7 +111,7 @@ export function CapabilityTable({
                   ))}
                 </span>
                 <span className="col-start-2 text-[12px] leading-snug md:col-start-auto">
-                  <span className="block font-semibold text-ink-2" data-control-name>{capabilityName(m.id)}</span>
+                  <span className="block font-semibold text-ink-2" data-control-name>{controlName(m.id)}</span>
                   <OrgControlNames controlId={m.id} />
                   <span className="block text-ink-3">{where.blocks.join(" · ")}</span>
                 </span>

@@ -11,12 +11,12 @@
 import { Fragment, type MouseEvent, type FocusEvent, type ReactNode } from "react";
 
 import { blockTab, chipColors, OVERLAY_STYLE } from "@/components/reference/flow-style";
-import { capabilityName, riskById, riskCode, statusFor } from "@/lib/data";
+import { controlName, riskById, riskCode, statusFor } from "@/lib/data";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ownedControls, summaryOf, wrap, type BoundaryTone, type ViewBox, type ViewLine, type ViewSpec } from "./layout";
 import { isLit, type BlockService, type Highlight, type StepOverlay } from "./types";
 
-export type DrawingPins = "risks" | "capabilities" | "all";
+export type DrawingPins = "risks" | "controls" | "all";
 
 /** What the hover card shows, and where the pointer was (client coordinates). */
 export interface HoverCard {
@@ -51,7 +51,7 @@ export function BoxDiagram({
   walk = null,
   highlight = null,
   overlay = null,
-  pins = "capabilities",
+  pins = "controls",
   services = null,
   differs = null,
   ownBoundary = null,
@@ -93,7 +93,7 @@ export function BoxDiagram({
   const blocks = new Map(archetype.blocks.map((b) => [b.id, b]));
   const edges = new Map(archetype.edges.map((e) => [`${e.from}->${e.to}`, e]));
   const showControls = pins !== "risks" && !walk && !overlay;
-  const showRisks = pins !== "capabilities" && !overlay;
+  const showRisks = pins !== "controls" && !overlay;
 
   // Controls and risks per place: a block id or an edge key.
   const controlsAt = new Map<string, string[]>();
@@ -157,7 +157,7 @@ export function BoxDiagram({
     const lit = highlight ? isLit(highlight, "mitigation", id) : false;
     const off = (highlight?.kind === "mitigation" && !lit) || faded;
     const tint = chipColors(statusFor(id));
-    const name = capabilityName(id);
+    const name = controlName(id);
     return (
       <g
         key={`c-${id}-${at}`}

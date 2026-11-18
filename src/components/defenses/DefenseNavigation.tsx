@@ -35,7 +35,7 @@ export function useDefenseSelection() {
   return [params.get("control"), select] as const;
 }
 
-export function CapabilityFilters() {
+export function ControlFilters() {
   const { by, category, surface } = useMatrixFilters();
   const router = useRouter();
   const pathname = usePathname();

@@ -19,7 +19,7 @@ import { Fragment, useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
 import { SettingCheck } from "./SettingCheck";
-import { adoptionFor, archetypeById, capabilityName, settingAdoptionFor, settingLinkFor, vendorById, type Product } from "@/lib/data";
+import { adoptionFor, archetypeById, controlName, settingAdoptionFor, settingLinkFor, vendorById, type Product } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
 import type { AdoptionStatus, Archetype, ProductSetting } from "@/lib/types";
 import { ADOPTION_META, SETTING_VIA_META } from "./labels";
@@ -100,7 +100,7 @@ export function SettingsTable({
   archetype: Archetype;
   /** The control lit on the drawing, so its name reads as selected here too. */
   lit: string | null;
-  onLight: (capabilityId: string) => void;
+  onLight: (controlId: string) => void;
 }) {
   const number = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
   // A setting belongs to the product that lists it; two products may use the same id.
@@ -157,7 +157,7 @@ export function SettingsTable({
                             : "border-chip bg-chip-soft text-chip"
                           : "border-line bg-mist text-ink-3"
                       }`}
-                      title={controls.length ? `Delivers control ${number.get(controls[0])}: ${capabilityName(controls[0])}` : "Delivers none of the numbered controls"}
+                      title={controls.length ? `Delivers control ${number.get(controls[0])}: ${controlName(controls[0])}` : "Delivers none of the numbered controls"}
                     >
                       {controls.length ? number.get(controls[0]) : "·"}
                     </span>
@@ -190,7 +190,7 @@ export function SettingsTable({
                       {controls.map((id) => (
                         <span key={id} className="block font-semibold text-ink-2" data-delivers={id}>
                           <span className="ident mr-1 text-[10.5px] font-bold text-chip">{number.get(id)}</span>
-                          {capabilityName(id)}
+                          {controlName(id)}
                         </span>
                       ))}
                       <span className="block text-ink-3">{placeOf(s)}</span>
@@ -363,7 +363,7 @@ export function ProductSettings({
   /** Picks a product; null lets go of the framework on a hosted pattern. */
   onPick: (id: string | null) => void;
   lit: string | null;
-  onLight: (capabilityId: string) => void;
+  onLight: (controlId: string) => void;
 }) {
   // On a hosted pattern the choosing is the step before this one: this step shows the settings
   // of what was chosen, the platform's and the framework's in one table.

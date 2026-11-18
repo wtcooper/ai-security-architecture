@@ -14,7 +14,7 @@ import { Prose } from "@/components/Prose";
 import { CloudComparison, OnCloud } from "@/components/cloud/CloudViews";
 import { bindingFor, cloudProductsFor, platformWords, type CloudProduct } from "@/components/cloud/model";
 import { summaryOf } from "@/components/drawing/layout";
-import { capabilityName, componentChoiceFor, guidanceByArchetype, toolsForArchetype } from "@/lib/data";
+import { controlName, componentChoiceFor, guidanceByArchetype, toolsForArchetype } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
 import type { Archetype, ComponentChoice } from "@/lib/types";
 
@@ -119,7 +119,7 @@ export function ArchetypeDetail({ archetype, cloud = null }: { archetype: Archet
                     Controls:{" "}
                     {item.mitigations
                       .filter((id) => archetype.mitigations.includes(id))
-                      .map((id) => `${archetype.mitigations.indexOf(id) + 1} ${capabilityName(id)}`)
+                      .map((id) => `${archetype.mitigations.indexOf(id) + 1} ${controlName(id)}`)
                       .join(" · ")}
                   </p>
                 </li>

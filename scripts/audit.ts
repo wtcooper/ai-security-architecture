@@ -475,8 +475,8 @@ async function main() {
   p();
   p(
     "Each first-party cloud architecture as built on each cloud (data/clouds/): the services " +
-      "bound to its blocks and the settings rows that cover its pinned capabilities. *Code rows* " +
-      "are capabilities no cloud setting provides, which the organisation builds itself.",
+      "bound to its blocks and the settings rows that cover its pinned controls. *Code rows* " +
+      "are controls no cloud setting provides, which the organisation builds itself.",
   );
   p();
   const cloudArchs = archetypes.filter((a) => a.surface === "surfaceCloud");

@@ -64,7 +64,7 @@ export const componentById = index(components);
 export const riskById = index(risks);
 export const controlById = index(controls);
 
-/** A capability is a MITRE mitigation or an authored specialisation of one. */
+/** A control in the catalogue is a MITRE mitigation or an authored specialisation of one. */
 export const specializationsOf = (id: string) => mitigations.filter((m) => m.parent === id);
 export const personaById = index(personas);
 export const frameworkById = index(frameworks);
@@ -366,7 +366,7 @@ export const controlsForTool = (toolId: string) => {
 // --- Status and the organisation's own controls (data/org/controls.yaml) -----------
 
 /** A catalogue control's name. Pages show names, never ids. */
-export const capabilityName = (id: string) => mitigationById.get(id)?.title ?? id;
+export const controlName = (id: string) => mitigationById.get(id)?.title ?? id;
 
 /** The organisation's own controls that map to one catalogue control, in the order it lists them. */
 export const orgControlsFor = (id: string): OrgControl[] => orgControls.filter((c) => c.maps.includes(id));
@@ -384,7 +384,7 @@ function rollup(values: DisplayStatus[]): DisplayStatus {
 }
 
 /**
- * A capability's status: its own entry, else — for a MITRE parent — the rollup of its
+ * A control's status: its own entry, else — for a MITRE parent — the rollup of its
  * specialisations' entries.
  */
 export function statusFor(id: string): DisplayStatus {
@@ -393,17 +393,17 @@ export function statusFor(id: string): DisplayStatus {
   return rollup(specializationsOf(id).map((s) => status[s.id]?.status ?? "notSet"));
 }
 
-/** Control status is never authored: it rolls up from the parent capabilities that support it. */
+/** A CoSAI control's status is never authored: it rolls up from the catalogue controls that support it. */
 export const controlStatusFor = (controlId: string): DisplayStatus =>
   rollup(mitigationsForControl(controlId).filter((m) => !m.parent).map((m) => statusFor(m.id)));
 
 // --- Enable groups ----------------------------------------------------------------
 
-const groupByCapability = new Map(enablement.groups.flatMap((g) => g.mitigations.map((id) => [id, g] as const)));
+const groupByControl = new Map(enablement.groups.flatMap((g) => g.mitigations.map((id) => [id, g] as const)));
 const baselineIds = new Set(enablement.baseline);
 
-/** The security domain a capability is grouped under on Enable. Every pinned capability has one. */
-export const enableGroupFor = (capabilityId: string) => groupByCapability.get(capabilityId);
+/** The security domain a control is grouped under on Enable. Every pinned control has one. */
+export const enableGroupFor = (controlId: string) => groupByControl.get(controlId);
 
-/** Whether every AI deployment needs this capability, whatever the architecture. */
-export const isBaseline = (capabilityId: string) => baselineIds.has(capabilityId);
+/** Whether every AI deployment needs this control, whatever the architecture. */
+export const isBaseline = (controlId: string) => baselineIds.has(controlId);

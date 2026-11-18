@@ -3,7 +3,7 @@
 /**
  * One incident, walked step by step across its reference architecture. The step reads on the
  * left, the drawing lights where it lands on the right, and the last step turns the drawing
- * back to its capability pins: the few that would have broken the chain, each a link to its
+ * back to its control pins: the few that would have broken the chain, each a link to its
  * row on the architecture's Enable tab. Background, related incidents and sources sit below,
  * out of the way of the walk.
  */
@@ -13,7 +13,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { PHASE_META } from "@/components/PhaseRail";
 import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
-import { archetypeById, capabilityName, incidentById, riskCode, riskTitle } from "@/lib/data";
+import { archetypeById, controlName, incidentById, riskCode, riskTitle } from "@/lib/data";
 import { categoryById } from "@/lib/incident-categories";
 import type { Incident, IncidentSource, Phase } from "@/lib/types";
 import { stepOverlay } from "./model";
@@ -125,7 +125,7 @@ export function IncidentWalkthrough({ id }: { id: string }) {
                           href={patternHref(archetype.id, { control: b.control })}
                           className="font-semibold text-ink hover:text-introduced hover:underline"
                         >
-                          {capabilityName(b.control)}
+                          {controlName(b.control)}
                         </Link>
                         <span className="block text-ink-2">{b.how}</span>
                       </span>
@@ -218,7 +218,7 @@ export function IncidentWalkthrough({ id }: { id: string }) {
           <PatternDrawing
             archetype={archetype}
             overlay={breaking ? null : stepOverlay(archetype, step)}
-            pins="capabilities"
+            pins="controls"
             // Beside the step text the drawing has a narrower column: show all of it, smaller.
             minScale={0.55}
             highlight={breaking && breakIds.length ? { kind: "mitigation", id: breakIds[0], with: breakIds.slice(1) } : null}

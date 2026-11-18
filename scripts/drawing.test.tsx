@@ -42,7 +42,7 @@ test(
     const drawable = (at: string) => places.has(at) || places.has(reverse(at));
     for (const p of a.pins.mitigations) assert.ok(drawable(p.at), `${a.id}: control ${p.mitigation} at ${p.at}`);
     for (const p of a.pins.risks) assert.ok(drawable(p.at), `${a.id}: risk ${p.risk} at ${p.at}`);
-    const controls = renderToStaticMarkup(<BoxDiagram archetype={a} spec={spec} pins="capabilities" />);
+    const controls = renderToStaticMarkup(<BoxDiagram archetype={a} spec={spec} pins="controls" />);
     // Every pinned control is on the drawing at least once, and each control-plane box shows what it owns.
     for (const id of a.mitigations) assert.ok(controls.includes(`data-control="${id}"`), `${a.id}: chip for ${id}`);
     const owned = a.blocks.filter((b) => b.kind === "governance").reduce((n, b) => n + ownedControls(a, b).length, 0);
@@ -129,7 +129,7 @@ test(
 test(
   "the drawing renders for every pattern in both pin modes, with its words taken from the pattern",
   each((a) => {
-    for (const pins of ["capabilities", "risks"] as const) {
+    for (const pins of ["controls", "risks"] as const) {
       const html = renderToStaticMarkup(<PatternDrawing archetype={a} pins={pins} onPickMitigation={() => {}} onHighlight={() => {}} />);
       assert.match(html, /data-drawing="boundaries"/, a.id);
       for (const z of a.zones ?? []) {

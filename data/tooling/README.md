@@ -72,8 +72,8 @@ tools:
 ```
 
 Build rules: the vendor exists; the architecture exists; every setting row is complete, dated,
-links over https and names only capabilities pinned on its architecture; once a tool has
-settings, every capability it rates `native` or `partial` is delivered by at least one row; every `controls[].mitigation` and
+links over https and names only controls pinned on its architecture; once a tool has
+settings, every control it rates `native` or `partial` is delivered by at least one row; every `controls[].mitigation` and
 `riskNotes[].risk` is pinned on the primary architecture; every step, advisory and source has a
 title and a url; `asOf` is present; every control row has either a step with a url or an
 `evidence` entry saying where the claim was checked. A tool cannot claim, or disclaim, a control
@@ -142,9 +142,9 @@ remainder are in `docs/VALIDATION-2026-09-10-TOOLING.md`. `toolOpenclaw` and `to
 personal agent the "admin" is the user who runs it, so `native` means the user can set it in the
 product's own config, and the grid's band says so.
 
-Re-verified 2026-09-25 against the MITRE capability definitions, for the thirteen entities on the
+Re-verified 2026-09-25 against the MITRE control definitions, for the thirteen entities on the
 third-party coding & desktop agent and coding & desktop session runtime drawings: the 65 rows left
-`unknown` by the capability migration were rewritten, the 10 missing rows (Credential Hardening on
+`unknown` by the migration to MITRE control ids were rewritten, the 10 missing rows (Credential Hardening on
 every hosted entity, four more on `toolClaudeCoworkCloud`) added, and every other row re-checked
 against the vendor page it cites. 40 `native` ratings came down, mostly by five rules now written into
 the rows: an MCP allowlist admits servers but pins nothing they serve; an AI reviewer is not human
@@ -158,7 +158,7 @@ were re-verified under the same rules, and one or two mainstream exemplars were 
 drawing had none or named one — Microsoft 365 Copilot, Bedrock AgentCore, Vertex AI Agent Engine,
 Copilot Studio, Agentforce, opencode, Cline, Ollama, LM Studio, the OpenAI Agents SDK, the Vercel AI
 SDK, the GitHub MCP server, vLLM and MLflow. Every entity on every drawing now addresses every
-pinned capability. Agent-to-agent federation has no registry entity: its exemplars are a protocol,
+pinned control. Agent-to-agent federation has no registry entity: its exemplars are a protocol,
 a draft grant type and a class of platforms, not products.
 
 Onboarded 2026-10-22 on the persistent managed agents drawing: `toolClaudeDuet` (research

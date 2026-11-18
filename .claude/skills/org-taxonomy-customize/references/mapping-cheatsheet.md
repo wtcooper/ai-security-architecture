@@ -1,13 +1,14 @@
-# Pick the capability
+# Pick the catalogue control
 
-Map each organization capability to one existing id: a MITRE mitigation in
-`data/overlay/mitigations.yaml` or a `cap-*` specialisation in
-`data/overlay/specializations.yaml`. Read the capability's definition and implementation
-scope and the controls it supports, not just a similar label. Where a specialisation exists
-for what is deployed, use it rather than the parent. Never record status against a control:
-control status rolls up from its capabilities.
+Map each of the organization's controls to the existing catalogue ids it delivers, one or
+more: a MITRE mitigation in `data/overlay/mitigations.yaml` or a `cap-*` specialisation in
+`data/overlay/specializations.yaml`. They go in the row's `maps` list in
+`data/org/controls.yaml`. Read the catalogue control's definition and implementation scope and
+the CoSAI controls it supports, not just a similar label. Where a specialisation exists for
+what is deployed, use it rather than the parent. Never record status against a CoSAI control:
+its status rolls up from the catalogue controls that support it.
 
-| Organization technology or practice | Capability |
+| Organization technology or practice | Catalogue control |
 | --- | --- |
 | Endpoint or gateway DLP, prompt and upload redaction | Sensitive Data Detection and Redaction (`cap-sensitive-data-redaction`, under `AML.M0020`) |
 | Prompt-attack and jailbreak classifiers, harm-category filters, denied topics, policy classifiers | Generative AI Guardrails (`AML.M0020`) — input and output classification stay in the parent |
@@ -36,15 +37,18 @@ control status rolls up from its capabilities.
 | Execution sandbox for agent tools | Execution Isolation (`D3-EI`) |
 | Human approval of agent actions | Human In-the-Loop for AI Agent Actions (`AML.M0029`) |
 
-These are candidates, not guarantees of function. One product can deliver several capabilities
-(a secure web gateway serves egress control and can host DLP inspection), so pick the
-capability the deployment actually delivers, and add a second org entry when one product
-genuinely delivers two. A specialisation is a distinct enforcement point, never one technology
-split by risk type: a guardrail product that classifies inputs and outputs is `AML.M0020`
-itself, while a DLP point is `cap-sensitive-data-redaction`. A record on a specialisation rolls
-up to its MITRE parent. Deployment status belongs to the org
-capability and surface, and only on surfaces where the capability applies. A missing capability
-is a catalogue gap; do not invent a match. Use
+These are candidates, not guarantees of function. The mapping is many to many. One of the
+organisation's controls can deliver several catalogue controls (a secure web gateway serves
+egress control and can host DLP inspection), so list in `maps` every catalogue control the
+deployment actually delivers, and only those. Several of the organisation's controls can also
+map to the same catalogue control (a secure web gateway and a sandbox network allowlist both
+deliver `cap-agent-egress-control`): give each its own row, and the catalogue control's status
+is worked out from all of them. A specialisation is a distinct enforcement point, never one
+technology split by risk type: a guardrail product that classifies inputs and outputs is
+`AML.M0020` itself, while a DLP point is `cap-sensitive-data-redaction`. A row mapped to a
+specialisation rolls up to its MITRE parent when the parent has no row of its own. Status
+belongs to the organisation's own control, one value per row. A missing catalogue control is a
+catalogue gap; do not invent a match. Use
 `node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs` to inspect the full
-catalogue and `... tools toolClaudeCode` to list the capabilities a product may be assessed
-against.
+catalogue, and add a word (`... cosai-index.mjs mcp`) to list only the entries that mention
+it.

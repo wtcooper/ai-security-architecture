@@ -22,7 +22,7 @@ export const SURFACE_CLASS_META: Record<ToolSurfaceClass, { label: string; short
 export const SURFACE_CLASS_ORDER = Object.keys(SURFACE_CLASS_META) as ToolSurfaceClass[];
 
 /**
- * How far a product covers a capability, in three words a reader can act on. The registry keeps
+ * How far a product covers a control, in three words a reader can act on. The registry keeps
  * finer grades (a third-party product, nothing offered); on the page both read "Not in tool",
  * because either way an enterprise control or another product has to cover it. A full, half or empty
  * circle (CoverageMark) carries the meaning, so the words need no colour key.

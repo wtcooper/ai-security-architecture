@@ -9,7 +9,7 @@ The registry (`data/tooling/<vendor>/<family>.yaml`) is the one place this repos
 products. Each entity is one product on one reference architecture, and the architecture fixes
 the **reference control set**: the mitigations pinned on that drawing. A pinned mitigation is a
 MITRE entry (`D3-OTF`) or an authored `cap-*` specialisation of one
-(`cap-agent-egress-control`); the app calls that layer Capabilities, the data still says
+(`cap-agent-egress-control`); the app calls that layer Controls, the data still says
 `mitigation`. The entry's job is to say, for each of those, whether the vendor lets an
 administrator switch it on and exactly where.
 

@@ -197,7 +197,7 @@ export type DisplayStatus = Status | "notSet";
 export const STATUSES: Status[] = ["enabled", "inProgress", "gap"];
 
 /** A catalogue control's status, worked out from the organisation's controls that map to it. */
-export interface CapabilityCustomisation {
+export interface ControlRollup {
   status?: Status;
   note?: string;
 }
@@ -285,7 +285,7 @@ export interface Mitigation {
    * the parent's definition, controls and surfaces unless it overrides them.
    */
   parent?: string;
-  /** The retired home-grown capability ids this entry restores; drives the data migration. */
+  /** The retired home-grown ids this entry restores; drives the data migration. */
   legacy?: string[];
   /** Practice items when the countermeasure is run as a process, beside any technology. */
   process?: { title: string; note: string }[];
@@ -745,7 +745,7 @@ export const SETTING_AREAS: SettingArea[] = ["identity", "data", "tools", "netwo
 /**
  * One security-relevant setting a product or cloud exposes, with the baseline value this
  * catalogue recommends for it (data/tooling/BASELINE.md). Rows are the unit of the Enable tab's
- * tools step: what to set, where, to what, and which capabilities on the drawing it delivers.
+ * tools step: what to set, where, to what, and which controls on the drawing it delivers.
  */
 export interface ProductSetting {
   /** Unique within its product (or cloud), camelCase; the key data/org/products.yaml uses. */
@@ -762,7 +762,7 @@ export interface ProductSetting {
   recommended: string;
   /** One line: the path the recommended value closes. */
   why: string;
-  /** Capabilities this setting delivers; each must be pinned on the drawing it is shown on. */
+  /** Controls this setting delivers; each must be pinned on the drawing it is shown on. */
   mitigations: string[];
   /** The plan or licence it needs, when it is not on every plan. */
   requires?: string;
@@ -1139,7 +1139,7 @@ export interface Incident {
   /** Set when the account rests on one report or on figures nobody has confirmed. */
   caveat?: string;
   summary: string[];
-  /** The 3–5 capabilities, each pinned on the drawing, that would have broken the chain. */
+  /** The 3–5 controls, each pinned on the drawing, that would have broken the chain. */
   breaks: IncidentBreak[];
   risks: string[];
   /** CoSAI controls; kept for the older case studies, no longer shown or required. */
@@ -1198,7 +1198,7 @@ export interface Dataset {
   /** Provenance statement for the tool registry; each guidance document carries its own. */
   toolingAttribution: string;
   /** Catalogue control id -> its status, worked out from the organisation's controls mapped to it. */
-  status: Record<string, CapabilityCustomisation>;
+  status: Record<string, ControlRollup>;
   /** The organisation's own controls, in the order it lists them (data/org/controls.yaml). */
   orgControls: OrgControl[];
   /** Tool or cloud id -> the organisation's adoption status and per-setting status, from data/org/products.yaml. */

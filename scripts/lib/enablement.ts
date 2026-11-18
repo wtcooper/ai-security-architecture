@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { STATUSES, type Archetype, type CapabilityCustomisation, type Enablement, type EnablementGroup, type Mitigation, type OrgControl, type Status, type Surface } from "../../src/lib/types";
+import { STATUSES, type Archetype, type ControlRollup, type Enablement, type EnablementGroup, type Mitigation, type OrgControl, type Status, type Surface } from "../../src/lib/types";
 
 /** A CSF category as the framework file declares it. */
 type CsfEntry = { label?: string; group?: string };
@@ -78,7 +78,7 @@ function rollup(values: (Status | undefined)[]): Status | undefined {
  * The organisation's own controls (data/org/controls.yaml): each maps to one or more catalogue
  * controls. Returns them, and each catalogue control's status worked out from the ones mapped to it.
  */
-export async function loadOrgControls(root: string, catalogue: Mitigation[]): Promise<{ orgControls: OrgControl[]; status: Record<string, CapabilityCustomisation> }> {
+export async function loadOrgControls(root: string, catalogue: Mitigation[]): Promise<{ orgControls: OrgControl[]; status: Record<string, ControlRollup> }> {
   const where = "org/controls.yaml";
   if (existsSync(join(root, "data/status.yaml"))) {
     throw new Error("data/status.yaml has moved: put its controls in data/org/controls.yaml and its products section in data/org/products.yaml (see data/org/README.md), then delete it");
@@ -92,7 +92,7 @@ export function checkOrgControls(
   doc: { controls?: OrgControl[] | null } | null,
   catalogue: Mitigation[],
   where = "org/controls.yaml",
-): { orgControls: OrgControl[]; status: Record<string, CapabilityCustomisation> } {
+): { orgControls: OrgControl[]; status: Record<string, ControlRollup> } {
   const known = new Map(catalogue.map((m) => [m.id, m]));
   const rows = doc?.controls ?? [];
   if (!Array.isArray(rows)) throw new Error(`${where}: controls is a list of rows, each starting "- id:"`);
@@ -117,7 +117,7 @@ export function checkOrgControls(
     if (row.link !== undefined && !/^https:\/\//.test(row.link)) throw new Error(`${at}: link must be an https address`);
     if (row.note !== undefined && typeof row.note !== "string") throw new Error(`${at}: note must be text`);
   }
-  const status: Record<string, CapabilityCustomisation> = {};
+  const status: Record<string, ControlRollup> = {};
   for (const m of catalogue) {
     const mine = rows.filter((r) => r.maps.includes(m.id));
     if (!mine.length) continue;

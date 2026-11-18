@@ -34,7 +34,7 @@ export function PatternDrawing({
   highlight = null,
   onHighlight,
   overlay = null,
-  pins = "capabilities",
+  pins = "controls",
   onPickMitigation,
   services = null,
   differs = null,

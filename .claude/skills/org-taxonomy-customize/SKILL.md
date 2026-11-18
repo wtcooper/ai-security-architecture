@@ -1,47 +1,66 @@
 ---
 name: org-taxonomy-customize
-description: Map an organization's security capabilities onto the repository's capability catalogue (MITRE mitigations and their cap-* specialisations) and record, in data/status.yaml, each capability's status and the organisation's own name for it. CoSAI control status rolls up from those entries. Also records, in the same file's products section, which tools, clouds and on-premises platforms the organisation uses, which settings are on, what it runs in place of a reference component (its own approved gateway, registry or store) and links to its own modules and runbooks. Use it when someone asks to record their status, map their controls, mark what is enabled, or add their approved services or modules to a hosted pattern.
+description: Map an organization's own security controls onto the repository's control catalogue (MITRE mitigations and their cap-* specialisations) and record them in data/org/controls.yaml, one row per control the organisation runs, with its own id, its name, its status and the catalogue controls it delivers. The mapping is many to many. A catalogue control's status rolls up from the rows mapped to it, and CoSAI control status rolls up from the catalogue controls. Also records, in data/org/products.yaml, which tools, clouds and on-premises platforms the organisation uses, which settings are on, what it runs in place of a reference component (its own approved gateway, registry or store), which ways of hosting it has approved and links to its own modules and runbooks. Use it when someone asks to record their status, map their controls, mark what is enabled, or add their approved services or modules to a hosted pattern.
 ---
 
-# Customize capability status and names
+# Record your controls, their status and your products
 
-Read `references/schema.md`. Everything an organisation records lives in one file,
-`data/status.yaml`, keyed by capability id: a MITRE mitigation (`D3-MFA`, `AML.M0020`) or an
-authored specialisation of one (`cap-*`, exactly one MITRE parent). Do not add status to CoSAI
-controls or risks, and do not alter `data/cosai/` or invent capabilities; if the catalogue
-lacks one, report the gap.
+Read `references/schema.md` and `data/org/README.md`. Everything an organisation records lives
+in two files in one folder: `data/org/controls.yaml` (its own controls) and
+`data/org/products.yaml` (the tools and platforms it uses). Both ship empty.
 
-1. Identify the organization's actual capabilities and what it calls them. Use the inventory
-   and evidence provided; do not infer a deployment from a requirement.
-2. Map each one to a single catalogue id. `scripts/cosai-index.mjs` lists the capabilities
-   (the MITRE mitigations, with the specialisations marked under their parent), the controls
-   each supports and the surfaces it applies on; `references/mapping-cheatsheet.md` has the
-   common picks. Prefer the specialisation where one exists for what is deployed (a DLP
-   product is `cap-sensitive-data-redaction`, not all of `AML.M0020`). If nothing fits,
-   report the gap; do not force a mapping.
-3. Add an entry under `capabilities:` in `data/status.yaml` with `status` (`enabled`,
-   `inProgress` or `gap`), and `displayName` where the organisation has its own name for it.
-   A `note` is optional and shows on hover. Leave a capability out entirely when it has not
-   been assessed: it reads "Not set".
-4. Run `npm run data` (it rejects unknown ids, statuses and fields), then check the Status
-   column on a pattern's Enable tab (`/patterns/<slug>/`), the control catalogue (`/controls/`)
-   and the CoSAI controls list (`/reference/cosai-controls/`). The app calls a capability a
-   **control**; a CoSAI control is always written "CoSAI control".
+A row in `data/org/controls.yaml` is one control the organisation runs. It maps to one or more
+controls in the catalogue: a MITRE mitigation (`D3-MFA`, `AML.M0020`) or an authored
+specialisation of one (`cap-*`, exactly one MITRE parent). The mapping is many to many: one of
+the organisation's controls can map to several catalogue controls, and several of its controls
+can map to the same one. Do not add status to CoSAI controls or risks, and do not alter
+`data/cosai/` or invent catalogue controls; if the catalogue lacks one, report the gap.
 
-Status is set only on capabilities. A MITRE parent with no entry of its own rolls up its
-specialisations; a control rolls up the parent capabilities that support it. A rollup is
-Enabled only when every part is, a Gap when nothing is under way, and In progress otherwise.
-It describes deployment, never verified control compliance or mitigation effectiveness.
+1. Identify the organization's actual controls: what each is called, its identifier in the
+   organisation's own register, and how far along it is. Use the inventory and evidence
+   provided; do not infer a deployment from a requirement.
+2. For each one, find the catalogue controls it delivers. `scripts/cosai-index.mjs` lists the
+   catalogue (the MITRE mitigations, with the specialisations marked under their parent), the
+   CoSAI controls each supports and the surfaces it applies on;
+   `references/mapping-cheatsheet.md` has the common picks. Prefer the specialisation where one
+   exists for what is deployed (a DLP product is `cap-sensitive-data-redaction`, not all of
+   `AML.M0020`). List every catalogue control the organisation's control really delivers, and
+   only those. If nothing fits, report the gap; do not force a mapping.
+3. Add a row under `controls:` in `data/org/controls.yaml`:
+   - `id`: the organisation's own identifier (a policy or register number). Required and
+     unique. It is for the file only and is never shown on a page.
+   - `name`: what the organisation calls the control. This is what pages show.
+   - `status`: `enabled`, `inProgress` or `gap`. Leave it out when the control has not been
+     assessed yet.
+   - `maps`: the catalogue control ids it delivers, one or more.
+   - `note` (optional, shown beside the name) and `link` (optional, https: the policy,
+     standard or evidence for it).
+
+   A catalogue control with no row mapped to it reads "Not set".
+4. Run `npm run data` (it rejects a missing or repeated `id`, an empty `name`, an unknown
+   catalogue id in `maps`, an unknown status or field, and a `link` that is not https), then
+   check a pattern's Enable tab (`/patterns/<slug>/`), the control catalogue (`/controls/`)
+   and the CoSAI controls list (`/reference/cosai-controls/`). Each catalogue control lists
+   the organisation's controls beneath it by name, with their status. Pages show names, never
+   ids. A CoSAI control is always written "CoSAI control".
+
+Status is set only on the organisation's own rows, never on a catalogue control directly. A
+catalogue control's status is worked out from the rows mapped to it: Enabled only when every
+one is enabled, a Gap when every one is a gap or has no status and at least one is a gap, and
+In progress otherwise. A MITRE parent with no row mapped to it rolls up its specialisations,
+and a CoSAI control rolls up the parent controls that support it, by the same rule. A rollup
+describes deployment, never verified control compliance or mitigation effectiveness.
 
 ## Products, platforms and your own components
 
-The same file has a `products:` section, keyed by a tool id (`data/tooling/`) or a platform id
-(`data/clouds/`: `cloudAws`, `cloudAzure`, `cloudGcp`, `cloudOnPrem`). Its header comment gives
-the fields; `npm run data` rejects anything it does not recognise.
+`data/org/products.yaml` has a `products:` map, keyed by a tool id (`data/tooling/`) or a
+platform id (`data/clouds/`: `cloudAws`, `cloudAzure`, `cloudGcp`, `cloudOnPrem`). Its header
+comment gives the fields; `npm run data` rejects anything it does not recognise.
 
-- `status` and `settings: { <setting id>: { status, value, note, link } }` record which
-  settings are switched on, the value actually set where it differs from the recommendation,
-  and a `link` (https) to the organisation's own module, policy-as-code or runbook.
+- `status` (`enabled`, `testing` or `notEnabled`), an optional `note`, and
+  `settings: { <setting id>: { status, value, note, link } }` record which settings are
+  switched on, the value actually set where it differs from the recommendation, and a `link`
+  (https) to the organisation's own module, policy-as-code or runbook.
 - On a platform, `components:` records what the organisation runs for a component in place of
   the reference service: `gateway: { uses: "Kong AI Gateway", link: "https://…" }`. The key is
   the component's id in the pattern file (it applies on every pattern that has it) or

@@ -3,16 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/Panel";
 import { DefenseMatrix } from "@/components/defenses/DefenseMatrix";
-import { CapabilityFilters, useDefenseSelection, useMatrixFilters } from "@/components/defenses/DefenseNavigation";
+import { ControlFilters, useDefenseSelection, useMatrixFilters } from "@/components/defenses/DefenseNavigation";
 import { GROUPING_META, mitigationMatrixItem, matchesMatrixFilters } from "@/components/defenses/model";
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
 import { FilterPill, RISK_CATEGORY_ACCENT } from "@/components/browse/RisksBrowser";
 import { useRouter } from "next/navigation";
-import { StackFilter } from "@/components/capabilities/StackFilter";
+import { StackFilter } from "@/components/controls/StackFilter";
 import { cosaiControlHref, isCosaiControlId } from "@/lib/routes";
 import type { BandId } from "@/lib/bands";
-import { CapabilityDetail } from "@/components/capabilities/CapabilityDetail";
-import { archetypeById, archetypesInOrder, bandsForMitigation, capabilityName, mitigations, mitigationById, mitigationAliases, riskById, riskCategories, status, statusFor } from "@/lib/data";
+import { ControlDetail } from "@/components/controls/ControlDetail";
+import { archetypeById, archetypesInOrder, bandsForMitigation, controlName, mitigations, mitigationById, mitigationAliases, riskById, riskCategories, status, statusFor } from "@/lib/data";
 
 const SOURCES = [
   { id: "", label: "All" },
@@ -35,7 +35,7 @@ const catalogue = mitigations.filter((m) => !specialised.has(m.id));
 const anyStatus = Object.values(status).some((s) => s.status);
 
 /** The control catalogue: every control is a MITRE mitigation or an authored specialisation of one. */
-export function CapabilitiesBrowser() {
+export function ControlsBrowser() {
   const [linked, setClicked] = useDefenseSelection();
   // This path used to hold the CoSAI controls; a link that names one is forwarded to Reference.
   const router = useRouter();
@@ -54,7 +54,7 @@ export function CapabilitiesBrowser() {
   // A retired home-grown id still opens its replacement.
   const replacements = linked ? mitigationAliases[linked] : undefined;
   const selected = replacements?.[0] ?? (linked && mitigationById.has(linked) ? linked : null);
-  const capability = selected ? mitigationById.get(selected) : undefined;
+  const picked = selected ? mitigationById.get(selected) : undefined;
   const isGap = (id: string) => statusFor(id) !== "enabled";
   const matchesSource = (m: typeof mitigations[number]) => !source || (source === "specialisation" ? Boolean(m.parent) : !m.parent && m.origin.framework === source);
   const matchesRisk = (m: typeof mitigations[number]) => !riskCategory || m.risks.some((id) => riskById.get(id)?.category === riskCategory);
@@ -63,7 +63,7 @@ export function CapabilitiesBrowser() {
     && matchesSource(m)
     && (!pinnedOnPattern || pinnedOnPattern.has(m.id))
     && (!gapsOnly || isGap(m.id))
-    && `${capabilityName(m.id)} ${m.title} ${m.id} ${m.parent ?? ""} ${m.implementation}`.toLowerCase().includes(query.toLowerCase());
+    && `${controlName(m.id)} ${m.title} ${m.id} ${m.parent ?? ""} ${m.implementation}`.toLowerCase().includes(query.toLowerCase());
   const shown = catalogue.filter((m) => matchesOthers(m) && matchesRisk(m) && matchesBand(m));
   // Stack-layer counts respond to every other filter, so the selectors read as one system.
   const bandCounts = Object.fromEntries(BAND_IDS.map((b) => [b, 0])) as Record<BandId, number>;
@@ -91,7 +91,7 @@ export function CapabilitiesBrowser() {
                 </FilterPill>
               ))}
             </div>
-            <CapabilityFilters />
+            <ControlFilters />
           </div>
           <div className="w-full shrink-0 lg:w-[300px]">
             <p className="eyebrow">Filter by stack layer</p>
@@ -132,7 +132,7 @@ export function CapabilitiesBrowser() {
         {!shown.length && <p className="mt-3 text-sm text-ink-2">No controls match these filters.</p>}
         <p className="mt-2 text-xs text-ink-3">A control sits in one row, on the surfaces where it applies; a MITRE mitigation with specialisations is shown as those specialisations, never beside them. A blank cell means no control in that row applies on that surface. NIST publishes no mapping from CSF to MITRE: the CSF category of each control is this repository&rsquo;s judgement.</p>
         <div ref={detailRef} className="mt-6 scroll-mt-20">
-          {capability && <CapabilityDetail mitigation={capability} onClose={() => setClicked(null)} />}
+          {picked && <ControlDetail mitigation={picked} onClose={() => setClicked(null)} />}
         </div>
       </div>
     </>

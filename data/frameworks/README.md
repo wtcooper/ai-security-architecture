@@ -20,5 +20,5 @@ compiles the file into `authoredMappings`.
 
 ## Verification
 
-Run `npm run data` and `npm run test:capabilities`. The build validates every framework entry
+Run `npm run data` and `npm run test:controls`. The build validates every framework entry
 reference and rejects unknown controls, missing rationales and duplicate mappings.

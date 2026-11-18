@@ -16,7 +16,7 @@ import {
   archetypeById,
   archetypesInOrder,
   clouds,
-  capabilityName,
+  controlName,
   mitigationsInOrder,
   componentTitle,
   components,
@@ -58,10 +58,10 @@ function buildIndex(): Entry[] {
     })),
     ...mitigationsInOrder.map((c) => ({
       kind: "Control",
-      title: capabilityName(c.id),
+      title: controlName(c.id),
       hint: c.parent ? ` · specialisation` : c.id,
       href: controlHref(c.id),
-      text: norm(capabilityName(c.id), c.title, c.abbrev, c.id, c.parent),
+      text: norm(controlName(c.id), c.title, c.abbrev, c.id, c.parent),
     })),
     ...components.map((c) => ({
       kind: "Component",

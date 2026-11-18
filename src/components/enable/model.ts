@@ -11,11 +11,11 @@ export interface ControlGroup {
   /** The CSF function: Govern, Identify, Protect, Detect, Respond or Recover. */
   function: string;
   blurb: string;
-  capabilities: Mitigation[];
+  controls: Mitigation[];
 }
 
 /**
- * The architecture's enterprise controls: every capability it pins, in pin order, under the
+ * The architecture's enterprise controls: every one it pins, in pin order, under the
  * NIST CSF category that owns it, in CSF order. Categories it pins nothing from are left out.
  */
 export function controlGroups(archetype: Archetype): ControlGroup[] {
@@ -24,12 +24,12 @@ export function controlGroups(archetype: Archetype): ControlGroup[] {
     .map((g) => {
       const own = g.surfaces?.[archetype.surface];
       const ids = new Set(g.mitigations);
-      return { id: g.id, title: g.title, plain: g.plain, function: g.function, blurb: own?.blurb ?? g.blurb, capabilities: pinned.filter((m) => ids.has(m.id)) };
+      return { id: g.id, title: g.title, plain: g.plain, function: g.function, blurb: own?.blurb ?? g.blurb, controls: pinned.filter((m) => ids.has(m.id)) };
     })
-    .filter((g) => g.capabilities.length);
+    .filter((g) => g.controls.length);
 }
 
-/** Baseline capabilities this architecture does not draw: still needed, set up once for all AI. */
+/** Baseline controls this architecture does not draw: still needed, set up once for all AI. */
 export const baselineNotPinned = (archetype: Archetype): Mitigation[] => {
   const pinned = new Set(archetype.mitigations);
   return enablement.baseline.filter((id) => !pinned.has(id)).map((id) => mitigationById.get(id)!);
@@ -45,7 +45,7 @@ export interface Placement {
 }
 
 /** Where a pattern places a control: every block it is pinned on, both ends of a flow it is pinned on, and the instruction at each place. */
-export function placementsFor(archetypeId: string, capabilityId: string): { blocks: string[]; notes: string[]; steps: Placement[] } {
+export function placementsFor(archetypeId: string, controlId: string): { blocks: string[]; notes: string[]; steps: Placement[] } {
   const arch = archetypeById.get(archetypeId);
   if (!arch) return { blocks: [], notes: [], steps: [] };
   const titles = new Map(arch.blocks.map((b) => [b.id, b.title]));
@@ -53,7 +53,7 @@ export function placementsFor(archetypeId: string, capabilityId: string): { bloc
   const notes = new Set<string>();
   const steps: Placement[] = [];
   for (const pin of arch.pins.mitigations) {
-    if (pin.mitigation !== capabilityId) continue;
+    if (pin.mitigation !== controlId) continue;
     const where = pin.at.split("->").filter((id) => titles.has(id)).map((id) => titles.get(id)!);
     for (const title of where) blocks.add(title);
     if (pin.note) notes.add(pin.note);
@@ -62,9 +62,9 @@ export function placementsFor(archetypeId: string, capabilityId: string): { bloc
   return { blocks: [...blocks], notes: [...notes], steps };
 }
 
-/** A product's own record on one capability, if the registry has one. */
-export const toolControlFor = (tool: Tool, capabilityId: string): ToolControl | undefined =>
-  tool.controls.find((c) => c.mitigation === capabilityId);
+/** A product's own record on one control, if the registry has one. */
+export const toolControlFor = (tool: Tool, controlId: string): ToolControl | undefined =>
+  tool.controls.find((c) => c.mitigation === controlId);
 
 /** One band of the settings step: a category's plain heading and the settings filed under it. */
 export interface SettingGroup {
@@ -92,7 +92,7 @@ export function settingGroups(archetype: Archetype, settings: ProductSetting[]):
   const first = (st: ProductSetting) => controlsDelivered(archetype, st)[0];
   const groups: SettingGroup[] = controlGroups(archetype)
     .map((g) => {
-      const ids = new Set(g.capabilities.map((c) => c.id));
+      const ids = new Set(g.controls.map((c) => c.id));
       const own = settings.filter((st) => ids.has(first(st) ?? ""));
       // Within a band, in the order step 1 lists the controls; a product's own order breaks ties.
       const sorted = own.map((st, i) => ({ st, i })).sort((a, b) => order.get(first(a.st)!)! - order.get(first(b.st)!)! || a.i - b.i).map((x) => x.st);

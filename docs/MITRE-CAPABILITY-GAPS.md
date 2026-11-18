@@ -1,14 +1,14 @@
-# MITRE capability profile and CoSAI gaps
+# MITRE control profile and CoSAI gaps
 
-> The MITRE catalogue is now the **Mitigations** layer (`data/overlay/mitigations.yaml`, `/mitigations`). This assessment retains its historical filename. Technology-capability source selection is tracked in [the options assessment](TECHNOLOGY-CAPABILITY-TAXONOMIES.md).
+> The MITRE catalogue is now the **Controls** catalogue (`data/overlay/mitigations.yaml`, `/controls`); the data still calls a control a `mitigation`. This assessment retains its historical filename. Technology-capability source selection is tracked in [the options assessment](TECHNOLOGY-CAPABILITY-TAXONOMIES.md).
 
-Implemented 2026-09-18. **59 canonical MITRE capabilities; no custom capability IDs.**
+Implemented 2026-09-18. **59 canonical MITRE controls; no custom control IDs.**
 35 D3FEND defensive techniques from 1.6.0 and 24 ATLAS mitigations from 2026.09.
 CoSAI components, risks, controls, personas and existing framework mappings are unchanged.
 
 ## What is missing?
 
-31 of 35 CoSAI controls have at least one supporting capability mapping. This is connectivity,
+31 of 35 CoSAI controls have at least one supporting control mapping. This is connectivity,
 not a completeness or effectiveness score. The four with no mapping are model privacy-enhancing
 technologies, user transparency/data controls, user education and internal policy/education.
 The last two are deliberately outside a technology catalogue; ATLAS does include the
@@ -16,31 +16,31 @@ nontechnical mitigation AML.M0018 User Training.
 
 The clearest technical vocabulary gap is privacy-preserving computation: the inspected pinned
 releases do not explicitly name differential privacy, secure aggregation, secure multiparty
-computation or homomorphic inference as capabilities. Generic encryption is not an equivalent.
+computation or homomorphic inference as controls. Generic encryption is not an equivalent.
 Other gaps are properties or organizational requirements that cannot be inferred from a broad
-MITRE function. They stay recorded against CoSAI controls without inventing capability names.
+MITRE function. They stay recorded against CoSAI controls without inventing control names.
 
 | CoSAI control | Mapping | Remaining requirement |
 | --- | --- | --- |
-| Privacy Enhancing Technologies for Model Training | unmapped — Encrypt Sensitive Information (`AML.M0012`) | No sufficiently explicit capability for differential privacy, secure aggregation, privacy-preserving federated training, or evaluated anonymization/synthetic-data privacy. Ordinary encryption and access control do not establish these guarantees. |
+| Privacy Enhancing Technologies for Model Training | unmapped — Encrypt Sensitive Information (`AML.M0012`) | No sufficiently explicit control for differential privacy, secure aggregation, privacy-preserving federated training, or evaluated anonymization/synthetic-data privacy. Ordinary encryption and access control do not establish these guarantees. |
 | Privacy Enhancing Technologies for Inference | partial — Generative AI Guardrails (`AML.M0020`), Encrypt Sensitive Information (`AML.M0012`) | Guardrails cover sensitive-data detection and redaction. Secure multiparty inference, homomorphic computation and privacy-preserving query mechanisms are not explicitly represented. Message/file encryption does not imply encrypted computation. |
 | Isolated and Confidential Computing | partial — Hardware-based Process Isolation (`D3-HBPI`), Execution Isolation (`D3-EI`) | Hardware process isolation is represented. Confidential-memory guarantees, workload attestation, measurement-bound key release and side-channel protections require explicit implementation evidence beyond that technique. |
 | User Data Management | partial — Generative AI Guardrails (`AML.M0020`), Memory Hardening (`AML.M0031`), Data Inventory (`D3-DI`), Access Mediation (`D3-AMED`) | Guardrails, inventory, access mediation and memory hardening cover constituent functions. End-to-end consent and purpose enforcement, user-data retention/deletion across all stores and provider copies, and proving those commitments remain outside these mappings. ATLAS Memory Hardening does include retention/deletion for agent memory. |
 | Training Data Management | partial — Maintain AI Dataset Provenance (`AML.M0025`), Sanitize Training Data (`AML.M0007`) | Dataset provenance and sanitization contribute, but provenance does not establish legal authorization, consent or permitted purpose for training/evaluation data. Data-use approval and provenance interpretation remain explicit implementation and governance requirements. |
-| User Transparency and Controls | unmapped | User-facing AI disclosures, consent choices and data-use controls have no sufficiently matching capability in this technical profile. Content filtering, authentication and human approval of agent actions are not substitutes for those experiences. |
-| User Policies and Education | unmapped | Policy publication and user education remain people/process obligations. ATLAS AML.M0018 User Training is available as a nontechnical mitigation, but is deliberately excluded from the technology-capability catalogue. |
-| Internal Policies and Education | unmapped | Internal policy authoring, publication and employee education remain people/process obligations. ATLAS AML.M0018 User Training is related but is not a technical capability. |
-| Product Governance | partial — Validate AI Model (`AML.M0008`), Operational Risk Assessment (`D3-ORA`) | Model validation and operational risk assessment support governance. Ownership, policy approvals, supplier assurance, release authorization and accountable decisions are not implemented merely by deploying those capabilities. |
+| User Transparency and Controls | unmapped | User-facing AI disclosures, consent choices and data-use controls have no sufficiently matching control in this technical profile. Content filtering, authentication and human approval of agent actions are not substitutes for those experiences. |
+| User Policies and Education | unmapped | Policy publication and user education remain people/process obligations. ATLAS AML.M0018 User Training is available as a nontechnical mitigation, but is deliberately excluded from the technology-control catalogue. |
+| Internal Policies and Education | unmapped | Internal policy authoring, publication and employee education remain people/process obligations. ATLAS AML.M0018 User Training is related but is not a technical control. |
+| Product Governance | partial — Validate AI Model (`AML.M0008`), Operational Risk Assessment (`D3-ORA`) | Model validation and operational risk assessment support governance. Ownership, policy approvals, supplier assurance, release authorization and accountable decisions are not implemented merely by deploying those controls. |
 | Risk Governance | partial — Operational Risk Assessment (`D3-ORA`) | Operational Risk Assessment provides a standardized concept. Residual-risk acceptance, supplier evidence evaluation and ongoing governance workflows still need organizational processes and evidence; a tool does not fulfill them automatically. |
 | Agent Observability | partial — AI Telemetry Logging (`AML.M0024`), System File Analysis (`D3-SFA`) | AI telemetry and system-file tampering analysis are represented. Immutable retention, non-repudiation and complete audit-chain guarantees need separate implementation evidence. Observable execution events do not reveal complete internal model reasoning. |
-| Model and Data Integrity Management | partial — Code Signing (`AML.M0013`), Verify AI Artifacts (`AML.M0014`), File Integrity Monitoring (`D3-FIM`) | Code/artifact signing, verification and integrity monitoring are represented. Signed-media provenance interoperability (for example C2PA), watermark semantics and authenticity of generated media are not fully specified by these capabilities. Authenticity is not truth. |
+| Model and Data Integrity Management | partial — Code Signing (`AML.M0013`), Verify AI Artifacts (`AML.M0014`), File Integrity Monitoring (`D3-FIM`) | Code/artifact signing, verification and integrity monitoring are represented. Signed-media provenance interoperability (for example C2PA), watermark semantics and authenticity of generated media are not fully specified by these controls. Authenticity is not truth. |
 | Orchestrator and Route Integrity | partial — System Configuration Permissions (`D3-SCP`), File Integrity Monitoring (`D3-FIM`), Message Authentication (`D3-MAN`) | Configuration permissions and integrity monitoring support route protection. Signed route manifests, binding responses to the chosen model, and end-to-end route/provenance checks must be verified as application-specific implementations. |
 
 ## Covered without new names
 
 - **Guardrails:** AML.M0020 explicitly includes injection/jailbreak screening, sensitive-data
   detection/redaction, content policy, grounding, retrieval screening and action checks. These
-  are separately verified implementation features, not separate capability identifiers.
+  are separately verified implementation features, not separate control identifiers.
 - **Retrieval and state:** AML.M0020, AML.M0031, AML.M0033, dataset provenance, access mediation
   and artifact integrity cover constituent defenses. Memory Hardening explicitly includes
   memory retention, deletion and recovery; that is not all enterprise data lifecycle management.
@@ -69,17 +69,17 @@ defense coverage. A mitigation can include process work as well as deployable to
 All active and disabled architecture sources, enforcement vocabulary, guidance, tooling and
 example organization mappings use the new IDs. Historical architecture archives are unchanged.
 Split pins retain their requirements and original notes; crowded active flows were reviewed
-and requirements moved to enforcing components. The active diagrams have 583 capability pins.
+and requirements moved to enforcing components. The active diagrams have 583 control pins.
 Tool claims with changed scope are unknown pending reassessment; previously enabled posture
 becomes inProgress. Original records remain in migration.original; no fresh verification date
 is manufactured. Two former IDs have no selected replacement: PET tooling and content
 provenance. Five reference records for these were archived, not silently attributed to a weak match.
 
-Legacy capability URLs show all successors or explain retirement. The migration command is
+Legacy control URLs show all successors or explain retirement. The migration command is
 idempotent and preserves retired evidence before removing live references. Forks must review
 placement and evidence after running it; automatic ID translation is not security validation.
 
-| Former capability ID | Native destinations |
+| Former control ID | Native destinations |
 | --- | --- |
 | Data loss prevention for AI interactions (`capabilityAiDlp`) | Generative AI Guardrails (`AML.M0020`) |
 | Data security posture management for AI (`capabilityDspm`) | Data Inventory (`D3-DI`) |
@@ -140,16 +140,16 @@ placement and evidence after running it; automatic ID translation is not securit
 
 ## Verification
 
-Data validation, source-hash checks, nine capability/migration tests, TypeScript, lint (zero
+Data validation, source-hash checks, nine control/migration tests, TypeScript, lint (zero
 errors; two pre-existing warnings), the generated audit and the production build passed.
 All 571 original tool rows were checked against retained migration evidence at 909
-destinations, and all 362 original active capability pins were accounted for. CoSAI source
+destinations, and all 362 original active control pins were accounted for. CoSAI source
 files are unchanged. Browser verification could not run because no browser connection was
 available in this session.
 
-Cross-view follow-up: all 16 architecture export models resolve canonical capability names
+Cross-view follow-up: all 16 architecture export models resolve canonical control names
 and valid chip numbers; all 10 incident replays resolve their migrated architecture and
-CoSAI controls; all 27 tool tables resolve the new capability set. A recursive scan of the
-compiled dataset found no retired live capability references outside compatibility aliases
+CoSAI controls; all 27 tool tables resolve the new control set. A recursive scan of the
+compiled dataset found no retired live control references outside compatibility aliases
 and preserved migration evidence. Stale authoring examples and architecture-tab wording were
 updated as part of that check.

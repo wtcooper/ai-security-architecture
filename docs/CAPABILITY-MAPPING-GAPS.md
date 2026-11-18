@@ -1,15 +1,15 @@
 # Technology category mapping gaps
 
-> **Note (2026-09-19).** A capability is a MITRE mitigation or a `cap-*` specialisation of one (`data/overlay/specializations.yaml`) and status is authored only on capabilities, so a mitigation without a technology category is not a status gap; the tables below are historical detail on the category ↔ mitigation crosswalk.
+> **Note (2026-09-19).** A control is a MITRE mitigation or a `cap-*` specialisation of one (`data/overlay/specializations.yaml`) and status is recorded only against controls, so a mitigation without a technology category is not a status gap; the tables below are historical detail on the category ↔ mitigation crosswalk.
 
 Current catalogue: **25 sourced technology categories**, linked to **38 of 59 MITRE mitigations**.
 The 21 mitigations below have no technology category mapping. This is a gap in the repository crosswalk, not a statement that no relevant technology exists. No new categories or forced mappings were added.
 
-Organization records are authored against capabilities (MITRE mitigations or their `cap-*` specialisations), which support CoSAI controls directly; technology categories are the technology dimension of a capability and map to mitigations as sourced detail. The Controls page stays organization-neutral until **Show org data** is on. These gaps do not remove MITRE methods or CoSAI controls from the catalogue.
+Organization records are mapped to controls (MITRE mitigations or their `cap-*` specialisations), which support CoSAI controls directly; technology categories are the technology dimension of a control and map to mitigations as sourced detail. The Controls page stays organization-neutral until **Show org data** is on. These gaps do not remove MITRE methods or CoSAI controls from the catalogue.
 
 ## Mapping review — 2026-09-18
 
-Four implementation mappings were added to existing categories. These are authored relationships supported by product documentation, not universal requirements of the source taxonomy or claims about deployed organization products. Each mapping includes scope limits and source links in its capability detail.
+Four implementation mappings were added to existing categories. These are authored relationships supported by product documentation, not universal requirements of the source taxonomy or claims about deployed organization products. Each mapping includes scope limits and source links in its control detail.
 
 | Technology category | MITRE mitigation | Implementation evidence and limit |
 | --- | --- | --- |
@@ -44,9 +44,9 @@ Four implementation mappings were added to existing categories. These are author
 | System File Analysis | D3-SFA | Threat Detection; Agent Observability |
 | Software Update | D3-SU | Vulnerability Management |
 
-## Controls with no capability path
+## CoSAI controls with no path from a control
 
-Historical: before the capability layer, 6 of 35 CoSAI controls had no path from any technology category. They are process or governance requirements, and each is now met by process rather than by a pinned capability; do not force technology mappings to hide that distinction.
+Historical: before the control layer, 6 of 35 CoSAI controls had no path from any technology category. They are process or governance requirements, and each is now met by process rather than by a pinned control; do not force technology mappings to hide that distinction.
 
 - Privacy Enhancing Technologies for Model Training (controlModelPrivacyEnhancingTechnologies)
 - Training Data Management (controlTrainingDataManagement)
@@ -55,4 +55,4 @@ Historical: before the capability layer, 6 of 35 CoSAI controls had no path from
 - User Policies and Education (controlUserPoliciesAndEducation)
 - Internal Policies and Education (controlInternalPoliciesAndEducation)
 
-Mapping presence describes possible support. It is not proof that a capability implements every function of a broad mitigation, or that a control is fulfilled.
+Mapping presence describes possible support. It is not proof that a control implements every function of a broad mitigation, or that a CoSAI control is fulfilled.

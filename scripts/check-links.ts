@@ -1,5 +1,5 @@
 /**
- * Fetch every URL authored in the AI tooling registry and the capability taxonomy, and report
+ * Fetch every URL authored in the AI tooling registry and the control catalogue, and report
  * the ones that do not resolve. Reachability only: a 200 says the page exists, not that it
  * still documents the claim beside it — that is the onboarding skill's job, page by page.
  *

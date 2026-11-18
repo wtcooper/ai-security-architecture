@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { EnablePanel } from "../src/components/enable/EnablePanel";
-import { CapabilityTable } from "../src/components/enable/CapabilityTable";
+import { ControlTable } from "../src/components/enable/ControlTable";
 import { PatternPage } from "../src/components/patterns/PatternPage";
 import { PatternFinder } from "../src/components/patterns/PatternFinder";
 import { ArchetypeDetail, ComponentList } from "../src/components/reference/ArchetypeDetail";
@@ -12,7 +12,7 @@ import HomePage from "../src/app/page";
 import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { CloudComparison } from "../src/components/cloud/CloudViews";
 import { cloudOptionsForControl, cloudProductsFor, cloudSlug, optionsFor } from "../src/components/cloud/model";
-import { CapabilityDetail } from "../src/components/capabilities/CapabilityDetail";
+import { ControlDetail } from "../src/components/controls/ControlDetail";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { coverageWord } from "../src/components/enable/labels";
 import { baselineNotPinned, controlGroups, controlsDelivered, settingGroups } from "../src/components/enable/model";
@@ -33,13 +33,13 @@ const page = (archetypeId: string, query = "") =>
 test("every pinned control falls in exactly one NIST CSF category, shown in CSF order", () => {
   for (const arch of dataset.archetypes) {
     const groups = controlGroups(arch);
-    assert.deepEqual(groups.flatMap((g) => g.capabilities.map((m) => m.id)).sort(), [...arch.mitigations].sort(), arch.id);
+    assert.deepEqual(groups.flatMap((g) => g.controls.map((m) => m.id)).sort(), [...arch.mitigations].sort(), arch.id);
     for (const g of groups) {
       const authored = enablement.groups.find((x) => x.id === g.id)!;
       assert.equal(g.title, dataset.frameworkEntries["nist-csf"][g.id].label, `${arch.id}: ${g.id} carries the CSF name`);
       assert.equal(g.blurb, authored.surfaces?.[arch.surface]?.blurb ?? authored.blurb, `${arch.id}: ${g.id}`);
       // Rows count up with the chips on the drawing.
-      const pins = g.capabilities.map((m) => arch.mitigations.indexOf(m.id));
+      const pins = g.controls.map((m) => arch.mitigations.indexOf(m.id));
       assert.deepEqual(pins, [...pins].sort((x, y) => x - y), `${arch.id}: ${g.id} is in pin order`);
     }
     const order = groups.map((g) => enablement.groups.findIndex((x) => x.id === g.id));
@@ -89,7 +89,7 @@ test("the settings step reads like the controls step: same headings, same order,
   }
 });
 
-test("a product not yet catalogued setting by setting falls back to its capability record", () => {
+test("a product not yet catalogued setting by setting falls back to its control record", () => {
   // Every registry product has its table today; a newly onboarded one may not, so strip one.
   const arch = dataset.archetypes.find((a) => productsForArchetype(a.id)[0]?.kind === "tool")!;
   const products = productsForArchetype(arch.id).map((p, i) => (i === 0 && p.kind === "tool" ? { ...p, settings: [] } : p));
@@ -151,7 +151,7 @@ test("the Enable tab opens as folded steps; a lit control opens the controls, ba
 
 test("a control row leads with a plain instruction and why, at every place it is pinned; the definition and the guidance are elsewhere", () => {
   for (const arch of dataset.archetypes) {
-    const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(arch)} archetype={arch} open={arch.mitigations[0]} onOpen={() => {}} />);
+    const table = renderToStaticMarkup(<ControlTable groups={controlGroups(arch)} archetype={arch} open={arch.mitigations[0]} onOpen={() => {}} />);
     assert.equal([...table.matchAll(/data-instruction/g)].length, arch.mitigations.length, `${arch.id}: a row per control`);
     assert.equal([...table.matchAll(/data-do/g)].length, arch.pins.mitigations.length, `${arch.id}: an instruction at every place a control is pinned`);
     for (const pin of arch.pins.mitigations) {
@@ -190,7 +190,7 @@ test("with a tool chosen, each control it covers names that tool's settings", ()
   const product = productsForArchetype(arch.id).find((p) => p.id === "toolClaudeCode")!;
   const covered = arch.mitigations.filter((id) => optionsFor(product, id).length);
   assert.ok(covered.length > 3, "the tool delivers several controls");
-  const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(arch)} archetype={arch} open={covered[0]} onOpen={() => {}} product={product} />);
+  const table = renderToStaticMarkup(<ControlTable groups={controlGroups(arch)} archetype={arch} open={covered[0]} onOpen={() => {}} product={product} />);
   assert.equal([...table.matchAll(/data-option-names/g)].length, covered.length, "a settings line on every control the tool covers, and only those");
   const first = optionsFor(product, covered[0])[0];
   assert.match(table, /data-native-options="toolClaudeCode"/);
@@ -251,7 +251,7 @@ test("the Risks tab lists every risk of the pattern, and the Incidents tab every
   }
 });
 
-test("a cloud architecture lists its clouds first, binds every component and covers every pinned capability", () => {
+test("a cloud architecture lists its clouds first, binds every component and covers every pinned control", () => {
   for (const cloud of dataset.clouds) {
     for (const impl of cloud.implementations) {
       const arch = dataset.archetypes.find((a) => a.id === impl.architecture)!;
@@ -318,7 +318,7 @@ test("a pattern read as built on a cloud names every component's service and tha
       const settings = page(arch.id, `tool=${product.id}`);
       assert.match(settings, new RegExp(`data-settings="${product.id}"`), `${where}: the settings step shows the cloud's settings`);
       // Every pinned control names at least one of the cloud's own settings.
-      const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(arch)} archetype={arch} open={null} onOpen={() => {}} product={product} />);
+      const table = renderToStaticMarkup(<ControlTable groups={controlGroups(arch)} archetype={arch} open={null} onOpen={() => {}} product={product} />);
       assert.equal([...table.matchAll(/data-option-names/g)].length, arch.mitigations.length, `${where}: every control names a setting`);
       for (const id of arch.mitigations) {
         const options = optionsFor(product, id);
@@ -383,7 +383,7 @@ test("Reference › Clouds lists every pattern on a cloud and an option for ever
       }
     }
   }
-  const detail = renderToStaticMarkup(<CapabilityDetail mitigation={dataset.mitigations.find((m) => m.id === "D3-OTF")!} />);
+  const detail = renderToStaticMarkup(<ControlDetail mitigation={dataset.mitigations.find((m) => m.id === "D3-OTF")!} />);
   assert.match(detail, /data-control-clouds/);
   for (const c of cloudOptionsForControl("D3-OTF")) assert.ok(detail.includes(esc(c.cloud.name)), `the control names ${c.cloud.name}`);
 });

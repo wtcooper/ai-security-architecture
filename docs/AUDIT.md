@@ -688,7 +688,7 @@ Highlights below are Google's original mapping, not ours.
 - Prompt/Response Cache Poisoning (`riskPromptResponseCachePoisoning`)
 - Stale Agent Identity Binding (`riskStaleAgentIdentityBinding`)
 
-### 4b. Capabilities no architecture pins — 21 of 76
+### 4b. Controls no pattern pins — 21 of 76
 
 - Configuration Inventory (`D3-CI`)
 - Restrict Library Loading (`AML.M0011`)
@@ -1028,7 +1028,7 @@ Highlights below are Google's original mapping, not ours.
 | --- | --- | --- | --- | --- |
 | Single agent workflow | build | draft | 7 | Execution Isolation |
 | Agent-to-agent federation across platforms | build | draft | 6 | _none_ |
-| Agent sandbox for RL & evaluation | build | draft | 8 | _none_ |
+| Agent sandbox for RL & evaluation | build | draft | 8 | Access Policy Administration |
 | Multi-agent workflow | build | draft | 8 | _none_ |
 | Chat agent with tools | build | draft | 7 | Execution Isolation |
 | Remote MCP server you publish | build | draft | 6 | _none_ |
@@ -1047,11 +1047,11 @@ Highlights below are Google's original mapping, not ours.
 
 ### 5b. AI tooling registry
 
-Named products (data/tooling/), one entity per product × architecture, each dated. An entry older than six months is due a re-verification pass against the vendor's current documentation. *Unaddressed* lists the mitigations pinned on the tool's architecture that the entry does not yet describe — the research work list. *Settings* counts the rows of its settings table (data/tooling/BASELINE.md); *Newest check* is the latest `verified` date among them, and a tool with no table falls back to its capability record.
+Named products (data/tooling/), one entity per product × architecture, each dated. An entry older than six months is due a re-verification pass against the vendor's current documentation. *Unaddressed* lists the mitigations pinned on the tool's architecture that the entry does not yet describe — the research work list. *Settings* counts the rows of its settings table (data/tooling/BASELINE.md); *Newest check* is the latest `verified` date among them, and a tool with no table falls back to its control record.
 
 | Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | Settings | Newest check | |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Inspect | aisi | Agent sandbox for RL & evaluation | 2026-11 | 7/11 | Hardware-based Process Isolation, File Analysis, Control Access to AI Models and Data at Rest, System Vulnerability Assessment | 19 | 2026-11-15 |  |
+| Inspect | aisi | Agent sandbox for RL & evaluation | 2026-11 | 7/12 | Hardware-based Process Isolation, File Analysis, Control Access to AI Models and Data at Rest, System Vulnerability Assessment, Access Policy Administration | 19 | 2026-11-15 |  |
 | Claude Agent SDK | anthropic | Multi-agent workflow | 2026-10 | 21/21 | _none_ | 25 | 2026-10-30 |  |
 | Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 15/15 | _none_ | 19 | 2026-10-30 |  |
 | Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 29 | 2026-10-30 |  |
@@ -1087,6 +1087,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Meta Muse | meta | Persistent managed agents | 2026-10 | 14/14 | _none_ | 6 | 2026-10-30 |  |
 | Microsoft Copilot in Edge (Microsoft 365 Copilot Chat in the Edge for Business side pane, browsing with Copilot) | microsoft | Browser AI agents & extensions | 2026-10 | 15/15 | _none_ | 17 | 2026-10-30 |  |
 | Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ | 32 | 2026-10-30 |  |
+| Microsoft Foundry Agent Service (prompt agents, hosted agents, Responses API) | microsoft | API/SDK managed agent runtime | 2026-11 | 16/16 | _none_ | 40 | 2026-11-18 |  |
 | Microsoft 365 Copilot (Microsoft Copilot app, Copilot Chat, in-app Copilot, agents and connectors) | microsoft | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 16 | 2026-10-30 |  |
 | MLflow Tracking Server and Model Registry | mlflow | Model training & release pipeline | 2026-09 | 12/13 | AI Telemetry Logging | 29 | 2026-10-30 |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ | 38 | 2026-10-30 |  |
@@ -1108,13 +1109,13 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 
 ### 5c. Cloud implementations
 
-Each first-party cloud architecture as built on each cloud (data/clouds/): the services bound to its blocks and the settings rows that cover its pinned capabilities. *Code rows* are capabilities no cloud setting provides, which the organisation builds itself.
+Each first-party cloud architecture as built on each cloud (data/clouds/): the services bound to its blocks and the settings rows that cover its pinned controls. *Code rows* are controls no cloud setting provides, which the organisation builds itself.
 
 | Architecture | AWS | Azure | Google Cloud | On-premises |
 | --- | --- | --- | --- | --- |
 | Single agent workflow | 24 rows (1 code), 11 blocks bound | 20 rows (1 code), 11 blocks bound | 24 rows (2 code), 11 blocks bound | 29 rows (2 code), 11 blocks bound |
 | Agent-to-agent federation across platforms | 18 rows (2 code), 12 blocks bound | 20 rows (1 code), 12 blocks bound | 12 rows (4 code), 12 blocks bound | 25 rows (4 code), 12 blocks bound |
-| Agent sandbox for RL & evaluation | 16 rows (1 code), 12 blocks bound | 13 rows (1 code), 12 blocks bound | 14 rows (2 code), 12 blocks bound | 30 rows (2 code), 12 blocks bound |
+| Agent sandbox for RL & evaluation | 17 rows (1 code), 12 blocks bound | 14 rows (1 code), 12 blocks bound | 15 rows (2 code), 12 blocks bound | 30 rows (2 code), 12 blocks bound |
 | Multi-agent workflow | 27 rows (0 code), 13 blocks bound | 27 rows (1 code), 13 blocks bound | 27 rows (2 code), 13 blocks bound | 30 rows (3 code), 13 blocks bound |
 | Chat agent with tools | 30 rows (2 code), 12 blocks bound | 24 rows (2 code), 12 blocks bound | 29 rows (3 code), 12 blocks bound | 31 rows (4 code), 12 blocks bound |
 | Remote MCP server you publish | 20 rows (2 code), 6 blocks bound | 18 rows (3 code), 6 blocks bound | 17 rows (4 code), 6 blocks bound | 28 rows (2 code), 6 blocks bound |
@@ -1130,18 +1131,18 @@ Each first-party cloud architecture as built on each cloud (data/clouds/): the s
 
 | CoSAI control | Mapping | Remaining requirement |
 | --- | --- | --- |
-| Privacy Enhancing Technologies for Model Training | unmapped | No sufficiently explicit capability for differential privacy, secure aggregation, privacy-preserving federated training, or evaluated anonymization/synthetic-data privacy. Ordinary encryption and access control do not establish these guarantees. |
+| Privacy Enhancing Technologies for Model Training | unmapped | No sufficiently explicit control for differential privacy, secure aggregation, privacy-preserving federated training, or evaluated anonymization/synthetic-data privacy. Ordinary encryption and access control do not establish these guarantees. |
 | Privacy Enhancing Technologies for Inference | partial | Guardrails cover sensitive-data detection and redaction. Secure multiparty inference, homomorphic computation and privacy-preserving query mechanisms are not explicitly represented. Message/file encryption does not imply encrypted computation. |
 | Isolated and Confidential Computing | partial | Hardware process isolation is represented. Confidential-memory guarantees, workload attestation, measurement-bound key release and side-channel protections require explicit implementation evidence beyond that technique. |
 | User Data Management | partial | Guardrails, inventory, access mediation and memory hardening cover constituent functions. End-to-end consent and purpose enforcement, user-data retention/deletion across all stores and provider copies, and proving those commitments remain outside these mappings. ATLAS Memory Hardening does include retention/deletion for agent memory. |
 | Training Data Management | partial | Dataset provenance and sanitization contribute, but provenance does not establish legal authorization, consent or permitted purpose for training/evaluation data. Data-use approval and provenance interpretation remain explicit implementation and governance requirements. |
-| User Transparency and Controls | unmapped | User-facing AI disclosures, consent choices and data-use controls have no sufficiently matching capability in this technical profile. Content filtering, authentication and human approval of agent actions are not substitutes for those experiences. |
-| User Policies and Education | unmapped | Policy publication and user education remain people/process obligations. ATLAS AML.M0018 User Training is available as a nontechnical mitigation, but is deliberately excluded from the technology-capability catalogue. |
-| Internal Policies and Education | unmapped | Internal policy authoring, publication and employee education remain people/process obligations. ATLAS AML.M0018 User Training is related but is not a technical capability. |
-| Product Governance | partial | Model validation and operational risk assessment support governance. Ownership, policy approvals, supplier assurance, release authorization and accountable decisions are not implemented merely by deploying those capabilities. |
+| User Transparency and Controls | unmapped | User-facing AI disclosures, consent choices and data-use controls have no sufficiently matching control in this technical profile. Content filtering, authentication and human approval of agent actions are not substitutes for those experiences. |
+| User Policies and Education | unmapped | Policy publication and user education remain people/process obligations. ATLAS AML.M0018 User Training is available as a nontechnical mitigation, but is deliberately excluded from the technology-control catalogue. |
+| Internal Policies and Education | unmapped | Internal policy authoring, publication and employee education remain people/process obligations. ATLAS AML.M0018 User Training is related but is not a technical control. |
+| Product Governance | partial | Model validation and operational risk assessment support governance. Ownership, policy approvals, supplier assurance, release authorization and accountable decisions are not implemented merely by deploying those controls. |
 | Risk Governance | partial | Operational Risk Assessment provides a standardized concept. Residual-risk acceptance, supplier evidence evaluation and ongoing governance workflows still need organizational processes and evidence; a tool does not fulfill them automatically. |
 | Agent Observability | partial | AI telemetry and system-file tampering analysis are represented. Immutable retention, non-repudiation and complete audit-chain guarantees need separate implementation evidence. Observable execution events do not reveal complete internal model reasoning. |
-| Model and Data Integrity Management | partial | Code/artifact signing, verification and integrity monitoring are represented. Signed-media provenance interoperability (for example C2PA), watermark semantics and authenticity of generated media are not fully specified by these capabilities. Authenticity is not truth. |
+| Model and Data Integrity Management | partial | Code/artifact signing, verification and integrity monitoring are represented. Signed-media provenance interoperability (for example C2PA), watermark semantics and authenticity of generated media are not fully specified by these controls. Authenticity is not truth. |
 | Orchestrator and Route Integrity | partial | Configuration permissions and integrity monitoring support route protection. Signed route manifests, binding responses to the chosen model, and end-to-end route/provenance checks must be verified as application-specific implementations. |
 
 See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope and source limitations. No custom mitigation identifiers are introduced.

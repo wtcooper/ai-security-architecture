@@ -1,13 +1,13 @@
 "use client";
 
-/** One product: what it is, where it runs, and how it covers each capability its architecture needs. */
+/** One product: what it is, where it runs, and how it covers each control its architecture needs. */
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
 import { Section } from "@/components/reference/ArchetypeDetail";
-import { archetypeById, capabilityName, riskById, riskCode, vendorById } from "@/lib/data";
+import { archetypeById, controlName, riskById, riskCode, vendorById } from "@/lib/data";
 import type { Tool, ToolVariant } from "@/lib/types";
 import { CoverageMark } from "./CoverageMark";
 import { COVERAGE_WORD, coverageWord, SURFACE_CLASS_META } from "./labels";
@@ -86,11 +86,11 @@ export function ToolRecord({ tool, focus, onClose }: { tool: Tool; focus?: strin
       <div className="mt-6">
         <p className="eyebrow">How {tool.name} covers each control</p>
         <div className="mt-2 space-y-4">
-          {controlGroups(arch).map(({ id, title, capabilities }) => (
+          {controlGroups(arch).map(({ id, title, controls }) => (
             <div key={id}>
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3">{title}</p>
               <div className="mt-1 divide-y divide-line rounded-lg border border-line">
-                {capabilities.map((m) => {
+                {controls.map((m) => {
                   const control = toolControlFor(tool, m.id);
                   const mark = coverageWord(control?.coverage);
                   const word = COVERAGE_WORD[mark];
@@ -103,7 +103,7 @@ export function ToolRecord({ tool, focus, onClose }: { tool: Tool; focus?: strin
                             <CoverageMark word={mark} />
                             {word.label}
                           </span>
-                          <span className="min-w-0 flex-1 text-[13px] text-ink">{capabilityName(m.id)}</span>
+                          <span className="min-w-0 flex-1 text-[13px] text-ink">{controlName(m.id)}</span>
                           <span className="text-[11px] text-ink-3 transition-transform group-open:rotate-90">›</span>
                         </summary>
                         <div className="px-3 pb-3 pl-[136px] max-sm:pl-3">

@@ -2,7 +2,7 @@
  * Visual language for the flow-style architecture diagrams, translated from the F5 reference
  * architecture grammar into this app's tokens: neutral ownership zones, white blocks with a
  * title tab coloured by layer, two path styles that differ by dash rather than hue, violet
- * numbered capability chips and grey risk tags. Each colour carries one meaning.
+ * numbered control chips and grey risk tags. Each colour carries one meaning.
  */
 import { bandFor, type BandId } from "@/lib/bands";
 import { componentById } from "@/lib/data";
@@ -118,7 +118,7 @@ export function blockTab(block: ArchBlock): string {
   return LAYER_COLOR[bandFor(component.id, component.category, component.subcategory)];
 }
 
-/** The capability chips — F5's numbered design-requirement circles, in a hue nothing else uses. */
+/** The control chips — F5's numbered design-requirement circles, in a hue nothing else uses. */
 export const CHIP = {
   r: 9,
   fill: "var(--chip-soft)",

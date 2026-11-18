@@ -6,7 +6,7 @@ import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks
 import { IncidentList } from "../src/components/incidents/IncidentList";
 import { IncidentWalkthrough } from "../src/components/incidents/IncidentWalkthrough";
 import { incidentsNewestFirst } from "../src/components/incidents/model";
-import { archetypeById, capabilityName, incidents } from "../src/lib/data";
+import { archetypeById, controlName, incidents } from "../src/lib/data";
 import { INCIDENT_CATEGORIES } from "../src/lib/incident-categories";
 
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
@@ -46,7 +46,7 @@ test("a walk-through opens on step 1, and its last step names each break and lin
     const arch = archetypeById.get(inc.archetype)!;
     for (const b of inc.breaks) {
       assert.ok(last.includes(`#control-${b.control}`), `${inc.id}: ${b.control} links to its Enable row`);
-      assert.ok(last.includes(capabilityName(b.control).replace(/&/g, "&amp;")), `${inc.id}: ${b.control} named`);
+      assert.ok(last.includes(controlName(b.control).replace(/&/g, "&amp;")), `${inc.id}: ${b.control} named`);
       assert.ok(arch.mitigations.includes(b.control), `${inc.id}: ${b.control} pinned`);
     }
   }

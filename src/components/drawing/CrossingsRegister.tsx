@@ -6,7 +6,7 @@
  * as a review checklist: a row marked "nothing of ours in the path" is a crossing the
  * organisation does not broker.
  */
-import { capabilityName } from "@/lib/data";
+import { controlName } from "@/lib/data";
 import type { Archetype, CrossingKind } from "@/lib/types";
 import { OUTSIDE, CROSSING_LABEL, crossingsOf } from "./crossings";
 
@@ -67,7 +67,7 @@ export function CrossingsRegister({ archetype, onPickMitigation }: { archetype: 
                         key={id}
                         type="button"
                         onClick={() => onPickMitigation?.(id)}
-                        title={`${capabilityName(id)}: open it on Enable`}
+                        title={`${controlName(id)}: open it on Enable`}
                         className="flex h-[21px] w-[21px] items-center justify-center rounded-full border border-chip bg-chip-soft text-[10.5px] font-bold text-chip hover:bg-chip hover:text-white"
                       >
                         {archetype.mitigations.indexOf(id) + 1}
