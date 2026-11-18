@@ -70,7 +70,7 @@ export const SETTING_AREA_META: Record<SettingArea, string> = {
   sharing: "Sharing & collaboration",
 };
 
-/** Whether the organisation has switched a product or a setting on, from data/status.yaml. */
+/** Whether the organisation has switched a product or a setting on, from data/org/products.yaml. */
 export const ADOPTION_META: Record<AdoptionStatus, { label: string; bg: string; border: string; text: string; dot: string }> = {
   enabled: { label: "Enabled", bg: "#e8f6ef", border: "#a7dcc4", text: "#06845a", dot: "#10b981" },
   testing: { label: "In testing", bg: "#fef8dc", border: "#ecd58a", text: "#a16207", dot: "#eab308" },
@@ -78,5 +78,5 @@ export const ADOPTION_META: Record<AdoptionStatus, { label: string; bg: string; 
 };
 
 export const ADOPTION_HELP =
-  "Your organisation records which products and settings it has switched on under products: in data/status.yaml — " +
+  "Your organisation records which products and settings it has switched on under products: in data/org/products.yaml — " +
   "Enabled, In testing or Not enabled. Anything not recorded reads Not enabled.";

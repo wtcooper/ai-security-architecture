@@ -45,9 +45,9 @@ test("a walk-through opens on step 1, and its last step names each break and lin
     assert.match(last, /Controls that break this chain/, inc.id);
     const arch = archetypeById.get(inc.archetype)!;
     for (const b of inc.breaks) {
-      assert.ok(last.includes(`#control-${b.capability}`), `${inc.id}: ${b.capability} links to its Enable row`);
-      assert.ok(last.includes(capabilityName(b.capability).replace(/&/g, "&amp;")), `${inc.id}: ${b.capability} named`);
-      assert.ok(arch.mitigations.includes(b.capability), `${inc.id}: ${b.capability} pinned`);
+      assert.ok(last.includes(`#control-${b.control}`), `${inc.id}: ${b.control} links to its Enable row`);
+      assert.ok(last.includes(capabilityName(b.control).replace(/&/g, "&amp;")), `${inc.id}: ${b.control} named`);
+      assert.ok(arch.mitigations.includes(b.control), `${inc.id}: ${b.control} pinned`);
     }
   }
 });

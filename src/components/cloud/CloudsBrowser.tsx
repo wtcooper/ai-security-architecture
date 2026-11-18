@@ -124,7 +124,6 @@ export function CloudsBrowser() {
               <div className="border-b border-line bg-mist/40 px-4 py-2">
                 <p id={`cloud-group-${group.id}`} className="flex flex-wrap items-baseline gap-x-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2">
                   {group.title}
-                  <span className="ident rounded-sm border border-line-strong bg-paper px-1 py-px text-[9.5px] font-bold tracking-normal text-ink-3">{group.id}</span>
                 </p>
               </div>
               <ul className="divide-y divide-line border-b border-line">
@@ -134,7 +133,6 @@ export function CloudsBrowser() {
                       <Link href={controlHref(id)} className="text-[13.5px] font-semibold leading-snug text-ink hover:text-introduced hover:underline">
                         {capabilityName(id)}
                       </Link>
-                      <p className="ident mt-0.5 text-[10.5px] text-ink-3">{id}</p>
                     </div>
                     <ul className="space-y-3">
                       {options.map(({ setting: s, patterns: used }) => (

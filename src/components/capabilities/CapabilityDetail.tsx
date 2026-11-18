@@ -1,5 +1,6 @@
 "use client";
 
+import { OrgControlList } from "@/components/OrgControls";
 import Link from "next/link";
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
@@ -40,13 +41,17 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
           <h2 className="display text-[24px] font-bold leading-tight text-ink">
             {capabilityName(mitigation.id)}
           </h2>
-          {own?.displayName && <p className="mt-1 text-sm text-ink-2">{mitigation.title}</p>}
           <p className="mt-2 flex items-center gap-2 text-xs text-ink-3">
             <StatusHeading className="font-semibold text-ink-2" />
             <StatusPill status={statusFor(mitigation.id)} title={own?.note} compact />
             {own?.note && <span>{own.note}</span>}
           </p>
-          <p className="mt-2 text-xs text-ink-3">{mitigation.parent ? `Authored specialisation of ${mitigation.parent} · ${mitigation.id}` : `${mitigation.origin.framework} · ${mitigation.id} · ${mitigation.origin.version}`}</p>
+          <p className="mt-2 text-xs text-ink-3">
+            {mitigation.parent ? `Authored here, as a more specific form of ${capabilityName(mitigation.parent)}` : `From ${mitigation.origin.framework} ${mitigation.origin.version}`}
+          </p>
+          <div className="mt-3">
+            <OrgControlList controlId={mitigation.id} />
+          </div>
         </div>
         {onClose && (
           <button
@@ -69,7 +74,7 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
       <p className="mt-2 text-xs text-ink-3">{categoryTitle} · {mitigation.kind === "support" ? "Governance support" : "Defensive function"} · {mitigation.origin.entityType}</p>
       {mitigation.origin.url && <a href={mitigation.origin.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-introduced hover:underline">Read the official {mitigation.title} definition ↗</a>}
       <div className="mt-4">
-        <p className="eyebrow">{mitigation.parent ? `Upstream definition of ${mitigation.parent} · unmodified` : "Upstream definition · unmodified"}</p>
+        <p className="eyebrow">{mitigation.parent ? `Upstream definition of ${capabilityName(mitigation.parent)} · unmodified` : "Upstream definition · unmodified"}</p>
         <Prose blocks={mitigation.description} className="mt-2 whitespace-pre-line" />
       </div>
       <div className="mt-4 rounded-lg bg-mist p-4">
@@ -82,10 +87,10 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
         <div className="mt-5 rounded-lg border border-line p-4">
           <p className="eyebrow">{mitigation.parent ? "Specialises" : "Specialised as"}</p>
           <p className="mt-1 text-xs text-ink-3">{mitigation.parent
-            ? "An authored narrowing of one MITRE entry, kept where the parent is too coarse to pin or report on. The parent is the citable identifier."
+            ? "An authored narrowing of one MITRE entry, kept where the parent is too coarse to pin or report on. The parent is the entry to cite."
             : "Authored narrowings of this entry, each one actionable control; their records roll up here."}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {mitigation.parent && <Link href={controlHref(mitigation.parent)}><Chip tone="introduced">{mitigationById.get(mitigation.parent)?.title} <span className="text-ink-3">({mitigation.parent})</span></Chip></Link>}
+            {mitigation.parent && <Link href={controlHref(mitigation.parent)}><Chip tone="introduced">{mitigationById.get(mitigation.parent)?.title}</Chip></Link>}
             {specializationsOf(mitigation.id).map((s) => <Link key={s.id} href={controlHref(s.id)}><Chip tone="introduced">{s.title}</Chip></Link>)}
           </div>
         </div>
@@ -130,7 +135,6 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
         <div className="mt-6">
           <p className="eyebrow">NIST CSF category</p>
           <p className="mt-1.5 text-[13px] text-ink">
-            <span className="ident mr-1.5 rounded-sm border border-line-strong bg-mist px-1 py-px text-[10px] font-bold text-ink-2">{family.id}</span>
             {family.title} <span className="text-ink-3">· {family.function}</span>
           </p>
           <p className="mt-1 text-xs text-ink-3">The category this control is grouped under on every pattern. Authored here: NIST publishes no mapping to MITRE.</p>
@@ -239,7 +243,8 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
                   rel="noreferrer"
                   className="text-[13px] text-introduced hover:underline"
                 >
-                  {s.title}
+                  {/* A source is cited by its name; the catalogue's own identifiers are not for a reader. */}
+                  {s.title.replace(/\b(AML\.M\d{4}|D3-[A-Z0-9]+)\s+/g, "")}
                 </a>
               </li>
             ))}

@@ -126,8 +126,8 @@ CoSAI controls, Components, Personas, Frameworks).
 | **A pattern** (`/patterns/<slug>/`) | One page per pattern. A header says when it applies and gives examples; the drawing carries its numbered control chips; beneath it sit five tabs, each of which changes what the drawing shows and the panel under it: Enable, How it works, Risks, Flows and Incidents. **Enable** (default) opens as folded steps and nothing else: two for a pattern that is bought, three for one the organisation hosts (controls, then **Choose how you'll build it**, then **Set it**). (1) **Enterprise controls**: one row per control, under plain headings ("Check your suppliers", "Control who and what gets in") that follow the NIST CSF categories. A row leads with **what to do**, as one plain sentence starting with a verb, and **why**, written for whoever has to put it in place and not for a security architect; the control's catalogue name and where it goes on the drawing sit beside it as the reference. It opens to the settings that deliver it, the architect's precise note, the risks it reduces and the definition. (2) **Set it in your product**: one pill per product and, for the one picked, the same list as step 1 as settings. On a hosted pattern the choosing is its own step, **(2) Choose how you'll build it**, in the order the choices are made: (a) where it runs (AWS, Azure, Google Cloud, On-premises); (b) how it is hosted there (your own cluster, the platform's own runtime, or a managed agent service), with the options compared on the same ten rows from the vendor's own pages, none ranked, and each marked if your organisation has approved it; (c) what the boxes you build are built with (an agent SDK, an inference server, an evaluation harness), named with the box it fills. Then **(3) Set it** holds the settings of what was chosen, the platform's and the framework's in one table under the same headings as the controls, each row tagged with whose it is; the drawing names the chosen framework in the box it fills. The rows have the same shape and sit under the same plain headings in the same order: the setting and the value to set it to, one line of why, and beside it the control it delivers, by number and name, and where it is set. A row opens to the full path, how it is set (MDM, admin console, config file, API/CLI, IdP, cloud policy or your own code), the default, what it requires and the vendor's page. Background on the product is one line and an "About" fold; a status column appears only once a status is recorded. Once a product is chosen, every control row in step 1 also names that product's settings for it, so the path reads: what to do → why → the exact setting and value. A step opens by itself when a chip is picked on the drawing or a link names a control or product. **How it works** is the long description, why it is its own pattern, and its sources. **Risks & flows** lists the risks that enter the pattern, where each enters and the controls here that reduce it, then the sequence flows numbered onto the drawing. **Incidents** lists the real incidents that happened on it. The tab, the open product and the open control ride in the address, so any view can be shared. |
 | **Incidents** | A list of real 2025–26 incidents, newest first, filtered by attack type and architecture. Each opens its own page: a step-by-step walk across its reference architecture, every step sourced, ending at the controls that would have broken the chain — each a link to its row on the pattern's Enable tab. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
-| **Reference › CoSAI controls** | The 35 CoSAI controls in six groups. A CoSAI control's status rolls up from the catalogue controls that deliver it. |
-| **Controls** (`/controls/`) | The full catalogue — 59 MITRE mitigations and 17 authored specialisations — as a matrix of NIST CSF category × deployment surface, tinted by status; one switch regroups the rows by CoSAI control group. Filter by pattern, risk category, stack layer or source. A control's detail shows the MITRE definition, the authored implementation scope, example technologies, its CSF category, the CoSAI controls it contributes to and the patterns that pin it. |
+| **Reference › CoSAI controls** (`/reference/cosai-controls/`) | The 35 CoSAI controls in six groups. A CoSAI control's status rolls up from the catalogue controls that deliver it. |
+| **Controls** (`/controls/`) | The full catalogue — 59 MITRE mitigations and 17 authored specialisations — as a matrix of NIST CSF category × deployment surface, tinted by status; one switch regroups the rows by CoSAI control group (`/controls?by=cosai`). Filter by pattern, risk category, stack layer or source. A control's detail shows the MITRE definition, the authored implementation scope, example technologies, its CSF category, the CoSAI controls it contributes to and the patterns that pin it. |
 | **Reference** (`/reference/`) | What each reference page is for, how risk is described, and where the data comes from. |
 | **Reference › Clouds & on-premises** (`/reference/clouds/`) | One platform at a time (AWS, Azure, Google Cloud, your own data centre): the patterns mapped onto it, each with the vendor reference architecture it follows, and the cloud's own setting for every control under its NIST CSF category, with where it is set, the value to set, why, and the patterns that use it. |
 | **Reference › Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. |
@@ -137,8 +137,10 @@ CoSAI controls, Components, Personas, Frameworks).
 Every diagram supports pan and zoom.
 
 Addresses from before the restructure are forwarded: `/reference?archetype=…` (with its tab,
-product and control anchor), `/enable`, `/capabilities`, `/controls?control=<CoSAI id>`, `/map`,
-`/risks`, `/components`, `/personas`, `/frameworks` and `/examples`. The site is a static
+product and control anchor), `/enable`, `/capabilities` (the old address of the control
+catalogue, now `/controls`), `/controls?control=<CoSAI id>` (now
+`/reference/cosai-controls?control=<CoSAI id>`), `/map`, `/risks`, `/components`, `/personas`,
+`/frameworks` and `/examples`. The site is a static
 export, so each retired path keeps a small page that rewrites the address in the browser
 (`src/components/shell/LegacyRedirect.tsx`); `src/lib/routes.ts` holds every address in one place.
 
@@ -246,21 +248,26 @@ The four unmapped controls and important partial matches are documented in
 NIST CSF 2.0 crosswalk maps 34 of the 35 controls at category level; all 22 CSF categories are
 visible, including unmapped ones.
 
-### Status and your own names
+### Status and your own controls
 
-Status is set in one file, [`data/status.yaml`](data/status.yaml), keyed by control id, and
-nothing ships with one: every control reads **Not set** until listed there. Each entry takes
-a `status` (`enabled`, `inProgress` or `gap`), optionally a `displayName` — the organisation's
-own name for the control, shown first with the catalogue name beneath — and a `note`. Every
+Status comes from one file, [`data/org/controls.yaml`](data/org/controls.yaml), which lists the
+organisation's own controls, and nothing ships with one: every catalogue control reads
+**Not set** until one of yours maps to it. Each row takes an `id` (your own identifier, required
+and unique, never shown on a page), a `name` (what pages show), optionally a `status`
+(`enabled`, `inProgress` or `gap`), `maps` (the catalogue controls it delivers, one or more),
+and optionally a `note` and a `link` to your policy or evidence. The mapping is many to many:
+one of your controls can map to several catalogue controls, and several of yours can map to
+one. A catalogue control lists your controls beneath it by name, each with its status. Every
 Status heading carries an ⓘ saying so.
 
-Status is set only on controls. A MITRE parent with no entry rolls up its specialisations,
-and a CoSAI control rolls up the controls that support it: Enabled only when every part is, a Gap
-when nothing is under way, In progress otherwise. A rollup describes deployment, not control
-compliance or mitigation effectiveness.
+Status is never set on a catalogue control directly. It is worked out from your controls that
+map to it: Enabled only when every one of them is enabled, a Gap when none is under way and at
+least one has a status, In progress otherwise. A MITRE parent with none of yours mapped rolls
+up its specialisations, and a CoSAI control rolls up the controls that support it, by the same
+rule. A rollup describes deployment, not control compliance or mitigation effectiveness.
 
-The same file's `products:` section records the tools, clouds and data centres your
-organisation uses, keyed by tool id (`toolClaudeCode`) or platform id (`cloudAzure`,
+A second file, [`data/org/products.yaml`](data/org/products.yaml), records the tools, clouds and data centres your
+organisation uses, under `products:`, keyed by tool id (`toolClaudeCode`) or platform id (`cloudAzure`,
 `cloudOnPrem`): a `status` (`enabled`, `testing` or `notEnabled`) colours the product's pill,
 and a `settings:` map gives each of its settings rows its own status and, optionally, the
 `value` you actually set and a `link` to your own module, policy or runbook that applies it.
@@ -307,7 +314,7 @@ standards-mandated with no product behind them, which makes them a predictable r
 
 Deliberate exclusions: bias and fairness testing and standalone hallucination detection (safety,
 not security: CoSAI carries no matching risk), deepfake detection (single-source, no CoSAI
-risk), and Zero Trust (an architecture stance, not a purchasable capability — it lives inside the
+risk), and Zero Trust (an architecture stance, not a purchasable control — it lives inside the
 segmentation and identity entries).
 
 ## The reference architectures: the drawing layer
@@ -385,7 +392,7 @@ loop, is not a variant: the loop moves into the vendor's boundary, which is anot
 comparison rows are fixed (who runs the loop, who patches, where prompts and state live,
 networking, identity, frameworks accepted, long-running work, portability, what your team
 operates, when the vendor says it fits) and carry no ranking, because the right answer depends
-on what an organisation has approved. That is recorded in `data/status.yaml` under
+on what an organisation has approved. That is recorded in `data/org/products.yaml` under
 `products.<platform>.hosting`, and shown on each option. The four agent patterns list their
 options on every platform (for example, on Azure: Container Apps, AKS and Foundry Agent
 Service). Each claim was written by one researcher and re-checked by a second who was not shown
@@ -397,7 +404,7 @@ provider runs any part: Kubernetes on its own servers, LiteLLM Proxy as the AI g
 for inference, and self-hosted identity, secrets, registry, policy and logging. The
 organisation's boundary on the drawing then reads **Enterprise data centre**, and How it works
 lists what a cloud provider would otherwise have run for you. The stack is this catalogue's
-choice for each role; record what you run instead in `data/status.yaml`.
+choice for each role; record what you run instead in `data/org/products.yaml`.
 
 **One drawing, and each platform says where it differs.** The drawing is the same on every
 platform, because the trust boundaries and the controls do not change with the vendor. What
@@ -418,7 +425,7 @@ snippet copied from here would be stale or wrong for it. Two things close the ga
 may carry a **check**: one read-only command from the vendor's reference that shows the
 setting's current value, with what a pass looks like (piloted on the single agent workflow on
 AWS; the build refuses a check that is not read-only, and no check here has been run by this
-project). And an organisation records, in `data/status.yaml`, what it runs for a component in
+project). And an organisation records, in `data/org/products.yaml`, what it runs for a component in
 place of the reference and a link to its own module or runbook for a component or a setting;
 the drawing and the tables then show the organisation's choice beside the reference.
 
@@ -507,7 +514,9 @@ data/
 │   └── <vendor>/<family>.yaml      (BASELINE.md is the rubric), dated and verified
 ├── clouds/                       ★ AWS, Azure, Google Cloud and on-premises: each platform's security
 │   └── <cloud>.yaml                settings, and every hosted pattern as built on it (onprem.yaml is your own data centre)
-├── status.yaml                   ★ YOUR status per control, product and setting (see "Adopt this" below)
+├── org/                          ★ YOUR organisation's inputs (see "Adopt this" below)
+│   ├── controls.yaml               your own controls: name, status and the catalogue controls each delivers
+│   └── products.yaml               the tools and platforms you use, their settings, components and hosting
 └── PROVENANCE.md                 pinned SHA, extraction record, what is original work
 
 scripts/
@@ -515,8 +524,8 @@ scripts/
 ├── audit.ts                      regenerates docs/AUDIT.md from the data
 ├── fetch-cosai.ts                refreshes the vendored CoSAI snapshot
 ├── extract-saif-tour.ts          re-extracts the SAIF tour seed
-├── lib/enablement.ts             loads and checks the control families and the status file
-└── lib/products.ts               checks settings rows, cloud implementations and product status
+├── lib/enablement.ts             loads and checks the control families and your controls (data/org/controls.yaml)
+└── lib/products.ts               checks settings rows, cloud implementations and your products (data/org/products.yaml)
 
 src/
 ├── data/generated/dataset.json   the compiled dataset (committed, never hand-edited)
@@ -545,7 +554,8 @@ src/
     ├── tour/TourExplorer.tsx     the three-phase walkthrough
     ├── browse/                   components, risks, controls, personas, frameworks;
     │                               CataloguePage.tsx is the shared master-detail shell
-    ├── capabilities/             the control catalogue (CSF category × surface) and a control's detail
+    ├── capabilities/             the control catalogue (CSF category × surface) and a control's detail;
+    │                               the folder keeps its older name, and it is the page at /controls
     ├── drawing/                  ★ the boundary drawing: automatic layout, crossings, the crossings table
     ├── cloud/                    ★ a pattern as built on a cloud: the switch, the component table, options per control, the Clouds page
     ├── reference/                ★ the pattern view (drawing, tabs, panels), sequence flows, switcher, per-block styling
@@ -574,8 +584,8 @@ is short on purpose; an incident that fits none of them is a reason to revisit i
 - `caveat` when the account rests on one report or on figures nobody has confirmed.
 - `steps`, each with a `path` of real edges and blocks on the architecture; the last step is the
   `mitigated` one.
-- `breaks`: three to five capabilities pinned on that architecture, each with one line on where
-  it bites. The last step lights them on the drawing.
+- `breaks`: three to five controls pinned on that architecture, each naming one as `control:`
+  with one line on where it bites. The last step lights them on the drawing.
 - `sources` on the incident and on each step; smaller related events go in `alsoSeen`.
 
 `components` and `controls` (the CoSAI component map and controls) are optional and no longer
@@ -605,14 +615,18 @@ overlay phase with no components, a map that has drifted from CoSAI.
 
 Everything is text. Clone the repository, and:
 
-1. **Set status, and your own names.** List controls in [`data/status.yaml`](data/status.yaml)
-   by id — a MITRE mitigation (`D3-MFA`, `AML.M0020`) or a `cap-*` specialisation
-   (`cap-sensitive-data-redaction`) — with a `status` (`enabled`, `inProgress`, `gap`) and,
-   where you have one, a `displayName`. Anything not listed reads **Not set**. Control status and
-   MITRE parents roll up automatically. The `org-taxonomy-customize` skill walks through the
-   mapping. Under `products:`, record the tools and platforms you use, which of their settings
-   you have switched on, what you run in place of a reference component, and links to your own
-   modules and runbooks.
+1. **Record your own controls, and their status.** List your organisation's controls in
+   [`data/org/controls.yaml`](data/org/controls.yaml), one row each: an `id` of your own (never
+   shown on a page), the `name` people see, a `status` (`enabled`, `inProgress`, `gap`) where
+   you have assessed it, and `maps`, the catalogue controls it delivers — a MITRE mitigation
+   (`D3-MFA`, `AML.M0020`) or a `cap-*` specialisation (`cap-sensitive-data-redaction`). One of
+   yours can map to several, and several of yours can map to one. A catalogue control with none
+   of yours mapped reads **Not set**. Catalogue control status, MITRE parents and CoSAI controls
+   roll up automatically. The `org-taxonomy-customize` skill walks through the mapping. In
+   [`data/org/products.yaml`](data/org/products.yaml), record the tools and platforms you use,
+   which of their settings you have switched on, what you run in place of a reference
+   component, and links to your own modules and runbooks.
+   [`data/org/README.md`](data/org/README.md) describes both files.
 2. **Adjust the control families if you disagree with a fit.** `data/overlay/enablement.yaml`
    decides which NIST CSF category each control sits under and which controls are the baseline
    for every AI deployment; `data/overlay/patterns.yaml` holds each pattern's use-when line and
@@ -633,7 +647,7 @@ run by asking Claude Code for the thing in plain words.
 | `pattern-author` | Adds a pattern, or restructures one, to the [pattern standard](docs/PATTERN-STANDARD.md): the drawing, one-liners, crossings, pins, sequence flows, guidance and finder entry, looped against the build, the drawing audit and the tests. | The pattern's files, and its row in the sign-off table. |
 | `incident-research` | Sweeps the web for AI security incidents since the last one on file, verifies each against its sources, and writes the ones that qualify as walk-throughs on the pattern they happened on. | New files in `data/incidents/` and a dated log in `docs/research/incidents/`. |
 | `tooling-onboard` | Adds or re-verifies a product's security settings under the pattern it belongs to. | A file in `data/tooling/`. |
-| `org-taxonomy-customize` | Records your organisation's status and names for the controls. | `data/status.yaml`. |
+| `org-taxonomy-customize` | Records your organisation's own controls, their status and the catalogue controls each delivers, and the products you use. | `data/org/controls.yaml` and `data/org/products.yaml`. |
 
 The three research and authoring skills hand off to each other: a scan that finds a new kind of
 system recommends a pattern, `pattern-author` draws it, and an incident that fits no pattern is

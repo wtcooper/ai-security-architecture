@@ -14,7 +14,7 @@ import { parse } from "yaml";
 import { parse as parseYaml } from "yaml";
 import { loadMitigations } from "./lib/mitigations";
 import { loadControlCrosswalks } from "./lib/control-crosswalks";
-import { loadEnablement, loadStatus } from "./lib/enablement";
+import { loadEnablement, loadOrgControls } from "./lib/enablement";
 import { standIn } from "../src/components/drawing/crossings";
 import { checkSettings, loadClouds, loadProductStatus } from "./lib/products";
 import { loadSpecializations } from "./lib/specializations";
@@ -352,14 +352,14 @@ async function main() {
     for (const id of Object.keys(doc.patterns ?? {})) if (!archetypes.some((a) => a.id === id)) fail(`patterns.yaml: unknown architecture ${id}`);
   }
 
-  // --- Enable layers and the organisation's status file ----------------------------
+  // --- Enable layers and the organisation's own controls (data/org/) -----------------
   const enablement = await loadEnablement(ROOT, mitigationsDoc.mitigations, mitigationsDoc.surfaces, archetypes, frameworkEntries["nist-csf"] ?? {});
   // The CSF crosswalk for controls is the Enable grouping itself, so the two cannot disagree.
   authoredMappings["nist-csf"] = {
     ...authoredMappings["nist-csf"],
     mitigations: Object.fromEntries(enablement.groups.flatMap((g) => g.mitigations.map((id) => [id, [g.id]]))),
   };
-  const status = await loadStatus(ROOT, mitigationsDoc.mitigations);
+  const { orgControls, status } = await loadOrgControls(ROOT, mitigationsDoc.mitigations);
   const productStatus = await loadProductStatus(ROOT, tools, clouds);
 
   // --- Overlay -----------------------------------------------------------------
@@ -384,10 +384,10 @@ async function main() {
     if (incidents.filter((i) => i.id === inc.id).length > 1) fail(`${where}: duplicate incident id`);
     // The last step lights these on the drawing, so each must be a capability pinned there.
     const pinnedHere = new Set(archetypes.find((a) => a.id === inc.archetype)?.mitigations ?? []);
-    if (!inc.breaks?.length || inc.breaks.length > 6) fail(`${where}: needs 1–6 breaks (capabilities that stop the chain)`);
+    if (!inc.breaks?.length || inc.breaks.length > 6) fail(`${where}: needs 1–6 breaks (controls that stop the chain)`);
     for (const b of inc.breaks ?? []) {
-      if (!pinnedHere.has(b.capability)) fail(`${where}: breaks names ${b.capability}, which is not pinned on ${inc.archetype}`);
-      if (!b.how?.trim()) fail(`${where}: break ${b.capability} needs a "how"`);
+      if (!pinnedHere.has(b.control)) fail(`${where}: breaks names ${b.control}, which is not pinned on ${inc.archetype}`);
+      if (!b.how?.trim()) fail(`${where}: break ${b.control} needs a "how"`);
     }
     if (inc.steps.at(-1)?.phase !== "mitigated") fail(`${where}: the last step must be the mitigated one — it is where the breaks light`);
     // The replay on the reference architecture is authored, not inferred: every step names
@@ -492,6 +492,7 @@ async function main() {
     tools,
     toolingAttribution: toolingLoaded.attribution,
     status,
+    orgControls,
     productStatus,
     clouds,
     enablement,
@@ -506,7 +507,7 @@ async function main() {
       `${authored} authored), ${controls.length} controls, ${components.length} components, ` +
       `${incidents.length} incidents, ${mitigationsDoc.mitigations.length} mitigations, ` +
       `${archetypes.length} archetypes, ${guidance.length} guidance docs, ` +
-      `${tools.length} tools, ${Object.values(status).filter((s) => s.status).length} capability statuses set`,
+      `${tools.length} tools, ${orgControls.length} of your own controls recorded`,
   );
 }
 

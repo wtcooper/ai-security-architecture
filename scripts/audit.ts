@@ -345,7 +345,7 @@ async function main() {
   // A MITRE parent whose pins all moved to its specialisations is pinned through them.
   const pinnedFamily = (id: string) => namedCaps.has(id) || dataset.mitigations.some((s) => s.parent === id && namedCaps.has(s.id));
   const unusedCaps = dataset.mitigations.filter((c) => !pinnedFamily(c.id));
-  p(`### 4b. Capabilities no architecture pins — ${unusedCaps.length} of ${dataset.mitigations.length}`);
+  p(`### 4b. Controls no pattern pins — ${unusedCaps.length} of ${dataset.mitigations.length}`);
   p();
   p(
     unusedCaps.length
@@ -445,7 +445,7 @@ async function main() {
       "documentation. *Unaddressed* lists the mitigations pinned on the tool's architecture " +
       "that the entry does not yet describe — the research work list. *Settings* counts the " +
       "rows of its settings table (data/tooling/BASELINE.md); *Newest check* is the latest " +
-      "`verified` date among them, and a tool with no table falls back to its capability record.",
+      "`verified` date among them, and a tool with no table falls back to its control record.",
   );
   p();
   const archTitle = (id: string) => archetypes.find((a) => a.id === id)?.title ?? id;
@@ -527,7 +527,7 @@ async function main() {
     `docs/AUDIT.md: ${components.length} components, ${EDGES.length} edges, ` +
       `${authored.length} authored + ${seeded.length} seeded overlays, ` +
       `${archetypes.length} flow-style architectures (${unreachedRisks.length} risks and ` +
-      `${unusedCaps.length} capabilities not yet pinned), ` +
+      `${unusedCaps.length} controls not yet pinned), ` +
       `${guidance.length} guidance docs, ${tools.length} tools`,
   );
 }

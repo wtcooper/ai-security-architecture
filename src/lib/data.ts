@@ -16,6 +16,7 @@ import type {
   AdoptionStatus,
   CloudImplementation,
   ComponentChoice,
+  OrgControl,
   ProductStatusEntry,
   CloudPlatform,
   ProductSetting,
@@ -50,6 +51,7 @@ export const {
   tools,
   toolingAttribution,
   status,
+  orgControls,
   productStatus,
   clouds,
   enablement,
@@ -361,10 +363,13 @@ export const controlsForTool = (toolId: string) => {
   }));
 };
 
-// --- Status and display names (data/status.yaml) -----------------------------------
+// --- Status and the organisation's own controls (data/org/controls.yaml) -----------
 
-/** What the organisation calls a capability: its own display name, else the catalogue title. */
-export const capabilityName = (id: string) => status[id]?.displayName ?? mitigationById.get(id)?.title ?? id;
+/** A catalogue control's name. Pages show names, never ids. */
+export const capabilityName = (id: string) => mitigationById.get(id)?.title ?? id;
+
+/** The organisation's own controls that map to one catalogue control, in the order it lists them. */
+export const orgControlsFor = (id: string): OrgControl[] => orgControls.filter((c) => c.maps.includes(id));
 
 /**
  * Several statuses read as one. Enabled only when every part is; a gap when nothing is under

@@ -1,4 +1,4 @@
-import { controlCategories, enablement, enableGroupFor, status, surfaces } from "@/lib/data";
+import { controlCategories, enablement, enableGroupFor, surfaces } from "@/lib/data";
 import type { Mitigation } from "@/lib/types";
 import type { MatrixItem, MatrixRow } from "./DefenseMatrix";
 
@@ -19,7 +19,7 @@ export function mitigationMatrixItem(mitigation: Mitigation, by: Grouping = "csf
   const row = by === "csf" ? enableGroupFor(mitigation.id)?.id ?? "" : mitigation.category;
   return {
     id: mitigation.id,
-    title: status[mitigation.id]?.displayName ?? mitigation.abbrev ?? mitigation.title,
+    title: mitigation.abbrev ?? mitigation.title,
     placements: surfaces.filter((s) => mitigation.surfaces[s.id]?.applies)
       .map((s) => ({ category: row, surface: s.id })),
   };

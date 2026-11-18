@@ -14,7 +14,7 @@ export function CapabilityLinks({ controls, title = "Delivered by controls in th
       <p className="mt-1 text-xs text-ink-3">MITRE-backed controls pinned on the patterns; status is set against these, never against the CoSAI control.</p>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {capabilities.map((m) => <Link key={m.id} href={controlHref(m.id)} className="inline-flex items-center gap-1">
-          <Chip tone="introduced">{capabilityName(m.id)}{" "}<span className="text-ink-3">({m.parent ?? m.id})</span></Chip>
+          <Chip tone="introduced">{capabilityName(m.id)}</Chip>
           {statusFor(m.id) !== "notSet" && <StatusPill status={statusFor(m.id)} compact />}
         </Link>)}
       </div>

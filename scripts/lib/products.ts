@@ -58,9 +58,9 @@ export function checkSettings(
     }
     if (!s.setVia?.length) ctx.fail(`${at}: needs setVia`);
     for (const v of s.setVia ?? []) if (!SETTING_VIAS.includes(v)) ctx.fail(`${at}: setVia ${v} is not one of ${SETTING_VIAS.join(", ")}`);
-    if (!Array.isArray(s.mitigations)) ctx.fail(`${at}: mitigations must be a list (empty when it serves an area, not a pinned capability)`);
+    if (!Array.isArray(s.mitigations)) ctx.fail(`${at}: mitigations must be a list (empty when it serves an area, not a pinned control)`);
     for (const id of s.mitigations ?? []) {
-      if (!ctx.mitigationIds.has(id)) ctx.fail(`${at}: unknown capability ${id}`);
+      if (!ctx.mitigationIds.has(id)) ctx.fail(`${at}: unknown control ${id}`);
       else if (ctx.pinned && !ctx.pinned.has(id)) ctx.fail(`${at}: ${id} is not pinned on the drawing this setting is shown on`);
     }
   }
@@ -199,7 +199,7 @@ export async function loadClouds(
           const dropped = new Set(o.dropSettings ?? []);
           const kept = [...(impl.settings ?? []).filter((id) => !dropped.has(id)), ...(o.addSettings ?? [])];
           const covered = new Set(kept.flatMap((id) => settingById.get(id)?.mitigations ?? []));
-          for (const id of arch.mitigations) if (!covered.has(id)) ctx.fail(`${oat}: pinned capability ${id} has no setting once the dropped ones are gone`);
+          for (const id of arch.mitigations) if (!covered.has(id)) ctx.fail(`${oat}: pinned control ${id} has no setting once the dropped ones are gone`);
           for (const d of o.differences ?? []) {
             if (!arch.blocks.some((x) => x.id === d.at) && !edgeKeys.has(d.at)) ctx.fail(`${oat}: difference at "${d.at}" is neither a block nor a flow of ${arch.id}`);
             if (!d.text?.trim() || d.text.length > 380) ctx.fail(`${oat}: difference at ${d.at} needs text of at most 380 characters`);
@@ -224,7 +224,7 @@ export async function loadClouds(
       }
       // Every pinned capability has at least one row: a cloud setting or a line of our own code.
       const delivered = new Set((impl.settings ?? []).flatMap((id) => settingById.get(id)?.mitigations ?? []));
-      for (const id of arch.mitigations) if (!delivered.has(id)) ctx.fail(`${at}: pinned capability ${id} has no setting or code row`);
+      for (const id of arch.mitigations) if (!delivered.has(id)) ctx.fail(`${at}: pinned control ${id} has no setting or code row`);
     }
     for (const s of cloud.settings) if (!used.has(s.id)) ctx.fail(`${where}: setting ${s.id} is used by no implementation`);
     clouds.push(cloud);
@@ -232,9 +232,9 @@ export async function loadClouds(
   return clouds;
 }
 
-/** The organisation's product section of data/status.yaml: every key a tool or cloud, every setting one it lists. */
+/** The organisation's products file (data/org/products.yaml): every key a tool or cloud, every setting one it lists. */
 export async function loadProductStatus(root: string, tools: Tool[], clouds: CloudPlatform[]): Promise<Record<string, ProductStatusEntry>> {
-  const doc = parse(await readFile(join(root, "data/status.yaml"), "utf8")) as { products?: Record<string, ProductStatusEntry> | null };
+  const doc = parse(await readFile(join(root, "data/org/products.yaml"), "utf8")) as { products?: Record<string, ProductStatusEntry> | null };
   return checkProductStatus(doc, tools, clouds);
 }
 
@@ -248,7 +248,7 @@ export function checkProductStatus(
     ...tools.map((t) => [t.id, new Set((t.settings ?? []).map((s) => s.id))] as const),
     ...clouds.map((c) => [c.id, new Set(c.settings.map((s) => s.id))] as const),
   ]);
-  const check = (ok: unknown, msg: string) => { if (!ok) throw new Error(`status.yaml: ${msg}`); };
+  const check = (ok: unknown, msg: string) => { if (!ok) throw new Error(`org/products.yaml: ${msg}`); };
   const out: Record<string, ProductStatusEntry> = {};
   for (const [id, entry] of Object.entries(doc?.products ?? {})) {
     const known = settingsOf.get(id);

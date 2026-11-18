@@ -47,8 +47,8 @@ export function IncidentWalkthrough({ id }: { id: string }) {
   const meta = PHASE_META[step.phase];
   const last = incident.steps.length - 1;
   const breaking = step.phase === "mitigated";
-  const breakIds = incident.breaks.map((b) => b.capability);
-  const pinNumber = (capability: string) => archetype.mitigations.indexOf(capability) + 1;
+  const breakIds = incident.breaks.map((b) => b.control);
+  const pinNumber = (control: string) => archetype.mitigations.indexOf(control) + 1;
 
   // The step stays in the URL, so a link can land on it. replaceState keeps the basePath.
   useEffect(() => {
@@ -115,17 +115,17 @@ export function IncidentWalkthrough({ id }: { id: string }) {
               <div className="mt-5">
                 <p className="eyebrow">Controls that break this chain</p>
                 <ul className="mt-2 space-y-2.5">
-                  {[...incident.breaks].sort((x, y) => pinNumber(x.capability) - pinNumber(y.capability)).map((b) => (
-                    <li key={b.capability} className="flex gap-2.5">
+                  {[...incident.breaks].sort((x, y) => pinNumber(x.control) - pinNumber(y.control)).map((b) => (
+                    <li key={b.control} className="flex gap-2.5">
                       <span className="mt-px flex h-[21px] w-[21px] shrink-0 items-center justify-center rounded-full border border-chip bg-chip text-[10.5px] font-bold text-white">
-                        {pinNumber(b.capability)}
+                        {pinNumber(b.control)}
                       </span>
                       <span className="min-w-0 text-[13px] leading-snug">
                         <Link
-                          href={patternHref(archetype.id, { control: b.capability })}
+                          href={patternHref(archetype.id, { control: b.control })}
                           className="font-semibold text-ink hover:text-introduced hover:underline"
                         >
-                          {capabilityName(b.capability)}
+                          {capabilityName(b.control)}
                         </Link>
                         <span className="block text-ink-2">{b.how}</span>
                       </span>

@@ -1,7 +1,8 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { STATUSES, type Archetype, type CapabilityCustomisation, type Enablement, type EnablementGroup, type Mitigation, type Surface } from "../../src/lib/types";
+import { STATUSES, type Archetype, type CapabilityCustomisation, type Enablement, type EnablementGroup, type Mitigation, type OrgControl, type Status, type Surface } from "../../src/lib/types";
 
 /** A CSF category as the framework file declares it. */
 type CsfEntry = { label?: string; group?: string };
@@ -65,19 +66,63 @@ export async function loadEnablement(
   return { framework: "nist-csf", groups, baseline: [...baseline] };
 }
 
-/** The organisation's status file. Every key must be a catalogue capability. */
-export async function loadStatus(root: string, catalogue: Mitigation[]): Promise<Record<string, CapabilityCustomisation>> {
-  const doc = parse(await readFile(join(root, "data/status.yaml"), "utf8")) as { capabilities?: Record<string, CapabilityCustomisation> | null };
-  const out: Record<string, CapabilityCustomisation> = {};
-  const ids = new Set(catalogue.map((m) => m.id));
-  for (const [id, entry] of Object.entries(doc?.capabilities ?? {})) {
-    if (!ids.has(id)) throw new Error(`status.yaml: unknown capability ${id}`);
-    if (!entry || typeof entry !== "object") throw new Error(`status.yaml: ${id} needs status, displayName or note`);
-    const extra = Object.keys(entry).filter((k) => !["status", "displayName", "note"].includes(k));
-    if (extra.length) throw new Error(`status.yaml: ${id} has unknown field ${extra.join(", ")}`);
-    if (entry.status !== undefined && !STATUSES.includes(entry.status)) throw new Error(`status.yaml: ${id} status must be one of ${STATUSES.join(", ")}`);
-    if (entry.displayName !== undefined && !String(entry.displayName).trim()) throw new Error(`status.yaml: ${id} displayName is empty`);
-    out[id] = entry;
+/** Several statuses read as one: enabled only when every part is, a gap when nothing is under way, else in progress. */
+function rollup(values: (Status | undefined)[]): Status | undefined {
+  if (values.every((v) => !v)) return undefined;
+  if (values.every((v) => v === "enabled")) return "enabled";
+  if (values.every((v) => v === "gap" || !v)) return "gap";
+  return "inProgress";
+}
+
+/**
+ * The organisation's own controls (data/org/controls.yaml): each maps to one or more catalogue
+ * controls. Returns them, and each catalogue control's status worked out from the ones mapped to it.
+ */
+export async function loadOrgControls(root: string, catalogue: Mitigation[]): Promise<{ orgControls: OrgControl[]; status: Record<string, CapabilityCustomisation> }> {
+  const where = "org/controls.yaml";
+  if (existsSync(join(root, "data/status.yaml"))) {
+    throw new Error("data/status.yaml has moved: put its controls in data/org/controls.yaml and its products section in data/org/products.yaml (see data/org/README.md), then delete it");
   }
-  return out;
+  const doc = parse(await readFile(join(root, "data/org/controls.yaml"), "utf8")) as { controls?: OrgControl[] | null } | null;
+  return checkOrgControls(doc, catalogue, where);
+}
+
+/** The checks on the organisation's controls, apart from reading the file, so they can be run on any document. */
+export function checkOrgControls(
+  doc: { controls?: OrgControl[] | null } | null,
+  catalogue: Mitigation[],
+  where = "org/controls.yaml",
+): { orgControls: OrgControl[]; status: Record<string, CapabilityCustomisation> } {
+  const known = new Map(catalogue.map((m) => [m.id, m]));
+  const rows = doc?.controls ?? [];
+  if (!Array.isArray(rows)) throw new Error(`${where}: controls is a list of rows, each starting "- id:"`);
+  const seen = new Set<string>();
+  for (const [n, row] of rows.entries()) {
+    const at = `${where} row ${n + 1}${row?.name ? ` (${row.name})` : ""}`;
+    if (!row || typeof row !== "object") throw new Error(`${at}: needs id, name and maps`);
+    const extra = Object.keys(row).filter((k) => !["id", "name", "status", "maps", "note", "link"].includes(k));
+    if (extra.length) throw new Error(`${at}: unknown field ${extra.join(", ")}`);
+    if (typeof row.id !== "string" && typeof row.id !== "number") throw new Error(`${at}: needs an id, your own identifier for the control`);
+    row.id = String(row.id).trim();
+    if (!row.id) throw new Error(`${at}: needs an id, your own identifier for the control`);
+    if (seen.has(row.id)) throw new Error(`${at}: id ${row.id} is used twice`);
+    seen.add(row.id);
+    if (typeof row.name !== "string" || !row.name.trim()) throw new Error(`${at}: needs a name, which is what people see`);
+    if (row.status !== undefined && !STATUSES.includes(row.status)) throw new Error(`${at}: status must be one of ${STATUSES.join(", ")}`);
+    if (!Array.isArray(row.maps) || !row.maps.length) throw new Error(`${at}: needs maps, the catalogue controls it delivers (one or more)`);
+    if (new Set(row.maps).size !== row.maps.length) throw new Error(`${at}: maps lists a control twice`);
+    for (const id of row.maps) {
+      if (!known.has(id)) throw new Error(`${at}: maps to "${id}", which is not a control in the catalogue; use the key from the Controls page address`);
+    }
+    if (row.link !== undefined && !/^https:\/\//.test(row.link)) throw new Error(`${at}: link must be an https address`);
+    if (row.note !== undefined && typeof row.note !== "string") throw new Error(`${at}: note must be text`);
+  }
+  const status: Record<string, CapabilityCustomisation> = {};
+  for (const m of catalogue) {
+    const mine = rows.filter((r) => r.maps.includes(m.id));
+    if (!mine.length) continue;
+    const rolled = rollup(mine.map((r) => r.status));
+    status[m.id] = rolled ? { status: rolled } : {};
+  }
+  return { orgControls: rows, status };
 }

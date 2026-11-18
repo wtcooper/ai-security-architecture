@@ -2,7 +2,8 @@ import { STATUSES, type DisplayStatus } from "@/lib/types";
 
 /**
  * The organisation's status vocabulary, one set of words and tints everywhere it renders. Status
- * comes from data/status.yaml; anything not listed there reads "Not set".
+ * comes from the organisation's own controls in data/org/controls.yaml; a catalogue control that
+ * none of them maps to reads "Not set".
  */
 export type { DisplayStatus } from "@/lib/types";
 
@@ -10,7 +11,7 @@ export const STATUS_META: Record<DisplayStatus, { label: string; blurb: string }
   enabled: { label: "Enabled", blurb: "In place and switched on." },
   inProgress: { label: "In progress", blurb: "Partly in place, or still being rolled out." },
   gap: { label: "Gap", blurb: "An identified shortfall." },
-  notSet: { label: "Not set", blurb: "No status recorded in data/status.yaml." },
+  notSet: { label: "Not set", blurb: "None of your organisation's controls is mapped to it yet (data/org/controls.yaml)." },
 };
 
 /** Pale tints so a column of pills stays quiet; the text colour does the work. */
@@ -25,8 +26,8 @@ export { STATUSES };
 
 /** What the ⓘ beside every Status heading says. */
 export const STATUS_HELP =
-  "Status is set by your organisation in data/status.yaml: Enabled, In progress or Gap for each control. " +
-  "The same file can rename any control to what your organisation calls it; the catalogue name stays beneath. " +
+  "Your organisation lists its own controls in data/org/controls.yaml, each with a status and the catalogue controls it delivers. " +
+  "A control here is Enabled only when every one of yours that maps to it is, a Gap when none is under way, and In progress otherwise. " +
   "A CoSAI control's status rolls up from the controls that deliver it.";
 
 export function StatusPill({

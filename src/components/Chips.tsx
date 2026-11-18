@@ -82,16 +82,15 @@ export function MappingBadges({
             {values.map((v) => {
               const bare = v.split("@")[0];
               const label = frameworkEntries[id]?.[bare]?.label ?? bare;
-              const localKey = frameworkEntries[id]?.[bare]?.identifierKind === "repository-key";
               return (
                 <Link
                   key={v}
                   href={frameworkHref(id, bare)}
-                  title={`See everything mapped to ${label}${label !== bare ? ` (${bare})` : ""}`}
+                  title={`See everything mapped to ${label}`}
                   className="transition-opacity hover:opacity-70"
                 >
                   <span className="rounded bg-mist px-1.5 py-[2px] text-[12px] text-ink-2">
-                    {label}{label !== bare && <span className="ml-1 text-[10.5px] text-ink-3">({localKey ? "repository key: " : ""}{bare})</span>}
+                    {label}
                   </span>
                 </Link>
               );

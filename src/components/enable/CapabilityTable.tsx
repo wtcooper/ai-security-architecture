@@ -16,6 +16,7 @@
 import Link from "next/link";
 import { Fragment } from "react";
 
+import { OrgControlList, OrgControlNames } from "@/components/OrgControls";
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
 import { capabilityName, isBaseline, riskCode, risksForMitigation, status as statusFile, statusFor, type Product } from "@/lib/data";
 import type { Archetype } from "@/lib/types";
@@ -66,10 +67,7 @@ export function CapabilityTable({
           <div id={`group-${group.id}`} className="border-b border-line bg-mist/40 px-4 py-2" title={group.blurb}>
             <p className="flex flex-wrap items-baseline gap-x-2.5">
               <span className="display text-[14px] font-bold text-ink">{group.plain}</span>
-              <span className="text-[11px] text-ink-3" title={`NIST CSF 2.0 · ${group.function}`}>
-                <span className="ident mr-1">{group.id}</span>
-                {group.title}
-              </span>
+              <span className="text-[11px] text-ink-3" title={`NIST CSF 2.0 · ${group.function}`}>{group.title}</span>
               {anyStatus && (
                 <span className="text-[11px] text-ink-3">
                   {group.capabilities.filter((m) => statusFor(m.id) === "enabled").length} of {group.capabilities.length} enabled
@@ -114,7 +112,7 @@ export function CapabilityTable({
                 </span>
                 <span className="col-start-2 text-[12px] leading-snug md:col-start-auto">
                   <span className="block font-semibold text-ink-2" data-control-name>{capabilityName(m.id)}</span>
-                  {own?.displayName && <span className="block text-[11.5px] text-ink-3">{m.title}</span>}
+                  <OrgControlNames controlId={m.id} />
                   <span className="block text-ink-3">{where.blocks.join(" · ")}</span>
                 </span>
                 {anyStatus && (
@@ -128,6 +126,7 @@ export function CapabilityTable({
                   {named.map(({ product: p, options }) => (
                     <NativeOptions key={p.id} id={p.id} name={p.name} options={options} />
                   ))}
+                  <OrgControlList controlId={m.id} />
                   {reduces.length > 0 && (
                     <p className="text-[12px]">
                       <span className="font-semibold text-ink">Reduces here: </span>
@@ -155,7 +154,7 @@ export function CapabilityTable({
                   )}
                   <div className="text-[12px] text-ink-3" data-definition>
                     <p>
-                      <span className="font-semibold text-ink-2">The control ({m.id}): </span>
+                      <span className="font-semibold text-ink-2">The control: </span>
                       {m.implementation}
                     </p>
                     <p className="mt-1">Delivered by: {m.examples.slice(0, 5).join(" · ")}</p>

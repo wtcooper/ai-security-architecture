@@ -21,7 +21,7 @@ archetype: archCodingAgentThirdParty   # a pattern id from pattern-map.mjs. chec
 caveat: >                          # only when the account rests on one report or unconfirmed figures
   What exactly is unconfirmed, and by whom.
 breaks:                            # 1–6 controls pinned on that pattern. checked
-  - capability: cap-agent-egress-control
+  - control: cap-agent-egress-control
     how: "One line: where in the chain this control bites."
 summary:                           # two or three short paragraphs
   - >
@@ -108,7 +108,7 @@ Run `pattern-map.mjs <pattern>` and use what it prints.
 
 ## `breaks`
 
-Each `capability` must be a control pinned on the chosen pattern (`pattern-map.mjs` lists them
+Each `control` must be a control pinned on the chosen pattern (`pattern-map.mjs` lists them
 with their chip numbers). If the control that would really have stopped the incident is not
 pinned on the pattern, that is worth saying in the log: either the pattern is the wrong one, or
 the pattern is missing a control.

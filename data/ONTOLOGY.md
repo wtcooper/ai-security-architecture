@@ -16,8 +16,9 @@ records what content is allowed to look like. When the two disagree, this one wi
 | Subcomponent (item) | block `items:` | canonical label+icon from vocabulary where the concept recurs |
 | Flow (edge) | architecture `edges:` | `from->to`, one of three path classes |
 | Container | architecture `blocks:` via `parent` | a `boundary` block, or any block with children; nests without limit |
-| Control | data/cosai/ | CoSAI control identifiers; required protections; status is a rollup of the capabilities that deliver it |
-| Capability (`mitigation` in data and code) | data/overlay/mitigations.yaml, data/overlay/specializations.yaml | A MITRE mitigation with its MITRE-native ID from pinned D3FEND/ATLAS, or an authored specialisation of one (`cap-*`, exactly one MITRE parent); the pin unit on every drawing, with per-diagram chip numbers and an authored per-surface decision; the only entity that carries authored status |
+| CoSAI control | data/cosai/ | CoSAI control identifiers; required protections; status is a rollup of the controls that deliver it |
+| Control (`mitigation` in data and code) | data/overlay/mitigations.yaml, data/overlay/specializations.yaml | A MITRE mitigation with its MITRE-native ID from pinned D3FEND/ATLAS, or an authored specialisation of one (`cap-*`, exactly one MITRE parent); the pin unit on every drawing, with per-diagram chip numbers and an authored per-surface decision; its status is worked out from the organisation's controls mapped to it |
+| Organisation's control | data/org/controls.yaml | The adopter's own `id` (unique, never shown on a page) and `name`; maps to one or more controls, many to many; the only entity that carries authored status |
 | Boundary-drawing fields | architecture `blocks:`, `zones:`, `edges:` | `summary` (a block's one line), `gloss` (a few words on a zone), `crossing` (kind and via, on every flow between zones) and `cell` (a block's grid cell on the boundary drawing); the rules are in docs/PATTERN-STANDARD.md |
 | Control family | data/overlay/enablement.yaml | The NIST CSF 2.0 category a control sits under, on every pattern's Enable tab and in the control catalogue (exactly one for every control), plus the baseline list every AI deployment needs |
 | Pattern (`archetype` in data and code) | data/reference/architectures/*.yaml, data/overlay/patterns.yaml | One reference architecture; its URL slug is its file name, and patterns.yaml carries its use-when line and search words |
@@ -30,17 +31,21 @@ gateway can be drawn as components. Their defensive methods are mitigations pinn
 components or flows, and those mitigations support CoSAI controls. The enforcement
 classification below determines where each mitigation must be implemented.
 
-A capability is a MITRE mitigation or an authored specialisation of one. The MITRE entry is
+A control is a MITRE mitigation or an authored specialisation of one. The MITRE entry is
 the citable identifier and carries the CoSAI controls it supports, the risks it addresses and
 an authored decision per surface with the reason. A specialisation (`cap-*`, in
 `specializations.yaml`) narrows one MITRE parent to a single actionable countermeasure where
-the parent is too coarse to pin or report on; it inherits the parent's definition, controls and
-surfaces unless it overrides them (its controls must be a subset of the parent's), is the pin
+the parent is too coarse to pin or report on; it inherits the parent's definition, CoSAI controls and
+surfaces unless it overrides them (its CoSAI controls must be a subset of the parent's), is the pin
 unit where it exists, and lists the retired home-grown ids it restores. In data and code the
-record is called `mitigation`; the app calls the layer Capabilities. Status is authored only on
-capabilities, one value each, in `data/status.yaml`. A parent
-rolls up its specialisations' entries and control status is the rollup of the capabilities that
-support it. Products carry vendor coverage only, never organisation status.
+record is called `mitigation`; the app calls the layer Controls. Status is authored only on
+the organisation's own controls, in `data/org/controls.yaml`: each row has the organisation's
+`id` and `name`, an optional status, and `maps`, the controls it delivers. The mapping is many
+to many. A control's status is worked out from the rows mapped to it: enabled only when all
+are enabled, a gap when all are a gap or unset with at least one set, otherwise in progress. A parent
+with no row mapped rolls up its specialisations, and CoSAI control status is the rollup of the controls that
+support it. Pages show a control's name, never its id. Products carry vendor coverage only;
+which products the organisation uses is recorded separately, in `data/org/products.yaml`.
 
 Related controls, architectures, and incidents are navigational paths, not inherited coverage
 or posture. CoSAI remains canonical; NIST AI RMF is retained verbatim and NIST CSF is an
@@ -69,7 +74,7 @@ Every mitigation carries `enforcement` in vocabulary.yaml:
   on a standard control block) to exist in that drawing, and the chip pins onto it.
   *Absorption* is permitted (option B): a simple diagram may let a functional block absorb the
   duty — the chip pins to the absorbing block and a `deviations:` entry records the
-  absorption, naming the capability id it absorbs. The build fails an absorption no
+  absorption, naming the control id it absorbs. The build fails an absorption no
   deviation names.
 - **embedded** — enforced inside a functional component or on a flow (input validation,
   tenant checks, memory scoping, output bounding, permission gates). Pin only — on the edge
@@ -78,9 +83,9 @@ Every mitigation carries `enforcement` in vocabulary.yaml:
   kill switch, policy authoring, assurance). Governance-plane call-out plus chip pinned to
   that call-out.
 
-Each capability has one governance group (`governanceGroups` in vocabulary.yaml): Identity
+Each control has one governance group (`governanceGroups` in vocabulary.yaml): Identity
 services, Secrets & key management, Policy & authorization, Supply-chain assurance, or
-Observability & response. A capability pinned on a drawing is cited under its group's
+Observability & response. A control pinned on a drawing is cited under its group's
 call-out wherever that block is drawn, and under no other; the build checks both.
 
 The same mitigation may legitimately sit at a different locus in one architecture when the

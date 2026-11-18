@@ -126,10 +126,7 @@ export function SettingsTable({
             <p className="flex flex-wrap items-baseline gap-x-2.5">
               <span className="display text-[14px] font-bold text-ink">{group.plain}</span>
               {group.title ? (
-                <span className="text-[11px] text-ink-3" title={`NIST CSF 2.0 · ${group.function}`}>
-                  <span className="ident mr-1">{group.id}</span>
-                  {group.title}
-                </span>
+                <span className="text-[11px] text-ink-3" title={`NIST CSF 2.0 · ${group.function}`}>{group.title}</span>
               ) : (
                 <span className="text-[11px] text-ink-3">Hardening the product recommends that is not one of the numbered controls</span>
               )}
@@ -200,7 +197,7 @@ export function SettingsTable({
                     </span>
                     {recorded && (
                       <span className="col-start-2 md:col-start-auto md:text-right">
-                        <AdoptionPill status={a.status} title={a.set ? [a.value && `Set to: ${a.value}`, a.note].filter(Boolean).join(" · ") || undefined : "No status recorded in data/status.yaml"} />
+                        <AdoptionPill status={a.status} title={a.set ? [a.value && `Set to: ${a.value}`, a.note].filter(Boolean).join(" · ") || undefined : "No status recorded in data/org/products.yaml"} />
                         {a.value && <span className="mt-0.5 block text-[11px] text-ink-3">Set to {a.value}</span>}
                       </span>
                     )}

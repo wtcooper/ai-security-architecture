@@ -188,19 +188,34 @@ export interface Vocabulary {
 }
 
 /**
- * The status vocabulary an organisation sets per capability in data/status.yaml. Nothing ships
- * with a status: an unset capability reads "Not set". Control status is a rollup, never authored.
+ * The status vocabulary an organisation sets on its own controls in data/org/controls.yaml.
+ * Nothing ships with a status: a catalogue control with none of the organisation's controls
+ * mapped to it reads "Not set". Every other status on the site is a rollup of those.
  */
 export type Status = "enabled" | "inProgress" | "gap";
 export type DisplayStatus = Status | "notSet";
 export const STATUSES: Status[] = ["enabled", "inProgress", "gap"];
 
-/** One organisation's entry for a capability: its status and, optionally, its own name for it. */
+/** A catalogue control's status, worked out from the organisation's controls that map to it. */
 export interface CapabilityCustomisation {
   status?: Status;
-  /** The organisation's name for the capability; the catalogue name is shown beneath it. */
-  displayName?: string;
   note?: string;
+}
+
+/**
+ * One of the organisation's own controls (data/org/controls.yaml). It maps to one or more
+ * catalogue controls, and several may map to the same one. Pages show its name; its id is for
+ * the organisation's records and is never shown.
+ */
+export interface OrgControl {
+  id: string;
+  name: string;
+  status?: Status;
+  /** Catalogue control ids it delivers: MITRE mitigations or authored specialisations. */
+  maps: string[];
+  note?: string;
+  /** The organisation's policy, standard or evidence for it. */
+  link?: string;
 }
 
 /**
@@ -733,7 +748,7 @@ export const SETTING_AREAS: SettingArea[] = ["identity", "data", "tools", "netwo
  * tools step: what to set, where, to what, and which capabilities on the drawing it delivers.
  */
 export interface ProductSetting {
-  /** Unique within its product (or cloud), camelCase; the key data/status.yaml uses. */
+  /** Unique within its product (or cloud), camelCase; the key data/org/products.yaml uses. */
   id: string;
   /** The setting's name exactly as the vendor's page gives it. */
   name: string;
@@ -804,7 +819,7 @@ export function checkCommandProblem(command: string): string | null {
 export type AdoptionStatus = "enabled" | "testing" | "notEnabled";
 export const ADOPTION_STATUSES: AdoptionStatus[] = ["enabled", "testing", "notEnabled"];
 
-/** The organisation's entry for one product or cloud in data/status.yaml. */
+/** The organisation's entry for one product or cloud in data/org/products.yaml. */
 export interface ProductStatusEntry {
   status?: AdoptionStatus;
   note?: string;
@@ -927,7 +942,7 @@ export const HOSTING_COMPARE = [
 export type HostingCompareKey = (typeof HOSTING_COMPARE)[number][0];
 
 export interface HostingOption {
-  /** camelCase, unique within the mapping; the key in the address and in data/status.yaml. */
+  /** camelCase, unique within the mapping; the key in the address and in data/org/products.yaml. */
   id: string;
   kind: HostingKind;
   /** The service as the vendor names it. */
@@ -960,7 +975,7 @@ export interface HostingOption {
 
 /** A cloud platform: its security-relevant settings, and how each first-party architecture is built on it. */
 export interface CloudPlatform {
-  /** ^cloud[A-Z] — shares the namespace data/status.yaml keys products by. */
+  /** ^cloud[A-Z] — shares the namespace data/org/products.yaml keys products by. */
   id: string;
   name: string;
   short: string;
@@ -1100,9 +1115,9 @@ export interface IncidentRelated {
   sources?: IncidentSource[];
 }
 
-/** A capability pinned on the incident's drawing that would have broken the chain. */
+/** A control pinned on the incident's drawing that would have broken the chain. */
 export interface IncidentBreak {
-  capability: string;
+  control: string;
   /** One line: where in the chain it bites. */
   how: string;
 }
@@ -1182,9 +1197,11 @@ export interface Dataset {
   tools: Tool[];
   /** Provenance statement for the tool registry; each guidance document carries its own. */
   toolingAttribution: string;
-  /** Capability id -> the organisation's status and display name, from data/status.yaml. */
+  /** Catalogue control id -> its status, worked out from the organisation's controls mapped to it. */
   status: Record<string, CapabilityCustomisation>;
-  /** Tool or cloud id -> the organisation's adoption status and per-setting status, from data/status.yaml. */
+  /** The organisation's own controls, in the order it lists them (data/org/controls.yaml). */
+  orgControls: OrgControl[];
+  /** Tool or cloud id -> the organisation's adoption status and per-setting status, from data/org/products.yaml. */
   productStatus: Record<string, ProductStatusEntry>;
   /** The clouds and the on-premises data centre, and how each hosted pattern is built on them, from data/clouds/. */
   clouds: CloudPlatform[];

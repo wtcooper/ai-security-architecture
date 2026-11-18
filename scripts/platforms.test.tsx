@@ -1,3 +1,4 @@
+import React from "react";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -5,7 +6,9 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { PatternPage } from "../src/components/patterns/PatternPage";
 import { SURFACE_SITUATION } from "../src/components/patterns/labels";
+import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { OnCloud } from "../src/components/cloud/CloudViews";
+import { IncidentWalkthrough } from "../src/components/incidents/IncidentWalkthrough";
 import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor, hostedAs, hostingOptionsFor } from "../src/components/cloud/model";
 import { SettingCheck } from "../src/components/enable/SettingCheck";
 import { CapabilityTable } from "../src/components/enable/CapabilityTable";
@@ -14,6 +17,7 @@ import { ChooseBuild } from "../src/components/enable/ChooseBuild";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { componentChoiceIn, dataset, productsForArchetype } from "../src/lib/data";
 import { checkCommandProblem, HOSTING_COMPARE, type ProductStatusEntry } from "../src/lib/types";
+import { checkOrgControls } from "./lib/enablement";
 import { checkProductStatus } from "./lib/products";
 
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
@@ -285,4 +289,63 @@ test("an organisation can record which ways of hosting it has approved", () => {
   assert.equal(ok[cloud.id].hosting?.[option.id].status, "enabled");
   assert.throws(() => checkProductStatus({ products: { [cloud.id]: { hosting: { noSuchOption: { status: "enabled" } } } } }, dataset.tools, dataset.clouds), /no hosting option/);
   assert.throws(() => checkProductStatus({ products: { [dataset.tools[0].id]: { hosting: { [option.id]: { status: "enabled" } } } } }, dataset.tools, dataset.clouds), /is a tool/);
+});
+
+test("an organisation's controls map many to many onto the catalogue's, and the status rolls up", () => {
+  const cat = dataset.mitigations;
+  const [a, b] = cat.filter((m) => !m.parent).slice(0, 2).map((m) => m.id);
+  const ok = checkOrgControls(
+    {
+      controls: [
+        { id: "SEC-1", name: "First of ours", status: "enabled", maps: [a, b] },
+        { id: "SEC-2", name: "Second of ours", status: "inProgress", maps: [a] },
+        { id: 7 as unknown as string, name: "Inventoried, not assessed", maps: [b] },
+      ],
+    },
+    cat,
+  );
+  assert.equal(ok.orgControls.length, 3);
+  assert.equal(ok.orgControls[2].id, "7", "a numeric identifier is kept as text");
+  assert.equal(ok.status[a].status, "inProgress", "two of ours on one of theirs: enabled only when both are");
+  assert.equal(ok.status[b].status, "inProgress", "an unassessed control holds the rollup back");
+  assert.equal(checkOrgControls({ controls: [{ id: "S", name: "Only one", status: "enabled", maps: [a] }] }, cat).status[a].status, "enabled");
+  assert.deepEqual(checkOrgControls({ controls: [] }, cat), { orgControls: [], status: {} });
+  const refuse = (row: Record<string, unknown>, why: RegExp) => assert.throws(() => checkOrgControls({ controls: [row as never] }, cat), why);
+  refuse({ name: "No id", maps: [a] }, /needs an id/);
+  refuse({ id: "X", maps: [a] }, /needs a name/);
+  refuse({ id: "X", name: "No mapping" }, /needs maps/);
+  refuse({ id: "X", name: "Unknown", maps: ["NOT-A-CONTROL"] }, /not a control in the catalogue/);
+  refuse({ id: "X", name: "Bad status", status: "done", maps: [a] }, /status must be one of/);
+  refuse({ id: "X", name: "Bad link", maps: [a], link: "http://insecure" }, /https/);
+  refuse({ id: "X", name: "Extra", maps: [a], owner: "me" }, /unknown field owner/);
+  assert.throws(() => checkOrgControls({ controls: [{ id: "X", name: "A", maps: [a] }, { id: "X", name: "B", maps: [b] }] }, cat), /used twice/);
+});
+
+test("pages show names, never identifiers: no control id reaches the text of a page", () => {
+  // What a reader sees: the text between tags, and the hover text. Addresses and data attributes are not text.
+  const visible = (html: string) =>
+    [...html.replace(/<(script|style)[\s\S]*?<\/\1>/g, "").matchAll(/>([^<]+)<|\s(?:title|aria-label|alt|placeholder)="([^"]*)"/g)].map((m) => m[1] ?? m[2]).join(" \n ");
+  const ids = dataset.mitigations.map((m) => m.id);
+  const leak = (html: string) => {
+    const text = visible(html);
+    return ids.filter((id) => new RegExp(`(^|[^A-Za-z0-9.-])${id.replace(/[.]/g, "\\.")}([^A-Za-z0-9-]|$)`).test(text));
+  };
+  for (const a of dataset.archetypes) {
+    for (const q of ["", "tab=overview", "tab=risks", "tab=flows", "tab=incidents"]) {
+      assert.deepEqual(leak(page(a.id, q)), [], `${a.id} ${q || "enable"}: shows a control id`);
+    }
+    const open = renderToStaticMarkup(<CapabilityTable groups={controlGroups(a)} archetype={a} open={a.mitigations[0]} onOpen={() => {}} />);
+    assert.deepEqual(leak(open), [], `${a.id}: an open control row shows an id`);
+    assert.doesNotMatch(visible(open), /\b(GV|ID|PR|DE|RS|RC)\.[A-Z]{2}\b/, `${a.id}: a category shows its framework code`);
+  }
+  const wrap = (node: React.ReactNode, path: string, query = "") =>
+    renderToStaticMarkup(
+      <AppRouterContext.Provider value={router}>
+        <PathnameContext.Provider value={path}>
+          <SearchParamsContext.Provider value={new URLSearchParams(query)}>{node}</SearchParamsContext.Provider>
+        </PathnameContext.Provider>
+      </AppRouterContext.Provider>,
+    );
+  for (const c of dataset.clouds) assert.deepEqual(leak(wrap(<CloudsBrowser />, "/reference/clouds", `cloud=${cloudSlug(c.id)}`)), [], `${c.id}: the platform page shows a control id`);
+  for (const i of dataset.incidents) assert.deepEqual(leak(wrap(<IncidentWalkthrough id={i.id} />, `/incidents/${i.id}`, `step=${i.steps.length}`)), [], `${i.id}: the incident page shows a control id`);
 });

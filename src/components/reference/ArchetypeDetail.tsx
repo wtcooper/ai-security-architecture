@@ -52,7 +52,7 @@ function BuiltWith({ archetype, blockId, cloud }: { archetype: Archetype; blockI
   );
 }
 
-/** What the organisation recorded it runs for a component (data/status.yaml), with its own module or runbook. */
+/** What the organisation recorded it runs for a component (data/org/products.yaml), with its own module or runbook. */
 function OurChoice({ choice }: { choice?: ComponentChoice }) {
   if (!choice) return null;
   return (

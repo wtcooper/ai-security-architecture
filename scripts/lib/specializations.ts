@@ -40,7 +40,7 @@ export async function loadSpecializations(root: string, parents: Mitigation[], i
     const parent = byId.get(s.parent);
     check(parent && !parent.parent, `${s.id}: parent ${s.parent} must be a MITRE entry`);
     check(s.title?.trim() && s.implementation?.trim(), `${s.id}: needs a title and an authored implementation`);
-    check(Array.isArray(s.legacy) && s.legacy.length, `${s.id}: names no legacy capability it restores`);
+    check(Array.isArray(s.legacy) && s.legacy.length, `${s.id}: names no retired control id it restores`);
     for (const id of s.legacy) {
       check(ids.legacy.has(id), `${s.id}: unknown legacy id ${id}`);
       check(!legacySeen.has(id), `${s.id}: legacy id ${id} already restored by another specialisation`);

@@ -45,10 +45,13 @@ function renderRefs(
   byId: Map<string, ExternalReference>,
   order: Map<string, number>,
 ) {
+  // Source text may carry a citation key in double brackets and a link written as [name](/path):
+  // neither is for a reader. The key goes; the link keeps its name.
+  const plain = (t: string) => t.replace(/\s*\[\[[^\]]+\]\]/g, "").replace(/\[([^\]]+)\]\([^)\s]*\)/g, "$1");
   const parts = text.split(/(\{\{ref:[^}]+\}\})/g);
   return parts.map((part, i) => {
     const match = part.match(/^\{\{ref:([^}]+)\}\}$/);
-    if (!match) return <span key={i}>{part}</span>;
+    if (!match) return <span key={i}>{plain(part)}</span>;
     const ref = byId.get(match[1]);
     if (!ref) return null;
     return (
@@ -70,7 +73,7 @@ function renderRefs(
 export function firstLine(blocks?: Paragraph[], max = 180): string {
   const first = blocks?.find((b): b is string => typeof b === "string");
   if (!first) return "";
-  const clean = first.replace(/\{\{ref:[^}]+\}\}/g, "").replace(/\s+/g, " ").trim();
+  const clean = first.replace(/\{\{ref:[^}]+\}\}/g, "").replace(/\s*\[\[[^\]]+\]\]/g, "").replace(/\[([^\]]+)\]\([^)\s]*\)/g, "$1").replace(/\s+/g, " ").trim();
   if (clean.length <= max) return clean;
   const cut = clean.slice(0, max);
   return cut.slice(0, cut.lastIndexOf(" ")) + "…";

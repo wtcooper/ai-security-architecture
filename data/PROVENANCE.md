@@ -124,7 +124,7 @@ It supplies CoSAI supporting relationships with rationale, implementation guidan
 and deployment responsibility. It cannot override canonical titles/definitions or introduce
 non-MITRE IDs. A product category or a feature under a broad mitigation is not another
 mitigation; where a MITRE entry is too coarse to act on, the narrowing is an authored
-specialisation in `specializations.yaml` (see Capabilities below), never a new id here. These
+specialisation in `specializations.yaml` (see Controls below), never a new id here. These
 mappings are repository judgments, not MITRE or CoSAI endorsements.
 
 `data/overlay/mitigation-gaps.yaml` records missing/partial requirements against existing
@@ -306,12 +306,17 @@ addressed and flags entries older than six months. The `tooling-onboard` skill u
 
 ## Organisation status
 
-`data/status.yaml` is the adopter's, not this repository's, and ships empty. Keyed by
-capability id — a MITRE mitigation or a `cap-*` specialisation — each entry carries a `status`
-(`enabled`, `inProgress` or `gap`), optionally the organisation's own `displayName` for the
-capability, and a `note`. Status is authored nowhere else: a parent mitigation with no entry
-rolls up its specialisations, and control status is a rollup of the capabilities that support
-the control. The `org-taxonomy-customize` skill walks through it.
+The two files under `data/org/` are the adopter's, not this repository's, and ship empty.
+`data/org/controls.yaml` lists the organisation's own controls, one row each: its own `id`
+(required, unique, never shown on a page), the `name` pages show, optionally a `status`
+(`enabled`, `inProgress` or `gap`), `maps` (one or more catalogue controls, each a MITRE
+mitigation or a `cap-*` specialisation), and optionally a `note` and a `link`. The mapping is
+many to many. Status is authored nowhere else: a catalogue control's status is worked out from
+the rows mapped to it, a parent mitigation with no row mapped rolls up its specialisations, and
+CoSAI control status is a rollup of the controls that support the CoSAI control.
+`data/org/products.yaml` records the tools and platforms the organisation uses, their settings,
+what it runs in place of a reference component, and the hosting options it has approved. The
+`org-taxonomy-customize` skill walks through both.
 
 ## Control families
 
@@ -328,9 +333,9 @@ control applies on every surface.
 `data/overlay/patterns.yaml` is original work too: one line per pattern on when it applies, and
 the search words a reader might use for it.
 
-## Capabilities
+## Controls
 
-A capability is a MITRE mitigation from the selection above, or an authored specialisation of
+A control is a MITRE mitigation from the selection above, or an authored specialisation of
 one. `data/overlay/specializations.yaml` is original work: 17 specialisations with `cap-*`
 keys, each naming exactly one MITRE parent — three under Operational Risk Assessment
 (`D3-ORA`), two each under Generative AI Guardrails (`AML.M0020`), Access Mediation (`D3-AMED`)
@@ -341,14 +346,14 @@ checks (the retrieval path) sit beside Generative AI Guardrails, while injection
 output policy stay inside it. The `cap-*` identifiers are repository keys only; the parent is
 the citable mitigation and the sole source of canonical names and definitions. Each specialisation
 authors its implementation scope and feature list, a `legacy` list of the retired home-grown
-capability ids it restores, and optionally a subset of the parent's controls, per-surface
+control ids it restores, and optionally a subset of the parent's CoSAI controls, per-surface
 overrides with a note, examples, risks and process items written as a title and one playbook
 sentence; everything it does not override is inherited from the parent. The build compiles
-them into the mitigation list and checks that the parent is a MITRE entry, the controls are a
+them into the mitigation list and checks that the parent is a MITRE entry, the CoSAI controls are a
 subset of the parent's, the surfaces are well-formed, and each legacy id is restored by exactly
 one specialisation; the MITRE-id rule applies to parents only. Titles, implementation text,
 surface notes and process items are repository prose, not a published standard, and a mapping
-records that a capability supports a control, never that the control is fulfilled.
+records that a control supports a CoSAI control, never that the CoSAI control is fulfilled.
 
 ## NIST CSF 2.0 crosswalk
 

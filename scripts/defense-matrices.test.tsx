@@ -9,7 +9,7 @@ import { matrixHref } from "../src/components/defenses/DefenseNavigation";
 import { GROUPING_META, mitigationMatrixItem, matchesMatrixFilters } from "../src/components/defenses/model";
 import { CapabilitiesBrowser } from "../src/components/capabilities/CapabilitiesBrowser";
 import { ControlsBrowser } from "../src/components/browse/ControlsBrowser";
-import { controls, controlStatusFor, enablement, enableGroupFor, mitigations, mitigationAliases, mitigationsForControl, status, statusFor } from "../src/lib/data";
+import { controls, controlStatusFor, enablement, enableGroupFor, mitigations, mitigationAliases, mitigationsForControl, orgControls, orgControlsFor, status, statusFor } from "../src/lib/data";
 
 const all = { category: "", surface: "" };
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
@@ -89,7 +89,7 @@ test("specialisations narrow their MITRE parent and restore retired capabilities
     for (const legacy of s.legacy!) assert.ok(mitigationAliases[legacy]?.includes(s.parent!), `${legacy} was migrated onto ${s.parent}`);
   }
   const html = page("/controls", "control=cap-sensitive-data-redaction");
-  assert.match(html, /Authored specialisation of AML\.M0020/);
+  assert.match(html, /Authored here, as a more specific form of Generative AI Guardrails/);
   assert.match(html, /Specialises/);
   assert.match(page("/controls", "control=AML.M0020"), /Specialised as/);
 });
@@ -142,10 +142,34 @@ test("status tints matrix chips without changing them, and a display name rename
     assert.deepEqual(names(before), names(after));
     assert.match(after, / — Enabled/);
   });
-  withStatus({ "D3-MFA": { displayName: "Phishing-resistant sign-in" } }, () => {
-    assert.ok(mitigationMatrixItem(mitigations.find((m) => m.id === "D3-MFA")!).title === "Phishing-resistant sign-in");
+  // The organisation's own controls show beneath the catalogue control, by name; the catalogue name stays the heading.
+  const mine = [
+    { id: "SEC-014", name: "Phishing-resistant sign-in", status: "enabled" as const, maps: ["D3-MFA"] },
+    { id: "SEC-015", name: "Privileged access workstation sign-in", status: "gap" as const, maps: ["D3-MFA", "D3-APA"], link: "https://policies.example.com/sec-015" },
+  ];
+  orgControls.push(...mine);
+  try {
     const detail = page("/controls", "control=D3-MFA");
-    assert.match(detail, /Phishing-resistant sign-in/);
     assert.match(detail, /Multi-factor Authentication/);
-  });
+    assert.match(detail, /Phishing-resistant sign-in/);
+    assert.match(detail, /Privileged access workstation sign-in/);
+    assert.match(detail, /also delivers 1 other control/, "a control of yours can deliver more than one of ours");
+    assert.doesNotMatch(detail, /SEC-014|SEC-015/, "your identifiers are never shown");
+    assert.equal(orgControlsFor("D3-APA").length, 1, "and one of ours can be delivered by several of yours");
+  } finally {
+    orgControls.splice(orgControls.length - mine.length, mine.length);
+  }
+});
+
+test("the catalogue shows names, never identifiers: no control id in the text of any control's page", () => {
+  const visible = (html: string) =>
+    [...html.replace(/<(script|style)[\s\S]*?<\/\1>/g, "").matchAll(/>([^<]+)<|\s(?:title|aria-label|alt|placeholder)="([^"]*)"/g)].map((m) => m[1] ?? m[2]).join(" \n ");
+  const ids = mitigations.map((m) => m.id);
+  const leak = (html: string) => {
+    const text = visible(html);
+    return ids.filter((id) => new RegExp(`(^|[^A-Za-z0-9.-])${id.replace(/[.]/g, "\\.")}([^A-Za-z0-9-]|$)`).test(text));
+  };
+  assert.deepEqual(leak(page("/controls")), [], "the catalogue matrix");
+  for (const m of mitigations) assert.deepEqual(leak(page("/controls", `control=${m.id}`)), [], `${m.id}: its own page`);
+  for (const c of controls) assert.deepEqual(leak(page("/reference/cosai-controls", `control=${c.id}`)), [], `CoSAI ${c.id}`);
 });

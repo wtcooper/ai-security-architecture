@@ -10,7 +10,7 @@
  * vendor's own pages, with no ranking. Two of the three kinds keep the same pattern and change
  * only some components and settings; a managed agent service moves the agent loop into the
  * vendor's boundary, so it is drawn as another pattern and this step links to it. What the
- * organisation has approved (data/status.yaml) is marked on each option.
+ * organisation has approved (data/org/products.yaml) is marked on each option.
  */
 import Link from "next/link";
 
@@ -49,7 +49,7 @@ function HostingCards({
           <>
             <span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
               <span className="text-[13px] font-semibold leading-snug text-ink">{o.name}</span>
-              {approved.set && <AdoptionPill status={approved.status} title={approved.note ?? "Recorded in data/status.yaml"} />}
+              {approved.set && <AdoptionPill status={approved.status} title={approved.note ?? "Recorded in data/org/products.yaml"} />}
             </span>
             <span className="mt-0.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">{HOSTING_KIND_LABEL[o.kind]}</span>
             <span className="mt-1.5 block text-[12.5px] leading-snug text-ink-2">{o.compare.fits}</span>
