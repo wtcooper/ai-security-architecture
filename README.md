@@ -372,7 +372,11 @@ questions about the patterns themselves that the audit and the review turned up.
 **A pattern you host can be read as built on a cloud, or in your own data centre.** Eight of
 the nine "AI you host yourself" patterns (agents, model inference, MCP servers, pipelines) are
 mapped onto AWS, Azure, Google Cloud and an on-premises data centre in `data/clouds/`; the
-ninth, the managed agent service in your cloud, was added on 2026-11-18 and is not mapped yet. A **Built on**
+ninth, the managed agent service in your cloud, is mapped onto the three clouds only, because a
+provider-run service has no on-premises form (the platform's file says so under `notOffered`,
+and the page points to the pattern to build there instead). On that pattern the cloud's own
+agent service comes with the cloud: its product record carries `platform:`, its settings are
+listed with the cloud's rows, and together they must deliver every pinned control. A **Built on**
 switch above the drawing (Generic · AWS · Azure · Google Cloud · On-premises) is one state,
 kept in the address as `?cloud=aws` or `?cloud=onprem` on every tab, and it changes four things
 together: every box on the drawing names what plays it (or says "you build this"); every
@@ -380,7 +384,7 @@ control row on Enable names that platform's own settings for it, and the open ro
 one's place, value and reason; the settings step lists that platform's settings; and How it
 works names what plays each component, with its note, and compares the platforms side by side.
 A control-plane box is a function, not one service, so it lists the settings that deliver its
-controls. The tests check, for all 32 pattern-and-platform pairs, that every named component
+controls. The tests check, for all 35 pattern-and-platform pairs, that every named component
 and every pinned control is covered.
 
 **Where it runs is not what it is built with.** A platform says where each box runs and which
