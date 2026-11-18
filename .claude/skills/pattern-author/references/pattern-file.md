@@ -283,6 +283,23 @@ For a hosted pattern (`surfaceCloud`), each file under `data/clouds/` (`aws.yaml
 `gcp.yaml`, and `onprem.yaml` for the organisation's own data centre) carries one entry under
 `implementations:`. Open an existing entry beside this; the build names anything missing.
 
+A hosted pattern must be mapped on every platform, or the platform must say why it cannot be
+the place for it, at the top of its file:
+
+```yaml
+notOffered:
+  - architecture: archCloudManagedAgent
+    why: "One plain sentence: why this pattern has no form on this platform."
+    instead: archChatAgent          # the pattern to use on this platform instead
+```
+
+Where the pattern is itself a platform's managed service (the managed agent service in your
+cloud), that service's product file carries `platform: cloudAzure` beside `fills:`. Choosing
+the platform then brings the service with it: its settings are listed with the platform's
+rows, the two together must deliver every pinned control, and no setting id may be used by
+both. Put a setting of the service itself in the product file, and a setting of anything
+around it (gateway, network, identity, keys, policy, logs, stores) in the platform's file.
+
 ```yaml
   - architecture: archShortName
     asOf: "2026-11"                 # the month the mapping was written

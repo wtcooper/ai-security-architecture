@@ -17,7 +17,9 @@ data/tooling/
 Vendor exists; id unique and `^tool[A-Z]`; name, family, asOf, summary, ≥1 surface class (all
 known); each variant's class is in `surfaceClasses`; the architecture exists, and there is exactly
 one per entity (no secondary architecture); on a hosted pattern (`surfaceCloud`) the tool has
-`fills`, a list of that architecture's block ids it is used to build; every `controls[].mitigation` is pinned on that
+`fills`, a list of that architecture's block ids it is used to build, and, where the product is one platform's
+own managed service, `platform` (that platform's id in `data/clouds/`: its settings are then listed with the
+platform's rows and no id may be used by both); every `controls[].mitigation` is pinned on that
 architecture and listed once; coverage in enum; each step has title + body; each risk note names a
 pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are optional on a row; the convention is that `native` and
 `partial` rows have them and `none` / `external` / `unknown` rows carry a `note` instead.

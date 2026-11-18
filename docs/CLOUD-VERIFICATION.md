@@ -507,6 +507,45 @@ fine-tuning route is SageMaker AI serverless model customization, not Bedrock mo
 customisation; and Lambda MicroVMs was added for the sandbox because AWS documents it for
 reinforcement-learning environments.
 
+
+## The managed agent service in your cloud
+
+On 18 November 2026 the three cloud agent services (Microsoft Foundry Agent Service, Amazon
+Bedrock AgentCore, and Agent Runtime on Google's Gemini Enterprise Agent Platform) moved from
+the subscribed "API/SDK managed agent runtime" pattern to a hosted pattern of their own. The
+rule is tenancy: a service that runs inside a cloud account the organisation governs belongs
+with the AI it hosts, because the organisation wraps its own cloud controls around it; a
+service in another company's tenancy stays with the AI it subscribes to (Claude Managed
+Agents, OpenAI Agents API).
+
+The pattern is mapped onto the three clouds and not onto the on-premises data centre, where
+nobody runs the agent loop for you. On each cloud the service's own settings (its product
+record) and the cloud's surrounding rows are one list, and together they deliver all 21
+pinned controls. A setting of the service itself lives in the product file; a setting of the
+gateway, network, identity, keys, policy, logs or stores lives in the platform's file.
+
+| Cloud | The service | The gateway in front of your tools | Platform rows | Rows added to the service | Claims | Confirmed | Tightened | Wrong |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Azure | Microsoft Foundry Agent Service, standard setup with private networking | Azure API Management (MCP servers), internal | 21 | 8 | 55 | 43 | 12 | 0 |
+| AWS | Amazon Bedrock AgentCore harness | AgentCore Gateway with Policy in AgentCore | 22 | 7 | 57 | 47 | 10 | 0 |
+GCPROW
+
+Where each cloud does not follow the drawing, in the terms a builder would feel:
+
+- **Azure.** Tool calls are not forced through the gateway: each tool endpoint is pointed at
+  it by hand. State is in your own stores only with standard setup, chosen when the project is
+  created. The endpoint is public by default and network injection is fixed at creation. Web
+  search and Grounding with Bing use public endpoints and leave the compliance boundary.
+  Prompt agents run on Microsoft's loop; hosted agents run your code. Several agent policy
+  definitions are preview.
+- **AWS.** The gateway is an AWS-run service whose public endpoint cannot be closed, so the
+  private path is PrivateLink plus policy conditions. Resource-based policies are documented
+  for runtimes, gateways and memory, not for a harness. State sits in AgentCore Memory, not in
+  stores you bring. A model allowlist on Bedrock's invoke actions does not cover calls made
+  through the newer inference endpoint, which needs its own deny. An invoke call can override
+  the deployed definition.
+GCPDIFF
+
 ## Keeping it current
 
 A mapping is only as good as its last check. `verified` on each mapping and each setting says
