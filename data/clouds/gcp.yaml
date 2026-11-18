@@ -176,11 +176,11 @@ settings:
 
   - id: workloadIdentityGke
     name: Workload Identity Federation for GKE
-    where: GKE cluster and node pools › Workload Identity; a Kubernetes ServiceAccount per run, bound in IAM; a network policy in the SandboxTemplate that allows the GKE metadata server
+    where: GKE cluster and node pools › Workload Identity; a Kubernetes ServiceAccount per workload (per run, for sandboxes), bound in IAM; for sandboxes, a network policy in the SandboxTemplate that allows the GKE metadata server
     setVia: [cloudPolicy, configFile]
     area: identity
-    recommended: "On, with one Kubernetes ServiceAccount per run granted only the platform calls that run needs. All Pods in a SandboxWarmPool share one ServiceAccount, so keep a separate SandboxTemplate and warm pool per run, or create sandboxes on demand without a pool"
-    why: A rollout gets short-lived tokens for its own principal from the GKE metadata server, and the node's credentials stay out of reach. Agent Sandbox's default network policy blocks the metadata server, so this works only once the sandbox's own policy allows it.
+    recommended: "On, with one Kubernetes ServiceAccount per workload, granted only the calls that workload needs. For sandbox runs that means one per run: all Pods in a SandboxWarmPool share one ServiceAccount, so keep a separate SandboxTemplate and warm pool per run, or create sandboxes on demand without a pool"
+    why: A workload gets short-lived tokens for its own principal from the GKE metadata server, and the node's credentials stay out of reach. Agent Sandbox's default network policy blocks the metadata server, so for sandboxes this works only once the sandbox's own policy allows it.
     mitigations: [D3-AA]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
     verified: "2026-11-18"
@@ -811,8 +811,8 @@ settings:
     setVia: [cloudPolicy, configFile]
     area: network
     default: All pods can reach each other; Agent Sandbox adds a policy per SandboxTemplate that still allows egress to the public internet
-    recommended: Default-deny in every serving and sandbox namespace, allowing only the named peers. For serving, that is the gateway and endpoint picker to the vLLM API and serving nodes to each other. For sandboxes, define your own policy in the SandboxTemplate that denies everything except named peers, because a namespace default-deny does not remove the internet egress the default template policy allows
-    why: A pod reaches only the peers its policies name, so vLLM's unauthenticated inter-node channels and one sandbox's neighbours are off limits to everything else. Network policies only add allowances, so the sandbox template's default policy must be replaced, not merely surrounded.
+    recommended: Default-deny in every workload namespace, allowing only the named peers. For an agent, that is the gateway and the stores it uses. For serving, that is the gateway and endpoint picker to the vLLM API and serving nodes to each other. For sandboxes, define your own policy in the SandboxTemplate that denies everything except named peers, because a namespace default-deny does not remove the internet egress the default template policy allows
+    why: A pod reaches only the peers its policies name, so an agent's pods, vLLM's unauthenticated inter-node channels and one sandbox's neighbours are off limits to everything else. Network policies only add allowances, so the sandbox template's default policy must be replaced, not merely surrounded.
     mitigations: [D3-NI]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/network-policy
     verified: "2026-11-18"
@@ -831,12 +831,12 @@ settings:
 
   - id: fqdnNetworkPolicy
     name: FQDN network policies (FQDNNetworkPolicy)
-    where: GKE Dataplane V2 › FQDNNetworkPolicy (networking.gke.io/v1alpha1) per run namespace for names outside the cluster, with label-based Kubernetes NetworkPolicy beside it for in-cluster Services
+    where: GKE Dataplane V2 › FQDNNetworkPolicy (networking.gke.io/v1alpha1) per workload namespace (per run namespace, for sandboxes) for names outside the cluster, with label-based Kubernetes NetworkPolicy beside it for in-cluster Services
     setVia: [configFile]
     area: network
     default: Pods reach any destination
-    recommended: Each rollout allowed only the external names its run needs, such as the package mirror. FQDN policies cannot allow egress to ClusterIP or headless Services, so allow the in-cluster offline web and vLLM API with label-based NetworkPolicy instead
-    why: A policy that selects a rollout's pods denies every endpoint it does not name, so the egress list is enforced on the pod rather than asked of the agent. Allowing a name on shared addresses such as Google APIs allows every other name there, and DNS lookups are not blocked, so add VPC Service Controls behind it.
+    recommended: Each workload allowed only the external names it needs, such as the package mirror for a sandbox rollout. FQDN policies cannot allow egress to ClusterIP or headless Services, so allow in-cluster services (for sandboxes, the offline web and the vLLM API) with label-based NetworkPolicy instead
+    why: A policy that selects a workload's pods denies every endpoint it does not name, so the egress list is enforced on the pod rather than asked of the agent. Allowing a name on shared addresses such as Google APIs allows every other name there, and DNS lookups are not blocked, so add VPC Service Controls behind it.
     mitigations: [cap-agent-egress-control]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
     verified: "2026-11-18"
