@@ -10,6 +10,7 @@ import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor } from "..
 import { SettingCheck } from "../src/components/enable/SettingCheck";
 import { CapabilityTable } from "../src/components/enable/CapabilityTable";
 import { controlGroups } from "../src/components/enable/model";
+import { ChooseBuild } from "../src/components/enable/ChooseBuild";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { componentChoiceIn, dataset, productsForArchetype } from "../src/lib/data";
 import { checkCommandProblem, type ProductStatusEntry } from "../src/lib/types";
@@ -170,12 +171,17 @@ test("on a hosted pattern, where it runs and what it is built with are two choic
     const [framework] = frameworks;
     const render = (selected: string | null, where: typeof platform | null) =>
       renderToStaticMarkup(<ProductSettings archetype={a} products={products} selected={selected} platform={where} onPick={() => {}} lit={null} onLight={() => {}} />);
-    // Nothing chosen: both rows of choices, and no table until the reader picks.
+    // The choices are their own step: where it runs, how it is hosted there, what it is built with.
+    const choose = renderToStaticMarkup(
+      <ChooseBuild archetype={a} products={products} platform={null} framework={null} host={null} onPickPlatform={() => {}} onPickHost={() => {}} onPickFramework={() => {}} />,
+    );
+    for (const label of ["Where it runs", "How it is hosted there", "What you build it with"]) assert.ok(choose.includes(`data-choice="${label}"`), `${a.id}: asks "${label}"`);
+    assert.match(choose, /data-hosting-wait/, `${a.id}: hosting waits for a platform`);
+    assert.doesNotMatch(choose, /data-settings=/, `${a.id}: no settings in the step of choices`);
+    // Nothing chosen: the settings step says so and shows no table.
     const none = render(null, null);
-    assert.match(none, /data-choice="Where it runs"/);
-    assert.match(none, /data-choice="What you build it with"/);
     assert.match(none, /data-choose-first/);
-    assert.doesNotMatch(none, /data-settings=/);
+    assert.doesNotMatch(none, /data-settings=|role="tab"/);
     // Both chosen: one table holding both products' settings, each row saying whose it is.
     const both = render(framework.id, platform);
     assert.match(both, new RegExp(`data-settings="${platform.id} ${framework.id}"`), `${a.id}: one table for both`);
@@ -203,7 +209,8 @@ test("on a hosted pattern, where it runs and what it is built with are two choic
   // A pattern that is bought, not hosted, keeps its one row of products.
   const bought = dataset.archetypes.find((a) => a.surface !== "surfaceCloud" && productsForArchetype(a.id).length > 1)!;
   const one = renderToStaticMarkup(<ProductSettings archetype={bought} products={productsForArchetype(bought.id)} selected={null} onPick={() => {}} lit={null} onLight={() => {}} />);
-  assert.doesNotMatch(one, /data-hosted-choices/);
+  assert.doesNotMatch(one, /data-hosted-settings/);
+  assert.match(one, /role="tab"/);
 });
 
 test("agent federation checks both peers alike; only whose identity travels differs", () => {

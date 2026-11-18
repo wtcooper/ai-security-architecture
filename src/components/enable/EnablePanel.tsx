@@ -2,7 +2,8 @@
 
 /**
  * The Enable tab of a pattern: how to put it in place, as two folded steps that read the same
- * way. The enterprise controls, each saying what to do and why; then the same list as settings
+ * way, or three on a pattern the organisation hosts, where a step of choices (which platform, how
+ * it is hosted there, which framework) sits between the controls and their settings. The enterprise controls, each saying what to do and why; then the same list as settings
  * of the cloud or tool it runs on, under the same headings: what to set, why, and the control
  * each delivers. The tab opens as those two lines
  * and nothing else; a step unfolds to its rows. Every control row is a numbered chip on the
@@ -18,9 +19,10 @@ import { useState, type ReactNode } from "react";
 
 import { capabilityName, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
-import { productShort, type CloudProduct } from "@/components/cloud/model";
+import { hostingInEffect, productShort, type CloudProduct } from "@/components/cloud/model";
 import { BASELINE_HELP, CapabilityTable } from "./CapabilityTable";
 import { baselineNotPinned, controlGroups } from "./model";
+import { ChooseBuild } from "./ChooseBuild";
 import { ProductSettings } from "./ProductSettings";
 
 const anyStatus = Object.values(status).some((s) => s.status);
@@ -32,7 +34,7 @@ function Progress({ capabilities }: { capabilities: Mitigation[] }) {
   return <span className="text-[12px] font-normal text-ink-3">{enabled} of {capabilities.length} enabled</span>;
 }
 
-type StepId = "controls" | "tools";
+type StepId = "controls" | "choose" | "tools";
 
 function Step({
   n,
@@ -95,6 +97,8 @@ export function EnablePanel({
   onPickTool,
   onDropFramework,
   cloud = null,
+  host = null,
+  onHost,
 }: {
   archetype: Archetype;
   /** The control row that is open, and lit on the drawing. */
@@ -109,6 +113,9 @@ export function EnablePanel({
   onDropFramework?: () => void;
   /** The cloud the pattern is shown as built on, or null for the cloud-neutral pattern. */
   cloud?: CloudProduct | null;
+  /** The hosting option chosen on that platform, or null for the one its mapping describes. */
+  host?: string | null;
+  onHost?: (optionId: string | null) => void;
 }) {
   const groups = controlGroups(archetype);
   const controls = groups.flatMap((g) => g.capabilities);
@@ -124,6 +131,9 @@ export function EnablePanel({
   // What the control rows name settings for: both choices on a hosted pattern, else the one product open.
   const chosen = built ? [platform, framework].filter((p): p is NonNullable<typeof p> => Boolean(p)) : picked ? [picked] : [];
   const platformCount = products.filter((p) => p.kind === "cloud").length;
+  const frameworkCount = products.length - platformCount;
+  // How it is hosted on the chosen platform, where its options have been compared.
+  const inEffect = platform ? hostingInEffect(platform, host) : undefined;
 
   // Every step starts folded. A step also stands open while it holds the lit control or the
   // opened product, so a chip picked on the drawing or a product link lands on a visible row.
@@ -133,6 +143,8 @@ export function EnablePanel({
   const [litFromTools, setLitFromTools] = useState(false);
   const holds: Record<StepId, boolean> = {
     controls: !litFromTools && controls.some((m) => m.id === open),
+    // Choosing is the reader's own act: the step opens only by hand.
+    choose: false,
     tools: Boolean(productId && products.some((p) => p.id === productId)),
   };
   const isOpen = (id: StepId) => unfolded.has(id) || holds[id];
@@ -151,8 +163,10 @@ export function EnablePanel({
   return (
     <div className="space-y-2.5">
       <p className="mb-3 max-w-3xl text-[13px] leading-relaxed text-ink-2">
-Two steps to run this pattern safely: put the controls in place, then set them in the product you run. Each control is a
-        numbered chip on the drawing: pick a chip to open its row.
+{built
+          ? "Three steps to run this pattern safely: put the controls in place, choose how you will build it, then set the controls in what you chose."
+          : "Two steps to run this pattern safely: put the controls in place, then set them in the product you run."}{" "}
+        Each control is a numbered chip on the drawing: pick a chip to open its row.
       </p>
 
       <Step
@@ -196,26 +210,54 @@ Two steps to run this pattern safely: put the controls in place, then set them i
         )}
       </Step>
 
+      {built && (
+        <Step
+          n={2}
+          id="choose"
+          title={"Choose how you\u2019ll build it"}
+          aside={count(
+            [
+              platform ? platform.cloud.short : `${platformCount} platforms`,
+              inEffect ? inEffect.name : null,
+              framework ? framework.name : frameworkCount ? `${frameworkCount} ${frameworkCount === 1 ? "framework" : "frameworks"}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          )}
+          expanded={isOpen("choose")}
+          onToggle={() => toggle("choose")}
+          lead="Three choices, in the order you make them: the platform it runs on, how it is hosted there, and the framework or server you build with. Compared, not ranked."
+        >
+          <ChooseBuild
+            archetype={archetype}
+            products={products}
+            platform={platform}
+            framework={framework}
+            host={host}
+            onPickPlatform={(id) => onPickTool(id)}
+            onPickHost={(id) => onHost?.(id)}
+            onPickFramework={(id) => {
+              if (id === null && onDropFramework) onDropFramework();
+              else onPickTool(id ?? platform?.id ?? null);
+            }}
+          />
+        </Step>
+      )}
+
       <Step
-        n={2}
+        n={built ? 3 : 2}
         id="tools"
-        title={built ? "Set it where it runs, and in what you build it with" : "Set it in your product"}
-        aside={
-          products.length
-            ? count(
-                built
-                  ? `${cloud ? `${cloud.cloud.short} · ` : ""}${platformCount} platforms${products.length > platformCount ? ` · ${products.length - platformCount} ${products.length - platformCount === 1 ? "framework" : "frameworks"}` : ""}`
-                  : `${products.length} products`,
-              )
-            : undefined
-        }
+        title={built ? "Set it" : "Set it in your product"}
+        aside={products.length ? count(built ? (chosen.length ? `${chosen.reduce((n, p) => n + p.settings.length, 0)} settings` : "nothing chosen yet") : `${products.length} products`) : undefined}
         expanded={isOpen("tools")}
         onToggle={() => toggle("tools")}
         lead={
           !products.length
             ? "No product of this kind is catalogued yet. Build it to the controls above."
             : built
-              ? "The same list, now as settings. Two separate choices: the platform it runs on, and the framework or server you build it with. Pick one of each."
+              ? chosen.length
+                ? `The same list as step 1, now as settings of ${chosen.map((p) => p.name).join(" and ")}: what to set and to what, why, and the control each one delivers.`
+                : "The same list as step 1, now as settings of what you chose in step 2: what to set and to what, why, and the control each one delivers."
               : "The same list, now as settings: what to set and to what, why, and the control each one delivers. Pick your product first."
         }
       >
@@ -225,12 +267,7 @@ Two steps to run this pattern safely: put the controls in place, then set them i
             products={products}
             selected={picked?.id ?? platform?.id ?? null}
             platform={platform}
-            onPick={(id) => {
-              // The step stays open while the reader is choosing, whatever they let go of.
-              setUnfolded(new Set(unfolded).add("tools"));
-              if (id === null && onDropFramework) onDropFramework();
-              else onPickTool(id ?? platform?.id ?? null);
-            }}
+            onPick={(id) => onPickTool(id ?? platform?.id ?? null)}
             lit={open}
             onLight={(id) => {
               setLitFromTools(true);

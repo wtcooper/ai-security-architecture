@@ -811,6 +811,12 @@ export interface ProductStatusEntry {
   /** `link` is the organisation's own module, policy or runbook that applies the setting. */
   settings?: Record<string, { status?: AdoptionStatus; value?: string; note?: string; link?: string }>;
   /**
+   * Platforms only: which ways of hosting the organisation has approved, keyed by a hosting
+   * option's id (`aks`, `containerApps`, `foundryAgentService`). It turns the general comparison
+   * into a specific answer for the organisation's own builders.
+   */
+  hosting?: Record<string, { status?: AdoptionStatus; note?: string }>;
+  /**
    * Clouds and on-premises only: what the organisation runs for a component in place of the
    * reference service. Keyed by a block id (every pattern on this platform that has the block)
    * or "<pattern id>/<block id>" (that pattern only, which wins).
@@ -889,6 +895,66 @@ export interface CloudImplementation {
   /** Services needed on this cloud that are not boxes on the drawing. */
   alsoNeeded?: CloudSupportingService[];
   /** The vendor's own pages for building this: a quickstart, tutorial or reference implementation. */
+  quickstart?: GuidanceLink[];
+  /**
+   * The ways this platform can host the pattern, compared row for row. One is `mapped`: the
+   * components and settings above describe it. Absent where only one way has been mapped.
+   */
+  hosting?: HostingOption[];
+}
+
+/**
+ * Who runs the agent. On your own cluster and on the platform's container runtime the pattern is
+ * the same and only some components and settings change; a managed agent service moves the agent
+ * loop into the vendor's boundary, which is a different pattern.
+ */
+export const HOSTING_KINDS = ["cluster", "runtime", "managed"] as const;
+export type HostingKind = (typeof HOSTING_KINDS)[number];
+
+/** The rows every hosting option is compared on, in the order they are read. No ranking. */
+export const HOSTING_COMPARE = [
+  ["agentLoop", "Who runs the agent loop"],
+  ["patching", "Who patches the runtime"],
+  ["data", "Where prompts and state are processed and kept"],
+  ["network", "Private networking and outbound control"],
+  ["identity", "The identity the agent runs as"],
+  ["framework", "Frameworks and agent types it accepts"],
+  ["longRunning", "Long-running and event-driven work"],
+  ["portability", "What moving off it involves"],
+  ["effort", "What your team operates"],
+  ["fits", "When the vendor says it fits"],
+] as const;
+export type HostingCompareKey = (typeof HOSTING_COMPARE)[number][0];
+
+export interface HostingOption {
+  /** camelCase, unique within the mapping; the key in the address and in data/status.yaml. */
+  id: string;
+  kind: HostingKind;
+  /** The service as the vendor names it. */
+  name: string;
+  url?: string;
+  asOf?: string;
+  /** True for the one option the mapping's components and settings describe. */
+  mapped?: boolean;
+  /** One plain, sourced sentence per row; the same rows for every option. */
+  compare: Record<HostingCompareKey, string>;
+  /** The vendor pages the comparison rests on. */
+  sources?: string[];
+  /** Managed only: the pattern this option is drawn as, and the product catalogued on it. */
+  pattern?: string;
+  tool?: string;
+  /** Managed only: the kinds of agent the service lets you build. */
+  offers?: { name: string; what: string; url?: string }[];
+  /** A variant on the same pattern (not the mapped one): only what changes. */
+  summary?: string;
+  bindings?: CloudBinding[];
+  /** Settings of the mapped option that do not apply, and library settings that take their place. */
+  dropSettings?: string[];
+  addSettings?: string[];
+  /** Differences of the mapped option that no longer hold, by place; and this option's own. */
+  dropDifferences?: string[];
+  differences?: CloudDifference[];
+  alsoNeeded?: CloudSupportingService[];
   quickstart?: GuidanceLink[];
 }
 

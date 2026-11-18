@@ -4,6 +4,8 @@ import { parse } from "yaml";
 import {
   ADOPTION_STATUSES,
   CLOUD_ROLES,
+  HOSTING_COMPARE,
+  HOSTING_KINDS,
   SETTING_AREAS,
   SETTING_VIAS,
   checkCommandProblem,
@@ -67,7 +69,7 @@ export function checkSettings(
 /** The platforms under data/clouds/ (three clouds and the organisation's own data centre), each with its settings and its implementations. */
 export async function loadClouds(
   root: string,
-  ctx: { archetypes: Archetype[]; mitigationIds: Set<string>; fail: (msg: string) => void },
+  ctx: { archetypes: Archetype[]; mitigationIds: Set<string>; fail: (msg: string) => void; toolIds?: Set<string> },
 ): Promise<CloudPlatform[]> {
   const dir = join(root, "data", "clouds");
   let files: string[] = [];
@@ -148,6 +150,66 @@ export async function loadClouds(
         if (n.url && !/^https:\/\//.test(n.url)) ctx.fail(`${at}: also-needed ${n.service}: url must be https`);
       }
       for (const q of impl.quickstart ?? []) if (!q.title?.trim() || !/^https:\/\//.test(q.url ?? "")) ctx.fail(`${at}: a quickstart needs a title and an https address`);
+      // Hosting options: the same rows for each, one of them the mapping itself.
+      const options = impl.hosting ?? [];
+      if (options.length) {
+        if (options.filter((o) => o.mapped).length !== 1) ctx.fail(`${at}: exactly one hosting option is mapped: true, the one the components and settings describe`);
+        const ids = new Set<string>();
+        for (const o of options) {
+          const oat = `${at} hosting ${o.id}`;
+          if (!/^[a-z][A-Za-z0-9]*$/.test(o.id ?? "") || ids.has(o.id)) ctx.fail(`${oat}: id must be camelCase and unique`);
+          ids.add(o.id);
+          if (!HOSTING_KINDS.includes(o.kind)) ctx.fail(`${oat}: kind must be one of ${HOSTING_KINDS.join(", ")}`);
+          if (!o.name?.trim()) ctx.fail(`${oat}: needs a name`);
+          if (o.url && !/^https:\/\//.test(o.url)) ctx.fail(`${oat}: url must be https`);
+          for (const [key, label] of HOSTING_COMPARE) {
+            const text = String(o.compare?.[key] ?? "").trim();
+            if (!text) ctx.fail(`${oat}: compare needs "${key}" (${label}); every option answers the same rows`);
+            else if (text.length > 190) ctx.fail(`${oat}: compare.${key} is ${text.length} characters; keep it to 190`);
+          }
+          const unknownRows = Object.keys(o.compare ?? {}).filter((k) => !HOSTING_COMPARE.some(([key]) => key === k));
+          if (unknownRows.length) ctx.fail(`${oat}: unknown compare row ${unknownRows.join(", ")}`);
+          for (const u of o.sources ?? []) if (!/^https:\/\//.test(u)) ctx.fail(`${oat}: a source must be an https address`);
+          if (o.kind === "managed") {
+            // The vendor runs the agent loop there, so it is drawn as another pattern.
+            if (!o.pattern || !archById.has(o.pattern)) ctx.fail(`${oat}: a managed option names the pattern it is drawn as`);
+            if (o.mapped || o.bindings?.length || o.addSettings?.length) ctx.fail(`${oat}: a managed option is another pattern, not a variant of this one`);
+            if (o.tool && ctx.toolIds && !ctx.toolIds.has(o.tool)) ctx.fail(`${oat}: unknown tool ${o.tool}`);
+            for (const x of o.offers ?? []) if (!x.name?.trim() || !x.what?.trim()) ctx.fail(`${oat}: each offer needs a name and what it is`);
+            continue;
+          }
+          if (o.mapped) {
+            if (o.bindings?.length || o.addSettings?.length || o.dropSettings?.length) ctx.fail(`${oat}: the mapped option is the mapping itself; put its components and settings there`);
+            continue;
+          }
+          // A variant states only what changes, and must still deliver every pinned control.
+          const seenBlocks = new Set<string>();
+          for (const b of o.bindings ?? []) {
+            if (!impl.bindings.some((x) => x.block === b.block)) ctx.fail(`${oat}: binding for ${b.block}, which the mapping does not bind`);
+            if (seenBlocks.has(b.block)) ctx.fail(`${oat}: block ${b.block} bound twice`);
+            seenBlocks.add(b.block);
+            if (!b.service?.trim()) ctx.fail(`${oat} ${b.block}: needs a service`);
+            if (b.url && !/^https:\/\//.test(b.url)) ctx.fail(`${oat} ${b.block}: url must be https`);
+          }
+          for (const id of o.dropSettings ?? []) if (!(impl.settings ?? []).includes(id)) ctx.fail(`${oat}: drops ${id}, which the mapping does not list`);
+          for (const id of o.addSettings ?? []) {
+            if (!settingById.has(id)) ctx.fail(`${oat}: adds unknown setting ${id}`);
+            used.add(id);
+          }
+          const dropped = new Set(o.dropSettings ?? []);
+          const kept = [...(impl.settings ?? []).filter((id) => !dropped.has(id)), ...(o.addSettings ?? [])];
+          const covered = new Set(kept.flatMap((id) => settingById.get(id)?.mitigations ?? []));
+          for (const id of arch.mitigations) if (!covered.has(id)) ctx.fail(`${oat}: pinned capability ${id} has no setting once the dropped ones are gone`);
+          for (const d of o.differences ?? []) {
+            if (!arch.blocks.some((x) => x.id === d.at) && !edgeKeys.has(d.at)) ctx.fail(`${oat}: difference at "${d.at}" is neither a block nor a flow of ${arch.id}`);
+            if (!d.text?.trim() || d.text.length > 380) ctx.fail(`${oat}: difference at ${d.at} needs text of at most 380 characters`);
+          }
+          for (const n of o.alsoNeeded ?? []) {
+            if (!n.service?.trim() || !n.why?.trim()) ctx.fail(`${oat}: an also-needed service needs a name and a reason`);
+            if (!CLOUD_ROLES.includes(n.role)) ctx.fail(`${oat}: also-needed ${n.service}: role must be one of ${CLOUD_ROLES.join(", ")}`);
+          }
+        }
+      }
       const pinned = new Set(arch.mitigations);
       for (const id of impl.settings ?? []) {
         const s = settingById.get(id);
@@ -192,7 +254,7 @@ export function checkProductStatus(
     const known = settingsOf.get(id);
     check(known, `unknown product ${id} — use a tool id from data/tooling/ or a cloud id from data/clouds/`);
     check(entry && typeof entry === "object", `${id} needs a status, a note or settings`);
-    const extra = Object.keys(entry).filter((k) => !["status", "note", "settings", "components"].includes(k));
+    const extra = Object.keys(entry).filter((k) => !["status", "note", "settings", "components", "hosting"].includes(k));
     check(!extra.length, `${id} has unknown field ${extra.join(", ")}`);
     check(entry.status === undefined || ADOPTION_STATUSES.includes(entry.status), `${id} status must be one of ${ADOPTION_STATUSES.join(", ")}`);
     for (const [sid, s] of Object.entries(entry.settings ?? {})) {
@@ -202,6 +264,12 @@ export function checkProductStatus(
     }
     // What the organisation runs for a component in place of the reference service.
     const cloud = clouds.find((c) => c.id === id);
+    // Which ways of hosting it has approved.
+    check(!entry.hosting || cloud, `${id} is a tool; hosting options are recorded on a cloud or on-premises entry`);
+    for (const [optionId, h] of Object.entries(entry.hosting ?? {})) {
+      check(cloud!.implementations.some((i) => i.hosting?.some((o) => o.id === optionId)), `${id}.hosting ${optionId}: no hosting option with that id on any pattern mapped onto ${id}`);
+      check(h?.status === undefined || ADOPTION_STATUSES.includes(h.status), `${id}.hosting ${optionId} status must be one of ${ADOPTION_STATUSES.join(", ")}`);
+    }
     check(!entry.components || cloud, `${id} is a tool; components are recorded on a cloud or on-premises entry`);
     for (const [key, choice] of Object.entries(entry.components ?? {})) {
       const [archId, blockId] = key.includes("/") ? key.split("/") : [null, key];

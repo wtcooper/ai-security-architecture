@@ -325,7 +325,7 @@ async function main() {
   // --- AI tooling registry -------------------------------------------------------
   const toolingLoaded = await loadTooling();
   const tools = checkTooling(toolingLoaded, { archetypes, riskIds, mitigationIds });
-  const clouds = await loadClouds(ROOT, { archetypes, mitigationIds, fail });
+  const clouds = await loadClouds(ROOT, { archetypes, mitigationIds, fail, toolIds: new Set(tools.map((t) => t.id)) });
 
   // --- Controls guidance ---------------------------------------------------------
   const guidanceLoaded = await loadGuidance();
@@ -975,6 +975,7 @@ function checkArchetypes(
       // What survives is the observation, reported and never blocking: an edge leaving a band
       // we operate without passing through a component that carries an inline mitigation pin.
       const ownerOf = new Map(arch.blocks.map((b) => [b.id, zoneOwner.get(b.zone ?? "")]));
+      const byId = new Map(arch.blocks.map((b) => [b.id, b]));
       const OURS = new Set(["endpoint", "cloud"]);
       const inlinePinned = new Set(
         (arch.pins?.mitigations ?? [])
@@ -989,6 +990,12 @@ function checkArchetypes(
         if (!OURS.has(from) && !OURS.has(to)) continue;
         if (from === "user" || to === "user") continue;
         if (inlinePinned.has(e.from) || inlinePinned.has(e.to)) continue;
+        // A control pinned on a boundary that encloses an end (a sandbox round the tools) holds at the crossing.
+        const enclosed = (id: string) => {
+          for (let p = byId.get(byId.get(id)?.parent ?? ""); p; p = byId.get(p.parent ?? "")) if (p.kind === "boundary" && inlinePinned.has(p.id)) return true;
+          return false;
+        };
+        if (enclosed(e.from) || enclosed(e.to)) continue;
         uncontrolledCrossings.push(
           `${where}: ${e.from}->${e.to} leaves the ${from} band for ${to} without an inline control pinned at either end`,
         );

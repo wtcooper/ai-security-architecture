@@ -7,7 +7,7 @@
 import { ownedControls } from "@/components/drawing/layout";
 import { archetypesInOrder, clouds, productsForArchetype, type Product } from "@/lib/data";
 import { cloudSlug } from "@/lib/routes";
-import type { Archetype, ArchBlock, CloudBinding, CloudPlatform, ProductSetting } from "@/lib/types";
+import type { Archetype, ArchBlock, CloudBinding, CloudPlatform, HostingOption, ProductSetting } from "@/lib/types";
 
 export type CloudProduct = Extract<Product, { kind: "cloud" }>;
 
@@ -23,6 +23,59 @@ export const cloudProductsFor = (archetypeId: string): CloudProduct[] =>
 
 export const cloudProductFor = (archetypeId: string, cloudId: string | null): CloudProduct | null =>
   cloudId ? cloudProductsFor(archetypeId).find((p) => p.id === cloudId) ?? null : null;
+
+/** The ways a platform can host a pattern, if more than one has been compared. */
+export const hostingOptionsFor = (product: CloudProduct): HostingOption[] => product.implementation.hosting ?? [];
+
+/** The option the mapping's own components and settings describe. */
+export const mappedHosting = (product: CloudProduct): HostingOption | undefined => hostingOptionsFor(product).find((o) => o.mapped);
+
+/** The hosting option in effect: the one chosen if it is a variant of this pattern, else the mapped one. */
+export const hostingInEffect = (product: CloudProduct, optionId: string | null): HostingOption | undefined => {
+  const chosen = hostingOptionsFor(product).find((o) => o.id === optionId && o.kind !== "managed");
+  return chosen ?? mappedHosting(product);
+};
+
+/**
+ * A platform as hosted on one of its options. The mapped option is the mapping itself; a variant
+ * changes only some components and settings, so everything else is carried over. A managed
+ * option is another pattern and is never resolved here.
+ */
+const resolved = new Map<string, CloudProduct>();
+export function hostedAs(product: CloudProduct, optionId: string | null): CloudProduct {
+  const option = hostingOptionsFor(product).find((o) => o.id === optionId);
+  if (!option || option.mapped || option.kind === "managed") return product;
+  const key = `${product.id}|${product.implementation.architecture}|${option.id}`;
+  const cached = resolved.get(key);
+  if (cached) return cached;
+  const impl = product.implementation;
+  const swap = new Map((option.bindings ?? []).map((b) => [b.block, b]));
+  const dropped = new Set(option.dropSettings ?? []);
+  const gone = new Set(option.dropDifferences ?? []);
+  const ids = [...impl.settings.filter((id) => !dropped.has(id)), ...(option.addSettings ?? [])];
+  const byId = new Map(product.cloud.settings.map((st) => [st.id, st]));
+  const next: CloudProduct = {
+    ...product,
+    implementation: {
+      ...impl,
+      summary: option.summary ? [option.summary] : impl.summary,
+      bindings: impl.bindings.map((b) => (swap.has(b.block) ? { ...swap.get(b.block)!, verified: swap.get(b.block)!.url ? impl.verified : undefined } : b)),
+      settings: ids,
+      differences: [...(impl.differences ?? []).filter((d) => !gone.has(d.at)), ...(option.differences ?? [])],
+      alsoNeeded: [...(impl.alsoNeeded ?? []), ...(option.alsoNeeded ?? [])],
+      quickstart: option.quickstart?.length ? option.quickstart : impl.quickstart,
+    },
+    settings: ids.map((id) => byId.get(id)!).filter(Boolean),
+  };
+  resolved.set(key, next);
+  return next;
+}
+
+export const HOSTING_KIND_LABEL: Record<string, string> = {
+  cluster: "Your own cluster",
+  runtime: "The platform's container runtime",
+  managed: "A managed agent service",
+};
 
 /** A product's own settings that deliver one control on this pattern, in the order the product lists them. */
 export const optionsFor = (product: Product, controlId: string): ProductSetting[] =>

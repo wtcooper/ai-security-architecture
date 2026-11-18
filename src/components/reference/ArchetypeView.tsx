@@ -15,7 +15,7 @@ import { EnablePanel } from "@/components/enable/EnablePanel";
 import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
 import { CrossingsRegister } from "@/components/drawing/CrossingsRegister";
 import { CloudSwitch } from "@/components/cloud/CloudSwitch";
-import { cloudProductFor, cloudProductsFor, differenceMarks, platformWords } from "@/components/cloud/model";
+import { cloudProductFor, cloudProductsFor, differenceMarks, hostedAs, hostingInEffect, platformWords, type CloudProduct } from "@/components/cloud/model";
 import { cloudById, componentChoiceFor, incidents, toolById } from "@/lib/data";
 import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
@@ -30,10 +30,12 @@ import { PatternIncidents, PatternRisks } from "@/components/patterns/PatternPan
  * receives the same Map on every render and does not rebuild its nodes.
  */
 const serviceMaps = new Map<string, Map<string, BlockService> | null>();
-function servicesFor(cloudId: string, archetypeId: string) {
-  const key = `${cloudId}|${archetypeId}`;
+function servicesFor(product: CloudProduct, hostId: string | null) {
+  const cloudId = product.id;
+  const archetypeId = product.implementation.architecture;
+  const key = `${cloudId}|${archetypeId}|${hostId ?? ""}`;
   if (!serviceMaps.has(key)) {
-    const impl = cloudById.get(cloudId)?.implementations.find((i) => i.architecture === archetypeId);
+    const impl = product.implementation;
     serviceMaps.set(
       key,
       impl
@@ -76,9 +78,12 @@ interface ArchetypeViewProps {
   /** The cloud the pattern is shown as built on, or null for the cloud-neutral pattern. */
   cloud: string | null;
   onCloud: (cloudId: string | null) => void;
+  /** How it is hosted on that platform, or null for the option the mapping describes. */
+  host?: string | null;
+  onHost?: (optionId: string | null) => void;
 }
 
-export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud, host = null, onHost }: ArchetypeViewProps) {
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const drawingRef = useRef<HTMLDivElement>(null);
   const open = highlight?.kind === "mitigation" ? highlight.id : null;
@@ -87,8 +92,11 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   // service that plays it, and Enable lists that cloud's own options beside every control. One
   // state, held by the page, so the switch above the drawing and the pills on Enable agree.
   const cloudProducts = cloudProductsFor(archetype.id);
-  const cloudProduct = cloudProductFor(archetype.id, cloud);
-  const services = cloudProduct ? servicesFor(cloudProduct.id, archetype.id) : null;
+  // The platform as hosted on the chosen option: a variant changes some components and settings.
+  const mappedProduct = cloudProductFor(archetype.id, cloud);
+  const cloudProduct = mappedProduct ? hostedAs(mappedProduct, host) : null;
+  const hosting = cloudProduct ? hostingInEffect(cloudProduct, host) : undefined;
+  const services = cloudProduct ? servicesFor(cloudProduct, hosting && !hosting.mapped ? hosting.id : null) : null;
   // Where the chosen cloud does not follow the drawing: marked on the drawing, listed under How it works.
   const differs = useMemo(() => (cloudProduct ? differenceMarks(archetype, cloudProduct) : null), [archetype, cloudProduct]);
   // The framework or server chosen in the settings step, named in the box it fills.
@@ -190,7 +198,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           <p className="text-[12.5px] leading-snug text-ink-3" data-cloud-caption>
             {cloudProduct ? (
               <>
-                Each box names the {platformWords(cloudProduct.cloud).service} that plays it.
+                Each box names the {platformWords(cloudProduct.cloud).service} that plays it{hosting ? `, hosted on ${hosting.name}` : ""}.
                 {(differCount > 0 || moreCount > 0) && (
                   <>
                     {" "}
@@ -327,6 +335,8 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
             focus={focus}
             onPickTool={pickProduct}
             onDropFramework={() => onPickTool(cloudProduct?.id ?? null)}
+            host={host}
+            onHost={onHost}
             cloud={cloudProduct}
           />
         )}

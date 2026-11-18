@@ -37,6 +37,9 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
   const tabFrom = (t: PatternTab | null): PatternTab => (t && PATTERN_TABS.includes(t) ? t : "enable");
   const [tab, setTab] = useState<PatternTab>(linkedToolOnly ? "enable" : tabFrom(linkedTab));
   const [cloud, setCloud] = useState<string | null>(linkedCloud);
+  // How the pattern is hosted on that cloud (`?host=aks`); null is the option its mapping describes.
+  const linkedHost = linkedCloud ? params.get("host") : null;
+  const [host, setHost] = useState<string | null>(linkedHost);
   // Index into the walk list, or null for the resting drawing. The flows tab opens on the
   // complete walk; every other tab shows the whole pattern, nothing faded.
   const [walkIndex, setWalkIndex] = useState<number | null>(tab === "flows" ? 0 : null);
@@ -45,7 +48,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
 
   // A link to this page from this page (search, say) changes the URL but not the mounted view:
   // adopt what it names. Our own replaceState echoes back here too, but matches the state already.
-  const linkKey = `${linkedTab}|${linkedTool}|${linkedCloud}`;
+  const linkKey = `${linkedTab}|${linkedTool}|${linkedCloud}|${linkedHost}`;
   const [seenKey, setSeenKey] = useState(linkKey);
   if (linkKey !== seenKey) {
     setSeenKey(linkKey);
@@ -53,6 +56,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     if (nextTab !== tab) setTab(nextTab);
     if (linkedToolOnly !== (selected?.tool ?? null)) setSelected(linkedToolOnly ? { tool: linkedToolOnly } : null);
     if (linkedCloud !== cloud) setCloud(linkedCloud);
+    if (linkedHost !== host) setHost(linkedHost);
   }
 
   // A product of another pattern in the address belongs on that pattern's page.
@@ -95,12 +99,13 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     const query = new URLSearchParams();
     if (tab !== "enable") query.set("tab", tab);
     if (cloud) query.set("cloud", cloudSlug(cloud));
+    if (cloud && host) query.set("host", host);
     // The open product stays in the address, a cloud included: the address is read back into
     // this page's state, so leaving it out would fold the step the reader just opened.
     if (tab === "enable" && selected) query.set("tool", selected.tool);
     const open = tab === "enable" && highlight?.kind === "mitigation" ? `#control-${highlight.id}` : "";
     window.history.replaceState(null, "", `${window.location.pathname}${query.size ? `?${query}` : ""}${open}`);
-  }, [arrived, tab, selected, highlight, cloud]);
+  }, [arrived, tab, selected, highlight, cloud, host]);
 
   const onWalk = (i: number | null) => {
     setWalkIndex(i);
@@ -163,7 +168,13 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
           focus={null}
           onPickTool={(id) => setSelected(id ? { tool: id } : null)}
           cloud={cloud}
-          onCloud={setCloud}
+          onCloud={(id) => {
+            // A hosting option belongs to one platform: changing the platform lets go of it.
+            if (id !== cloud) setHost(null);
+            setCloud(id);
+          }}
+          host={host}
+          onHost={setHost}
         />
       </div>
     </>

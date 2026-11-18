@@ -334,6 +334,12 @@ export const componentChoiceIn = (status: Record<string, ProductStatusEntry>, pl
 };
 export const componentChoiceFor = (platformId: string, archetypeId: string, blockId: string) => componentChoiceIn(productStatus, platformId, archetypeId, blockId);
 
+/** Whether the organisation has approved one way of hosting on a platform, if it recorded it. */
+export const hostingAdoptionFor = (platformId: string, optionId: string): { status: AdoptionStatus; set: boolean; note?: string } => {
+  const entry = productStatus[platformId]?.hosting?.[optionId];
+  return { status: entry?.status ?? "notEnabled", set: Boolean(entry?.status), note: entry?.note };
+};
+
 /** The organisation's own module, policy or runbook for one setting. */
 export const settingLinkFor = (productId: string, settingId: string): string | undefined => productStatus[productId]?.settings?.[settingId]?.link;
 

@@ -40,7 +40,7 @@ export function AdoptionPill({ status, title }: { status: AdoptionStatus; title?
 }
 
 /** The row of products, each a pill tinted by its adoption. */
-function ProductPills({ products, selected, onPick, label = "Products" }: { products: Product[]; selected: string; onPick: (id: string) => void; label?: string }) {
+export function ProductPills({ products, selected, onPick, label = "Products" }: { products: Product[]; selected: string; onPick: (id: string) => void; label?: string }) {
   return (
     <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={label}>
       {products.map((p) => {
@@ -334,15 +334,16 @@ function ProductHeader({ product, archetype }: { product: Product; archetype: Ar
   );
 }
 
-/** One row of choices in the settings step of a hosted pattern, with what the choice is. */
-function ChoiceRow({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+/** One choice of a hosted pattern's build, lettered in the order the choices are made. */
+export function ChoiceRow({ n, label, hint, children }: { n?: string; label: string; hint: string; children: ReactNode }) {
   return (
-    <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[150px_minmax(0,1fr)]" data-choice={label}>
-      <p className="pt-1 text-[12.5px] font-semibold leading-snug text-ink">
+    <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[190px_minmax(0,1fr)]" data-choice={label}>
+      <p className="pt-1 text-[13px] font-semibold leading-snug text-ink">
+        {n && <span className="ident mr-1.5 text-[11px] text-ink-3">{n}</span>}
         {label}
         <span className="block text-[11.5px] font-normal text-ink-3">{hint}</span>
       </p>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
@@ -367,59 +368,36 @@ export function ProductSettings({
   lit: string | null;
   onLight: (capabilityId: string) => void;
 }) {
-  const platforms = products.filter((p) => p.kind === "cloud");
-  const frameworks = products.filter((p) => p.kind === "tool");
-  // A hosted pattern has two separate choices: where it runs, and what its own boxes are built with.
-  // They are not alternatives, so they are not one row of pills.
-  if (platforms.length) {
+  // On a hosted pattern the choosing is the step before this one: this step shows the settings
+  // of what was chosen, the platform's and the framework's in one table.
+  if (products.some((p) => p.kind === "cloud")) {
     const picked = products.find((p) => p.id === selected);
     const where = platform ?? (picked?.kind === "cloud" ? picked : null);
     const framework = picked?.kind === "tool" ? picked : null;
     const chosen = [where, framework].filter((p): p is Product => Boolean(p));
-    const titles = new Map(archetype.blocks.map((b) => [b.id, b.title]));
-    // The boxes the catalogued frameworks fill, as the reader sees them on the drawing.
-    const filled = [...new Set(frameworks.flatMap((p) => (p.kind === "tool" ? p.tool.fills ?? [] : [])).map((id) => titles.get(id) ?? id))];
-    const defaults = where?.kind === "cloud" ? [...new Set(where.implementation.bindings.map((b) => b.builtWith).filter((x): x is string => Boolean(x)))] : [];
+    if (!chosen.length) {
+      return (
+        <p className="text-[13px] leading-snug text-ink-2" data-choose-first>
+          Nothing is chosen yet. In the step above, pick where it runs, what you build it with, or both; their settings appear here under the same headings as the controls.
+        </p>
+      );
+    }
     return (
-      <div data-hosted-choices>
-        <div className="space-y-3 rounded-xl border border-line bg-mist/40 p-3.5">
-          <ChoiceRow label="Where it runs" hint="a cloud, or your own data centre">
-            <ProductPills products={platforms} selected={where?.id ?? ""} onPick={onPick} label="Where it runs" />
-          </ChoiceRow>
-          {frameworks.length > 0 && (
-            <ChoiceRow label="What you build it with" hint={`fills ${filled.length === 1 ? "the" : "these boxes:"} ${filled.join(", ")}${filled.length === 1 ? " box" : ""}`}>
-              <ProductPills products={frameworks} selected={framework?.id ?? ""} onPick={(id) => onPick(id === framework?.id ? null : id)} label="What you build it with" />
-              {defaults.length > 0 && !framework && (
-                <p className="mt-1.5 text-[12px] leading-snug text-ink-3" data-default-framework>
-                  {where?.kind === "cloud" && where.cloud.selfManaged ? "This mapping builds" : `${shortOf(where!)}'s own guides build`} it with {defaults.join(" and ")}. That is a default, not a
-                  requirement: any framework that fills the box runs there.
-                </p>
-              )}
-            </ChoiceRow>
-          )}
+      <div data-hosted-settings>
+        <div className="space-y-2.5">
+          {chosen.map((p) => (
+            <ProductHeader key={p.id} product={p} archetype={archetype} />
+          ))}
         </div>
-        {chosen.length === 0 ? (
-          <p className="mt-3 text-[13px] leading-snug text-ink-2" data-choose-first>
-            These are two separate choices, not alternatives. Pick where it runs, what you build it with, or both, to see the settings under the same headings as the controls above.
-          </p>
-        ) : (
-          <>
-            <div className="mt-3 space-y-2.5">
-              {chosen.map((p) => (
-                <ProductHeader key={p.id} product={p} archetype={archetype} />
-              ))}
-            </div>
-            {chosen.some((p) => p.settings.length) && (
-              <div className="mt-3">
-                <SettingsTable key={chosen.map((p) => p.id).join("+")} products={chosen.filter((p) => p.settings.length)} archetype={archetype} lit={lit} onLight={onLight} />
-              </div>
-            )}
-            {framework?.kind === "tool" && !framework.settings.length && (
-              <div className="mt-4">
-                <ToolRecord tool={framework.tool} />
-              </div>
-            )}
-          </>
+        {chosen.some((p) => p.settings.length) && (
+          <div className="mt-3">
+            <SettingsTable key={chosen.map((p) => `${p.id}:${p.settings.length}`).join("+")} products={chosen.filter((p) => p.settings.length)} archetype={archetype} lit={lit} onLight={onLight} />
+          </div>
+        )}
+        {framework?.kind === "tool" && !framework.settings.length && (
+          <div className="mt-4">
+            <ToolRecord tool={framework.tool} />
+          </div>
         )}
       </div>
     );

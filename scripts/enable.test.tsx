@@ -57,7 +57,9 @@ test("the settings step reads like the controls step: same headings, same order,
     for (const product of products.filter((p) => p.settings.length)) {
       const where = `${arch.id} ${product.id}`;
       const html = renderToStaticMarkup(<ProductSettings archetype={arch} products={products} selected={product.id} onPick={() => {}} lit={null} onLight={() => {}} />);
-      assert.equal([...html.matchAll(/role="tab"/g)].length, products.length, `${where}: a pill per product`);
+      // A pattern that is bought offers a pill per product here; a hosted one makes its choices in the step before.
+      const hostedPattern = products.some((p) => p.kind === "cloud");
+      assert.equal([...html.matchAll(/role="tab"/g)].length, hostedPattern ? 0 : products.length, `${where}: a pill per product, or none where the choice is its own step`);
       assert.equal([...html.matchAll(new RegExp(`id="setting-${product.id}-`, "g"))].length, product.settings.length, `${where}: a row per setting`);
       // One line about the product; the background is folded, and there is no table of components here.
       assert.match(html, new RegExp(`data-product-header="${product.id}"`), where);
@@ -123,9 +125,13 @@ test("the Enable tab opens as folded steps; a lit control opens the controls, ba
   for (const arch of dataset.archetypes) {
     // At rest: the controls and the settings, each one folded line, and nothing else.
     const folded = panel(arch, null);
-    assert.equal([...folded.matchAll(/aria-controls="/g)].length, 2, `${arch.id}: two steps`);
+    // Two steps for what is bought; three for what is hosted, with the choices between the controls and their settings.
+    const hostedPattern = arch.surface === "surfaceCloud";
+    assert.equal([...folded.matchAll(/aria-controls="/g)].length, hostedPattern ? 3 : 2, `${arch.id}: ${hostedPattern ? "three" : "two"} steps`);
     assert.doesNotMatch(folded, /aria-expanded="true"/, `${arch.id}: every step starts folded`);
     assert.ok(folded.indexOf('id="controls"') < folded.indexOf('id="tools"'), `${arch.id}: controls, then settings`);
+    if (hostedPattern) assert.ok(folded.indexOf('id="controls"') < folded.indexOf('id="choose"') && folded.indexOf('id="choose"') < folded.indexOf('id="tools"'), `${arch.id}: the choices sit between them`);
+    else assert.doesNotMatch(folded, /id="choose"/, `${arch.id}: nothing to choose beyond the product`);
     assert.doesNotMatch(folded, /id="control-|role="tab"|data-action|data-built-on/, `${arch.id}: no rows until a step is opened`);
     // A control lit on the drawing opens the controls step on its row.
     const html = panel(arch, arch.mitigations[0]);

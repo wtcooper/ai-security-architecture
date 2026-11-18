@@ -17,7 +17,10 @@ export interface Crossing {
   via: string;
   /** True when the pattern file states the crossing; false when it is derived. */
   authored: boolean;
-  /** Controls held at the crossing: pinned on the flow, or on either end of it, in pin order. */
+  /**
+   * Controls held at the crossing, in pin order: pinned on the flow, on either end of it, or on
+   * a boundary that encloses an end (a sandbox round the tools holds the tools' egress).
+   */
   controls: string[];
 }
 
@@ -66,7 +69,13 @@ export function crossingsOf(archetype: Archetype): Crossing[] {
     const to = block.get(edge.to);
     if (!from || !to || !from.zone || !to.zone || standOf(from) === standOf(to)) continue;
     const key = keyOf(edge);
-    const at = new Set([key, keyOf({ from: edge.to, to: edge.from }), edge.from, edge.to]);
+    // A boundary block is pure containment: what is pinned on it holds for everything inside it.
+    const enclosing = (b: ArchBlock): string[] => {
+      const out: string[] = [];
+      for (let p = b.parent ? block.get(b.parent) : undefined; p; p = p.parent ? block.get(p.parent) : undefined) if (p.kind === "boundary") out.push(p.id);
+      return out;
+    };
+    const at = new Set([key, keyOf({ from: edge.to, to: edge.from }), edge.from, edge.to, ...enclosing(from), ...enclosing(to)]);
     const controls = [...new Set(archetype.pins.mitigations.filter((p) => at.has(p.at)).map((p) => p.mitigation))].sort(
       (x, y) => archetype.mitigations.indexOf(x) - archetype.mitigations.indexOf(y),
     );
