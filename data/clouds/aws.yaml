@@ -11,9 +11,6 @@ id: cloudAws
 name: Amazon Web Services
 short: AWS
 
-notOffered:
-  - architecture: archCloudManagedAgent
-    why: "The mapping is being researched and checked."
 settings:
   # --- Identity & access ---------------------------------------------------------------
   - id: idcAppAssignment
@@ -1345,6 +1342,156 @@ settings:
     url: https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ClusterEbsVolumeConfig.html
     verified: "2026-11-18"
   # <<< more hosting rows
+  # >>> managed agent service rows (the cloud controls around the provider's agent service)
+  - id: agentCoreInterfaceEndpoints
+    name: "Interface VPC endpoints for AgentCore, with endpoint policies"
+    where: "Amazon VPC › Endpoints › com.amazonaws.<region>.bedrock-agentcore, bedrock-agentcore-control and bedrock-agentcore.gateway"
+    setVia: [apiCli, cloudPolicy]
+    area: network
+    default: "No endpoint; calls use the public regional endpoint"
+    requires: "For JWT callers the policy principal must be *; only SigV4 callers can be named"
+    recommended: "Create all three with private DNS in the application and agent VPCs. Endpoint policy: only InvokeHarness and InvokeAgentRuntime on your harness ARNs for the application role, and InvokeGateway on your gateway. Endpoint security group: the application and agent subnets only."
+    why: "The default endpoint policy allows full access to AgentCore. A scoped policy keeps the private path from being used to reach other accounts' agents or other actions."
+    mitigations: [D3-NI]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html
+    verified: "2026-11-18"
+  - id: agentCoreNetworkPerimeterScp
+    name: "Network perimeter policy (aws:SourceVpc, aws:SourceVpce)"
+    where: "AWS Organizations › Service control policies › Deny bedrock-agentcore invoke and control actions unless the request arrives through your VPC endpoints"
+    setVia: [cloudPolicy]
+    area: network
+    default: "Not set"
+    requires: "Applies to IAM principals in your organisation only; AWS documents resource-based policies for runtimes, gateways and memory, not for a harness ARN, so JWT callers of a harness are not covered"
+    recommended: "Deny InvokeHarness, InvokeAgentRuntime, InvokeAgentRuntimeCommand and InvokeGateway unless aws:SourceVpce is one of your endpoints, with an exception where aws:ViaAWSService is true and for the pipeline role."
+    why: "The AgentCore API endpoint stays reachable from the internet. This makes a stolen role credential useless from outside your network."
+    mitigations: [D3-NI, D3-ACH]
+    url: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html
+    verified: "2026-11-18"
+  - id: gatewayIamInboundPolicy
+    name: "AWS_IAM inbound authoriser and resource-based policy on the gateway"
+    where: "AgentCore Gateway › (gateway) › Inbound Auth AWS_IAM; PutResourcePolicy on the gateway ARN"
+    setVia: [apiCli, cloudPolicy]
+    area: identity
+    default: "No resource-based policy"
+    requires: "Harness tool type agentcore_gateway with outboundAuth awsIam"
+    recommended: "Allow bedrock-agentcore:InvokeGateway only to the execution roles of the harnesses that use this gateway, and deny when aws:SourceVpce is not your gateway endpoint. Give each execution role InvokeGateway on that one gateway ARN."
+    why: "The harness then signs each tool call with short-lived credentials for its own role, so no key is stored and the gateway can tell agents apart."
+    mitigations: [D3-CH, D3-AA, D3-NI, AML.M0028]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/resource-based-policies.html
+    verified: "2026-11-18"
+  - id: harnessAdminScp
+    name: "Deny harness create and update outside the pipeline role"
+    where: "AWS Organizations › Service control policies › Deny CreateHarness, UpdateHarness, CreateHarnessEndpoint, UpdateHarnessEndpoint, CreateAgentRuntime, UpdateAgentRuntime, CreateGateway, CreateGatewayTarget"
+    setVia: [cloudPolicy]
+    area: identity
+    default: "Not set"
+    recommended: "Deny these actions unless aws:PrincipalArn is the delivery pipeline's deployment role, and require your ownership tags with aws:RequestTag. Give engineers read and invoke permissions only, in non-production accounts."
+    why: "Anyone holding the create actions can otherwise stand up an agent nobody reviewed. A harness also needs CreateAgentRuntime and CreateMemory, so denying those closes the same door."
+    mitigations: [cap-agent-tool-registry, D3-ACH]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+    verified: "2026-11-18"
+  - id: regionDenyScp
+    name: "Region deny (aws:RequestedRegion)"
+    where: "AWS Organizations › Service control policies › Deny bedrock-agentcore:* and bedrock:* when aws:RequestedRegion is outside your list"
+    setVia: [cloudPolicy]
+    area: data
+    default: "Not set"
+    recommended: "List only the Regions you operate in. If you allow global inference profiles, the policy must also allow aws:RequestedRegion unspecified; leave that out to hold inference inside your geography."
+    why: "A harness, its memory and its model calls can otherwise be created in any Region the account can reach."
+    mitigations: [D3-ACH]
+    url: https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html
+    verified: "2026-11-18"
+  - id: bedrockModelAllowlistScp
+    name: "Deny inference on unapproved models"
+    where: "AWS Organizations › Service control policies (and each harness execution role) › Deny bedrock:InvokeModel and bedrock:InvokeModelWithResponseStream on foundation models and inference profiles outside your list"
+    setVia: [cloudPolicy]
+    area: tools
+    default: "Not set"
+    recommended: "Deny all model ARNs except the approved foundation models and the geographic inference profiles you chose. Remove sts:AssumeRole from execution roles. Set model on every harness, since the service default is a global profile and can change."
+    why: "The harness calls Bedrock on its execution role, so this stops a model override on InvokeHarness. It does not cover OpenAI, Gemini or LiteLLM endpoints, or Bedrock Mantle calls (bedrock-mantle:CreateInference), which need their own deny."
+    mitigations: [D3-ACH]
+    url: https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples.html
+    verified: "2026-11-18"
+  - id: securityHubAgentCoreControls
+    name: "Security Hub CSPM controls for Amazon Bedrock AgentCore"
+    where: "AWS Security Hub CSPM › Controls › BedrockAgentCore.1 to BedrockAgentCore.7 (AWS Config managed rules)"
+    setVia: [adminConsole, cloudPolicy]
+    area: audit
+    default: "Off until the standard or control is enabled"
+    recommended: "Enable in every account that may hold agents: runtime not in PUBLIC network mode, gateway authoriser present, Memory and Gateway under a customer managed key, custom Browser and Code Interpreter in VPC mode, browser recording on."
+    why: "These rules report drift that deny policies cannot see, such as resources created before the policy. They detect and do not refuse, and each rule is offered in a limited list of Regions."
+    mitigations: [D3-ACH, D3-NI, AML.M0012]
+    url: https://docs.aws.amazon.com/securityhub/latest/userguide/bedrockagentcore-controls.html
+    verified: "2026-11-18"
+  - id: agentStateKmsKey
+    name: "Customer managed key and key policy for agent state"
+    where: "AWS KMS › Customer managed keys › key policy (kms:ViaService bedrock-agentcore.<region>.amazonaws.com)"
+    setVia: [apiCli, cloudPolicy]
+    area: data
+    default: "AWS owned keys"
+    recommended: "One single-Region symmetric key per environment for AgentCore Memory, the gateway and the Identity token vault. Grant use only through the AgentCore service and to the roles that create those resources; keep key administration with the platform team."
+    why: "Disabling the key or removing the grant cuts the service off from stored conversations and credentials without deleting anything."
+    mitigations: [AML.M0012]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/storage-encryption.html
+    verified: "2026-11-18"
+  - id: agentFilesEfsEncryption
+    name: "Encryption at rest on the file system the harness mounts"
+    where: "Amazon EFS › (file system) › Encryption at rest with your KMS key; access point per agent, mounted through filesystemConfigurations"
+    setVia: [apiCli, cloudPolicy]
+    area: data
+    default: "On in the console, off unless requested through the API"
+    requires: "Harness in VPC network mode"
+    recommended: "Create the file system encrypted with your customer managed key, one access point per agent with its own root directory, and a mount target security group that admits port 2049 from the agent security group only."
+    why: "Files the agent keeps are then in a store you own and can revoke. Encryption cannot be changed after the file system exists."
+    mitigations: [AML.M0012]
+    url: https://docs.aws.amazon.com/efs/latest/ug/encryption-at-rest.html
+    verified: "2026-11-18"
+  - id: kbAclAwareness
+    name: "Access Control Lists awareness on Managed Knowledge Base data sources"
+    where: "Amazon Bedrock › Knowledge Bases › Managed Knowledge Base › data source › ACL awareness; userContext on Retrieve"
+    setVia: [adminConsole, apiCli]
+    area: data
+    default: "Off"
+    requires: "Managed Knowledge Base; user identified by email"
+    recommended: "Enable ACL awareness on every data source that carries permissions, and deny bedrock:Retrieve to every principal except the gateway role, so no caller can query the knowledge base around the gateway."
+    why: "Results are then filtered to what the named user may see in the source system. AWS describes this as filtering, not authorisation: the user identity must come from your verified token."
+    mitigations: [cap-data-access-governance]
+    url: https://docs.aws.amazon.com/bedrock/latest/userguide/kb-managed-acl.html
+    verified: "2026-11-18"
+  - id: webSearchDomainFilter
+    name: "Web Search Tool target domain include and exclude lists"
+    where: "AgentCore Gateway › Web Search Tool connector target › parameterValues.domainFilter.include and .exclude"
+    setVia: [apiCli]
+    area: tools
+    default: "No domain lists"
+    requires: "Include list needs connector version 1.2.0 or later"
+    recommended: "Set an include list of the sites the agent's task needs, or at least an exclude list, on the target. Pin the connector version. Do not grant bedrock-agentcore:InvokeWebSearch to execution roles directly."
+    why: "Target-level lists are enforced server-side and hidden from the agent, which cannot relax them. Without them the agent may read any indexed site."
+    mitigations: [cap-agent-egress-control]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connector-web-search-tool.html
+    verified: "2026-11-18"
+  - id: agentLogGroupKms
+    name: "KMS key, retention and access on the agent log groups"
+    where: "CloudWatch Logs › log groups aws/spans and /aws/bedrock-agentcore/* › KMS key, retention setting, IAM read access"
+    setVia: [apiCli, cloudPolicy]
+    area: audit
+    default: "Service-managed encryption"
+    recommended: "Associate your customer managed key with each group, set retention to your record period, and give read access on these groups to the security and platform roles only. Send the CloudTrail trail to your log archive account."
+    why: "Traces carry prompts, tool arguments and tool results, so they need the same protection as the data the agent handles."
+    mitigations: [cap-agent-tracing, AML.M0012]
+    url: https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/encrypt-log-data-kms.html
+    verified: "2026-11-18"
+  - id: awsArtifactAgentCoreReview
+    name: "AWS Artifact reports and AgentCore scope review"
+    where: "AWS Artifact › Reports; AgentCore compliance validation, cross-Region inference and release notes pages, in your third-party risk process"
+    setVia: [adminConsole]
+    area: audit
+    recommended: "Before rollout and each quarter, record: the audit reports that cover AgentCore, which features you use are in preview, where Memory, Policy, Evaluations and your chosen inference profile process data, and what the harness managed defaults currently are."
+    why: "The loop, the microVM isolation and the managed defaults are run by AWS and change without a deployment of yours. Preview features and global inference can sit outside the terms you rely on."
+    mitigations: [cap-ai-vendor-assessment]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/compliance-validation.html
+    verified: "2026-11-18"
+  # <<< managed agent service rows
 
 implementations:
   - architecture: archChatAgent
@@ -4050,3 +4197,121 @@ implementations:
       - agentCoreObservability
       - cloudTrailDataEvents
       - registryDeprecate
+  # >>> managed agent service mapping (checked against the vendor's pages by two people)
+  - architecture: archCloudManagedAgent
+    asOf: "2026-11"
+    verified: "2026-11-18"
+    reference:
+      - title: "AWS Security Reference Architecture for generative AI: Capability 5, secure access, usage and implementation of generative AI agents"
+        url: https://docs.aws.amazon.com/prescriptive-guidance/latest/security-reference-architecture-generative-ai/gen-auto-agents.html
+    summary:
+      - "On AWS the managed runtime is the AgentCore harness: AWS runs the agent loop in a microVM per session on AgentCore Runtime, under an IAM execution role you own. Your application invokes it with IAM or a user JWT through AgentCore interface VPC endpoints. Tools sit behind AgentCore Gateway with Policy in AgentCore, and state sits in AgentCore Memory under your KMS key. Service control policies, AWS Config rules, CloudTrail and CloudWatch give the floor and the record."
+    bindings:
+      - { block: entry, service: "Your app behind ALB or API Gateway, on its IAM role", build: true, note: "Signs users in, then calls InvokeHarness through the bedrock-agentcore interface endpoint with SigV4 on its own role, or forwards the user's JWT to a harness with a JWT authoriser." }
+      - { block: agentDef, service: "Harness configuration (CreateHarness, harness.yaml)", build: true, note: "Model, system prompt, tools, allowedTools, memory, limits, network mode and execution role, held in source control and deployed by your pipeline with the AgentCore CLI or the control API." }
+      - { block: memory, service: "AgentCore Memory, plus EFS or S3 Files mounts", note: "Conversations and long-term records sit in an AgentCore Memory resource in your account under your KMS key. Files persist on EFS or S3 Files access points that you own." }
+      - { block: aiGateway, service: "AgentCore Gateway with Policy in AgentCore", note: "An AWS-run MCP gateway that is a resource in your account: IAM or JWT inbound, a Cedar policy engine, guardrails, Lambda interceptors and CloudTrail data events." }
+      - { block: internalTools, service: "Lambda, API Gateway and private MCP servers", build: true, note: "Gateway targets: Lambda functions, API Gateway stages, and OpenAPI or MCP servers in your VPC reached over VPC Lattice private endpoints." }
+      - { block: orgData, service: "Bedrock Knowledge Bases, S3 and your databases", note: "Systems of record behind the tools. A Managed Knowledge Base is a built-in gateway connector with ACL-aware retrieval; a customer-managed one keeps the vector store in your account." }
+      - { block: managedRuntime, service: "AgentCore harness (on AgentCore Runtime)", note: "AWS runs the Strands-based loop in a Firecracker microVM per session and calls the model on the execution role you supply. Generally available." }
+      - { block: nativeTools, service: "Harness built-ins, Code Interpreter, Browser", note: "Shell and file tools run inside the session microVM; AWS does not state where web_fetch or subagent run. Code Interpreter and Browser are separate resources, each with its own network mode." }
+      - { block: vendorTools, service: "Remote MCP servers and gateway connectors", note: "remote_mcp servers named in the harness, called from the session microVM, and AWS connectors on the gateway such as Web Search Tool, Web Answer and integration templates." }
+      - { block: openWeb, service: "Web Search Tool index and pages via web_fetch", note: "Web search is a gateway connector answered from an Amazon-operated index inside AWS. web_fetch and Browser reach live pages through the network mode you set." }
+    sources:
+      entry: https://aws.amazon.com/blogs/security/securely-exposing-amazon-bedrock-agentcore-runtime/
+      agentDef: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-models.html
+      memory: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-memory.html
+      aiGateway: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html
+      internalTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-vpc-egress.html
+      orgData: https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base.html
+      managedRuntime: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html
+      nativeTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+      vendorTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connectors.html
+      openWeb: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connector-web-search-tool.html
+    differences:
+      - at: managedRuntime->aiGateway
+        text: "Tool calls reach your gateway only if you build it that way. A harness also accepts remote_mcp tools, and a caller can pass tools on InvokeHarness. Those connections start inside the session microVM and go direct. Declare only agentcore_gateway tools, strip caller overrides in your application, and let the security group reach only the gateway endpoint."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+      - at: aiGateway
+        text: "The gateway is an AWS-run service, not a listener you host on a private address. It supports PrivateLink ingress and VPC Lattice egress, but AWS documents no setting that closes its public endpoint, so access rests on the authoriser, a resource-based policy with aws:SourceVpce and AWS WAF. Policy in AgentCore also uses cross-Region inference in the Regions AWS lists."
+        url: https://aws.amazon.com/blogs/security/securely-exposing-amazon-bedrock-agentcore-runtime/
+      - at: entry->managedRuntime
+        text: "No setting closes the AgentCore API endpoint. The private path is an interface VPC endpoint plus policy conditions (aws:SourceVpc, aws:SourceVpce) that refuse every other route. Network mode PUBLIC or VPC on the harness governs outbound traffic only, and PUBLIC is the default."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html
+      - at: entry->managedRuntime
+        text: "Workload identity and user pass-through pull apart. With SigV4 the harness does not carry per-user identity to downstream tools; user-scoped tokens and on-behalf-of exchange need a JWT authoriser. With JWT there is no IAM principal, so the endpoint policy must allow Principal * and the network path becomes the gate. A runtime takes one inbound type."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+      - at: nativeTools->memory
+        text: "State is not in stores you bring. Conversations and long-term memory go to AgentCore Memory, an AWS-run store that is a resource in your account; managed memory is created by default with an AWS owned key unless encryptionKeyArn is set at creation. Managed session storage is in preview with no customer key documented, so files you must hold go on EFS or S3 Files mounts."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-memory.html
+      - at: nativeTools->openWeb
+        text: "Web search is not a native tool here. It is the Web Search Tool connector behind your gateway, so gateway policy and CloudTrail apply and an Amazon index answers inside AWS. The Browser reaches live pages on its own network mode, PUBLIC by default, and takes Chromium policies and proxies; the web_fetch path is undocumented. Network-level site lists need a firewall."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connector-web-search-tool.html
+      - at: managedRuntime
+        text: "Inference is called from the session microVM on your execution role, so approved models are enforced with IAM and service control policies on Bedrock, and Bedrock invocation logging applies. The default model is a global inference profile that may process in any commercial Region, and a harness can also call OpenAI, Gemini or LiteLLM endpoints with a stored key."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-models.html
+      - at: agentDef->managedRuntime
+        text: "The deployed version is not the last decision. InvokeHarness accepts per-call overrides of model, system prompt, tools, skills and limits, so anyone who may invoke can change the agent. CreateHarness has no condition keys of its own: the policy floor uses keys on CreateAgentRuntime and CreateMemory, and AWS Config rules that detect and do not refuse."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+    alsoNeeded:
+      - service: "AWS IAM"
+        role: identity
+        why: "Holds the application role that may invoke, the pipeline role that may deploy and one execution role per harness."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security_iam_service-with-iam.html
+      - service: "Amazon Cognito or your OIDC identity provider"
+        role: identity
+        why: "Issues the user JWT that the harness and gateway authorisers validate when sessions must carry the signed-in user."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/inbound-jwt-authorizer.html
+      - service: "AWS PrivateLink (interface VPC endpoints)"
+        role: network
+        why: "Private path to the AgentCore data plane, control plane and gateway, and to ECR, S3, CloudWatch Logs and Bedrock for a harness in VPC mode."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html
+      - service: "Amazon VPC Lattice"
+        role: network
+        why: "Carries gateway calls to MCP servers and APIs inside your VPC through a managed or self-managed resource gateway."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-egress-private-endpoints.html
+      - service: "AWS Network Firewall and Route 53 Resolver DNS Firewall"
+        role: network
+        why: "why: Limits a VPC-mode harness, Browser or Code Interpreter to named internet domains at network level; AgentCore's own controls are browser-level only (Chromium enterprise policies and proxies on a custom Browser)."
+        url: https://aws.amazon.com/blogs/machine-learning/control-which-domains-your-ai-agents-can-access/
+      - service: "Application Load Balancer or API Gateway with AWS WAF"
+        role: ingress
+        why: "Your front door: signs users in, filters requests and relays them to the harness through the interface endpoint."
+        url: https://aws.amazon.com/blogs/security/securely-exposing-amazon-bedrock-agentcore-runtime/
+      - service: "AWS KMS"
+        role: keys
+        why: "Customer managed keys for AgentCore Memory, the gateway, the Identity token vault, log groups and the file systems you mount."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/storage-encryption.html
+      - service: "AWS Secrets Manager"
+        role: secrets
+        why: "Holds credential provider client secrets for AgentCore Identity, under your key where configured."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity-data-encryption.html
+      - service: "Amazon ECR"
+        role: registry
+        why: "A VPC-mode harness pulls its managed container from a private ECR repository at session start; custom environments are your own images."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+      - service: "AWS Agent Registry"
+        role: registry
+        why: "why: Catalogue of agents, tools, skills and MCP servers; its approval workflow decides which records are discoverable. It does not block deployment of an unlisted agent."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry.html
+      - service: "AWS CloudTrail and Amazon CloudWatch (Transaction Search, X-Ray)"
+        role: logging
+        why: "Management and data events for harness calls, and the traces, logs and metrics every invocation emits, all in your account."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-operations.html
+      - service: "AWS Organizations (service control policies)"
+        role: other
+        why: "Holds the deny rules a builder cannot lower: Regions, models, VPC mode, authoriser type and keys."
+        url: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html
+      - service: "AWS Config and Security Hub CSPM"
+        role: other
+        why: "Managed rules that flag public network mode, missing gateway authorisers and resources without a customer managed key."
+        url: https://docs.aws.amazon.com/securityhub/latest/userguide/bedrockagentcore-controls.html
+    quickstart:
+      - title: "AgentCore harness: Get started"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-get-started.html
+      - title: "AgentCore harness: Security and access controls"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+      - title: "Use interface VPC endpoints (AWS PrivateLink) with Amazon Bedrock AgentCore"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html
+    settings: [albAuthenticate, runtimeExecutionRole, runtimeVpcMode, networkFirewallDomains, gatewayMcpPrivateEndpoint, kbMetadataFilter, cloudTrailDataEvents, iamRevokeSessions, bedrockDenyApiKeys, agentCoreInterfaceEndpoints, agentCoreNetworkPerimeterScp, gatewayIamInboundPolicy, harnessAdminScp, regionDenyScp, bedrockModelAllowlistScp, securityHubAgentCoreControls, agentStateKmsKey, agentFilesEfsEncryption, kbAclAwareness, webSearchDomainFilter, agentLogGroupKms, awsArtifactAgentCoreReview]
+  # <<< managed agent service mapping

@@ -47,6 +47,7 @@ tools:
           and are not isolated from each other. Data and EBS volumes stay in your account and VPC.
     architecture: archCloudManagedAgent
     fills: [managedRuntime]
+    platform: cloudAws
     status: ga
     asOf: "2026-09"
     summary:
@@ -717,6 +718,97 @@ tools:
           to 30 seconds to change. No dollar budget exists in the runtime; spend ceilings are AWS Budgets
           outside it.
         verified: "2026-10-30"
+      # >>> cloud controls (added when the service moved to the hosted pattern)
+      - mitigation: D3-AA
+        coverage: native
+        mechanism: "Each harness is created with its own IAM execution role (executionRoleArn) and gets a workload identity named harness_<name> in the account's AgentCore Identity directory. The role signs calls to Bedrock, the gateway and Memory with short-lived credentials."
+        steps:
+          - title: "Give each harness its own execution role"
+            body:
+              - "Create one role per harness and scope its policy to that agent's model, gateway, memory and credential-provider ARNs. Do not reuse a role across harnesses."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+          - title: "Bind the role to AgentCore in your account"
+            body:
+              - "Add aws:SourceAccount and aws:SourceArn conditions to the trust policy so only AgentCore resources in your account can assume it."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/cross-service-confused-deputy-prevention.html
+          - title: "Scope stored credentials to the workload identity"
+            body:
+              - "Limit GetWorkloadAccessToken and the credential-provider actions to that harness's workload identity ARN and the exact provider ARNs."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/scope-credential-provider-access.html
+        verified: "2026-11-18"
+      - mitigation: D3-NI
+        coverage: partial
+        mechanism: "AgentCore offers interface VPC endpoints for its data plane, control plane and gateway, and networkMode VPC for outbound traffic. Resource-based policies with aws:SourceVpce are documented for runtimes, gateways and memory, not for a harness ARN. The public regional endpoint cannot be switched off, so isolation is by policy condition."
+        steps:
+          - title: "Create the AgentCore interface endpoints"
+            body:
+              - "Add endpoints for bedrock-agentcore, bedrock-agentcore-control and bedrock-agentcore.gateway with private DNS, and attach endpoint policies scoped to your resources."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html
+          - title: "Refuse every other path in the resource-based policy"
+            body:
+              - "Attach an explicit Deny for invoke actions when aws:SourceVpce is not your endpoint. For JWT callers the principal is * and this condition is the gate."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/resource-based-policies.html
+          - title: "Run sessions in VPC network mode"
+            body:
+              - "Set networkMode VPC with private subnets and a tight security group, and add the ECR, S3, CloudWatch Logs and Bedrock runtime endpoints the session needs."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+        verified: "2026-11-18"
+      - mitigation: AML.M0012
+        coverage: partial
+        mechanism: "Customer managed KMS keys are supported on AgentCore Memory, including harness managed memory through encryptionKeyArn, on gateways and on the Identity token vault. Managed session storage (preview) and other runtime data use AWS owned keys, so files that need your key go on EFS or S3 Files mounts."
+        steps:
+          - title: "Set the key when memory is created"
+            body:
+              - "Pass encryptionKeyArn in managedMemoryConfiguration or CreateMemory. It cannot be changed later."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-memory.html
+          - title: "Refuse memory without your key"
+            body:
+              - "Use the bedrock-agentcore:KmsKeyArn condition key on CreateMemory in a service control policy, and the AWS Config rule for Memory encryption to find older resources."
+            url: https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonbedrockagentcore.html
+          - title: "Keep persistent files in a store you own"
+            body:
+              - "Mount an encrypted EFS or S3 Files access point through filesystemConfigurations in place of managed session storage."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-environment.html
+        verified: "2026-11-18"
+      - mitigation: cap-data-access-governance
+        coverage: partial
+        mechanism: "The harness carries the caller's identity onward only with a JWT authoriser; AgentCore Identity can then exchange it for user-scoped tool credentials. Memory is scoped by actorId and namespace, and the Managed Knowledge Bases connector passes a userContext for ACL-aware retrieval but does not populate it."
+        steps:
+          - title: "Use JWT inbound where the user must carry through"
+            body:
+              - "With SigV4 the harness does not propagate per-user identity to tools. Configure customJWTAuthorizer so on-behalf-of exchange and user-scoped tokens are available."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+          - title: "Fix userContext at the gateway, not in the model"
+            body:
+              - "Expose $.userContext on the knowledge base connector target and overwrite it in a REQUEST interceptor from the validated token."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connector-managed-kb.html
+          - title: "Scope memory to the signed-in user"
+            body:
+              - "Have the application pass actorId for the bound user on every InvokeHarness call so short-term and long-term memory stay per user."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-memory.html
+        verified: "2026-11-18"
+      - mitigation: D3-ACH
+        coverage: partial
+        mechanism: "AgentCore publishes IAM condition keys for service control policies (subnets, securityGroups, RuntimeAuthorizerType, KmsKeyArn and the gateway keys) and AWS Config managed rules surfaced as Security Hub controls. CreateHarness has no key for model, tools or memory mode, so those floors come from Bedrock and Organizations policy."
+        steps:
+          - title: "Require VPC mode and approved subnets"
+            body:
+              - "Deny CreateAgentRuntime, UpdateAgentRuntime, CreateCodeInterpreter and CreateBrowser when bedrock-agentcore:subnets or securityGroups is null or not approved."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-vpc-condition.html
+          - title: "Fix the gateway's authoriser, policy engine and key"
+            body:
+              - "Use the gateway and gateway target condition keys to deny configurations outside your baseline."
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-gateway-condition-keys.html
+          - title: "Fix the runtime authoriser type and the memory key"
+            body:
+              - "Use bedrock-agentcore:RuntimeAuthorizerType on runtime create and update, and bedrock-agentcore:KmsKeyArn on CreateMemory."
+            url: https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonbedrockagentcore.html
+          - title: "Detect what policy cannot refuse"
+            body:
+              - "Enable the Security Hub CSPM controls for AgentCore to report public network mode and missing customer managed keys."
+            url: https://docs.aws.amazon.com/securityhub/latest/userguide/bedrockagentcore-controls.html
+        verified: "2026-11-18"
+      # <<< cloud controls
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # AgentCore has no admin console: rows are resource fields set over the control-plane API or
     # CLI, IAM and SCP condition keys (cloudPolicy) and code in the front end. Verified 2026-10-30.
@@ -1055,6 +1147,88 @@ tools:
         mitigations: [cap-agent-kill-switch, D3-APA]
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/resource-based-policies.html
         verified: "2026-10-30"
+      # >>> cloud settings (the service's own settings for the cloud controls)
+      - id: harnessExecutionRole
+        name: "executionRoleArn (one IAM execution role per harness)"
+        where: "CreateHarness / UpdateHarness › executionRoleArn; role trust policy for bedrock-agentcore.amazonaws.com"
+        setVia: [apiCli, configFile]
+        area: identity
+        default: "Required; nothing stops several harnesses sharing one role"
+        recommended: "A separate role for each harness, trusted only by bedrock-agentcore.amazonaws.com with aws:SourceAccount and aws:SourceArn conditions, holding only the model, gateway, memory and credential-provider ARNs that agent needs, and no more privilege than its callers."
+        why: "Code in the session can read the role's credentials from the microVM metadata service, so the role is the agent's real reach. Separate roles let you tell agents apart and switch one off."
+        mitigations: [D3-AA, D3-CH]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+        verified: "2026-11-18"
+      - id: resourcePolicySourceVpce
+        name: "Resource-based policy condition aws:SourceVpce (invoke only through your endpoint)"
+        where: "PutResourcePolicy on the agent runtime, its endpoints, the gateway and the memory › Deny when aws:SourceVpce or aws:SourceVpc does not match"
+        setVia: [apiCli, cloudPolicy]
+        area: network
+        default: "No resource-based policy"
+        requires: "Interface VPC endpoint for bedrock-agentcore. AWS documents this for Runtime, Gateway and Memory ARNs only; a harness ARN is not listed, so test before relying on it"
+        recommended: "Explicit Deny on InvokeAgentRuntime and the other invoke actions for Principal * when aws:SourceVpce is not your interface endpoint, with aws:ViaAWSService false so calls AWS makes on your behalf still pass."
+        why: "With a JWT authoriser there is no IAM principal to restrict, so the network path is the only remaining gate on who can reach the agent."
+        mitigations: [D3-NI]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/resource-based-policies.html
+        verified: "2026-11-18"
+      - id: managedMemoryEncryptionKey
+        name: "encryptionKeyArn (managed memory and CreateMemory)"
+        where: "CreateHarness › memory › managedMemoryConfiguration.encryptionKeyArn; CreateMemory › encryptionKeyArn"
+        setVia: [apiCli, configFile]
+        area: data
+        default: "AWS owned key; managed memory on"
+        recommended: "Set your customer managed key ARN when the harness or memory is first created. Where a harness needs no recall, set memory to disabled."
+        why: "Managed memory is created by default and uses an AWS owned key unless told otherwise. The key cannot be changed afterwards, so a harness created without it needs a new memory attached through UpdateHarness."
+        mitigations: [AML.M0012]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-memory.html
+        verified: "2026-11-18"
+      - id: memoryKmsKeyFloor
+        name: "bedrock-agentcore:KmsKeyArn"
+        where: "SCP or IAM policy › Deny CreateMemory (and CreateGateway, UpdateGateway) unless the key is one of your approved KMS key ARNs"
+        setVia: [cloudPolicy]
+        area: data
+        default: "Not set"
+        recommended: "Deny bedrock-agentcore:CreateMemory when bedrock-agentcore:KmsKeyArn is null or not in your approved list, and apply the same condition to CreateGateway and UpdateGateway."
+        why: "A memory or gateway without your key is refused when it is created, which is the only moment the key can be set on a memory."
+        mitigations: [AML.M0012, D3-ACH]
+        url: https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonbedrockagentcore.html
+        verified: "2026-11-18"
+      - id: runtimeAuthorizerTypeFloor
+        name: "bedrock-agentcore:RuntimeAuthorizerType"
+        where: "SCP or IAM policy › Deny CreateAgentRuntime and UpdateAgentRuntime unless the key matches the authoriser type in your baseline"
+        setVia: [cloudPolicy]
+        area: identity
+        default: "Not set"
+        recommended: "Pick one inbound type per environment, IAM for application-only callers or JWT from your identity provider where the user must carry through, and deny every other value."
+        why: "Each runtime takes one inbound authoriser type. Fixing it in policy stops a builder choosing the type that your network and identity controls do not cover."
+        mitigations: [D3-ACH, D3-APA]
+        url: https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonbedrockagentcore.html
+        verified: "2026-11-18"
+      - id: harnessFilesystemMounts
+        name: "filesystemConfigurations (efsAccessPoint, s3FilesAccessPoint, sessionStorage)"
+        where: "CreateHarness / UpdateHarness › environment › agentCoreRuntimeEnvironment.filesystemConfigurations"
+        setVia: [apiCli, configFile]
+        area: data
+        default: "No persistent file system"
+        requires: "EFS and S3 Files mounts need networkMode VPC"
+        recommended: "Mount an EFS or S3 Files access point that you own for files that must persist, and leave sessionStorage off for regulated data while it is in preview."
+        why: "Managed session storage is kept by the service with no customer key option documented. A mounted access point keeps the files in your account under your key and your access rules."
+        mitigations: [AML.M0012]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-environment.html
+        verified: "2026-11-18"
+      - id: kbConnectorUserContext
+        name: "parameterOverrides › $.userContext (Managed Knowledge Bases connector)"
+        where: "CreateGatewayTarget › Amazon Bedrock Managed Knowledge Bases connector › tool configuration parameterOverrides and parameterValues"
+        setVia: [apiCli, code]
+        area: data
+        default: "userContext not exposed; ACL-enabled sources return nothing"
+        requires: "JWT inbound on the gateway; ACL awareness on the data source"
+        recommended: "Expose $.userContext, bind knowledgeBaseId in parameterValues without exposing it, and have a REQUEST interceptor overwrite userContext with the email from the validated JWT; add a Cedar policy that denies a mismatch."
+        why: "The gateway passes userContext through and does not fill it from the caller's identity. Left to the model, a prompt can ask for another user's documents."
+        mitigations: [cap-data-access-governance]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connector-managed-kb.html
+        verified: "2026-11-18"
+      # <<< cloud settings
     advisories:
       - title: "CVE-2026-18830 — AgentCore harness InvokeHarness could dispatch a configured tool without the model"
         url: https://aws.amazon.com/security/security-bulletins/2026-073-aws/
