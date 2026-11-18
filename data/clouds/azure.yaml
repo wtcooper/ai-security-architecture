@@ -929,6 +929,87 @@ settings:
     mitigations: [D3-APA]
     url: https://learn.microsoft.com/en-us/azure/aks/entra-id-authorization
     verified: "2026-11-18"
+  # >>> hosting rows (settings used only by a hosting variant)
+  - id: aksKedaTriggerAuth
+    name: "KEDA add-on with workload identity (TriggerAuthentication)"
+    where: "AKS › az aks create or update --enable-keda (preconfigured on AKS Automatic); a KEDA TriggerAuthentication with podIdentity provider azure-workload, referenced by the ScaledJob's azure-servicebus trigger"
+    setVia: [apiCli, configFile]
+    area: identity
+    default: "Not enabled on AKS Standard; preconfigured on AKS Automatic"
+    recommended: "On, with the TriggerAuthentication naming a user-assigned identity federated to system:serviceaccount:kube-system:keda-operator and used for nothing else. Microsoft's tutorial shares one identity between KEDA and the workload and grants it Azure Service Bus Data Owner (full access) on the namespace; give the agent's service account its own identity with Azure Service Bus Data Receiver on the trigger queue only, and keep SAS keys off with disableLocalAuth"
+    why: "KEDA's operator reads the trigger queue with a standing identity of its own to decide when a run starts, a step Container Apps performed inside the platform. Keeping that identity apart from the agent's stops the trigger path widening what a run can do."
+    mitigations: [D3-APA]
+    url: https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity
+    verified: "2026-11-18"
+  - id: aksCanaryRollout
+    name: "Canary deployment strategy (Kubernetes manifest task)"
+    where: "Azure Pipelines › KubernetesManifest@1 task › action deploy with strategy canary and a percentage; then action promote or reject, behind an approval on the pipeline environment"
+    setVia: [configFile]
+    area: tools
+    default: "strategy none (the new version replaces the stable one in one step)"
+    recommended: "strategy canary with a small percentage for every new agent image, prompt or model version, promoted only after its evaluation passes and an approver signs off. With trafficSplitMethod pod the percentage sets the share of replicas given to the -canary variant, which Microsoft documents for Deployment workloads; it does not document a canary for KEDA ScaledJob resources, so test how your trigger objects behave first"
+    why: "Container Apps split traffic between revisions for you. On AKS a new version reaches every pod unless the pipeline holds it at a canary share and waits for a promote or reject decision."
+    mitigations: [cap-staged-rollout-gate]
+    url: https://learn.microsoft.com/en-us/azure/devops/pipelines/ecosystems/kubernetes/canary-demo?view=azure-devops
+    verified: "2026-11-18"
+  - id: aksImdsRestriction
+    name: "Block pod access to the IMDS endpoint (preview)"
+    where: "AKS › az aks create or update --enable-imds-restriction, then a node image upgrade; or a NetworkPolicy in every user namespace that excludes 169.254.169.254/32 from egress"
+    setVia: [apiCli, configFile]
+    area: identity
+    default: "All pods can reach the IMDS endpoint"
+    requires: "aks-preview Azure CLI extension and the IMDSRestrictionPreview feature flag"
+    recommended: "Enabled where the cluster's add-ons allow it. Microsoft lists Container Insights, Azure Policy and application routing among the add-ons that cannot run with it; on those clusters apply the network policy from the AKS cluster security best practices that blocks pod egress to 169.254.169.254/32 in every user namespace"
+    why: "A pod that reaches the node's metadata service can request tokens for the node's managed identity. Blocking it leaves the agent and the sandbox with only the federated workload identity you gave them."
+    mitigations: [D3-CH]
+    url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
+    verified: "2026-11-18"
+  - id: aksNodeOsUpgradeChannel
+    name: "Node OS auto-upgrade channel"
+    where: "AKS › az aks create or update --node-os-upgrade-channel; planned maintenance configuration aksManagedNodeOSUpgradeSchedule"
+    setVia: [apiCli]
+    area: tools
+    default: "NodeImage on new AKS Standard clusters (API version 2023-06-01 and later) and always on AKS Automatic"
+    recommended: "NodeImage or SecurityPatch, never None, with a planned maintenance window, and a cluster auto-upgrade channel set alongside it"
+    why: "Container Apps patches its hosts for you. On AKS Standard node patching is a shared responsibility: Microsoft publishes patched node images and you choose how and when they are applied."
+    mitigations: []
+    url: https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+    verified: "2026-11-18"
+  - id: aksDisableLocalAccounts
+    name: "Local accounts (disableLocalAccounts)"
+    where: "AKS cluster › az aks create or update --disable-local-accounts, on a cluster with Microsoft Entra integration (--enable-aad); properties.disableLocalAccounts on the managed cluster resource"
+    setVia: [apiCli]
+    area: identity
+    default: "Local accounts are enabled by default; AKS Standard lists them as the default way to authenticate, and AKS Automatic preconfigures Azure RBAC for Kubernetes authorization"
+    requires: "Microsoft Entra integration on the cluster"
+    recommended: "Disabled, so that az aks get-credentials --admin fails and every Kubernetes API call is made with a Microsoft Entra identity. On an existing cluster, rotate the cluster certificates afterwards to revoke credentials already issued."
+    why: "Container Apps has no Kubernetes API to sign in to. On AKS, Microsoft describes the local admin credential as a non-auditable backdoor, and whoever holds it can change or reach the agent's pods."
+    mitigations: [D3-APA]
+    url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+    verified: "2026-11-18"
+  - id: aksInternalLoadBalancer
+    name: "Internal load balancer (azure-load-balancer-internal annotation)"
+    where: "Kubernetes Service of type LoadBalancer › annotation service.beta.kubernetes.io/azure-load-balancer-internal: \"true\"; the Gateway of the application routing add-on takes annotations for the same purpose"
+    setVia: [configFile]
+    area: network
+    default: "Not set; Microsoft's Gateway API examples create an external load balancer that is reachable from outside the cluster"
+    recommended: "Set on the Service or Gateway in front of the agent, so that it gets a private IP address from the cluster's virtual network and no public IP. Let only the front end and API Management reach it, and give the agent no public Service."
+    why: "A Container Apps internal environment has no public endpoint. On AKS each Service or Gateway decides this for itself, so the path from the front end and the gateway to the agent is private only where the annotation is set."
+    mitigations: [D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/aks/internal-lb
+    verified: "2026-11-18"
+  - id: entraSidecarWorkloadIdentity
+    name: "SignedAssertionFilePath credential source (Microsoft Entra ID Auth SDK sidecar with Microsoft Entra Workload ID)"
+    where: "Sidecar container in the agent's pod › env AzureAd__ClientCredentials__0__SourceType; pod label azure.workload.identity/use: \"true\" and a service account annotated with the managed identity's client ID"
+    setVia: [configFile, identityProvider]
+    area: identity
+    requires: "AKS cluster with the OIDC issuer and workload identity enabled; a user-assigned managed identity with a federated credential for the pod's service account"
+    recommended: "SignedAssertionFilePath, so the sidecar reads the service account token that the workload identity webhook projects into the pod and no client secret or certificate is stored. Keep the sidecar on localhost and never publish it through a LoadBalancer or Ingress."
+    why: "The sidecar that gets the agents' tokens needs a credential of its own. On AKS that is the projected, automatically refreshed service account token, not the managed identity credential type used on VMs or App Service."
+    mitigations: [D3-AA, D3-CH]
+    url: https://learn.microsoft.com/en-us/entra/msidweb/agent-id-sdk/scenarios/managed-identity
+    verified: "2026-11-18"
+  # <<< hosting rows
 
 implementations:
   - architecture: archChatAgent
@@ -1046,6 +1127,209 @@ implementations:
       - { block: openWeb, service: Grounding with Bing Search }
       - { block: sources, service: "Public registries (PyPI, npm)" }
       - { block: registry, service: Azure Artifacts feed }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: containerApps
+        kind: runtime
+        name: "Azure Container Apps"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/overview
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop inside your container; Container Apps runs that container as an app or a job and takes no part in the loop."
+          patching: "Microsoft updates and patches the hosts and the control plane; you rebuild your own container image when its base image or dependencies need patches."
+          data: "Prompts, tool results and state stay in your container and the stores you choose in your subscription; replica storage is ephemeral unless you mount Azure Files."
+          network: "A workload profiles environment in your own virtual network supports private endpoints and user-defined routes to Azure Firewall; network policies are not supported."
+          identity: "A system-assigned or user-assigned managed identity that you enable on the app or job and grant roles to through Azure role-based access control."
+          framework: "Any runtime, language or framework packaged as a Linux x86-64 container image; privileged containers are not allowed."
+          longRunning: "Apps run continuously and scale on KEDA rules; jobs start manually, on a cron schedule or per event such as a queue message, each bounded by a replica timeout."
+          portability: "The agent is a standard container image; app, job, scale rule and revision settings are Container Apps resources, and the Kubernetes API is not exposed."
+          effort: "Your team operates the agent code, image builds, scale rules, revisions and the virtual network; there is no cluster, node pool or Kubernetes upgrade to run."
+          fits: "Microsoft's guidance: one workload with a single shared security boundary, built as containers, that does not need direct access to the Kubernetes API."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/overview
+          - https://learn.microsoft.com/en-us/azure/container-apps/compare-options
+          - https://learn.microsoft.com/en-us/azure/container-apps/jobs
+          - https://learn.microsoft.com/en-us/azure/container-apps/containers
+          - https://learn.microsoft.com/en-us/azure/container-apps/networking
+          - https://learn.microsoft.com/en-us/azure/container-apps/use-azure-firewall
+          - https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
+          - https://learn.microsoft.com/en-us/azure/container-apps/planned-maintenance
+          - https://learn.microsoft.com/en-us/azure/container-apps/sandboxes-overview
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/choose-azure-container-service
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/container-service-general-considerations
+          - https://learn.microsoft.com/en-us/azure/container-apps/storage-mounts
+      - id: aks
+        kind: cluster
+        name: "Azure Kubernetes Service (AKS)"
+        url: https://learn.microsoft.com/en-us/azure/aks/what-is-aks
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in pods that you deploy; AKS runs the Kubernetes control plane and takes no part in the loop."
+          patching: "Microsoft publishes node images and Kubernetes versions, which you apply or schedule on AKS Standard and Azure applies on AKS Automatic; you rebuild your own image."
+          data: "Prompts, tool results and state stay in your pods and the stores you choose; nodes, disks and logs sit in your subscription, and Microsoft Support has limited access."
+          network: "Nodes sit in your virtual network; outbound type, Azure Firewall routes, network policies and FQDN filtering are yours to configure, and outbound is open by default."
+          identity: "Microsoft Entra Workload ID: a Kubernetes service account federated to a managed identity through the cluster's OIDC issuer, which you enable on AKS Standard."
+          framework: "Any Kubernetes workload: any language or framework in a container image, on Linux or Windows node pools, with direct access to the Kubernetes API."
+          longRunning: "Deployments run continuously, Kubernetes Jobs and CronJobs cover run-to-completion and scheduled work, and the KEDA add-on starts work from events such as queue messages."
+          portability: "The agent is a container image deployed through the Kubernetes API of a CNCF-certified service; workload identity, AKS add-ons and Azure networking are Azure-specific."
+          effort: "Your team operates cluster configuration, node pools, upgrades, network policy, add-ons and the workloads; AKS Automatic moves node management and upgrades to Azure."
+          fits: "Microsoft's guidance: when you need the Kubernetes API, network policy between colocated workloads or several workloads on one host, and have the skills to run a cluster."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/aks/what-is-aks
+          - https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic
+          - https://learn.microsoft.com/en-us/azure/aks/support-policies
+          - https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
+          - https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - https://learn.microsoft.com/en-us/azure/aks/container-network-security-fqdn-filtering-concepts
+          - https://learn.microsoft.com/en-us/azure/aks/keda-about
+          - https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+          - https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity
+          - https://learn.microsoft.com/en-us/azure/service-bus-messaging/authenticate-application
+          - https://learn.microsoft.com/en-us/azure/container-apps/compare-options
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/choose-azure-container-service
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/container-service-general-considerations
+          - https://learn.microsoft.com/en-us/azure/architecture/best-practices/background-jobs
+          - https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+          - https://learn.microsoft.com/en-us/agent-framework/hosting/self-hosting/
+        summary: "The agent runs as a Deployment of pods on AKS nodes in your virtual network, reached from App Service through an internal load balancer or Gateway that you create; model-written code runs in separate Kata-isolated sandbox pods. Front end, gateway, models, memory and firewall stay as mapped. On AKS Standard the builder carries node and Kubernetes upgrades, workload identity federation, ingress, network policy, outbound routing, logging add-ons and rollout tooling."
+        bindings:
+          - { block: agent, service: "Your agent in pods on Azure Kubernetes Service", builtWith: "Microsoft Agent Framework", note: "Runs as a Deployment behind an internal Service, under a Kubernetes service account federated to its own managed identity. Agent Framework's prerelease self-hosting packages cover your container.", url: https://learn.microsoft.com/en-us/agent-framework/hosting/self-hosting/ }
+          - { block: localTools, service: "AKS Pod Sandboxing (Kata Containers)", note: "Each sandbox pod runs in its own Kata pod VM on an Azure Linux node pool. The Agent Sandbox extension (preview) adds a Sandbox resource per session but needs the preview v2 runtime and AKS Standard.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
+        dropSettings: [agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
+        addSettings: [aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel, aksDisableLocalAccounts, aksInternalLoadBalancer]
+        differences:
+          - at: agent->gateway
+            text: "By default an AKS cluster has unrestricted outbound internet access, so the agent's pods can reach hosts other than the gateway. The drawing holds only once the outbound type is userDefinedRouting through Azure Firewall, and the firewall must then also allow the outbound network rules and FQDNs that the cluster itself requires."
+            url: https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
+          - at: agent
+            text: "By default every pod can reach the node's metadata service at 169.254.169.254, which Microsoft says can be exploited to obtain tokens, so the agent is not limited to its own workload identity. IMDS restriction is in preview and excludes add-ons such as Container Insights, Azure Policy and application routing; the alternative is a network policy in each namespace."
+            url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
+          - at: entry->agent
+            text: "Container Apps gives the agent HTTPS ingress without other infrastructure. On AKS you build the path from App Service: a Service or Gateway that is internal only where you annotate it, since Microsoft's Gateway API examples create a load balancer reachable from outside the cluster. The add-on's managed NGINX ingress loses Azure support after November 2026."
+            url: https://learn.microsoft.com/en-us/azure/aks/app-routing-gateway-api
+          - at: localTools
+            text: "Pod Sandboxing gives each sandbox pod its own VM and guest kernel, but Microsoft states that this boundary is compute isolation only. A Container Apps session blocks outbound requests by default; a pod on AKS can send and receive traffic without limitation until a network policy engine and a default-deny policy for the sandbox namespace are in place."
+            url: https://learn.microsoft.com/en-us/azure/aks/concepts-pod-sandboxing
+          - at: events->agent
+            text: "The Kubernetes API is another way to reach or change the agent with no user in the thread: anyone who can edit workloads in its namespace acts outside the front end and the scheduled-run path. Local accounts are enabled by default and Microsoft describes their admin access as a non-auditable backdoor, so disable them and authorise the API with Microsoft Entra ID."
+            url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+        alsoNeeded:
+          - service: "Microsoft Entra Workload ID and the cluster OIDC issuer"
+            role: identity
+            why: "Container Apps attaches a managed identity to the app. On AKS Standard you enable the OIDC issuer and workload identity, then federate a Kubernetes service account to a user-assigned identity; AKS Automatic preconfigures the cluster side."
+            url: https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - service: "Microsoft Entra ID access to the Kubernetes API"
+            role: identity
+            why: "Container Apps is managed only through Azure Resource Manager. AKS adds a Kubernetes API server whose local accounts are enabled by default, so you disable them and control access with Microsoft Entra ID."
+            url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+          - service: "Internal load balancer or the application routing add-on (Gateway API)"
+            role: ingress
+            why: "Container Apps has HTTPS ingress built in. On AKS you create the Service or Gateway that the front end and API Management call. Azure support for the add-on's managed NGINX ingress ends after November 2026, with the Gateway API as its successor."
+            url: https://learn.microsoft.com/en-us/azure/aks/app-routing-gateway-api
+          - service: "Network policy engine (Azure CNI Powered by Cilium)"
+            role: network
+            why: "A Container Apps environment is the network boundary and exposes no Kubernetes API. On AKS all pods can send and receive traffic without limitation until you have a policy engine and write default-deny policies per namespace."
+            url: https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - service: "Outbound type and route table for the node subnet"
+            role: network
+            why: "AKS Standard uses a Standard Load Balancer for egress by default, AKS Automatic a managed NAT gateway. Azure Firewall egress means outbound type userDefinedRouting, a route table and the cluster's required FQDN rules."
+            url: https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - service: "Azure Monitor container logging and managed Prometheus"
+            role: logging
+            why: "Container Apps stores console and system logs in Log Analytics by default. On AKS Standard, Container insights and managed Prometheus are optional features you enable for the cluster; AKS Automatic turns them on by default."
+            url: https://learn.microsoft.com/en-us/azure/azure-monitor/containers/kubernetes-monitoring-enable
+          - service: "Azure Key Vault provider for Secrets Store CSI Driver"
+            role: secrets
+            why: "Container Apps has a built-in secret store that can reference Key Vault. On AKS the CSI driver add-on mounts Key Vault secrets, keys and certificates into pods."
+            url: https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver
+          - service: "Azure Container Registry attached to the cluster"
+            role: registry
+            why: "Container Apps pulls images with a managed identity set on the app. On AKS the kubelet's managed identity needs the AcrPull role on the registry, which az aks --attach-acr assigns."
+            url: https://learn.microsoft.com/en-us/azure/aks/cluster-container-registry-integration
+          - service: "Node pools with cluster and node OS auto-upgrade"
+            role: other
+            why: "Container Apps patches its hosts and control plane. On AKS Standard you size the node pools and apply or schedule Kubernetes version and node image upgrades; AKS Automatic manages nodes and upgrades for you."
+            url: https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+        quickstart:
+          - title: "Secure access to Azure OpenAI from Azure Kubernetes Service (AKS)"
+            url: https://learn.microsoft.com/en-us/azure/aks/open-ai-secure-access-quickstart
+          - title: "Self-host Agent Framework applications"
+            url: https://learn.microsoft.com/en-us/agent-framework/hosting/self-hosting/
+          - title: "Limit network traffic with Azure Firewall in Azure Kubernetes Service (AKS)"
+            url: https://learn.microsoft.com/en-us/azure/aks/limit-egress-traffic
+      - id: foundryAgentService
+        kind: managed
+        name: "Microsoft Foundry Agent Service"
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolFoundryAgentService
+        compare:
+          agentLoop: "Microsoft runs the loop for prompt agents; for hosted agents your code runs the loop in a container on Foundry-managed compute, one VM-isolated sandbox per session."
+          patching: "Microsoft operates the runtime and its compute; a prompt agent has no code or container to maintain, while a hosted agent's code and container image remain yours."
+          data: "Conversations, agent definitions and files sit in Microsoft storage or your own Cosmos DB, Storage and AI Search; hosted session files stay Microsoft-managed."
+          network: "Public by default; add a private endpoint inbound any time; set your own or a managed virtual network outbound at account creation only; hosted agents add egress rules."
+          identity: "A Microsoft Entra agent identity that Foundry creates and manages for each agent, with no secret for you to hold; it has no resource permissions until you assign roles."
+          framework: "Prompt agents are configuration only; hosted agents take Python or C# code built with Agent Framework, LangGraph, OpenAI Agents SDK, Anthropic Agent SDK or your own code."
+          longRunning: "Routines start an agent on a timer, a schedule or a GitHub or Teams event; hosted agents add background mode, crash recovery and session state kept through idle periods."
+          portability: "A prompt agent is a definition held in Foundry; a hosted agent is your own container, but its endpoint, identity, conversations and Toolbox tools are Foundry services."
+          effort: "Your team operates agent definitions or agent code and the Foundry configuration; Microsoft runs the container, scaling, session lifecycle and platform integration."
+          fits: "Microsoft's guidance: when you want Microsoft-managed agent hosting; prompt agents without custom orchestration, hosted agents when the agent calls into your own code."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/prompt-agents
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/routines
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/long-running-agent-resilience
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/environment-setup
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+          - https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/agents/data-privacy-security
+          - https://learn.microsoft.com/en-us/agent-framework/hosting/
+          - https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
+          - https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+        offers:
+          - name: "Prompt agents"
+            what: "Agents defined entirely by configuration (model, instructions, tools) in the Foundry portal, SDK, REST API or Azure Developer CLI, which Foundry runs with no code or compute for you to manage."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/prompt-agents
+          - name: "Prompt agents with the Microsoft Copilot harness (preview)"
+            what: "An optional Foundry-operated harness, chosen when the prompt agent is created, that adds built-in file-system, shell, web-fetch and subagent tools for multi-step work; in public preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness
+          - name: "Voice-based prompt agents"
+            what: "Real-time spoken agents defined by configuration, with Foundry managing the voice orchestration through Voice Live over a WebSocket; generally available, with GPT-Live, SIP, campaigns and some other features in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/prompt-voice-agent
+          - name: "Hosted agents"
+            what: "Your own Python or C# agent code, in any framework, shipped as a container image or a .zip of source that Foundry builds, and run by Foundry in a per-session VM-isolated sandbox with a managed endpoint and a dedicated Entra agent identity; generally available."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents
+          - name: "Responses API (ephemeral agents)"
+            what: "Agent code you run elsewhere calls the Responses API on the Foundry project endpoint for models and tools, with the agent definition kept in your application and no agent resource saved in Foundry."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/responses-api
+          - name: "Routines"
+            what: "A project-level trigger with one action: a one-time timer, a recurring schedule, or a GitHub issue or Teams message event invokes one prompt agent or hosted agent; customer-managed keys are not supported and the C# SDK support is in beta packages."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/routines
+          - name: "Workflows (preview, retiring 1 December 2026)"
+            what: "A visual, declarative builder in the portal that sequences several agents with branching and human-in-the-loop steps; it is in preview and Microsoft retires it on 1 December 2026, pointing new work to Microsoft Agent Framework workflows deployed as hosted agents or to Azure Logic Apps."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/workflow
+          - name: "Agent-to-agent (A2A) endpoints"
+            what: "A Foundry agent can be exposed as an A2A endpoint that other agents discover and call, and can call remote A2A agents as a tool; A2A protocol version 1.0 is generally available and version 0.3 is in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/enable-agent-to-agent-endpoint
+          - name: "Multi-agent orchestration in the Responses API (preview)"
+            what: "A model creates and coordinates subagents in parallel within one response and combines their work; documented under Azure OpenAI in Foundry, in preview and limited to GPT-5.6 models."
+            url: https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses-multi-agent
+          - name: "Autopilots"
+            what: "Agents with their own Entra agent user account (mailbox, Teams presence, manager) that act as themselves in Microsoft 365, created as instances of a blueprint published from a hosted agent; the quickstart requires enrolment in the Microsoft Agent 365 Frontier preview programme."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/autopilot-overview
+          - name: "Microsoft Foundry Canvas (preview)"
+            what: "A GitHub Copilot app extension that opens a side panel for creating, configuring, testing and deploying hosted agents and harness-based prompt agents from a prompt gallery; in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/foundry-canvas
+    # <<< hosting options
     settings:
       - entraAssignmentRequired
       - appServiceRequireAuth
@@ -1177,6 +1461,209 @@ implementations:
       - { block: openWeb, service: Grounding with Bing Search }
       - { block: sources, service: "Public registries (PyPI, npm)" }
       - { block: registry, service: Azure Artifacts feed }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: containerApps
+        kind: runtime
+        name: "Azure Container Apps"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/overview
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop inside your container; Container Apps runs that container as an app or a job and takes no part in the loop."
+          patching: "Microsoft updates and patches the hosts and the control plane; you rebuild your own container image when its base image or dependencies need patches."
+          data: "Prompts, tool results and state stay in your container and the stores you choose in your subscription; replica storage is ephemeral unless you mount Azure Files."
+          network: "A workload profiles environment in your own virtual network supports private endpoints and user-defined routes to Azure Firewall; network policies are not supported."
+          identity: "A system-assigned or user-assigned managed identity that you enable on the app or job and grant roles to through Azure role-based access control."
+          framework: "Any runtime, language or framework packaged as a Linux x86-64 container image; privileged containers are not allowed."
+          longRunning: "Apps run continuously and scale on KEDA rules; jobs start manually, on a cron schedule or per event such as a queue message, each bounded by a replica timeout."
+          portability: "The agent is a standard container image; app, job, scale rule and revision settings are Container Apps resources, and the Kubernetes API is not exposed."
+          effort: "Your team operates the agent code, image builds, scale rules, revisions and the virtual network; there is no cluster, node pool or Kubernetes upgrade to run."
+          fits: "Microsoft's guidance: one workload with a single shared security boundary, built as containers, that does not need direct access to the Kubernetes API."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/overview
+          - https://learn.microsoft.com/en-us/azure/container-apps/compare-options
+          - https://learn.microsoft.com/en-us/azure/container-apps/jobs
+          - https://learn.microsoft.com/en-us/azure/container-apps/containers
+          - https://learn.microsoft.com/en-us/azure/container-apps/networking
+          - https://learn.microsoft.com/en-us/azure/container-apps/use-azure-firewall
+          - https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
+          - https://learn.microsoft.com/en-us/azure/container-apps/planned-maintenance
+          - https://learn.microsoft.com/en-us/azure/container-apps/sandboxes-overview
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/choose-azure-container-service
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/container-service-general-considerations
+          - https://learn.microsoft.com/en-us/azure/container-apps/storage-mounts
+      - id: aks
+        kind: cluster
+        name: "Azure Kubernetes Service (AKS)"
+        url: https://learn.microsoft.com/en-us/azure/aks/what-is-aks
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in pods that you deploy; AKS runs the Kubernetes control plane and takes no part in the loop."
+          patching: "Microsoft publishes node images and Kubernetes versions, which you apply or schedule on AKS Standard and Azure applies on AKS Automatic; you rebuild your own image."
+          data: "Prompts, tool results and state stay in your pods and the stores you choose; nodes, disks and logs sit in your subscription, and Microsoft Support has limited access."
+          network: "Nodes sit in your virtual network; outbound type, Azure Firewall routes, network policies and FQDN filtering are yours to configure, and outbound is open by default."
+          identity: "Microsoft Entra Workload ID: a Kubernetes service account federated to a managed identity through the cluster's OIDC issuer, which you enable on AKS Standard."
+          framework: "Any Kubernetes workload: any language or framework in a container image, on Linux or Windows node pools, with direct access to the Kubernetes API."
+          longRunning: "Deployments run continuously, Kubernetes Jobs and CronJobs cover run-to-completion and scheduled work, and the KEDA add-on starts work from events such as queue messages."
+          portability: "The agent is a container image deployed through the Kubernetes API of a CNCF-certified service; workload identity, AKS add-ons and Azure networking are Azure-specific."
+          effort: "Your team operates cluster configuration, node pools, upgrades, network policy, add-ons and the workloads; AKS Automatic moves node management and upgrades to Azure."
+          fits: "Microsoft's guidance: when you need the Kubernetes API, network policy between colocated workloads or several workloads on one host, and have the skills to run a cluster."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/aks/what-is-aks
+          - https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic
+          - https://learn.microsoft.com/en-us/azure/aks/support-policies
+          - https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
+          - https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - https://learn.microsoft.com/en-us/azure/aks/container-network-security-fqdn-filtering-concepts
+          - https://learn.microsoft.com/en-us/azure/aks/keda-about
+          - https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+          - https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity
+          - https://learn.microsoft.com/en-us/azure/service-bus-messaging/authenticate-application
+          - https://learn.microsoft.com/en-us/azure/container-apps/compare-options
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/choose-azure-container-service
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/container-service-general-considerations
+          - https://learn.microsoft.com/en-us/azure/architecture/best-practices/background-jobs
+          - https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+        summary: "The agent runs as pods on AKS nodes in your virtual network: a KEDA ScaledJob starts a pod for Service Bus messages, and model-written code runs in separate Kata-isolated sandbox pods. Models, tools, gateway, state and firewall stay as mapped. The builder now carries what Container Apps ran: node and Kubernetes upgrades, workload identity federation, network policy and outbound routing, the KEDA and monitoring add-ons, and rollout tooling. AKS Automatic preconfigures several of these."
+        bindings:
+          - { block: planner, service: "Your agent in pods on Azure Kubernetes Service", builtWith: "Microsoft Agent Framework", note: "Runs as a Deployment or as KEDA-started Jobs under a Kubernetes service account federated to its own managed identity. Agent Framework's hosting guide covers self-hosting in your own container.", url: https://learn.microsoft.com/en-us/agent-framework/hosting/ }
+          - { block: events, service: "Azure Service Bus queues and KEDA scaled jobs on AKS", note: "The KEDA add-on's azure-servicebus trigger creates a Kubernetes Job as queue messages arrive and authenticates with workload identity. A Kubernetes CronJob covers timers.", url: https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity }
+          - { block: localTools, service: "AKS Pod Sandboxing (Kata Containers)", note: "Each sandbox pod runs in its own Kata VM on an Azure Linux node pool. The Agent Sandbox cluster extension (preview) adds per-session claims but needs the preview v2 runtime and AKS Standard.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
+        dropSettings: [agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
+        addSettings: [aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksKedaTriggerAuth, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel]
+        differences:
+          - at: planner->gateway
+            text: "By default an AKS cluster has unrestricted outbound internet access (through a load balancer public IP, or a managed NAT gateway on AKS Automatic), so the agent's pods can reach hosts other than the gateway. The drawing holds only once the outbound type is userDefinedRouting through Azure Firewall, which must then also allow the cluster's own required FQDNs."
+            url: https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
+          - at: planner
+            text: "By default every pod can reach the node's Instance Metadata Service at 169.254.169.254 and ask for tokens for the node's managed identity, so the agent is not limited to its own identity. IMDS restriction is still a preview and cannot be enabled alongside several add-ons, including Container Insights and Azure Policy; the alternative is a network policy in each namespace."
+            url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
+          - at: localTools
+            text: "Pod Sandboxing gives each sandbox pod its own VM and guest kernel, but Microsoft states the boundary is compute isolation only. A Container Apps session pool blocks outbound traffic by default; an AKS sandbox pod can send and receive traffic without limitation until a network policy engine and a default-deny policy for its namespace are in place."
+            url: https://learn.microsoft.com/en-us/azure/aks/concepts-pod-sandboxing
+          - at: events->planner
+            text: "The trigger path gains an actor: the KEDA operator polls the queue with its own identity to decide when a run starts. Microsoft's tutorial gives one identity, shared with the workload, the Azure Service Bus Data Owner role (full access) on the whole namespace. The queue stays the only way in only if this identity is separated and scoped by choice."
+            url: https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity
+          - at: events
+            text: "The Kubernetes API is a second way to start or change a run: anyone who can create Jobs or edit workloads in the namespace bypasses the queue. AKS Standard enables local accounts by default and Microsoft describes their admin access as a non-auditable backdoor, so the single entry point holds only with them disabled and Microsoft Entra authorisation on the cluster."
+            url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+        alsoNeeded:
+          - service: "Microsoft Entra Workload ID and the cluster OIDC issuer"
+            role: identity
+            why: "Container Apps attaches a managed identity to the app. On AKS Standard you enable the OIDC issuer and workload identity, then federate a Kubernetes service account to a user-assigned identity; AKS Automatic preconfigures the cluster side."
+            url: https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - service: "Microsoft Entra ID access to the Kubernetes API"
+            role: identity
+            why: "Container Apps is managed only through Azure Resource Manager. AKS adds a Kubernetes API server; AKS Standard enables its local accounts by default, so you disable them and control access with Entra ID."
+            url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+          - service: "KEDA add-on"
+            role: other
+            why: "Container Apps has KEDA scale rules and event-driven jobs built in. On AKS Standard you enable the managed KEDA add-on and write the ScaledJob and TriggerAuthentication yourself; AKS Automatic preconfigures the add-on."
+            url: https://learn.microsoft.com/en-us/azure/aks/keda-about
+          - service: "Network policy engine (Azure CNI Powered by Cilium)"
+            role: network
+            why: "A Container Apps environment is the network boundary and exposes no Kubernetes API. On AKS all pods can send and receive traffic without limitation until you have a policy engine and write default-deny policies per namespace."
+            url: https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - service: "Outbound type and route table for the node subnet"
+            role: network
+            why: "AKS Standard uses a Standard Load Balancer for egress by default, AKS Automatic a managed NAT gateway. Azure Firewall egress means outbound type userDefinedRouting, a route table and the cluster's required FQDN rules."
+            url: https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - service: "Azure Monitor container logging and managed Prometheus"
+            role: logging
+            why: "Container Apps sends console and system logs to Log Analytics by default. On AKS Standard container logging and metrics are opt-in features you enable for the cluster; AKS Automatic turns them on."
+            url: https://learn.microsoft.com/en-us/azure/azure-monitor/containers/kubernetes-monitoring-enable
+          - service: "Azure Key Vault provider for Secrets Store CSI Driver"
+            role: secrets
+            why: "Container Apps has a built-in secret store that can reference Key Vault. On AKS the CSI driver add-on mounts Key Vault secrets, keys and certificates into pods."
+            url: https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver
+          - service: "Azure Container Registry attached to the cluster"
+            role: registry
+            why: "Container Apps pulls images with a managed identity set on the app. On AKS the kubelet's managed identity needs the AcrPull role on the registry, which az aks --attach-acr assigns."
+            url: https://learn.microsoft.com/en-us/azure/aks/cluster-container-registry-integration
+          - service: "Node pools with cluster and node OS auto-upgrade"
+            role: other
+            why: "Container Apps patches its hosts and control plane. On AKS Standard you size the node pools and apply or schedule Kubernetes version and node image upgrades; AKS Automatic manages nodes and upgrades for you."
+            url: https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+        quickstart:
+          - title: "Securely scale your applications using the KEDA add-on and workload identity on AKS"
+            url: https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity
+          - title: "Secure access to Azure OpenAI from Azure Kubernetes Service (AKS)"
+            url: https://learn.microsoft.com/en-us/azure/aks/open-ai-secure-access-quickstart
+          - title: "Limit network traffic with Azure Firewall in Azure Kubernetes Service (AKS)"
+            url: https://learn.microsoft.com/en-us/azure/aks/limit-egress-traffic
+      - id: foundryAgentService
+        kind: managed
+        name: "Microsoft Foundry Agent Service"
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolFoundryAgentService
+        compare:
+          agentLoop: "Microsoft runs the loop for prompt agents; for hosted agents your code runs the loop in a container on Foundry-managed compute, one VM-isolated sandbox per session."
+          patching: "Microsoft operates the runtime and its compute; a prompt agent has no code or container to maintain, while a hosted agent's code and container image remain yours."
+          data: "Conversations, agent definitions and files sit in Microsoft storage or your own Cosmos DB, Storage and AI Search; hosted session files stay Microsoft-managed."
+          network: "Public by default; add a private endpoint inbound any time; set your own or a managed virtual network outbound at account creation only; hosted agents add egress rules."
+          identity: "A Microsoft Entra agent identity that Foundry creates and manages for each agent, with no secret for you to hold; it has no resource permissions until you assign roles."
+          framework: "Prompt agents are configuration only; hosted agents take Python or C# code built with Agent Framework, LangGraph, OpenAI Agents SDK, Anthropic Agent SDK or your own code."
+          longRunning: "Routines start an agent on a timer, a schedule or a GitHub or Teams event; hosted agents add background mode, crash recovery and session state kept through idle periods."
+          portability: "A prompt agent is a definition held in Foundry; a hosted agent is your own container, but its endpoint, identity, conversations and Toolbox tools are Foundry services."
+          effort: "Your team operates agent definitions or agent code and the Foundry configuration; Microsoft runs the container, scaling, session lifecycle and platform integration."
+          fits: "Microsoft's guidance: when you want Microsoft-managed agent hosting; prompt agents without custom orchestration, hosted agents when the agent calls into your own code."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/prompt-agents
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/routines
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/long-running-agent-resilience
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/environment-setup
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+          - https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/agents/data-privacy-security
+          - https://learn.microsoft.com/en-us/agent-framework/hosting/
+          - https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
+          - https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+        offers:
+          - name: "Prompt agents"
+            what: "Agents defined entirely by configuration (model, instructions, tools) in the Foundry portal, SDK, REST API or Azure Developer CLI, which Foundry runs with no code or compute for you to manage."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/prompt-agents
+          - name: "Prompt agents with the Microsoft Copilot harness (preview)"
+            what: "An optional Foundry-operated harness, chosen when the prompt agent is created, that adds built-in file-system, shell, web-fetch and subagent tools for multi-step work; in public preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness
+          - name: "Voice-based prompt agents"
+            what: "Real-time spoken agents defined by configuration, with Foundry managing the voice orchestration through Voice Live over a WebSocket; generally available, with GPT-Live, SIP, campaigns and some other features in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/prompt-voice-agent
+          - name: "Hosted agents"
+            what: "Your own Python or C# agent code, in any framework, shipped as a container image or a .zip of source that Foundry builds, and run by Foundry in a per-session VM-isolated sandbox with a managed endpoint and a dedicated Entra agent identity; generally available."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents
+          - name: "Responses API (ephemeral agents)"
+            what: "Agent code you run elsewhere calls the Responses API on the Foundry project endpoint for models and tools, with the agent definition kept in your application and no agent resource saved in Foundry."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/responses-api
+          - name: "Routines"
+            what: "A project-level trigger with one action: a one-time timer, a recurring schedule, or a GitHub issue or Teams message event invokes one prompt agent or hosted agent; customer-managed keys are not supported and the C# SDK support is in beta packages."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/routines
+          - name: "Workflows (preview, retiring 1 December 2026)"
+            what: "A visual, declarative builder in the portal that sequences several agents with branching and human-in-the-loop steps; it is in preview and Microsoft retires it on 1 December 2026, pointing new work to Microsoft Agent Framework workflows deployed as hosted agents or to Azure Logic Apps."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/workflow
+          - name: "Agent-to-agent (A2A) endpoints"
+            what: "A Foundry agent can be exposed as an A2A endpoint that other agents discover and call, and can call remote A2A agents as a tool; A2A protocol version 1.0 is generally available and version 0.3 is in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/enable-agent-to-agent-endpoint
+          - name: "Multi-agent orchestration in the Responses API (preview)"
+            what: "A model creates and coordinates subagents in parallel within one response and combines their work; documented under Azure OpenAI in Foundry, in preview and limited to GPT-5.6 models."
+            url: https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses-multi-agent
+          - name: "Autopilots"
+            what: "Agents with their own Entra agent user account (mailbox, Teams presence, manager) that act as themselves in Microsoft 365, created as instances of a blueprint published from a hosted agent; the quickstart requires enrolment in the Microsoft Agent 365 Frontier preview programme."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/autopilot-overview
+          - name: "Microsoft Foundry Canvas (preview)"
+            what: "A GitHub Copilot app extension that opens a side panel for creating, configuring, testing and deploying hosted agents and harness-based prompt agents from a prompt gallery; in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/foundry-canvas
+    # <<< hosting options
     settings:
       - serviceBusSenderRole
       - serviceBusDisableLocalAuth
@@ -1319,6 +1806,209 @@ implementations:
       - { block: openWeb, service: Grounding with Bing Search }
       - { block: sources, service: "Public registries (PyPI, npm)" }
       - { block: registry, service: Azure Artifacts feed }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: containerApps
+        kind: runtime
+        name: "Azure Container Apps"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/overview
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop inside your container; Container Apps runs that container as an app or a job and takes no part in the loop."
+          patching: "Microsoft updates and patches the hosts and the control plane; you rebuild your own container image when its base image or dependencies need patches."
+          data: "Prompts, tool results and state stay in your container and the stores you choose in your subscription; replica storage is ephemeral unless you mount Azure Files."
+          network: "A workload profiles environment in your own virtual network supports private endpoints and user-defined routes to Azure Firewall; network policies are not supported."
+          identity: "A system-assigned or user-assigned managed identity that you enable on the app or job and grant roles to through Azure role-based access control."
+          framework: "Any runtime, language or framework packaged as a Linux x86-64 container image; privileged containers are not allowed."
+          longRunning: "Apps run continuously and scale on KEDA rules; jobs start manually, on a cron schedule or per event such as a queue message, each bounded by a replica timeout."
+          portability: "The agent is a standard container image; app, job, scale rule and revision settings are Container Apps resources, and the Kubernetes API is not exposed."
+          effort: "Your team operates the agent code, image builds, scale rules, revisions and the virtual network; there is no cluster, node pool or Kubernetes upgrade to run."
+          fits: "Microsoft's guidance: one workload with a single shared security boundary, built as containers, that does not need direct access to the Kubernetes API."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/overview
+          - https://learn.microsoft.com/en-us/azure/container-apps/compare-options
+          - https://learn.microsoft.com/en-us/azure/container-apps/jobs
+          - https://learn.microsoft.com/en-us/azure/container-apps/containers
+          - https://learn.microsoft.com/en-us/azure/container-apps/networking
+          - https://learn.microsoft.com/en-us/azure/container-apps/use-azure-firewall
+          - https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
+          - https://learn.microsoft.com/en-us/azure/container-apps/planned-maintenance
+          - https://learn.microsoft.com/en-us/azure/container-apps/sandboxes-overview
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/choose-azure-container-service
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/container-service-general-considerations
+          - https://learn.microsoft.com/en-us/azure/container-apps/storage-mounts
+      - id: aks
+        kind: cluster
+        name: "Azure Kubernetes Service (AKS)"
+        url: https://learn.microsoft.com/en-us/azure/aks/what-is-aks
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in pods that you deploy; AKS runs the Kubernetes control plane and takes no part in the loop."
+          patching: "Microsoft publishes node images and Kubernetes versions, which you apply or schedule on AKS Standard and Azure applies on AKS Automatic; you rebuild your own image."
+          data: "Prompts, tool results and state stay in your pods and the stores you choose; nodes, disks and logs sit in your subscription, and Microsoft Support has limited access."
+          network: "Nodes sit in your virtual network; outbound type, Azure Firewall routes, network policies and FQDN filtering are yours to configure, and outbound is open by default."
+          identity: "Microsoft Entra Workload ID: a Kubernetes service account federated to a managed identity through the cluster's OIDC issuer, which you enable on AKS Standard."
+          framework: "Any Kubernetes workload: any language or framework in a container image, on Linux or Windows node pools, with direct access to the Kubernetes API."
+          longRunning: "Deployments run continuously, Kubernetes Jobs and CronJobs cover run-to-completion and scheduled work, and the KEDA add-on starts work from events such as queue messages."
+          portability: "The agent is a container image deployed through the Kubernetes API of a CNCF-certified service; workload identity, AKS add-ons and Azure networking are Azure-specific."
+          effort: "Your team operates cluster configuration, node pools, upgrades, network policy, add-ons and the workloads; AKS Automatic moves node management and upgrades to Azure."
+          fits: "Microsoft's guidance: when you need the Kubernetes API, network policy between colocated workloads or several workloads on one host, and have the skills to run a cluster."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/aks/what-is-aks
+          - https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic
+          - https://learn.microsoft.com/en-us/azure/aks/support-policies
+          - https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
+          - https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - https://learn.microsoft.com/en-us/azure/aks/container-network-security-fqdn-filtering-concepts
+          - https://learn.microsoft.com/en-us/azure/aks/keda-about
+          - https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+          - https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity
+          - https://learn.microsoft.com/en-us/azure/service-bus-messaging/authenticate-application
+          - https://learn.microsoft.com/en-us/azure/container-apps/compare-options
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/choose-azure-container-service
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/container-service-general-considerations
+          - https://learn.microsoft.com/en-us/azure/architecture/best-practices/background-jobs
+          - https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+          - https://learn.microsoft.com/en-us/agent-framework/hosting/durable-extension
+        summary: "The Agent Framework workflow runs as a self-hosted Durable Task worker in pods on AKS, the host Microsoft's Durable Task guide assigns to the standalone Durable Task SDKs. Durable Task Scheduler stays the managed journal outside the cluster, reached with workload identity; model-written code runs in Kata-isolated sandbox pods. On AKS Standard the builder carries node and Kubernetes upgrades, identity federation, worker scaling, network policy, outbound routing, logging and rollouts."
+        bindings:
+          - { block: harness, service: "Your workflow in pods on Azure Kubernetes Service", builtWith: "Microsoft Agent Framework", note: "Self-hosted Durable Extension (preview): a Durable Task worker in your pods connects to Durable Task Scheduler. Microsoft's hosting table puts AKS on the standalone Durable Task SDKs.", url: https://learn.microsoft.com/en-us/azure/durable-task/common/choose-orchestration-framework }
+          - { block: localTools, service: "AKS Pod Sandboxing (Kata Containers)", note: "Each sandbox pod runs in its own Kata pod VM on an Azure Linux node pool. The Agent Sandbox extension (preview) adds a Sandbox resource per session but needs the preview v2 runtime and AKS Standard.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
+        dropSettings: [agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
+        addSettings: [aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel, aksKedaTriggerAuth, aksDisableLocalAccounts, entraSidecarWorkloadIdentity]
+        differences:
+          - at: harness->gateway
+            text: "By default an AKS cluster has unrestricted outbound internet access, so the workflow's pods can reach hosts other than the gateway. The drawing holds only once the outbound type is userDefinedRouting through Azure Firewall, and the firewall must then also allow the outbound network rules and FQDNs that the cluster itself requires."
+            url: https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
+          - at: harness
+            text: "By default every pod can reach the node's metadata service at 169.254.169.254, which Microsoft says can be exploited to obtain tokens, so the workflow is not limited to its own workload identity. IMDS restriction is in preview and excludes add-ons such as Container Insights, Azure Policy and application routing; the alternative is a network policy in each namespace."
+            url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
+          - at: orchestration->state
+            text: "Durable Task Scheduler still journals every step, and Microsoft's hosting guide puts AKS on the standalone Durable Task SDKs. The scheduler's autoscaler is documented for Container Apps only: on AKS you manage worker scaling yourself or with KEDA, and the workers reach the scheduler through a workload identity that you federate and grant a Durable Task role."
+            url: https://learn.microsoft.com/en-us/azure/durable-task/common/choose-orchestration-framework
+          - at: localTools
+            text: "Pod Sandboxing gives each sandbox pod its own VM and guest kernel, but Microsoft states that this boundary is compute isolation only. A Container Apps session blocks outbound requests by default; a pod on AKS can send and receive traffic without limitation until a network policy engine and a default-deny policy for the sandbox namespace are in place."
+            url: https://learn.microsoft.com/en-us/azure/aks/concepts-pod-sandboxing
+          - at: events
+            text: "The Kubernetes API is a second way to start, change or stop a run: anyone who can edit workloads in the namespace bypasses the queue. Local accounts are enabled by default and Microsoft describes their admin access as a non-auditable backdoor, so the single entry point holds only with local accounts disabled and Microsoft Entra ID authorisation on the cluster."
+            url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+        alsoNeeded:
+          - service: "Microsoft Entra Workload ID and the cluster OIDC issuer"
+            role: identity
+            why: "Container Apps attaches a managed identity to the app. On AKS Standard you enable the OIDC issuer and workload identity, then federate a Kubernetes service account to a user-assigned identity; AKS Automatic preconfigures the cluster side."
+            url: https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - service: "Microsoft Entra ID access to the Kubernetes API"
+            role: identity
+            why: "Container Apps is managed only through Azure Resource Manager. AKS adds a Kubernetes API server whose local accounts are enabled by default, so you disable them and control access with Microsoft Entra ID."
+            url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+          - service: "KEDA add-on"
+            role: other
+            why: "Container Apps has KEDA scale rules built in, including one for Durable Task Scheduler. On AKS you manage worker scaling yourself or enable the managed KEDA add-on and write its scaling objects; AKS Automatic preconfigures the add-on."
+            url: https://learn.microsoft.com/en-us/azure/aks/keda-about
+          - service: "Network policy engine (Azure CNI Powered by Cilium)"
+            role: network
+            why: "A Container Apps environment is the network boundary and exposes no Kubernetes API. On AKS all pods can send and receive traffic without limitation until you have a policy engine and write default-deny policies per namespace."
+            url: https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - service: "Outbound type and route table for the node subnet"
+            role: network
+            why: "AKS Standard uses a Standard Load Balancer for egress by default, AKS Automatic a managed NAT gateway. Azure Firewall egress means outbound type userDefinedRouting, a route table and the cluster's required FQDN rules."
+            url: https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - service: "Azure Monitor container logging and managed Prometheus"
+            role: logging
+            why: "Container Apps stores console and system logs in Log Analytics by default. On AKS Standard, Container insights and managed Prometheus are optional features you enable for the cluster; AKS Automatic turns them on by default."
+            url: https://learn.microsoft.com/en-us/azure/azure-monitor/containers/kubernetes-monitoring-enable
+          - service: "Azure Key Vault provider for Secrets Store CSI Driver"
+            role: secrets
+            why: "Container Apps has a built-in secret store that can reference Key Vault. On AKS the CSI driver add-on mounts Key Vault secrets, keys and certificates into pods."
+            url: https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver
+          - service: "Azure Container Registry attached to the cluster"
+            role: registry
+            why: "Container Apps pulls images with a managed identity set on the app. On AKS the kubelet's managed identity needs the AcrPull role on the registry, which az aks --attach-acr assigns."
+            url: https://learn.microsoft.com/en-us/azure/aks/cluster-container-registry-integration
+          - service: "Node pools with cluster and node OS auto-upgrade"
+            role: other
+            why: "Container Apps patches its hosts and control plane. On AKS Standard you size the node pools and apply or schedule Kubernetes version and node image upgrades; AKS Automatic manages nodes and upgrades for you."
+            url: https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+        quickstart:
+          - title: "Quickstart: Host a .NET Durable Task SDK App on AKS"
+            url: https://learn.microsoft.com/en-us/azure/durable-task/sdks/quickstart-aks-durable-task-scheduler
+          - title: "Durable Extension (Microsoft Agent Framework)"
+            url: https://learn.microsoft.com/en-us/agent-framework/hosting/durable-extension
+          - title: "Limit network traffic with Azure Firewall in Azure Kubernetes Service (AKS)"
+            url: https://learn.microsoft.com/en-us/azure/aks/limit-egress-traffic
+      - id: foundryAgentService
+        kind: managed
+        name: "Microsoft Foundry Agent Service"
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolFoundryAgentService
+        compare:
+          agentLoop: "Microsoft runs the loop for prompt agents; for hosted agents your code runs the loop in a container on Foundry-managed compute, one VM-isolated sandbox per session."
+          patching: "Microsoft operates the runtime and its compute; a prompt agent has no code or container to maintain, while a hosted agent's code and container image remain yours."
+          data: "Conversations, agent definitions and files sit in Microsoft storage or your own Cosmos DB, Storage and AI Search; hosted session files stay Microsoft-managed."
+          network: "Public by default; add a private endpoint inbound any time; set your own or a managed virtual network outbound at account creation only; hosted agents add egress rules."
+          identity: "A Microsoft Entra agent identity that Foundry creates and manages for each agent, with no secret for you to hold; it has no resource permissions until you assign roles."
+          framework: "Prompt agents are configuration only; hosted agents take Python or C# code built with Agent Framework, LangGraph, OpenAI Agents SDK, Anthropic Agent SDK or your own code."
+          longRunning: "Routines start an agent on a timer, a schedule or a GitHub or Teams event; hosted agents add background mode, crash recovery and session state kept through idle periods."
+          portability: "A prompt agent is a definition held in Foundry; a hosted agent is your own container, but its endpoint, identity, conversations and Toolbox tools are Foundry services."
+          effort: "Your team operates agent definitions or agent code and the Foundry configuration; Microsoft runs the container, scaling, session lifecycle and platform integration."
+          fits: "Microsoft's guidance: when you want Microsoft-managed agent hosting; prompt agents without custom orchestration, hosted agents when the agent calls into your own code."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/prompt-agents
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/routines
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/long-running-agent-resilience
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/environment-setup
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+          - https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/agents/data-privacy-security
+          - https://learn.microsoft.com/en-us/agent-framework/hosting/
+          - https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
+          - https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+        offers:
+          - name: "Prompt agents"
+            what: "Agents defined entirely by configuration (model, instructions, tools) in the Foundry portal, SDK, REST API or Azure Developer CLI, which Foundry runs with no code or compute for you to manage."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/prompt-agents
+          - name: "Prompt agents with the Microsoft Copilot harness (preview)"
+            what: "An optional Foundry-operated harness, chosen when the prompt agent is created, that adds built-in file-system, shell, web-fetch and subagent tools for multi-step work; in public preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness
+          - name: "Voice-based prompt agents"
+            what: "Real-time spoken agents defined by configuration, with Foundry managing the voice orchestration through Voice Live over a WebSocket; generally available, with GPT-Live, SIP, campaigns and some other features in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/prompt-voice-agent
+          - name: "Hosted agents"
+            what: "Your own Python or C# agent code, in any framework, shipped as a container image or a .zip of source that Foundry builds, and run by Foundry in a per-session VM-isolated sandbox with a managed endpoint and a dedicated Entra agent identity; generally available."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents
+          - name: "Responses API (ephemeral agents)"
+            what: "Agent code you run elsewhere calls the Responses API on the Foundry project endpoint for models and tools, with the agent definition kept in your application and no agent resource saved in Foundry."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/responses-api
+          - name: "Routines"
+            what: "A project-level trigger with one action: a one-time timer, a recurring schedule, or a GitHub issue or Teams message event invokes one prompt agent or hosted agent; customer-managed keys are not supported and the C# SDK support is in beta packages."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/routines
+          - name: "Workflows (preview, retiring 1 December 2026)"
+            what: "A visual, declarative builder in the portal that sequences several agents with branching and human-in-the-loop steps; it is in preview and Microsoft retires it on 1 December 2026, pointing new work to Microsoft Agent Framework workflows deployed as hosted agents or to Azure Logic Apps."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/workflow
+          - name: "Agent-to-agent (A2A) endpoints"
+            what: "A Foundry agent can be exposed as an A2A endpoint that other agents discover and call, and can call remote A2A agents as a tool; A2A protocol version 1.0 is generally available and version 0.3 is in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/enable-agent-to-agent-endpoint
+          - name: "Multi-agent orchestration in the Responses API (preview)"
+            what: "A model creates and coordinates subagents in parallel within one response and combines their work; documented under Azure OpenAI in Foundry, in preview and limited to GPT-5.6 models."
+            url: https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses-multi-agent
+          - name: "Autopilots"
+            what: "Agents with their own Entra agent user account (mailbox, Teams presence, manager) that act as themselves in Microsoft 365, created as instances of a blueprint published from a hosted agent; the quickstart requires enrolment in the Microsoft Agent 365 Frontier preview programme."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/autopilot-overview
+          - name: "Microsoft Foundry Canvas (preview)"
+            what: "A GitHub Copilot app extension that opens a side panel for creating, configuring, testing and deploying hosted agents and harness-based prompt agents from a prompt gallery; in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/foundry-canvas
+    # <<< hosting options
     settings:
       - serviceBusSenderRole
       - serviceBusDisableLocalAuth
@@ -1936,6 +2626,201 @@ implementations:
       - { block: peerVendor, service: Vendor platform A2A agent, note: "Under agreement, federated to our Entra tenant as an enterprise application." }
       - { block: provider, service: Azure OpenAI in Foundry Models }
       - { block: partner, service: Partner organisation A2A agent, note: "No federation: agent identity and skill scopes only." }
+    # >>> hosting options (compared against the vendor's pages; one is the mapping itself)
+    hosting:
+      - id: containerApps
+        kind: runtime
+        name: "Azure Container Apps"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/overview
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          agentLoop: "Your code runs the loop inside your container; Container Apps runs that container as an app or a job and takes no part in the loop."
+          patching: "Microsoft updates and patches the hosts and the control plane; you rebuild your own container image when its base image or dependencies need patches."
+          data: "Prompts, tool results and state stay in your container and the stores you choose in your subscription; replica storage is ephemeral unless you mount Azure Files."
+          network: "A workload profiles environment in your own virtual network supports private endpoints and user-defined routes to Azure Firewall; network policies are not supported."
+          identity: "A system-assigned or user-assigned managed identity that you enable on the app or job and grant roles to through Azure role-based access control."
+          framework: "Any runtime, language or framework packaged as a Linux x86-64 container image; privileged containers are not allowed."
+          longRunning: "Apps run continuously and scale on KEDA rules; jobs start manually, on a cron schedule or per event such as a queue message, each bounded by a replica timeout."
+          portability: "The agent is a standard container image; app, job, scale rule and revision settings are Container Apps resources, and the Kubernetes API is not exposed."
+          effort: "Your team operates the agent code, image builds, scale rules, revisions and the virtual network; there is no cluster, node pool or Kubernetes upgrade to run."
+          fits: "Microsoft's guidance: one workload with a single shared security boundary, built as containers, that does not need direct access to the Kubernetes API."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/overview
+          - https://learn.microsoft.com/en-us/azure/container-apps/compare-options
+          - https://learn.microsoft.com/en-us/azure/container-apps/jobs
+          - https://learn.microsoft.com/en-us/azure/container-apps/containers
+          - https://learn.microsoft.com/en-us/azure/container-apps/networking
+          - https://learn.microsoft.com/en-us/azure/container-apps/use-azure-firewall
+          - https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
+          - https://learn.microsoft.com/en-us/azure/container-apps/planned-maintenance
+          - https://learn.microsoft.com/en-us/azure/container-apps/sandboxes-overview
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/choose-azure-container-service
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/container-service-general-considerations
+          - https://learn.microsoft.com/en-us/azure/container-apps/storage-mounts
+      - id: aks
+        kind: cluster
+        name: "Azure Kubernetes Service (AKS)"
+        url: https://learn.microsoft.com/en-us/azure/aks/what-is-aks
+        asOf: "2026-11"
+        compare:
+          agentLoop: "Your code runs the loop in pods that you deploy; AKS runs the Kubernetes control plane and takes no part in the loop."
+          patching: "Microsoft publishes node images and Kubernetes versions, which you apply or schedule on AKS Standard and Azure applies on AKS Automatic; you rebuild your own image."
+          data: "Prompts, tool results and state stay in your pods and the stores you choose; nodes, disks and logs sit in your subscription, and Microsoft Support has limited access."
+          network: "Nodes sit in your virtual network; outbound type, Azure Firewall routes, network policies and FQDN filtering are yours to configure, and outbound is open by default."
+          identity: "Microsoft Entra Workload ID: a Kubernetes service account federated to a managed identity through the cluster's OIDC issuer, which you enable on AKS Standard."
+          framework: "Any Kubernetes workload: any language or framework in a container image, on Linux or Windows node pools, with direct access to the Kubernetes API."
+          longRunning: "Deployments run continuously, Kubernetes Jobs and CronJobs cover run-to-completion and scheduled work, and the KEDA add-on starts work from events such as queue messages."
+          portability: "The agent is a container image deployed through the Kubernetes API of a CNCF-certified service; workload identity, AKS add-ons and Azure networking are Azure-specific."
+          effort: "Your team operates cluster configuration, node pools, upgrades, network policy, add-ons and the workloads; AKS Automatic moves node management and upgrades to Azure."
+          fits: "Microsoft's guidance: when you need the Kubernetes API, network policy between colocated workloads or several workloads on one host, and have the skills to run a cluster."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/aks/what-is-aks
+          - https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic
+          - https://learn.microsoft.com/en-us/azure/aks/support-policies
+          - https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
+          - https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - https://learn.microsoft.com/en-us/azure/aks/container-network-security-fqdn-filtering-concepts
+          - https://learn.microsoft.com/en-us/azure/aks/keda-about
+          - https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+          - https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity
+          - https://learn.microsoft.com/en-us/azure/service-bus-messaging/authenticate-application
+          - https://learn.microsoft.com/en-us/azure/container-apps/compare-options
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/choose-azure-container-service
+          - https://learn.microsoft.com/en-us/azure/architecture/guide/container-service-general-considerations
+          - https://learn.microsoft.com/en-us/azure/architecture/best-practices/background-jobs
+          - https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+          - https://learn.microsoft.com/en-us/agent-framework/hosting/self-hosting/a2a/server
+        summary: "Our agent runs as pods on AKS and still speaks A2A both ways through API Management; Entra ID, API Center, memory and the model stay as mapped. The Entra auth SDK sidecar runs in the agent's pod and authenticates through workload identity. On AKS Standard the builder carries the ingress that brings turns and peers' A2A tasks to the pod, identity federation, network policy and outbound routing, node and Kubernetes upgrades, and logging add-ons."
+        bindings:
+          - { block: harness, service: "Your agent in pods on Azure Kubernetes Service", builtWith: "Microsoft Agent Framework", note: "Agent Framework's prerelease A2A hosting exposes the agent as an A2A server from your own host, behind an internal Service API Management calls. The Entra auth SDK sidecar shares the pod.", url: https://learn.microsoft.com/en-us/agent-framework/hosting/self-hosting/a2a/server }
+        addSettings: [aksWorkloadIdentity, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksImdsRestriction, aksNodeOsUpgradeChannel, aksDisableLocalAccounts, aksInternalLoadBalancer, entraSidecarWorkloadIdentity]
+        differences:
+          - at: harness->gateway
+            text: "By default AKS has unrestricted outbound internet access, so the agent's pods could call a peer or a model directly and skip the gateway that attaches peer-bound tokens and classifies artifacts. It holds only with outbound type userDefinedRouting through Azure Firewall, or a Cilium FQDN policy (paid ACNS add-on) that leaves the gateway as the pods' only destination."
+            url: https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
+          - at: entry->harness
+            text: "Container Apps has ingress built in. On AKS you build the one path that carries turns from the front end and peers' A2A tasks from API Management: a Service or Gateway that is internal only where annotated. Microsoft notes that when API Management is outside the cluster's virtual network the cluster must publish public endpoints, and suggests mutual TLS at the ingress."
+            url: https://learn.microsoft.com/en-us/azure/api-management/api-management-kubernetes
+          - at: harness
+            text: "The agent's tokens come from the Entra auth SDK sidecar in its pod, which on AKS signs in with a projected workload identity token. Microsoft warns that every application inside the sidecar's trust boundary can ask it for tokens, and by default every pod can also reach the node's metadata service, so localhost binding, network policy and IMDS blocking are choices you make."
+            url: https://learn.microsoft.com/en-us/entra/msidweb/agent-id-sdk/security
+        alsoNeeded:
+          - service: "Microsoft Entra Workload ID and the cluster OIDC issuer"
+            role: identity
+            why: "Container Apps attaches a managed identity to the app. On AKS Standard you enable the OIDC issuer and workload identity, then federate a Kubernetes service account to a user-assigned identity; AKS Automatic preconfigures the cluster side."
+            url: https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+          - service: "Microsoft Entra ID access to the Kubernetes API"
+            role: identity
+            why: "Container Apps is managed only through Azure Resource Manager. AKS adds a Kubernetes API server whose local accounts are enabled by default, so you disable them and control access with Microsoft Entra ID."
+            url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+          - service: "Internal load balancer or the application routing add-on (Gateway API)"
+            role: ingress
+            why: "Container Apps has HTTPS ingress built in. On AKS you create the Service or Gateway that the front end and API Management call. Azure support for the add-on's managed NGINX ingress ends after November 2026, with the Gateway API as its successor."
+            url: https://learn.microsoft.com/en-us/azure/aks/app-routing-gateway-api
+          - service: "Network policy engine (Azure CNI Powered by Cilium)"
+            role: network
+            why: "A Container Apps environment is the network boundary and exposes no Kubernetes API. On AKS all pods can send and receive traffic without limitation until you have a policy engine and write default-deny policies per namespace."
+            url: https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+          - service: "Outbound type and route table for the node subnet"
+            role: network
+            why: "AKS Standard uses a Standard Load Balancer for egress by default, AKS Automatic a managed NAT gateway. Azure Firewall egress means outbound type userDefinedRouting, a route table and the cluster's required FQDN rules."
+            url: https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype
+          - service: "Azure Monitor container logging and managed Prometheus"
+            role: logging
+            why: "Container Apps stores console and system logs in Log Analytics by default. On AKS Standard, Container insights and managed Prometheus are optional features you enable for the cluster; AKS Automatic turns them on by default."
+            url: https://learn.microsoft.com/en-us/azure/azure-monitor/containers/kubernetes-monitoring-enable
+          - service: "Azure Key Vault provider for Secrets Store CSI Driver"
+            role: secrets
+            why: "Container Apps has a built-in secret store that can reference Key Vault. On AKS the CSI driver add-on mounts Key Vault secrets, keys and certificates into pods."
+            url: https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver
+          - service: "Azure Container Registry attached to the cluster"
+            role: registry
+            why: "Container Apps pulls images with a managed identity set on the app. On AKS the kubelet's managed identity needs the AcrPull role on the registry, which az aks --attach-acr assigns."
+            url: https://learn.microsoft.com/en-us/azure/aks/cluster-container-registry-integration
+          - service: "Node pools with cluster and node OS auto-upgrade"
+            role: other
+            why: "Container Apps patches its hosts and control plane. On AKS Standard you size the node pools and apply or schedule Kubernetes version and node image upgrades; AKS Automatic manages nodes and upgrades for you."
+            url: https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-node-os-image
+        quickstart:
+          - title: "Host agents with A2A (Microsoft Agent Framework)"
+            url: https://learn.microsoft.com/en-us/agent-framework/hosting/self-hosting/a2a/server
+          - title: "Installation guide: Deploy the Microsoft Entra ID Auth SDK (sidecar)"
+            url: https://learn.microsoft.com/en-us/entra/msidweb/agent-id-sdk/installation
+          - title: "Azure API Management with Microservices in AKS"
+            url: https://learn.microsoft.com/en-us/azure/api-management/api-management-kubernetes
+      - id: foundryAgentService
+        kind: managed
+        name: "Microsoft Foundry Agent Service"
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+        asOf: "2026-11"
+        pattern: archManagedAgentRuntime
+        tool: toolFoundryAgentService
+        compare:
+          agentLoop: "Microsoft runs the loop for prompt agents; for hosted agents your code runs the loop in a container on Foundry-managed compute, one VM-isolated sandbox per session."
+          patching: "Microsoft operates the runtime and its compute; a prompt agent has no code or container to maintain, while a hosted agent's code and container image remain yours."
+          data: "Conversations, agent definitions and files sit in Microsoft storage or your own Cosmos DB, Storage and AI Search; hosted session files stay Microsoft-managed."
+          network: "Public by default; add a private endpoint inbound any time; set your own or a managed virtual network outbound at account creation only; hosted agents add egress rules."
+          identity: "A Microsoft Entra agent identity that Foundry creates and manages for each agent, with no secret for you to hold; it has no resource permissions until you assign roles."
+          framework: "Prompt agents are configuration only; hosted agents take Python or C# code built with Agent Framework, LangGraph, OpenAI Agents SDK, Anthropic Agent SDK or your own code."
+          longRunning: "Routines start an agent on a timer, a schedule or a GitHub or Teams event; hosted agents add background mode, crash recovery and session state kept through idle periods."
+          portability: "A prompt agent is a definition held in Foundry; a hosted agent is your own container, but its endpoint, identity, conversations and Toolbox tools are Foundry services."
+          effort: "Your team operates agent definitions or agent code and the Foundry configuration; Microsoft runs the container, scaling, session lifecycle and platform integration."
+          fits: "Microsoft's guidance: when you want Microsoft-managed agent hosting; prompt agents without custom orchestration, hosted agents when the agent calls into your own code."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/overview
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/prompt-agents
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/routines
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/long-running-agent-resilience
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/environment-setup
+          - https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+          - https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/agents/data-privacy-security
+          - https://learn.microsoft.com/en-us/agent-framework/hosting/
+          - https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
+          - https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
+          - https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+        offers:
+          - name: "Prompt agents"
+            what: "Agents defined entirely by configuration (model, instructions, tools) in the Foundry portal, SDK, REST API or Azure Developer CLI, which Foundry runs with no code or compute for you to manage."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/prompt-agents
+          - name: "Prompt agents with the Microsoft Copilot harness (preview)"
+            what: "An optional Foundry-operated harness, chosen when the prompt agent is created, that adds built-in file-system, shell, web-fetch and subagent tools for multi-step work; in public preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness
+          - name: "Voice-based prompt agents"
+            what: "Real-time spoken agents defined by configuration, with Foundry managing the voice orchestration through Voice Live over a WebSocket; generally available, with GPT-Live, SIP, campaigns and some other features in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/prompt-voice-agent
+          - name: "Hosted agents"
+            what: "Your own Python or C# agent code, in any framework, shipped as a container image or a .zip of source that Foundry builds, and run by Foundry in a per-session VM-isolated sandbox with a managed endpoint and a dedicated Entra agent identity; generally available."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents
+          - name: "Responses API (ephemeral agents)"
+            what: "Agent code you run elsewhere calls the Responses API on the Foundry project endpoint for models and tools, with the agent definition kept in your application and no agent resource saved in Foundry."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/responses-api
+          - name: "Routines"
+            what: "A project-level trigger with one action: a one-time timer, a recurring schedule, or a GitHub issue or Teams message event invokes one prompt agent or hosted agent; customer-managed keys are not supported and the C# SDK support is in beta packages."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/routines
+          - name: "Workflows (preview, retiring 1 December 2026)"
+            what: "A visual, declarative builder in the portal that sequences several agents with branching and human-in-the-loop steps; it is in preview and Microsoft retires it on 1 December 2026, pointing new work to Microsoft Agent Framework workflows deployed as hosted agents or to Azure Logic Apps."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/workflow
+          - name: "Agent-to-agent (A2A) endpoints"
+            what: "A Foundry agent can be exposed as an A2A endpoint that other agents discover and call, and can call remote A2A agents as a tool; A2A protocol version 1.0 is generally available and version 0.3 is in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/enable-agent-to-agent-endpoint
+          - name: "Multi-agent orchestration in the Responses API (preview)"
+            what: "A model creates and coordinates subagents in parallel within one response and combines their work; documented under Azure OpenAI in Foundry, in preview and limited to GPT-5.6 models."
+            url: https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses-multi-agent
+          - name: "Autopilots"
+            what: "Agents with their own Entra agent user account (mailbox, Teams presence, manager) that act as themselves in Microsoft 365, created as instances of a blueprint published from a hosted agent; the quickstart requires enrolment in the Microsoft Agent 365 Frontier preview programme."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/autopilot-overview
+          - name: "Microsoft Foundry Canvas (preview)"
+            what: "A GitHub Copilot app extension that opens a side panel for creating, configuring, testing and deploying hosted agents and harness-based prompt agents from a prompt gallery; in preview."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/foundry-canvas
+    # <<< hosting options
     settings:
       - entraAssignmentRequired
       - appServiceRequireAuth
