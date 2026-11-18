@@ -1,0 +1,162 @@
+# Controls guidance for the managed agent service in your cloud. Audience: platform teams,
+# architects and security teams. A hybrid pattern: engineers write the definition and the
+# application, the cloud provider runs the loop, and the platform team wraps the service in the
+# cloud controls it already holds. The build fails this document if a control it cites stops
+# being pinned on the pattern.
+archetype: archCloudManagedAgent
+mode: hybrid
+status: draft
+attribution: >-
+  Authored in this repository. Pattern-level by design; cloud services are named only in the
+  cited sources, not in the items.
+
+overview:
+  - >-
+    Governing this pattern is mostly ordinary cloud governance pointed at a new kind of
+    resource. The agent service sits in your account, so the controls that matter most are
+    ones the platform team already runs for every other workload: an identity for the
+    workload, a private network path, your own encryption keys, policy that refuses a bad
+    configuration, and the audit log. The work is to apply each of them to the agent
+    deliberately, because the service's defaults are usually open: a public endpoint, state in
+    the provider's storage, tracing off.
+  - >-
+    The part that is not ordinary is the loop. The provider runs it, and being in your account
+    does not let you inspect it. So the pattern has two halves: what you enforce yourself, at
+    your gateway, your stores and your cloud policy, and what you accept on the provider's
+    assurance. Keeping those two lists apart, and knowing which control sits on which, is what
+    stops a team from believing a setting protects more than it does.
+
+items:
+  - title: Write down what the provider assures and what you inspect
+    mitigations: [ cap-ai-vendor-assessment, cap-agent-tracing, D3-EI ]
+    body:
+      - >-
+        The provider operates the loop, so some behaviour is assured by the provider and not
+        inspected by you. How one session is kept apart from another, how the built-in tools
+        are sandboxed, how the model is called and what happens to a request inside the
+        service are the provider's to run and to patch. You see their effects in traces and
+        logs; you do not see the mechanism. Treat this as a supplier review, even though the
+        supplier is your cloud provider and the service is in your account: read the service's
+        shared responsibility statement, list which features you use are still in preview,
+        find out which model deployments may process data outside your region, and record what
+        a customer-managed key does not cover.
+      - >-
+        Then write the other list: what you enforce yourself and can test. Who may call the
+        agent, what it may reach in your systems, where its state is kept, and what
+        configuration is allowed are all yours. Repeat the review on a schedule, because the
+        service's defaults and preview labels change every quarter.
+
+  - title: Give each agent its own cloud identity, and store no keys on the paths into your systems
+    mitigations: [ D3-AA, D3-CH, D3-APA, D3-CTS ]
+    body:
+      - >-
+        Use the identity the cloud issues for each agent, and grant it only the roles that
+        agent needs. Do not let agents fall back to one shared project identity or default
+        service account: with a shared identity you cannot tell agents apart in the logs or
+        switch one off without stopping them all. The same identity is what your gateway and
+        your stores check, so there is no key to create, store or rotate for those paths.
+      - >-
+        Treat the call into the service the same way. Allow your application's own workload
+        identity to invoke the agent, switch off key access on the service, and carry the
+        signed-in user with the call so that later access is the person's and not the
+        application's. For the connectors the provider hosts, keep each credential in the
+        service's connection store against one named tool. A simple test: disable one agent's
+        identity and confirm that exactly one agent stops.
+
+  - title: Close the public endpoint and bring the service onto your network
+    mitigations: [ D3-NI, cap-agent-egress-control ]
+    body:
+      - >-
+        Most of these services are reachable from the internet until you change it. Disable
+        public network access, reach the service through a private endpoint, and give it a
+        private path into your network: private endpoints, or a subnet you delegate to it. On
+        some services the network mode is fixed when the resource is created, so decide before
+        the first agent exists. Then limit what the service can reach on your network to your
+        gateway and its own stores; being on the network is not permission to call everything
+        on it.
+      - >-
+        Set the network rules for the built-in tools as well. Web search, web fetch and hosted
+        connectors leave from the provider's side and never pass your gateway, so the
+        service's own outbound rules are the only limit on where they send data. Check which
+        tools stop working on a private network before you promise them to a team.
+
+  - title: Keep the agent's state in your own stores, under your keys, apart for each user
+    mitigations: [ AML.M0012, AML.M0031, cap-data-access-governance ]
+    body:
+      - >-
+        Choose the setup that keeps conversations, memory, files and the search index in your
+        own account, and encrypt them with keys you manage. Left at the default, this state
+        usually sits in storage the provider manages. Give the agent's identity access to its
+        own stores and nothing else, and keep the list of people with a role on those stores
+        short: anyone who can read the store can read every conversation without going near
+        the agent.
+      - >-
+        Decide memory scope on purpose. Keep each user's and each session's memory apart, set
+        how long it is kept, and filter knowledge searches by what the asking user may see.
+        Nothing screens what the service writes to memory or reads back, so a planted
+        instruction that reaches shared memory returns in every later session.
+
+  - title: Set the configuration floor in cloud policy, and release definitions like code
+    mitigations: [ D3-ACH, cap-agent-tool-registry, cap-staged-rollout-gate ]
+    body:
+      - >-
+        Put the baseline in organisation-level cloud policy so that a non-compliant agent
+        cannot be created: no public endpoint, no key access, approved models and regions
+        only, your own keys and stores, and the tool types you allow. Use the deny effect, not
+        audit, and test that each rule refuses, because several agent-specific policies are
+        still in preview. A setting chosen once in a console is undone by the next
+        deployment; policy refuses it every time.
+      - >-
+        Let only the delivery pipeline create or change agents. Register every definition,
+        review it like code, test each version against attacks before it serves traffic, and
+        keep rollback to one switch. In a cloud account an agent is one call away for anyone
+        with the role, so the register and the policy on who may create agents are what keep
+        the population known.
+
+  - title: Decide reach and approvals at your own gateway
+    mitigations: [ AML.M0028, AML.M0029, cap-input-guardrails, cap-agent-action-policy-enforcement ]
+    body:
+      - >-
+        The private network only gets the service's call to your gateway. The gateway decides
+        whether it goes further: which tool servers this agent may reach, on which user's
+        access, and whether a write carries a person's approval for that exact action. Make
+        your tool servers accept calls from the gateway and from nowhere else. Screen tool
+        results there before they go back to a loop you cannot see.
+      - >-
+        Use the service's own rules for what your gateway never sees. Per-tool rules in the
+        definition, the list of allowed tools on each remote server and the service's content
+        screening are the only controls on built-in tools and hosted connectors. Where a
+        connector matters, register it at your gateway instead, so it is scoped and recorded
+        on your side.
+
+  - title: Bound each session, keep the record in your account, and rehearse the stop
+    mitigations: [ AML.M0036, cap-agent-tracing, cap-agent-kill-switch ]
+    body:
+      - >-
+        Set limits on each session's length, steps and cost in the service, and keep running
+        totals in your own application and in cloud budgets, because a new session resets a
+        limit set per session. Switch tracing on, send traces and the cloud audit log to
+        stores in your account, join them with your gateway's record, and restrict who may
+        read them: traces hold prompts and tool results.
+      - >-
+        Practise stopping an agent. Disable its cloud identity, stop its running sessions,
+        take its version out of service and stop your own code handling its requests. Time
+        it, and check whether a running session keeps working until its token expires.
+
+sources:
+  - title: "Microsoft Learn: Networking options for Foundry Agent Service"
+    url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
+  - title: "Microsoft Learn: Agent identity concepts in Microsoft Foundry"
+    url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity
+  - title: "Microsoft Learn: Use your own resources in the Foundry Agent Service"
+    url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-your-own-resources
+  - title: "Microsoft Learn: Built-in policy definitions for Foundry Tools"
+    url: https://learn.microsoft.com/en-us/azure/ai-services/policy-reference
+  - title: "AWS: AgentCore harness security and access controls, including the shared responsibility model"
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+  - title: "AWS: Use interface VPC endpoints (AWS PrivateLink) with Amazon Bedrock AgentCore"
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html
+  - title: "Google Cloud: Manage agent access on Agent Runtime"
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-agent-access
+  - title: "Google Cloud: Agent Identity overview"
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/agent-identity-overview

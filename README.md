@@ -6,7 +6,7 @@ Patterns for securely enabling AI. Pick the pattern for the AI tool or applicati
 you; it shows the controls your organisation needs in place and the settings of the product you
 chose. Everything else in the app is the evidence behind those two lists.
 
-- **Patterns.** One for each kind of AI tool or application, 18 in all, grouped by where the AI
+- **Patterns.** One for each kind of AI tool or application, 19 in all, grouped by where the AI
   runs: tools on your devices, AI services you subscribe to, AI you host yourself. Each is a
   drawing of the components, data flows and trust boundaries, with every control numbered onto
   it where it goes.
@@ -321,7 +321,7 @@ segmentation and identity entries).
 
 The taxonomy answers *what to worry about* and the mitigations answer *what defensive function to
 deploy*. The architectures answer the question that comes next in every review: **"so what does
-a sound deployment actually look like?"** — one drawing per class of AI application, 18 in all,
+a sound deployment actually look like?"** — one drawing per class of AI application, 19 in all,
 across the three deployment surfaces used by the control matrix.
 
 The catalogue is original work: no published source offers "here are the classes of AI
@@ -333,15 +333,23 @@ separate when their control sets differ, not when their vendors do.
 | Surface | Architectures |
 | --- | --- |
 | **Endpoint** (5) | Third-party coding & desktop agents, first-party coding & desktop agents, personal autonomous agent (the OpenClaw class), local model runtime, browser AI agents & extensions |
-| **AI you host yourself** (8; on a cloud or on-premises) | Single agent workflow, multi-agent workflow, chat agent with tools, remote MCP server you publish, self-hosted model inference, model training & release pipeline, agent sandbox for RL & evaluation, agent-to-agent federation |
+| **AI you host yourself** (9; on a cloud or on-premises) | Single agent workflow, multi-agent workflow, chat agent with tools, remote MCP server you publish, self-hosted model inference, model training & release pipeline, agent sandbox for RL & evaluation, agent-to-agent federation, managed agent service in your cloud |
 | **Third-party SaaS** (5) | Enterprise AI chat with connectors, and four managed agent runtimes: UI/low-code, coding & desktop sessions, API/SDK, and persistent agents |
+
+A managed agent service is sorted by tenancy, not by who runs the agent loop. A service that
+runs inside a cloud account the organisation governs (its subscription, identity, network,
+keys, policy and logs) is "AI you host yourself", drawn as the managed agent service in your
+cloud: the provider still runs the loop, inside a provider boundary, and the enterprise wraps
+its own cloud controls around it. A service in another company's tenancy, reached over the
+internet with that vendor's console, keys and contract, stays with the third-party SaaS
+patterns as the API/SDK managed agent runtime.
 
 Every pattern has **one drawing**, the trust-boundary view: each zone is a labelled outline
 (managed endpoint, enterprise cloud, vendor platform, external), people stand outside every
 boundary, the security and governance control plane runs beneath, and each component is a
 plain box with a title, one line and a thin accent for its type. Pointing at a box shows what
 it holds, and the **How it works** tab lists every component with everything it holds, so
-nothing is hover-only. The drawing is laid out automatically for all 18 patterns by
+nothing is hover-only. The drawing is laid out automatically for all 19 patterns by
 `src/components/drawing/layout.ts`; no pattern has coordinates in code. Four fields in a
 pattern's file feed it: a `summary` on every block (its one line), a `gloss` on a zone (a few
 words beside the canonical name), a `crossing` on every flow that crosses a boundary (what it
@@ -361,9 +369,10 @@ pattern's file must carry. `npm run drawing:audit` scores every pattern against 
 tests fail if one slips. [`docs/PATTERN-FINDINGS.md`](docs/PATTERN-FINDINGS.md) lists the open
 questions about the patterns themselves that the audit and the review turned up.
 
-**A pattern you host can be read as built on a cloud, or in your own data centre.** The eight
-"AI you host yourself" patterns (agents, model inference, MCP servers, pipelines) are mapped
-onto AWS, Azure, Google Cloud and an on-premises data centre in `data/clouds/`. A **Built on**
+**A pattern you host can be read as built on a cloud, or in your own data centre.** Eight of
+the nine "AI you host yourself" patterns (agents, model inference, MCP servers, pipelines) are
+mapped onto AWS, Azure, Google Cloud and an on-premises data centre in `data/clouds/`; the
+ninth, the managed agent service in your cloud, was added on 2026-11-18 and is not mapped yet. A **Built on**
 switch above the drawing (Generic · AWS · Azure · Google Cloud · On-premises) is one state,
 kept in the address as `?cloud=aws` or `?cloud=onprem` on every tab, and it changes four things
 together: every box on the drawing names what plays it (or says "you build this"); every
@@ -387,8 +396,11 @@ hosting option. Running your code on your own cluster and running it on the plat
 own runtime are the same pattern: the trust boundaries do not move, so a mapping records
 the second as a variant that changes only some components and settings (`hosting:` in the
 platform's file, chosen as `?host=`). A managed agent service, where the vendor runs the agent
-loop, is not a variant: the loop moves into the vendor's boundary, which is another pattern
-(API/SDK managed agent runtime), so the option links there instead of being redrawn here. The
+loop, is not a variant: the loop moves into the provider's boundary, which is another pattern
+(the managed agent service in your cloud), so the option links there instead of being redrawn
+here. For the other hosted patterns a managed option is a service where the provider runs the
+server, the model, the training or the sandbox for you; no pattern draws it, so the option says
+what the service offers. The
 comparison rows are fixed (who runs it, who patches, where the data lives, networking,
 identity, what it accepts, how it handles the work, portability, what your team operates, when
 the vendor says it fits) and carry no ranking, because the right answer depends
@@ -508,7 +520,7 @@ data/
 │   └── nist-csf.yaml             NIST CSF 2.0 categories + CoSAI control crosswalk
 ├── incidents/                    authored incidents, one YAML each, replayed on their architecture
 ├── reference/
-│   ├── architectures/            ★ 18 flow-style reference architectures, one YAML each
+│   ├── architectures/            ★ 19 flow-style reference architectures, one YAML each
 │   └── guidance/                 controls guidance, one document per architecture
 ├── tooling/                      ★ the AI tooling registry: named products, one entity per
 │   ├── BASELINE.md                 product × architecture, with per-control operator steps,

@@ -90,7 +90,8 @@ finding the table exists to show.
 
 A pattern is signed off when its audit row is clean and its drawing has been looked at.
 
-Signed off 2026-11-15. For all 18 the audit reports no finding on any rule (L1 to L7, C1 to
+Signed off 2026-11-15, and on 2026-11-18 for the managed agent service in your cloud, added
+that day. For all 19 the audit reports no finding on any rule (L1 to L7, C1 to
 C3). Each drawing was viewed by eye at rest, at laptop width. The other states were checked in
 the browser for every pattern (no sideways scroll at 1366px; every control has a chip; on Risks
 & flows every pinned risk has a tag and every step of the walkthrough is drawn; each cloud's
@@ -118,5 +119,6 @@ themselves are in [PATTERN-FINDINGS.md](PATTERN-FINDINGS.md).
 | Remote MCP server you publish | 958×647 | 100% | Callers now stand outside our cloud; three inbound crossings added. |
 | Self-hosted model inference | 1252×692 | 100% | Secrets & key management is drawn empty (open question). |
 | Model training & release pipeline | 1006×706 | 100% | Training content comes in up the outside of the boundary. Observability & response is drawn empty (open question). |
+| Managed agent service in your cloud | 1304×925 | 99% | The provider's hosted connectors sit beside the runtime, so the web flow drops straight to External and no arrow crosses another. The deploy flow steps round Memory & state and runs close above the session flow. Viewed at rest, with risks lit and with the walkthrough running. Not yet mapped onto a cloud (open question). |
 
 A drawing narrower than the page is shown larger than 100%, up to the page width.

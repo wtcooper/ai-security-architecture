@@ -9,7 +9,7 @@ import { SURFACE_SITUATION } from "../src/components/patterns/labels";
 import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { OnCloud } from "../src/components/cloud/CloudViews";
 import { IncidentWalkthrough } from "../src/components/incidents/IncidentWalkthrough";
-import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor, hostedAs, hostingOptionsFor, hostingWords, isManagedTarget } from "../src/components/cloud/model";
+import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor, hostedAs, hostingOptionsFor, hostingWords, isManagedTarget, notOfferedFor } from "../src/components/cloud/model";
 import { SettingCheck } from "../src/components/enable/SettingCheck";
 import { ControlTable } from "../src/components/enable/ControlTable";
 import { controlGroups } from "../src/components/enable/model";
@@ -86,7 +86,15 @@ test("a platform states where it does not follow the drawing: marked on the draw
 
 test("shown on-premises, the organisation's boundary is its data centre and the wording drops the cloud", () => {
   for (const a of hosted) {
-    const product = cloudProductsFor(a.id).find((p) => p.cloud.selfManaged)!;
+    const product = cloudProductsFor(a.id).find((p) => p.cloud.selfManaged);
+    if (!product) {
+      // A provider-run service has no on-premises form: the page says so and points to the pattern to build there.
+      const own = dataset.clouds.find((c) => c.selfManaged)!;
+      const absent = notOfferedFor(a.id).find((n) => n.cloud.id === own.id);
+      assert.ok(absent?.why && absent.instead, `${a.id}: on-premises says why it is not offered and what to use`);
+      assert.doesNotMatch(page(a.id), new RegExp(`data-cloud="${own.id}"`), `${a.id}: the switch does not offer on-premises`);
+      continue;
+    }
     const html = page(a.id, `cloud=${cloudSlug(product.id)}`);
     assert.match(html, new RegExp(`aria-pressed="true"[^>]*data-cloud="${product.id}"`), `${a.id}: the switch shows on-premises`);
     assert.ok(html.includes(product.cloud.boundary!.toUpperCase()), `${a.id}: the boundary is titled ${product.cloud.boundary}`);
