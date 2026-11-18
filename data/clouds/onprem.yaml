@@ -17,56 +17,58 @@ boundary: Enterprise data centre
 settings:
   # --- Identity & access ---------------------------------------------------------------
   - id: keycloakGroupsAccess
-    name: "Condition - User Role with Deny Access (authentication flow)"
-    where: "Keycloak › Authentication › a copy of the browser flow bound to the assistant's client: Condition - User Role, then Deny Access; the client role mapped to groups"
+    name: "Condition - User Role with Deny Access (conditional flow)"
+    where: "Keycloak › Authentication › Flows › a copy of the browser flow bound to the client, with a conditional sub-flow: Condition - User Role, then Deny Access; the client role granted through Groups"
     setVia: [identityProvider]
     area: identity
-    recommended: "A client role for the assistant, granted to the groups that use it and never to individual users; the flow denies sign-in to anyone without the role"
-    why: "Only people in the assigned groups can open a conversation, and access follows group membership when someone moves or leaves."
+    recommended: "One client role for each client people sign in to, granted to groups and never to individual users; the flow denies sign-in to anyone who lacks the role; group membership reviewed on the same cycle as any access grant; step-up or network conditions sit in the same flow"
+    why: "Who may use a client is decided in the identity provider, per group, before any token for it exists, and access follows group membership when someone moves or leaves."
     mitigations: [D3-APA]
     url: https://www.keycloak.org/docs/latest/server_admin/index.html#explicitly-denyallow-access-in-conditional-flows
     verified: "2026-11-18"
   - id: keycloakTokenLifetimes
-    name: "Access Token Lifespan, SSO Session Max and Revocation"
-    where: "Keycloak › Realm settings › Tokens tab (Access Token Lifespan) and Sessions tab (SSO Session Idle, SSO Session Max, Client Session Max); Sessions › Actions › Revocation › Set to now, Push"
+    name: "Access Token Lifespan and Revocation"
+    where: "Keycloak › Realm settings › Tokens: Access Token Lifespan (client override under the client's Advanced settings), Revoke Refresh Token; Realm settings › Sessions: SSO Session Idle, SSO Session Max, Client Session Max; Sessions › Actions › Revocation (not-before, Set to now, Push); the client's Enabled switch"
     setVia: [identityProvider]
     area: identity
-    recommended: "Access Token Lifespan of a few minutes; Client Session Max for the assistant's client no longer than a working day; the incident runbook uses Revocation › Set to now and signs out all active sessions"
-    why: "The access the assistant carries belongs to the signed-in user and ends with the session, and every token already issued can be made invalid at once."
+    requires: "Access tokens already issued stay valid until they expire, which is why the lifespan must be short"
+    recommended: "Access Token Lifespan of five minutes or less; Client Session Max no longer than a working day; Revoke Refresh Token enabled; the incident runbook disables the affected client, uses Revocation › Set to now › Push and signs out active sessions; a drill times how long the last old token keeps working"
+    why: "A token already issued stays valid until it expires, so a short lifespan bounds how long a stolen or revoked token is useful, and disabling the client stops new tokens, exchanges and refreshes at once."
     mitigations: [D3-APA, cap-agent-kill-switch, D3-CH, D3-CR]
     url: https://www.keycloak.org/docs/latest/server_admin/index.html#_timeouts
     verified: "2026-11-18"
   - id: litellmVirtualKeys
     name: "Virtual Keys"
-    where: "LiteLLM Proxy › POST /key/generate (or the admin UI › Virtual Keys); general_settings.master_key and database_url set"
+    where: "LiteLLM Proxy › POST /key/generate (or the admin UI › Virtual Keys); general_settings.master_key and database_url (DATABASE_URL) set"
     setVia: [apiCli, adminConsole]
     area: identity
-    default: "Off: virtual keys need general_settings.master_key and a PostgreSQL database_url; a key has no expiry unless duration is set"
-    recommended: "One key per agent service, issued with models and a duration (expiry); the master key used only to mint keys; upperbound_key_generate_params caps the budget, limits and duration any key may be given"
-    why: "Each agent has its own identity at the gateway, checked on every call and separate from the users it serves, so usage is attributable and one agent can be cut off without touching the rest."
+    default: "Off: virtual keys need general_settings.master_key and a PostgreSQL database_url, and neither is set out of the box; a key has no expiry unless duration is set"
+    recommended: "One key per calling agent, team, client or run, issued with models, allowed_routes, a duration (expiry) and its own MCP server and agent lists; the master key used only to mint keys, never to carry traffic; upperbound_key_generate_params caps the budget, limits and duration any key may be given"
+    why: "Each caller has its own identity at the gateway, checked on every call, so usage is attributable and one caller can be cut off without touching the rest."
     mitigations: [D3-AA, D3-CH, D3-CTS]
     url: https://docs.litellm.ai/docs/proxy/virtual_keys
     verified: "2026-11-18"
   - id: litellmKeyRotation
     name: "Disable Keys (/key/block) and key expiry (duration)"
-    where: "LiteLLM Proxy › POST /key/block and /key/unblock; duration on /key/generate; /key/{key}/regenerate"
+    where: "LiteLLM Proxy › duration on /key/generate; POST /key/block and /key/unblock; /key/{key}/regenerate; auto_rotate and rotation_interval with LITELLM_KEY_ROTATION_ENABLED=true"
     setVia: [apiCli]
     area: identity
     default: "Keys do not expire and are not blocked unless you set it"
-    requires: "Key Rotations (/key/{key}/regenerate, auto_rotate, rotation_interval) need a LiteLLM Enterprise licence; /key/block and duration do not"
-    recommended: "Every agent key issued with a duration and re-issued by the pipeline before it lapses; the incident runbook's first step calls /key/block for the agent's key, which cuts it off at the gateway without a release"
-    why: "A leaked key stops working on its own, and an agent that misbehaves loses its model and tool access in one call."
+    requires: "Key Rotations (/key/{key}/regenerate, auto_rotate, rotation_interval) need a LiteLLM Enterprise licence; duration and /key/block do not"
+    recommended: "A duration on every key, capped with litellm_settings.upperbound_key_generate_params, and each key re-issued before it lapses; POST /key/block as the first step of the cut-off runbook, timed in a drill; where the licence allows, auto_rotate: true with a rotation_interval of 30d or less"
+    why: "A leaked key stops working on its own, and a misbehaving caller loses the gateway in one call, whatever tokens it still holds and without a release."
     mitigations: [D3-CH, cap-agent-kill-switch, D3-CR]
     url: https://docs.litellm.ai/docs/proxy/virtual_keys
     verified: "2026-11-18"
   - id: keycloakTokenExchange
     name: "Standard token exchange"
-    where: "Keycloak › Clients › the requesting client › Standard token exchange switch; token endpoint with grant_type=urn:ietf:params:oauth:grant-type:token-exchange, subject_token, audience"
+    where: "Keycloak › Clients › the requesting client › Capability config › Standard Token Exchange switch; token endpoint with grant_type=urn:ietf:params:oauth:grant-type:token-exchange, subject_token, audience; client policy executor downscope-assertion-grant-enforcer"
     setVia: [identityProvider]
     area: identity
-    default: "Off for each client. The server feature (token-exchange-standard:v2) is enabled by default; legacy token exchange is deprecated and off"
-    recommended: "On only for the gateway's confidential client; every exchange names the one tool service as audience; the downscope-assertion-grant-enforcer client policy executor applied so an exchange can only narrow a token"
-    why: "The tool service receives a token for itself alone, in the user's name, and the user's own token is never passed on."
+    default: "Off for each client until its switch is turned on. The server feature (token-exchange-standard:v2) is enabled by default; legacy token exchange is deprecated and off"
+    requires: "Standard token exchange covers tokens of your own realm; delegation is a preview feature and subject impersonation is not implemented"
+    recommended: "On only for the confidential clients that hand work on (the gateway, or a service that calls other systems); every exchange names one audience; the downscope-assertion-grant-enforcer executor applied so an exchange can only narrow a token; refresh tokens in token exchange set to No; every exchange logged"
+    why: "Each service behind the caller receives a new token made for it alone and no wider than the one presented, so the credential a request arrived with is never passed on."
     mitigations: [D3-CTS, AML.M0028, cap-data-access-governance]
     url: https://www.keycloak.org/securing-apps/token-exchange
     verified: "2026-11-18"
@@ -82,14 +84,15 @@ settings:
     url: https://docs.litellm.ai/docs/mcp_obo_auth
     verified: "2026-11-18"
   - id: keycloakClientScopes
-    name: "Service account roles and client scopes"
-    where: "Keycloak › Clients › the workload's client › Settings: Client authentication On, Service account roles; Client scopes tab (Default and Optional), dedicated scope with Full scope allowed off"
+    name: "Client scopes, Audience mapper and role scope mappings"
+    where: "Keycloak › Clients › the client › Settings (Client authentication On, Service account roles) and Client scopes tab (Default and Optional; dedicated scope › Scope › Full scope allowed); Client scopes › (scope) › Mappers › Audience (Included Client Audience or Included Custom Audience); with --features=resource-indicators, the client's resource_url attribute"
     setVia: [identityProvider]
     area: identity
-    recommended: "One confidential client per trigger source and per agent; its service account holds only the roles that kind of run needs; scopes linked as Optional so a run asks for the task's scope; Full scope allowed off"
-    why: "Whose access a run uses is decided in one place before the run starts: a named service account with its own limits, not whatever the agent can reach."
+    default: "Full Scope Allowed is on: each client gets all the role mappings of the user. No audience is added until a mapper is configured; RFC 8707 resource indicators are an experimental feature that is off unless enabled at start-up"
+    recommended: "One confidential client per agent, trigger source or calling service, with a named owner; its service account holds only the roles its work needs; scopes linked as Optional, so a caller gets only those it needs; an Audience mapper for each service in an optional client scope; Full scope allowed off"
+    why: "A token names the one service it is for and carries only the roles, scopes and claims that caller was granted, so a service can refuse tokens issued for anything else."
     mitigations: [D3-APA, D3-AA, D3-CTS, AML.M0028]
-    url: https://www.keycloak.org/docs/latest/server_admin/index.html#_service_accounts
+    url: https://www.keycloak.org/docs/latest/server_admin/index.html#audience-support
     verified: "2026-11-18"
   - id: kafkaAcls
     name: "Authorization and ACLs (StandardAuthorizer)"
@@ -104,33 +107,34 @@ settings:
     verified: "2026-11-18"
   - id: temporalAuthorizer
     name: "Authorizer and ClaimMapper plugins"
-    where: "Temporal Server (self-hosted) › server options: an Authorizer and the default JWT ClaimMapper (config.Config.Global.Authorization.JWTKeyProvider); mTLS in the TLS configuration"
+    where: "Temporal Server (self-hosted) › authorization: an Authorizer and the default JWT ClaimMapper (JWTKeyProvider KeySourceURIs, permissions claim); frontend TLS with requireClientAuth (mTLS)"
     setVia: [code, configFile]
     area: identity
     default: "The default noopAuthorizer allows every API request, with no authentication or access control"
-    recommended: "An Authorizer configured so that only the trigger consumer may start the agent's Workflows and only the approval service may signal them, with claims taken from Keycloak tokens; mTLS on the frontend"
-    why: "Starting a run and approving an action are themselves checked calls, so the triggers stay the only way in."
+    recommended: "The default JWT ClaimMapper pointed at the Keycloak JWKS and an Authorizer replacing the no-op default; each trigger client may start Workflows in its own namespace only, only the approval service may signal them, workers hold the worker permission, admin is kept to operators; mTLS on the frontend"
+    why: "Starting, signalling and resuming a run are themselves checked calls, so only a named trigger, approval service or operator can make them and the triggers stay the only way in."
     mitigations: [D3-APA]
     url: https://docs.temporal.io/self-hosted-guide/security
     verified: "2026-11-18"
   - id: k8sServiceAccountTokens
-    name: "Bound service account tokens (TokenRequest API, projected volume)"
-    where: "Kubernetes › Pod spec.serviceAccountName; projected serviceAccountToken volume with an audience; automountServiceAccountToken: false where no token is needed"
+    name: "ServiceAccount token volume projection"
+    where: "Kubernetes › Pod spec: serviceAccountName, automountServiceAccountToken; volumes.projected.sources.serviceAccountToken (audience, expirationSeconds)"
     setVia: [configFile]
     area: identity
-    default: "A pod that names no ServiceAccount uses the namespace's default one, and its credentials are mounted automatically"
-    recommended: "One ServiceAccount per workload (the agent, each tool service, the trigger consumer), a projected token whose audience is the service it calls, and automountServiceAccountToken: false on sandbox pods"
-    why: "Each workload proves which workload it is with a short-lived token that rotates by itself, so nothing long-lived sits in an image or a config file."
+    default: "A Pod with no serviceAccountName runs as the namespace's default ServiceAccount, and its token is mounted automatically unless automounting is turned off"
+    recommended: "One ServiceAccount per workload; a projected token with its own audience and a short expirationSeconds for each service the workload signs in to; automountServiceAccountToken: false on every pod that does not need a token, sandbox pods included"
+    why: "Each workload proves which workload it is with a short-lived token that the kubelet rotates and only the named service accepts, so nothing long-lived sits in an image or a config file."
     mitigations: [D3-AA, D3-CH]
-    url: https://kubernetes.io/docs/concepts/security/service-accounts/
+    url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
     verified: "2026-11-18"
   - id: vaultDynamicSecrets
     name: "Database secrets engine (dynamic roles)"
-    where: "HashiCorp Vault › database secrets engine › database/roles/<role> (creation_statements, default_ttl, max_ttl); database/creds/<role>"
+    where: "HashiCorp Vault › database secrets engine: database/config/<name>, database/roles/<role> (creation_statements, default_ttl, max_ttl), database/creds/<role> (OpenBao is the open-source alternative)"
     setVia: [apiCli]
     area: identity
-    recommended: "Each tool service and the agent read their store with credentials issued for that workload, default_ttl of an hour or less, and a database role limited to that workload's tables. OpenBao is the open-source alternative"
-    why: "Every service reaches the data with its own short-lived database user, so access is limited where the data is stored and can be traced to one workload."
+    default: "Default TTL of 1 hour and maximum TTL of 24 hours"
+    recommended: "One role per service and database, readable only by that service's own Vault role and limited to its tables; credentials issued on demand with a default_ttl of one hour or less; a static role with a rotation period where a service cannot re-read them; the root credential rotated by Vault"
+    why: "Every service reaches each database with its own short-lived user, so a leaked credential is limited to one system for a short time and can be traced to one workload."
     mitigations: [cap-data-access-governance, D3-CH]
     url: https://developer.hashicorp.com/vault/docs/secrets/databases
     verified: "2026-11-18"
@@ -172,8 +176,8 @@ settings:
     where: "Vault › auth/kubernetes/role/<role>: bound_service_account_names, bound_service_account_namespaces, audience, ttl, policies"
     setVia: [apiCli]
     area: identity
-    recommended: "One role per workload, bound to its service account and namespace, with an audience, a short ttl and a policy limited to that workload's paths"
-    why: "A workload gets secrets with the identity the cluster gave it, and only its own."
+    recommended: "One role per workload, bound to exactly one service account and namespace, with an audience, a short ttl and a policy that reads only that workload's paths; a role for a sensitive job, such as release signing, is bound to that job's account alone"
+    why: "A workload proves who it is with its service account token and gets only its own secrets, so no vault credential is stored in the cluster and each secret has one reader."
     mitigations: [D3-CH, D3-AA, AML.M0013]
     url: https://developer.hashicorp.com/vault/docs/auth/kubernetes
     verified: "2026-11-18"
@@ -191,14 +195,14 @@ settings:
     verified: "2026-11-18"
   - id: vllmApiKey
     name: "--api-key (VLLM_API_KEY)"
-    where: "vLLM › vllm serve flag or environment variable"
+    where: "vLLM › vllm serve --api-key flag or VLLM_API_KEY environment variable; VLLM_ALLOW_RUNTIME_LORA_UPDATING and VLLM_SERVER_DEV_MODE unset; --trust-remote-code not passed"
     setVia: [configFile]
     area: identity
     default: "No authentication. With a key set, only the /v1, /v2, /inference and /cohere paths require it"
-    recommended: "Set from a Secret synced from Vault and held only by LiteLLM, with VLLM_ALLOW_RUNTIME_LORA_UPDATING and VLLM_SERVER_DEV_MODE unset and --trust-remote-code left off"
-    why: "The key stops a stray pod from calling the model directly; leaving the other switches off keeps adapter loading, development endpoints and code shipped with a model out of reach."
+    recommended: "Set from a Secret synced from Vault and held only by the gateway (LiteLLM), never by callers; VLLM_ALLOW_RUNTIME_LORA_UPDATING and VLLM_SERVER_DEV_MODE unset and --trust-remote-code left off; every path outside /v1 blocked by network policy or a reverse proxy"
+    why: "The key stops a stray pod from calling the model directly, and leaving the other switches off keeps adapter loading, development endpoints and code shipped with a model out of reach."
     mitigations: [D3-ACH, AML.M0005]
-    url: https://docs.vllm.ai/en/latest/usage/security.html
+    url: https://docs.vllm.ai/en/latest/usage/security/
     verified: "2026-11-18"
   - id: cephRgwStsWebIdentity
     name: "STS AssumeRoleWithWebIdentity"
@@ -237,32 +241,32 @@ settings:
     where: "Kubernetes › Role, ClusterRole, RoleBinding, ClusterRoleBinding"
     setVia: [clusterPolicy]
     area: identity
-    recommended: "People submit runs through a namespaced Role that can create jobs and pipeline runs but cannot read Secrets or bind roles; workload service accounts get no binding outside their own namespace, and none in the namespace where the release job runs"
-    why: "Permissions are additive, so each person and workload is granted only what its task needs and nothing in the release path."
+    recommended: "People and orchestrators act through a namespaced Role limited to what they create (jobs, pipeline runs, Sandboxes) that cannot read Secrets or bind roles; workload service accounts get no binding outside their own namespace; accounts that run generated code are bound to no role"
+    why: "Permissions are additive, so each person and workload is granted only what its task needs, and nothing that runs generated code can reach weights, secrets or the release path through the cluster."
     mitigations: [D3-AA, AML.M0005, D3-EI]
     url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
     verified: "2026-11-18"
   # --- Data & models -------------------------------------------------------------------
   - id: litellmGuardrailsInput
     name: "Guardrails (mode: pre_call and post_mcp_call)"
-    where: "LiteLLM Proxy › config.yaml › guardrails[].litellm_params: guardrail, mode, default_on"
+    where: "LiteLLM Proxy › config.yaml › guardrails[]: guardrail_name, litellm_params.guardrail, mode, default_on"
     setVia: [configFile]
     area: data
-    default: "Off: default_on is false, so a guardrail runs only when a request names it"
-    requires: "Choosing guardrails per key or per model needs a LiteLLM Enterprise licence; default_on guardrails do not"
-    recommended: "default_on: true guardrails in pre_call for messages and uploads and in post_mcp_call for tool results and fetched pages, calling Presidio and a self-hosted injection classifier served by vLLM (a custom guardrail, or detect_prompt_injection with llm_api_check); skip_tool_message_in_guardrail left off"
-    why: "What a person typed, what a record contained and what a web page said are all screened at the gateway before the model reads them."
+    default: "Off: default_on is false, so a guardrail runs only when a request names it. MCP sub-calls do not inherit the parent request's guardrails selection, so nothing screens them unless default_on is set"
+    requires: "Choosing guardrails per key or per model needs a LiteLLM Enterprise licence; guardrails in config.yaml with default_on are open source"
+    recommended: "default_on: true guardrails in pre_call for requests and, where tools are called, in post_mcp_call for tool results and fetched pages, calling Presidio and an injection or safety classifier you host (a custom guardrail or guardrail: generic_guardrail_api); skip_tool_message_in_guardrail left off"
+    why: "What people, tools, web pages and other organisations send is screened at the gateway before a model reads it, and default_on covers MCP sub-calls that would not inherit a per-request choice."
     mitigations: [cap-input-guardrails, cap-output-guardrails]
     url: https://docs.litellm.ai/docs/proxy/guardrails/quick_start
     verified: "2026-11-18"
   - id: litellmGuardrailsOutput
     name: "PII, PHI Masking - Presidio (guardrail: presidio)"
-    where: "LiteLLM Proxy › config.yaml › guardrails[].litellm_params: guardrail: presidio, mode, pii_entities_config, presidio_language; PRESIDIO_ANALYZER_API_BASE, PRESIDIO_ANONYMIZER_API_BASE"
+    where: "LiteLLM Proxy › config.yaml › guardrails[].litellm_params: guardrail: presidio, mode, pii_entities_config, presidio_filter_scope, presidio_language; PRESIDIO_ANALYZER_API_BASE, PRESIDIO_ANONYMIZER_API_BASE"
     setVia: [configFile]
     area: data
-    default: "No masking until a Presidio guardrail is configured"
-    recommended: "Presidio analyser and anonymiser run in the cluster; pii_entities_config set to MASK for the personal-data types the organisation handles, in post_call for answers and in logging_only so traces and logs hold masked text; presidio_language set to the users' language"
-    why: "Personal data is replaced with placeholders in answers and in everything the gateway logs."
+    default: "No masking until a Presidio guardrail is configured. output_parse_pii only restores masked tokens after the call; it does not scan answers. Scanning answers needs post_call and presidio_filter_scope, which defaults to both"
+    recommended: "Presidio analyser and anonymiser run in the cluster; the guardrail on post_call with default_on: true and presidio_filter_scope: both; pii_entities_config set to MASK for the personal data types you handle and BLOCK for those that must never pass; logging_only too, so traces and logs hold masked text"
+    why: "Personal data is masked in what models return and in what the gateway logs or passes on, whichever model produced it."
     mitigations: [cap-sensitive-data-redaction, cap-output-guardrails]
     url: https://docs.litellm.ai/docs/proxy/guardrails/pii_masking_v2
     verified: "2026-11-18"
@@ -281,9 +285,9 @@ settings:
     where: "PostgreSQL › ALTER TABLE ... ENABLE ROW LEVEL SECURITY and FORCE ROW LEVEL SECURITY; CREATE POLICY ... USING (...)"
     setVia: [apiCli]
     area: data
-    default: "Off: every row of a table a role can read is visible. Once enabled, a table with no policy denies all rows"
-    recommended: "Row security enabled and forced on the memory, case and embedding tables; a policy that matches each row's tenant and session (or case) to the caller's; the application role does not own the tables and has no BYPASSRLS; pgvector tables partitioned by tenant"
-    why: "The database returns only the rows of the conversation, case or customer being served, whatever query the agent or a tool sends."
+    default: "Off: every row of a table a role can read is visible. Once enabled, a table with no policy denies all rows; superusers, BYPASSRLS roles and normally the table owner bypass row security"
+    recommended: "Enabled and forced on every table that holds tenant, session, case or run data (memory, artefact and embedding tables included); a policy matching each row's tenant, session, run or task to the one set on the connection or transaction; the application role has no BYPASSRLS and does not own the tables"
+    why: "The database itself returns only the rows of the tenant, session or run being served, whatever query is sent and even when a handler forgets its filter."
     mitigations: [AML.M0031, cap-data-access-governance, cap-retrieval-grounding-checks]
     url: https://www.postgresql.org/docs/current/ddl-rowsecurity.html
     verified: "2026-11-18"
@@ -333,8 +337,8 @@ settings:
     where: "Harbor › Projects › (project) › Configuration"
     setVia: [adminConsole]
     area: data
-    recommended: "Both on for every project the workloads pull from, with the severity level set to High"
-    why: "An image with a serious known flaw cannot be pulled, so it cannot be deployed or started as a sandbox."
+    recommended: "Both on for every project the cluster's workloads pull from, with the severity level set to High; Trivy enabled when Harbor is installed (--with-trivy)"
+    why: "The registry scans every image pushed to it and refuses to serve one with a serious known flaw, so that image cannot be deployed or started as a sandbox."
     mitigations: [D3-AVE, D3-FA]
     url: https://goharbor.io/docs/2.16.0/working-with-projects/project-configuration/
     verified: "2026-11-18"
@@ -392,11 +396,11 @@ settings:
     verified: "2026-11-18"
   - id: objectStoreBucketPolicy
     name: "Bucket Policies"
-    where: "Ceph Object Gateway › bucket policy JSON, applied with s3cmd setpolicy"
+    where: "Ceph Object Gateway › S3 bucket policy JSON (Principal, Action, Resource), applied with s3cmd setpolicy"
     setVia: [apiCli]
     area: data
-    recommended: "Each bucket written (s3:PutObject) by the one pipeline identity that owns it and read (s3:GetObject, s3:ListBucket) only by the identities that need it; no other principal named"
-    why: "Only the approval pipeline can change stored weights or data, and only the identities that must read them can."
+    recommended: "Each bucket written (s3:PutObject) by the one identity that owns it and read (s3:GetObject, s3:ListBucket) only by the identities that need it; no other principal named, so an identity that runs generated code appears in no policy"
+    why: "Only the identity that owns a bucket can change the weights or data in it, and only the identities that must read them can."
     mitigations: [AML.M0005]
     url: https://docs.ceph.com/en/latest/radosgw/bucketpolicy/
     verified: "2026-11-18"
@@ -443,12 +447,12 @@ settings:
     verified: "2026-11-18"
   - id: vaultTransitKeys
     name: "Transit secrets engine"
-    where: "Vault › transit secrets engine: named keys under transit/keys/<name> (for example ecdsa-p256 or rsa-4096), with key rotation"
+    where: "HashiCorp Vault or OpenBao › transit secrets engine: transit/keys/<name> (for example ecdsa-p256 or rsa-4096), sign and verify; transit/keys/<name>/rotate"
     setVia: [apiCli]
     area: data
     requires: "Keys held in an HSM (managed_key) and PKCS11 auto-unseal need Vault Enterprise; OpenBao provides a pkcs11 seal through its KMS plugin"
-    recommended: "A signing key that only the release role may use and separate encryption keys for the object gateway, each rotated on a schedule; the training job's role is granted neither"
-    why: "Keys are used through the vault and never handed to a workload, so the training job cannot sign and stored data stays under the organisation's own keys."
+    recommended: "A separate named key for each purpose (a signing key per release role or per agent per partnership, separate encryption keys for stored data), usable only by the one role that needs it; workloads ask the vault to sign and never hold the key; each key rotated on a schedule and at once when its use ends"
+    why: "Private keys are used through the vault and never reach a pod or a file, so only the approved role can sign and stored data stays under the organisation's own keys."
     mitigations: [AML.M0013, AML.M0012, D3-AA]
     url: https://developer.hashicorp.com/vault/docs/secrets/transit
     verified: "2026-11-18"
@@ -477,12 +481,12 @@ settings:
   # --- Tools, runtime & supply chain ---------------------------------------------------
   - id: litellmMcpGateway
     name: "MCP servers (mcp_servers) and MCP Permission Management"
-    where: "LiteLLM Proxy › config.yaml › mcp_servers; object_permission.mcp_servers, mcp_access_groups and mcp_rpm_limit on keys and teams; general_settings.require_key_mcp_access_defined"
+    where: "LiteLLM Proxy › config.yaml › mcp_servers (or the admin UI › MCP Servers); object_permission.mcp_servers, mcp_access_groups and mcp_rpm_limit on keys and teams; general_settings.require_key_mcp_access_defined"
     setVia: [configFile, apiCli]
     area: tools
     default: "Open: if no key, team or organisation carries a list, a request can reach every registered MCP server"
-    recommended: "Every tool server declared under mcp_servers in a config file kept in version control and changed by reviewed merge; each agent key granted only its own servers, with an mcp_rpm_limit for each; require_key_mcp_access_defined: true; allow_all_keys left off"
-    why: "The config file is the register of tools the agent may use, a key reaches only the servers it was granted, and its calls to each server have a ceiling."
+    recommended: "Every tool service registered once under mcp_servers by a named owner, changed by reviewed merge; each key or team granted only its own servers, with an mcp_rpm_limit for each; require_key_mcp_access_defined: true; allow_all_keys off; available_on_public_internet: false on internal servers"
+    why: "The list of registered servers is the inventory of tools, and a key reaches only the servers it was granted, so a tool that is not on the list cannot be reached through the gateway."
     mitigations: [cap-agent-tool-registry, AML.M0028, AML.M0036]
     url: https://docs.litellm.ai/docs/mcp_control
     verified: "2026-11-18"
@@ -491,9 +495,9 @@ settings:
     where: "LiteLLM Proxy › config.yaml › mcp_servers.<server>.allowed_tools, disallowed_tools, allowed_params; object_permission.mcp_tool_permissions on keys and teams"
     setVia: [configFile, apiCli]
     area: tools
-    default: "Every tool and every parameter of a permitted server can be called"
-    recommended: "allowed_tools lists only the reviewed tools of each server; mcp_tool_permissions narrows them for each agent key; allowed_params lists the arguments each write tool accepts"
-    why: "The agent is offered, and can call, only the named tools with the named arguments; anything else is refused with 403 at the gateway."
+    default: "Every tool and every parameter of a server a caller can reach can be called"
+    recommended: "allowed_tools on every server, listing only its reviewed tools; mcp_tool_permissions giving each key or team only the tools it may call; allowed_params listing the arguments accepted by tools that write or take sensitive arguments"
+    why: "Each caller is offered, and can call, only the named tools with the named arguments; anything else is refused with a 403 at the gateway."
     mitigations: [AML.M0028, cap-agent-tool-registry, cap-agent-action-policy-enforcement]
     url: https://docs.litellm.ai/docs/mcp_control
     verified: "2026-11-18"
@@ -529,46 +533,58 @@ settings:
     mitigations: [AML.M0029]
     url: https://docs.temporal.io/ai/cookbook/human-in-the-loop-python
     verified: "2026-11-18"
+  - id: litellmBudgetsRateLimits
+    name: "Budgets, Rate Limits"
+    where: "LiteLLM Proxy › /key/generate, /team/new, /user/new, /customer/new, /budget/new: max_budget, budget_duration, tpm_limit, rpm_limit, max_parallel_requests; mcp_rpm_limit per MCP server on a key or team; rpm on the MCP server; general_settings.fail_closed_rate_limit_enforcement"
+    setVia: [apiCli, adminConsole]
+    area: tools
+    default: "No limits unless set: a key's max_budget is null, the master key has none and an MCP server without an entry is uncapped. Budgets need the PostgreSQL database; without it they fail open"
+    requires: "A PostgreSQL database for budgets. Budgets for each model on a key (model_max_budget) need a LiteLLM Enterprise licence; the other limits do not"
+    recommended: "tpm_limit, rpm_limit and max_parallel_requests on every key and team; a max_budget with budget_duration on each team; a customer budget for each end user or customer; mcp_rpm_limit for each MCP server a key may reach; fail_closed_rate_limit_enforcement: true so a limit still holds when Redis is down"
+    why: "Every caller and team has a ceiling on model and tool usage, so a loop or a greedy caller is refused at the gateway instead of consuming the GPUs everyone shares."
+    mitigations: [AML.M0036, AML.M0004]
+    url: https://docs.litellm.ai/docs/proxy/users
+    verified: "2026-11-18"
   - id: litellmFallbacksRouting
     name: "Weighted Deployments (weight) and traffic mirroring (silent_model)"
-    where: "LiteLLM Proxy › config.yaml › model_list[].litellm_params.weight and silent_model; router_settings.fallbacks"
+    where: "LiteLLM Proxy › config.yaml › model_list[].litellm_params.weight and silent_model; router_settings: routing_strategy, fallbacks, allowed_fails, cooldown_time"
     setVia: [configFile]
     area: tools
-    default: "Requests are spread at random (simple-shuffle) across deployments that share a model_name"
-    recommended: "The agent calls a model group name. A new model version is first mirrored with silent_model, then joins the group with a small weight once its evaluation passes; rollback is removing that deployment from the config"
-    why: "A change of model reaches a small share of traffic first and can be withdrawn in one reviewed config change."
+    default: "routing_strategy is simple-shuffle: requests are spread at random across the deployments that share a model_name"
+    recommended: "Callers use a model group name. A new model version is first mirrored with silent_model, then added under the same model_name with a small weight once its evaluation passes; the previous version stays in the group and in fallbacks until the new one is approved; rollback removes the new deployment"
+    why: "A new model version takes a small share of traffic first, and the previous version is one reviewed configuration change away."
     mitigations: [cap-staged-rollout-gate]
     url: https://docs.litellm.ai/docs/routing
     verified: "2026-11-18"
   - id: promptfooEvalGate
     name: "promptfoo eval and redteam run in the pipeline"
-    where: "promptfoo › promptfooconfig.yaml in the agent's repository; pipeline steps promptfoo eval --fail-on-error and promptfoo redteam run"
+    where: "promptfoo › promptfooconfig.yaml in the workload's repository; CI pipeline steps promptfoo eval --fail-on-error (with a pass-rate threshold on the results file) and promptfoo redteam run"
     setVia: [configFile]
     area: tools
-    recommended: "The pipeline runs the evaluation suite and the red-team scan against the candidate, through the gateway, on every change to the model, the system prompt or the tool list, and blocks the merge when a test fails; prompts live in the same repository with a named owner"
-    why: "Behaviour is tested before each change ships, and the instructions are versioned like code."
+    recommended: "The pipeline runs the evaluation suite and red-team cases against the candidate, through the gateway, on every change to a model, system prompt, tool list or agent version, and blocks the merge or release when a test fails or the pass rate is below the agreed level; prompts are versioned with a named owner"
+    why: "Behaviour is tested before every change to a model, an instruction or an agent ships, and a regression blocks the release while the previous version stays live."
     mitigations: [cap-staged-rollout-gate]
     url: https://www.promptfoo.dev/docs/integrations/ci-cd/
     verified: "2026-11-18"
   - id: k8sRuntimeClassSandbox
-    name: "RuntimeClass (runtimeClassName: gvisor)"
-    where: "Kubernetes › RuntimeClass with handler: runsc; runtimeClassName in the sandbox pod template (agent-sandbox Sandbox spec.podTemplate.spec)"
-    setVia: [configFile, clusterPolicy]
+    name: "RuntimeClass (gVisor or Kata Containers)"
+    where: "Kubernetes › RuntimeClass (node.k8s.io/v1: handler, scheduling.nodeSelector) and Pod spec.runtimeClassName, set in the sandbox pod template (agent-sandbox Sandbox spec.podTemplate.spec or SandboxTemplate)"
+    setVia: [clusterPolicy]
     area: tools
-    default: "If no runtimeClassName is specified, the default runtime handler is used"
-    recommended: "Code the agent writes runs only in pods with the gVisor RuntimeClass (Kata Containers is the alternative), in a namespace and node pool of their own, never in the agent's pod"
-    why: "Generated code runs against a sandboxed kernel in a separate pod, so a break-out does not land in the agent's process or on the host kernel."
+    default: "If no runtimeClassName is specified, the default runtime handler is used and pods share the node's kernel"
+    recommended: "A RuntimeClass for gVisor (handler: runsc) or Kata Containers on a dedicated node pool, set as runtimeClassName on every pod that runs code a model or agent wrote and fixed in the sandbox template; those pods have their own namespace, and the code never runs in the agent's or the job's own pod"
+    why: "Generated code runs behind a second kernel boundary, a user-space kernel or a guest kernel, in a pod of its own, so a break-out does not land in the agent's process, a job that holds credentials or the node's kernel."
     mitigations: [D3-EI, D3-HBPI]
     url: https://kubernetes.io/docs/concepts/containers/runtime-class/
     verified: "2026-11-18"
   - id: agentSandboxShutdown
-    name: "Sandbox shutdownTime and shutdownPolicy"
-    where: "agent-sandbox › Sandbox (agents.x-k8s.io/v1beta1) › spec.shutdownTime, spec.shutdownPolicy: Delete; SandboxClaim lifecycle"
-    setVia: [configFile, code]
+    name: "Sandbox lifecycle: shutdownTime and shutdownPolicy"
+    where: "agent-sandbox › Sandbox (agents.x-k8s.io/v1beta1) › spec.lifecycle: shutdownTime, shutdownPolicy"
+    setVia: [clusterPolicy, code]
     area: tools
-    default: "A sandbox runs until it is deleted by hand"
-    recommended: "A new Sandbox for each task from a reviewed template, shutdownPolicy: Delete and a shutdownTime minutes ahead, deleted as soon as the task returns; no sandbox shared between users or cases"
-    why: "Whatever the code left behind is destroyed with the sandbox, and a forgotten or runaway one is removed at its deadline."
+    default: "Unset: the Sandbox never expires and runs until it is deleted by hand; shutdownPolicy defaults to Retain"
+    recommended: "One Sandbox per task, never reused across tasks or runs; shutdownPolicy: Delete and a shutdownTime no later than the task's time limit, set on every Sandbox when it is created; the component that created it also deletes it as soon as the task ends"
+    why: "No sandbox outlives its task: the controller tears the pod down at the deadline even if its creator has failed, so nothing one task's code left behind is there for the next."
     mitigations: [D3-EI]
     url: https://agent-sandbox.sigs.k8s.io/docs/sandbox/lifecycle/
     verified: "2026-11-18"
@@ -783,27 +799,16 @@ settings:
     verified: "2026-11-18"
   # --- Network -------------------------------------------------------------------------
   - id: envoyGatewayRateLimit
-    name: "BackendTrafficPolicy: global rate limit"
+    name: "Global rate limit (BackendTrafficPolicy rateLimit)"
     where: "Envoy Gateway › BackendTrafficPolicy › spec.rateLimit.global.rules: clientSelectors.headers (type: Distinct), limit.requests, limit.unit"
     setVia: [clusterPolicy]
     area: network
     default: "None until a policy is applied. The global rate limit needs a Redis instance configured for Envoy Gateway"
-    recommended: "On the chat route, one rule keyed on the distinct value of the header that carries the signed-in user and one on the session header, each with a per-minute limit; requests above it get 429"
-    why: "One user or one runaway session cannot flood the assistant or the GPUs behind it."
+    requires: "A Redis-compatible store for the rate limit service"
+    recommended: "On each route, one rule keyed on the distinct value of each header that identifies the caller (the signed-in user and the session, or the client and its customer), each with a per-minute limit sized for callers that retry and run in parallel; requests over the limit receive 429"
+    why: "One user, one runaway session or one looping client is slowed at the edge by its own limit, without flooding the service behind the route or touching other callers."
     mitigations: [AML.M0004]
     url: https://gateway.envoyproxy.io/docs/tasks/traffic/global-rate-limit/
-    verified: "2026-11-18"
-  - id: litellmBudgetsRateLimits
-    name: "Budgets, Rate Limits"
-    where: "LiteLLM Proxy › /key/generate, /team/new, /user/new, /customer/new: max_budget, budget_duration, tpm_limit, rpm_limit, max_parallel_requests; general_settings.fail_closed_rate_limit_enforcement"
-    setVia: [apiCli, adminConsole]
-    area: network
-    default: "No limits unless set: a key's max_budget is null and the master key has none. Budgets need the PostgreSQL database"
-    requires: "Budgets for each model on a key (model_max_budget) need a LiteLLM Enterprise licence; the other limits do not"
-    recommended: "tpm_limit, rpm_limit and a max_budget with budget_duration on every agent key and team; a customer budget for each end user; fail_closed_rate_limit_enforcement: true so a limit still holds when Redis is down"
-    why: "Model usage and tool calls have a ceiling for each agent and each user, so a loop or an abusive caller is stopped at the gateway."
-    mitigations: [AML.M0036, AML.M0004]
-    url: https://docs.litellm.ai/docs/proxy/users
     verified: "2026-11-18"
   - id: litellmAgentSessionLimits
     name: "Agent session limits (max_iterations, max_budget_per_session)"
@@ -818,34 +823,35 @@ settings:
     verified: "2026-11-18"
   - id: k8sNetworkPolicyDefaultDeny
     name: "Default deny all ingress and all egress traffic"
-    where: "Kubernetes › NetworkPolicy in each namespace: podSelector: {}, policyTypes: [Ingress, Egress]; enforced by Cilium"
+    where: "Kubernetes › NetworkPolicy in each namespace: podSelector: {}, policyTypes: [Ingress, Egress]; enforced by Cilium (policyEnforcementMode always makes it cluster-wide)"
     setVia: [clusterPolicy]
     area: network
-    default: "Pods are non-isolated: all inbound and outbound connections are allowed"
-    recommended: "A default-deny policy in the agent, sandbox, gateway, inference and tool namespaces, then allow rules: the sandbox reaches only the gateway and the package mirror, the agent reaches the gateway, its memory store and its named services, and only the gateway reaches vLLM and the tool services"
-    why: "The paths on the drawing are the only paths that exist: no pod can call a model, a tool or the outside directly."
+    default: "Pods are non-isolated: all inbound and outbound connections are allowed until a policy selects them"
+    requires: "A network plugin that enforces NetworkPolicy, such as Cilium"
+    recommended: "A default-deny policy in every namespace before any workload starts, then one explicit allow per flow on the drawing: each service accepts traffic only from the component drawn in front of it, only the gateway's pods reach the model and tool services, and a workload reaches only the stores it uses"
+    why: "Kubernetes isolates nothing by default. With deny-by-default the drawn flows are the only paths that exist, the gateway is the only way to a model or tool, and a compromised pod has nowhere to go."
     mitigations: [cap-agent-egress-control, AML.M0028, D3-NI]
     url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
     verified: "2026-11-18"
   - id: ciliumFqdnEgress
     name: "DNS-based policies (toFQDNs)"
-    where: "Cilium › CiliumNetworkPolicy › spec.egress[].toFQDNs (matchName) with a rules.dns rule towards kube-dns"
+    where: "Cilium › CiliumNetworkPolicy or CiliumClusterwideNetworkPolicy › spec.egress[].toFQDNs (matchName, matchPattern) with a toPorts rules.dns rule towards kube-dns"
     setVia: [clusterPolicy]
     area: network
-    default: "All egress is allowed until a policy selects the endpoint"
-    recommended: "matchName entries only, no wildcard patterns, port 443; the outbound proxy is the only workload with a rule that leaves the cluster network"
-    why: "Outbound traffic is allowed by name to a short list, so new destinations need a reviewed policy change."
+    default: "All egress and every DNS lookup is allowed until a policy selects the endpoint"
+    recommended: "Each workload's egress lists the few named services it needs as matchName entries, no matchPattern wildcards, on port 443, with the rules.dns rule that lets Cilium's DNS proxy see lookups and allows those names only; the outbound proxy is the only workload with a rule that leaves the cluster network"
+    why: "A workload can resolve and reach only the names on its list, even when their addresses change, so a new destination needs a reviewed policy change and data cannot be sent anywhere unapproved."
     mitigations: [cap-agent-egress-control, D3-OTF, D3-NI]
     url: https://docs.cilium.io/en/stable/security/dns/
     verified: "2026-11-18"
   - id: egressProxyAllowlist
     name: "acl dstdomain and http_access"
-    where: "Squid › squid.conf: acl <name> dstdomain <hosts>; http_access allow <name>; http_access deny all"
+    where: "Squid › squid.conf: acl <name> dstdomain <hosts>; acl <name> dst <ranges>; http_access allow <name>; http_access deny all"
     setVia: [configFile]
     area: network
     default: "Deny, unless rules exist in squid.conf"
-    recommended: "One dstdomain list for each calling workload holding only the hosts it needs (the search service's upstreams, the public registries for the package mirror), then http_access deny all; the access log shipped with the other logs"
-    why: "Everything that leaves the data centre passes one proxy that knows which workload may reach which host, and records it."
+    recommended: "http_access deny for private, loopback and link-local destinations (acl dst); one dstdomain list of approved hosts per calling workload, allowed for that workload only; then http_access deny all; the access log shipped with the other logs; the proxy is the only host with a route to the internet"
+    why: "There is one exit from the data centre: it refuses internal addresses, opens only for hosts on a reviewed list for each workload, and records every request."
     mitigations: [cap-agent-egress-control, D3-OTF, D3-NI]
     url: https://www.squid-cache.org/Doc/config/http_access/
     verified: "2026-11-18"
@@ -930,34 +936,35 @@ settings:
   # --- Logging & audit -----------------------------------------------------------------
   - id: langfuseTracing
     name: "Self-hosted Langfuse (model and agent traces)"
-    where: "Langfuse (Kubernetes Helm) with its own PostgreSQL, ClickHouse, Valkey and S3-compatible bucket; LiteLLM success_callback: [\"langfuse\"] with LANGFUSE_HOST set to your instance"
+    where: "Langfuse on Kubernetes (Helm) with its own PostgreSQL, ClickHouse, Valkey and S3-compatible bucket; LiteLLM success_callback: [\"langfuse\"] with LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY"
     setVia: [configFile]
     area: audit
-    default: "The LiteLLM callback sends to Langfuse Cloud unless LANGFUSE_HOST is set"
+    default: "LANGFUSE_HOST defaults to https://cloud.langfuse.com, so the LiteLLM callback sends to Langfuse Cloud unless it is set"
     requires: "Langfuse audit logs, data retention policies and server-side masking need an Enterprise licence key; tracing does not"
-    recommended: "LANGFUSE_HOST points at the instance in your data centre; the gateway, not the agent, holds the Langfuse keys; every proposal, approval and tool call carries the session and user identifiers"
-    why: "Each turn is recorded with its prompt, tool calls and result in a store the agent has no credentials for."
+    recommended: "LANGFUSE_HOST set to the Langfuse instance in your own data centre; the gateway, not the agents, holds the Langfuse keys; one trace per session, run or task carrying the agent identity and the user or trigger it acts for; operators can read traces while the work is still running"
+    why: "Which agent did what, on whose behalf, with which prompt, tool calls and result is one readable trace in the organisation's own store, which the agents have no credentials for."
     mitigations: [cap-agent-tracing]
     url: https://langfuse.com/self-hosting
     verified: "2026-11-18"
   - id: litellmLoggingCallbacks
     name: "Logging callbacks (callbacks, success_callback, failure_callback)"
-    where: "LiteLLM Proxy › config.yaml › litellm_settings: callbacks: [\"otel\"], success_callback: [\"s3_v2\"] with s3_callback_params (s3_endpoint_url), global_disable_no_log_param"
+    where: "LiteLLM Proxy › config.yaml › litellm_settings: callbacks, success_callback, failure_callback, s3_callback_params (s3_endpoint_url), global_disable_no_log_param, turn_off_message_logging; callback_settings; OTEL_EXPORTER and OTEL_ENDPOINT"
     setVia: [configFile]
     area: audit
-    default: "No callback is configured, and a caller can skip logging for a request with no-log"
-    recommended: "otel to the OpenTelemetry Collector and s3_v2 to a bucket in your own object store that only the gateway can write to; global_disable_no_log_param: true; failure_callback set as well"
-    why: "Every model call and tool call is logged by the gateway, outside the agent's reach, and a caller cannot ask for a request to be left out."
+    default: "No callback is configured, and a caller can skip logging for a request with no-log. Message content is logged unless turn_off_message_logging is set; Langfuse logging goes to Langfuse Cloud unless LANGFUSE_HOST is set"
+    recommended: "callbacks: [\"otel\"] to your own OpenTelemetry Collector, plus s3_v2 (s3_endpoint_url) to a bucket only the gateway can write or langfuse to your own instance; failure_callback set too; global_disable_no_log_param: true; turn_off_message_logging only where content must not be kept; redact_user_api_key_info off"
+    why: "Every model and tool call that crosses the gateway is recorded with the key and team it belongs to, in stores the organisation runs, and a caller cannot ask for a request to be left out."
     mitigations: [cap-agent-tracing, AML.M0024]
     url: https://docs.litellm.ai/docs/proxy/logging
     verified: "2026-11-18"
   - id: lokiRetentionImmutability
-    name: "Log retention, in a store the workloads cannot rewrite"
-    where: "Grafana Loki › compactor.retention_enabled, limits_config.retention_period; write access to Loki and its bucket held by the collector only"
+    name: "Compactor retention (retention_enabled, retention_period)"
+    where: "Grafana Loki › compactor: retention_enabled, delete_request_store; limits_config: retention_period; chunks in an object store bucket that only Loki's identity can write"
     setVia: [configFile]
     area: audit
-    recommended: "retention_enabled: true with a retention_period that meets your record-keeping rule; agents and tools have no credentials for Loki or its object-store bucket, and the bucket has object lock"
-    why: "The record of what the agents did is kept for a set time and cannot be edited or deleted by the workloads it describes."
+    default: "Retention is off until the compactor enables it: logs sent to Loki are kept indefinitely"
+    recommended: "retention_enabled: true with a retention_period that meets the organisation's record-keeping rule; chunks in a bucket with object lock that only Loki can write; only the collector writes to Loki, and no workload holds credentials for Loki, its delete API or the bucket"
+    why: "The record of what the workloads did is kept for a set time, outlives the run, and cannot be edited or deleted by the workloads it describes."
     mitigations: [cap-agent-tracing, AML.M0024]
     url: https://grafana.com/docs/loki/latest/operations/storage/retention/
     verified: "2026-11-18"
@@ -997,8 +1004,8 @@ settings:
     setVia: [configFile]
     area: audit
     default: "No events are logged when the flag is omitted"
-    recommended: "A policy that records at least Metadata for every request and RequestResponse for job, pipeline and role resources (never for Secrets), shipped off the control plane nodes to the log store and the SIEM"
-    why: "The platform itself records who started each run, under which identity, and what was created or changed."
+    recommended: "A policy that records at least Metadata for every request and RequestResponse for job, pipeline, Sandbox, SandboxClaim, role and RoleBinding resources; Secrets at Metadata only, never RequestResponse; events shipped off the control plane nodes to the log store and the SIEM"
+    why: "The platform itself records who started each run, under which identity, and who created, changed or deleted a workload, a role or a secret, outside the cluster the run could touch."
     mitigations: [AML.M0024, cap-agent-tracing]
     url: https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
     verified: "2026-11-18"
@@ -1035,26 +1042,26 @@ settings:
   # --- Sharing -------------------------------------------------------------------------
   - id: nexusProxyAllowlist
     name: "Routing Rules"
-    where: "Sonatype Nexus Repository › Settings › Routing Rules (BLOCK or ALLOW, path matchers); assigned in each proxy repository's Routing Rule field"
+    where: "Sonatype Nexus Repository › Settings › Routing Rules (BLOCK or ALLOW mode, path matchers); assigned in each proxy repository's Routing Rule field"
     setVia: [adminConsole]
     area: sharing
-    default: "No rule: a proxy repository forwards any request to the public registry"
-    requires: "Routing rules match on the request path only. Malware and look-alike-name detection is Sonatype Repository Firewall, a separate product. Community Edition is capped at 40,000 components and 100,000 requests a day"
-    recommended: "A BLOCK rule on the PyPI and npm proxy repositories for every in-house package name and namespace, so an internal name is never fetched from outside; clients and sandboxes install only through Nexus"
-    why: "A public package cannot take the place of an internal one, and nothing is installed that did not come through the mirror."
+    default: "No rule: a proxy repository fetches any requested component from its remote, the public registry"
+    requires: "Routing rules are in Community Edition and match on the request path only. Malware and look-alike-name detection and quarantine is Sonatype Repository Firewall, a separate paid product (Pro+ or Enterprise). Community Edition is capped at 40,000 components and 100,000 requests a day; a large fleet needs the Pro edition or Pulp"
+    recommended: "On each proxy repository (PyPI, npm, Hugging Face), an ALLOW rule listing only the approved package and model paths, or a BLOCK rule covering every in-house package name and namespace so it is never fetched from outside; clients and sandboxes install only through the mirror (pip index-url), pinned by hash"
+    why: "A package or model reaches a workload only if the mirror was told to admit it, and an internal name cannot be answered by a public look-alike."
     mitigations: [D3-FA, AML.M0028]
     url: https://help.sonatype.com/en/routing-rules.html
     verified: "2026-11-18"
   - id: trivyScanPipeline
-    name: "trivy fs (dependency and lock-file scanning)"
-    where: "Trivy › pipeline step: trivy fs --exit-code 1 --severity HIGH,CRITICAL <project or lock file>"
+    name: "Vulnerability scanning of images and dependencies"
+    where: "Trivy › pipeline steps trivy image <ref> and trivy fs <project or lock file> with --severity HIGH,CRITICAL --exit-code 1; Trivy's vulnerability databases mirrored in your own registry"
     setVia: [apiCli]
     area: sharing
-    default: "Vulnerability and secret scanning are on; Trivy exits with code 0 even when it finds issues unless --exit-code is set"
-    recommended: "Run on every lock file and on each package version before it is promoted to the repository the agents install from; the step fails on HIGH and CRITICAL findings; add your own check of new names against the approved list"
-    why: "Packages with known vulnerabilities or embedded secrets are stopped before they become available inside."
+    default: "Vulnerability and secret scanning are on; Trivy exits with code 0 even when it finds issues unless --exit-code is set. Trivy pulls its databases from mirror.gcr.io and ghcr.io and contacts check.trivy.dev, none of which the cluster can reach"
+    recommended: "On every change and nightly build, trivy image and trivy fs with --severity HIGH,CRITICAL --exit-code 1 on each image and lock file before it is pushed to the registry or promoted to the package mirror; Trivy's databases mirrored inside the data centre; new package names checked against your approved list"
+    why: "Known flaws and embedded secrets in the images and packages you run are found before they are admitted and again as new advisories appear, and a failing scan stops the build instead of producing a report nobody reads."
     mitigations: [D3-FA, D3-AVE, D3-SYSVA]
-    url: https://trivy.dev/docs/latest/target/filesystem/
+    url: https://trivy.dev/docs/latest/guide/scanner/vulnerability/
     verified: "2026-11-18"
   - id: peerPlatformReview
     name: "Assess the peer platform before federation"
