@@ -47,3 +47,11 @@ So the baseline:
    afterwards. Feature toggles with no security effect are left out.
 5. **Sourced.** The setting's exact name as on the vendor's page, a `url` that resolved on the
    `verified` date, and the plan it needs in `requires` when it is not on every plan.
+6. **Checkable, where the vendor lets you.** A row may carry a `check`: one read-only command
+   from the vendor's command reference that shows the setting's current value (`command`, with
+   identifiers as `<placeholders>`), what a passing result looks like (`expect`) and the
+   reference page for the command (`url`). It reads and changes nothing: the build refuses a
+   command that is not a get, describe, list or show, or that has a pipe or a redirect. There is
+   deliberately no command that creates or changes a setting, because how an organisation
+   deploys is its own. No check in this catalogue has been run by this project; the page says
+   so beside each one. A control built in the organisation's own code has no check.
