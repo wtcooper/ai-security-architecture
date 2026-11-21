@@ -143,8 +143,9 @@ blocks:
     note: >
       The OpenAI-compatible endpoint the serving stack publishes — the same component the
       local runtime draws, at a different scale. Authentication here is opt-in too: vLLM's
-      `--api-key` is a flag, not a default, and a serving tier reachable without one is the
-      same failure as an unauthenticated laptop, with a much larger blast radius.
+      `--api-key` is a flag, not a default, and even when set it covers only the /v1, /v2,
+      /inference and /cohere routes: /invocations serves the same inference without it. Only the
+      gateway may reach this port, or the tier is an unauthenticated laptop with a larger blast radius.
     items:
       - id: endpoint
         label: Completion endpoint
@@ -535,7 +536,9 @@ pins:
         Runtime weight and adapter updating disabled, the control endpoints outside the versioned API
         unreachable from any tenant, and the serving configuration reviewed as security settings rather than
         tuning knobs. Cache isolation is part of it: the gateway sets a secret per-tenant cache salt on every
-        request, overwriting any the caller sent, or prefix sharing is off; and the compile and kernel cache
+        request, overwriting any the caller sent, and strips or regenerates multimodal uuid values, or prefix
+        sharing is off; vLLM says the salt is not an isolation boundary, so tenants that must share nothing get
+        their own instance; and the compile and kernel cache
         directory is private to the serving identity, never shared or tenant-writable.
     - mitigation: D3-NI
       at: runtime
@@ -621,8 +624,8 @@ scenarios:
         note: >
           Time to first token says whether the prefix was already cached by someone else. A
           secret per-tenant salt, set by the gateway on every request, keeps other tenants'
-          entries out of reach; the common serving stack leaves the salt opt-in, so without it
-          the channel is open.
+          prefixes out of reach; vLLM leaves it opt-in and says it is not an isolation boundary,
+          so tenants that must share nothing are served by their own instance.
 
 deviations:
   - subject: No separate GPU or cache blocks are drawn
