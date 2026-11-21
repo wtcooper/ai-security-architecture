@@ -25,6 +25,13 @@
 # 2026-11-21: the training statement was corrected against www.langchain.com/terms-of-service (Enterprise) and
 # www.langchain.com/standard-terms-of-service (Standard), both updated 2026-11-19, which disagree; the EMEA and
 # pricing FAQs say LangChain does not train; the LangSmith docs pages read do not state one.
+# 2026-11-21, JavaScript pass: every settings row that names a Python API now gives its JavaScript form as well,
+# read that day on docs.langchain.com/oss/javascript (.md), reference.langchain.com/javascript, the langgraphjs
+# repository (auth types, CLI config schema, checkpoint serializer) and the npm packages langchain 1.6.7,
+# @langchain/langgraph 1.7.5, @langchain/langgraph-checkpoint 1.2.3 and @langchain/auth 0.1.0. Python only:
+# ShellToolMiddleware, EncryptedSerializer and pickle_fallback. JavaScript's recursion limit defaults to 25. The
+# JS tab of the langgraph.json reference lists the same store, checkpointer, http and webhooks keys; JS custom
+# auth is an Auth from @langchain/langgraph-sdk/auth (auth.authenticate, auth.on), served by langgraph-api.
 vendor: langchain
 family: LangChain
 tools:
@@ -36,15 +43,15 @@ tools:
       - name: langgraph (Python)
         class: sdkFramework
         url: https://docs.langchain.com/oss/python/langgraph/overview
-      - name: "@langchain/langgraph (TypeScript, LangGraph.js)"
+      - name: "@langchain/langgraph (JavaScript, LangGraph.js)"
         class: sdkFramework
         url: https://docs.langchain.com/oss/javascript/langgraph/overview
       - name: "langchain v1 create_agent and middleware (Python)"
         class: sdkFramework
         url: https://docs.langchain.com/oss/python/langchain/agents
-      - name: "langchain v1 createAgent and middleware (TypeScript)"
+      - name: "langchain v1 createAgent and middleware (JavaScript)"
         class: sdkFramework
-        url: https://docs.langchain.com/oss/javascript/langchain/overview
+        url: https://docs.langchain.com/oss/javascript/langchain/agents
       - name: LangSmith Agent Server (langgraph-api, langgraph-cli; Cloud, Hybrid, self-hosted or standalone)
         class: sdkFramework
         url: https://docs.langchain.com/langsmith/deploy-overview
@@ -837,7 +844,7 @@ tools:
     settings:
       - id: agentServerAuth
         name: auth.path with @auth.authenticate
-        where: langgraph.json › auth › path, naming a langgraph_sdk.Auth instance with an @auth.authenticate handler
+        where: 'Python: langgraph.json › auth › path, naming a langgraph_sdk.Auth instance with an @auth.authenticate handler · JS: the same key, naming a new Auth() from @langchain/langgraph-sdk/auth whose auth.authenticate(...) handler receives the Request'
         setVia: [configFile, code]
         area: identity
         default: LangSmith API key in x-api-key on LangSmith; no authentication when self-hosted
@@ -850,7 +857,7 @@ tools:
         verified: "2026-11-21"
       - id: authorizationHandlers
         name: "@auth.on handlers"
-        where: The Auth instance › @auth.on (global), @auth.on.threads.create, .read, .create_run, @auth.on.assistants, @auth.on.crons
+        where: 'Python: the Auth instance › @auth.on (global), @auth.on.threads.create, .read, .create_run, @auth.on.assistants, @auth.on.crons · JS: auth.on("*"), auth.on("threads:create"), "threads:read", "threads:create_run", auth.on("assistants"), auth.on("crons")'
         setVia: [code]
         area: identity
         default: None registered
@@ -863,11 +870,11 @@ tools:
         verified: "2026-11-21"
       - id: storeAuth
         name: "@auth.on.store"
-        where: The Auth instance › @auth.on.store, rewriting or validating value["namespace"]
+        where: 'Python: the Auth instance › @auth.on.store, rewriting or validating value["namespace"] · JS: auth.on("store", ...), rewriting or validating value.namespace'
         setVia: [code]
         area: data
         default: Store namespaces shared across all callers
-        requires: Agent Server with custom auth
+        requires: Agent Server with custom auth; for JS handlers, namespace rewrites apply from langgraph-api 0.15.0 (CVE-2026-118668)
         recommended: Prepend ctx.user.identity to every namespace, or reject any namespace not starting with it; register it explicitly when a global handler denies by default
         value: "Namespace prefixed with the caller's identity"
         why: Long-term memories and the store's semantic index stay per user, so one user's agent cannot read, overwrite or be steered by another's memories.
@@ -889,7 +896,7 @@ tools:
         verified: "2026-11-21"
       - id: agentAuth
         name: Agent Auth client.authenticate
-        where: langchain_auth Client(...).authenticate(provider, scopes, user_id, agent_id) in a tool or node (JavaScript @langchain/auth)
+        where: 'Python: langchain_auth Client(...).authenticate(provider, scopes, user_id, agent_id) in a tool or node · JS: new Client({ apiKey }).authenticate({ provider, scopes, userId, agentId }) from @langchain/auth'
         setVia: [code]
         area: identity
         default: Tokens scoped to the calling assistant ID
@@ -902,12 +909,12 @@ tools:
         verified: "2026-11-21"
       - id: perUserMcpAuth
         name: MCPAdapter with per-user auth
-        where: Graph factory › MCPAdapter(Client(config, auth=BearerAuth(...))) built from runtime.user; ClientGroup for per-server credentials
+        where: 'Python: graph factory › MCPAdapter(Client(config, auth=BearerAuth(...))) built from runtime.user; ClientGroup for per-server credentials · JS: new MCPAdapter({ servers: { name: { url, authProvider } } }); per user, listTools([name], { authProvider })'
         setVia: [code]
         area: identity
         default: Whatever auth the client is built with, shared by every run
-        requires: langchain[mcp] 1.4.0+ (beta); Agent Server for runtime.user
-        recommended: A token exchanged for the authenticated caller in the graph factory, one ClientGroup member per server, and any tool-list cache keyed by user
+        requires: Python langchain[mcp] 1.4.0+ (beta) and Agent Server for runtime.user; JS @langchain/mcp-adapters 2.0+
+        recommended: A token exchanged for the authenticated caller in the graph factory, one ClientGroup member per server (in JS a servers entry, and a single-server adapter per user token, since a method-level authProvider reaches every server the adapter holds), and any tool-list cache keyed by user
         value: "Per-user token, one client per server"
         why: Each MCP call carries only that user's authority for that one server, and one user's cached tool list or token never serves another.
         mitigations: [D3-CTS, cap-data-access-governance, D3-CH]
@@ -915,13 +922,13 @@ tools:
         verified: "2026-11-21"
       - id: checkpointer
         name: checkpointer with thread_id and durability
-        where: graph.compile(checkpointer=PostgresSaver or MongoDBSaver), config["configurable"]["thread_id"], durability= on invoke or stream
+        where: 'Python: graph.compile(checkpointer=PostgresSaver or MongoDBSaver), config["configurable"]["thread_id"], durability= on invoke or stream · JS: graph.compile({ checkpointer }) with PostgresSaver or MongoDBSaver, { configurable: { thread_id } }, { durability }'
         setVia: [code]
         area: data
-        default: No checkpointer (examples use InMemorySaver, lost on restart)
+        default: No checkpointer (examples use InMemorySaver, JS MemorySaver, lost on restart)
         recommended: A persistent checkpointer, a new UUID thread_id per case, and durability="sync" on runs with side effects
         value: "Postgres, one thread per case, sync durability"
-        why: Interrupts survive a restart, a resumed run does not redo committed steps, and one case's state never seeds another's run.
+        why: Interrupts survive a restart, a resumed run does not redo committed steps, and one case's state never seeds another's run; in JS, sync awaits pending writes only when the run ends, so a crash mid-run can lose recent checkpoints.
         mitigations: [AML.M0031, AML.M0029]
         url: https://docs.langchain.com/oss/python/langgraph/checkpointers
         verified: "2026-11-21"
@@ -931,6 +938,7 @@ tools:
         setVia: [code, configFile]
         area: data
         default: Unset (persisted state not encrypted)
+        requires: Python only; the JS library has no EncryptedSerializer as of 2026-11, and the AES page documents LANGGRAPH_AES_KEY only for Python deployments
         recommended: A 32-byte key from the firm's secret manager (AES-256), with credential-bearing field names listed in LANGGRAPH_AES_JSON_KEYS
         value: "AES-256 key from the secret manager"
         why: Checkpoint blobs and named JSON fields in threads, runs, crons and the store are unreadable in the database without the key; encrypted fields cannot be searched.
@@ -939,11 +947,11 @@ tools:
         verified: "2026-11-21"
       - id: checkpointerSerde
         name: checkpointer.serde (allowed_json_modules, pickle_fallback)
-        where: langgraph.json › checkpointer › serde; JsonPlusSerializer(pickle_fallback=...) in a self-run process
+        where: 'Python: langgraph.json › checkpointer › serde; JsonPlusSerializer(pickle_fallback=...) in a self-run process · JS: the same langgraph.json key (listed for JS servers); the JS JsonPlusSerializer takes no options'
         setVia: [configFile, code]
         area: data
         default: allowed_json_modules limited to LangChain-safe defaults
-        requires: Agent Server 0.5+ for the langgraph.json keys
+        requires: Agent Server 0.5+ for the langgraph.json keys; pickle_fallback is Python only, the JS library has no pickle_fallback as of 2026-11
         recommended: Leave allowed_json_modules at the default (list only your own state classes, never true), leave pickle_fallback off, and keep langgraph-checkpoint at 4.1.1 or later
         value: "Default allowlist, no pickle fallback"
         why: Whoever can write to the checkpoint store cannot make a resumed run rebuild arbitrary Python objects; four 2025-26 advisories were code execution on checkpoint or cache load.
@@ -965,11 +973,11 @@ tools:
         verified: "2026-11-21"
       - id: humanInTheLoop
         name: HumanInTheLoopMiddleware (interrupt_on, interrupt_mode)
-        where: create_agent(middleware=[HumanInTheLoopMiddleware(interrupt_on={...}, interrupt_mode="per_call")]) (TypeScript humanInTheLoopMiddleware)
+        where: 'Python: create_agent(middleware=[HumanInTheLoopMiddleware(interrupt_on={...}, interrupt_mode="per_call")]) · JS: createAgent({ middleware: [humanInTheLoopMiddleware({ interruptOn: {...}, interruptMode: "per_call" })] })'
         setVia: [code]
         area: tools
         default: No middleware (tools run unapproved); batched mode once added
-        requires: A checkpointer; langchain 1.4.6+ for per_call
+        requires: A checkpointer; per_call needs Python langchain 1.4.6+ or JS langchain 1.5.18+ with createAgent v2 (the default)
         recommended: Every tool that changes records, moves money or sends data out in interrupt_on with allowed_decisions approve and reject, per_call mode, and only deterministic when predicates
         value: "per_call approval on every consequential tool"
         why: The run pauses in the checkpointer with the exact call until a person decides; a when predicate that turns False on resume runs the tool and ignores the reject.
@@ -978,7 +986,7 @@ tools:
         verified: "2026-11-21"
       - id: toolPolicyMiddleware
         name: wrap_tool_call
-        where: "@wrap_tool_call middleware (or AgentMiddleware.wrap_tool_call) on create_agent, returning a ToolMessage instead of calling the handler"
+        where: 'Python: @wrap_tool_call middleware (or AgentMiddleware.wrap_tool_call) on create_agent, returning a ToolMessage instead of calling the handler · JS: createMiddleware({ wrapToolCall }) on createAgent, returning a new ToolMessage without calling handler'
         setVia: [code]
         area: tools
         default: None
@@ -990,7 +998,7 @@ tools:
         verified: "2026-11-21"
       - id: perAgentTools
         name: tools per subagent (create_agent)
-        where: create_agent(model=..., tools=[...]) for each specialist wrapped as a supervisor tool; @wrap_model_call with request.override(tools=...)
+        where: 'Python: create_agent(model=..., tools=[...]) per specialist, wrapped as a tool; @wrap_model_call with request.override(tools=...) · JS: createAgent({ model, tools }) per specialist, wrapped with tool(); wrapModelCall with handler({ ...request, tools })'
         setVia: [code]
         area: tools
         recommended: Each specialist built with only the tools its task needs and given only the task description, plus a wrap_model_call filter that drops tools the caller's grant does not cover
@@ -1001,20 +1009,20 @@ tools:
         verified: "2026-11-21"
       - id: mcpToolList
         name: MCPAdapter.list_tools
-        where: MCPAdapter(target).list_tools(cache_mode=...), then the tools passed to create_agent
+        where: 'Python: MCPAdapter(target).list_tools(cache_mode=...), then the tools passed to create_agent · JS: new MCPAdapter({ servers }).listTools(names, { cacheMode }), names prefixed with the server name by default, then passed to createAgent'
         setVia: [code]
         area: tools
-        default: Every tool the server advertises; cache_mode "use"
-        requires: langchain[mcp] 1.4.0+ (beta)
-        recommended: Pass create_agent only the approved tool names, fix each target in code as an https URL or a Path, and never build a target from model or user input
+        default: Every tool the server advertises; cache_mode (JS cacheMode) "use"
+        requires: Python langchain[mcp] 1.4.0+ (beta); JS @langchain/mcp-adapters 2.0+
+        recommended: Pass create_agent only the approved tool names (server-prefixed in JS), fix each target in code as an https URL or a Path (in JS a url or command entry in servers), and never build a target from model or user input
         value: "Approved tool names, targets fixed in code"
-        why: Tools a server adds or renames are never offered, and a string from config or a model cannot launch a local file as an MCP subprocess.
+        why: Tools a server adds or renames are never offered, and a string from config or a model cannot launch a local file as an MCP subprocess (Python rejects non-URL strings; in JS only a servers entry with command starts a process).
         mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028]
         url: https://docs.langchain.com/oss/python/langchain/mcp/tools
         verified: "2026-11-21"
       - id: guardrailHooks
         name: before_agent and wrap_tool_call guardrail middleware
-        where: AgentMiddleware.before_agent (or @before_agent) and wrap_tool_call on create_agent, calling your classifier
+        where: 'Python: AgentMiddleware.before_agent (or @before_agent) and wrap_tool_call on create_agent, calling your classifier · JS: createMiddleware({ beforeAgent: { hook, canJumpTo: ["end"] }, wrapToolCall }) on createAgent'
         setVia: [code]
         area: tools
         default: None
@@ -1026,22 +1034,22 @@ tools:
         verified: "2026-11-21"
       - id: piiMiddleware
         name: PIIMiddleware
-        where: create_agent(middleware=[PIIMiddleware(pii_type, strategy=..., apply_to_input=..., apply_to_output=..., apply_to_tool_results=...)]) (TypeScript piiMiddleware)
+        where: 'Python: create_agent(middleware=[PIIMiddleware(pii_type, strategy=..., apply_to_input=..., apply_to_output=..., apply_to_tool_results=...)]) · JS: piiMiddleware(piiType, { strategy, applyToInput, applyToOutput, applyToToolResults }) in createAgent middleware'
         setVia: [code]
         area: data
         default: Strategy redact; input on, output and tool results off
         recommended: email, credit_card and ip plus custom detectors for national identifiers and API keys, with apply_to_tool_results and apply_to_output true
         value: "Input, output and tool results on"
-        why: Identifiers in requests, tool results and replies are redacted before the model and the client see them; output redaction also covers the stream from langchain 1.3.2.
+        why: Identifiers in requests, tool results and replies are redacted before the model and the client see them; output redaction also covers the stream from Python langchain 1.3.2, while JS applyToOutput rewrites the message only after the model call.
         mitigations: [cap-sensitive-data-redaction]
         url: https://docs.langchain.com/oss/python/langchain/middleware/built-in
         verified: "2026-11-21"
       - id: recursionLimit
         name: recursion_limit
-        where: Run config › recursion_limit (top level, not under configurable), or LANGGRAPH_DEFAULT_RECURSION_LIMIT; TypeScript recursionLimit
+        where: 'Python: run config › recursion_limit (top level, not under configurable), or LANGGRAPH_DEFAULT_RECURSION_LIMIT · JS: run config › recursionLimit (top level), with no environment variable in the library'
         setVia: [code, configFile]
         area: tools
-        default: Python 10,007 super-steps (create_agent 9,999; Agent Server env var 10,011); TypeScript 25
+        default: "Python: 10,007 super-steps (create_agent 9,999; Agent Server env var 10,011); JS: 25, and createAgent sets none of its own"
         recommended: An explicit limit sized to the workflow on every run, and server-wide with LANGGRAPH_DEFAULT_RECURSION_LIMIT on Agent Server
         value: "Explicit, sized to the workflow"
         why: A looping graph ends with GraphRecursionError after a bounded number of steps instead of running for thousands of model and tool calls.
@@ -1050,7 +1058,7 @@ tools:
         verified: "2026-11-21"
       - id: callLimits
         name: ModelCallLimitMiddleware and ToolCallLimitMiddleware
-        where: create_agent(middleware=[ModelCallLimitMiddleware(run_limit=..., thread_limit=..., exit_behavior=...), ToolCallLimitMiddleware(tool_name=..., run_limit=...)])
+        where: 'Python: ModelCallLimitMiddleware(run_limit, thread_limit, exit_behavior) and ToolCallLimitMiddleware(tool_name, run_limit) on create_agent · JS: modelCallLimitMiddleware({ runLimit, threadLimit, exitBehavior }) and toolCallLimitMiddleware({ toolName, runLimit })'
         setVia: [code]
         area: tools
         default: No limits; ToolCallLimitMiddleware exit_behavior "continue"
@@ -1079,6 +1087,7 @@ tools:
         setVia: [code]
         area: tools
         default: HostExecutionPolicy (no filesystem or network sandboxing)
+        requires: Python only; the JS library has no ShellToolMiddleware as of 2026-11
         recommended: DockerExecutionPolicy with network_enabled False, read_only_rootfs True and a non-root user, on a locked-down Docker daemon, for any agent whose commands follow untrusted input
         value: "DockerExecutionPolicy, no network, read-only root"
         why: Commands run in a separate container per agent run with no network, instead of on the host where they can change anything the process user reaches.
@@ -1112,7 +1121,7 @@ tools:
         verified: "2026-11-21"
       - id: hideInputsOutputs
         name: LANGSMITH_HIDE_INPUTS / LANGSMITH_HIDE_OUTPUTS
-        where: Environment variables, or Client(hide_inputs=..., hide_outputs=..., anonymizer=...) in the LangSmith SDK
+        where: 'Python: environment variables, or Client(hide_inputs=..., hide_outputs=..., anonymizer=...) in the LangSmith SDK · JS: the same variables, or new Client({ hideInputs, hideOutputs, anonymizer }) with createAnonymizer from langsmith/anonymizer'
         setVia: [configFile, code]
         area: audit
         default: Unset (inputs and outputs sent)
@@ -1136,12 +1145,12 @@ tools:
         verified: "2026-11-21"
       - id: cancelRun
         name: runs.cancel and cancel_many (action interrupt or rollback)
-        where: Agent Server API › POST /threads/{thread_id}/runs/{run_id}/cancel; client.runs.cancel_many(status=...); on_disconnect="cancel"
+        where: 'Python: Agent Server API › POST /threads/{thread_id}/runs/{run_id}/cancel; client.runs.cancel_many(status=...); on_disconnect="cancel" · JS: client.runs.cancel(threadId, runId, wait, action), onDisconnect: "cancel"; no cancelMany, so POST /runs/cancel for bulk'
         setVia: [apiCli]
         area: tools
         default: action interrupt (run and checkpoints kept)
         requires: Agent Server
-        recommended: Wired to an operator stop that calls cancel_many with status "all", rollback where the partial state must not be resumed, and on_disconnect "cancel" on interactive runs
+        recommended: Wired to an operator stop that calls cancel_many (from JS, POST /runs/cancel) with status "all", rollback where the partial state must not be resumed, and on_disconnect (JS onDisconnect) "cancel" on interactive runs
         value: "Operator stop wired to cancel_many"
         why: Running work stops at the worker, and with rollback its checkpoints are deleted so nobody can resume it; tool calls already made are not undone.
         mitigations: [cap-agent-kill-switch]
@@ -1161,7 +1170,7 @@ tools:
         verified: "2026-11-21"
       - id: releaseControl
         name: Git Ref (Branch or Tag) and Deploy on push; assistant versions
-        where: LangSmith › Agent Servers › Agent Server Settings; client.assistants.update and set_latest
+        where: 'Python: LangSmith › Agent Servers › Agent Server Settings; client.assistants.update and set_latest · JS: the same settings; client.assistants.update and setLatest'
         setVia: [adminConsole, apiCli]
         area: tools
         default: Deploy on push available for a branch
@@ -1333,3 +1342,59 @@ tools:
         url: https://www.langchain.com/standard-terms-of-service
       - title: langgraph on GitHub
         url: https://github.com/langchain-ai/langgraph
+      - title: LangChain JavaScript agents (createAgent)
+        url: https://docs.langchain.com/oss/javascript/langchain/agents
+      - title: LangChain JavaScript prebuilt middleware (humanInTheLoopMiddleware, piiMiddleware, call limits; no shell tool)
+        url: https://docs.langchain.com/oss/javascript/langchain/middleware/built-in
+      - title: LangChain JavaScript custom middleware (createMiddleware, wrapToolCall, wrapModelCall)
+        url: https://docs.langchain.com/oss/javascript/langchain/middleware/custom
+      - title: LangChain JavaScript human-in-the-loop (interruptOn, interruptMode, when)
+        url: https://docs.langchain.com/oss/javascript/langchain/human-in-the-loop
+      - title: LangChain JavaScript guardrails (beforeAgent)
+        url: https://docs.langchain.com/oss/javascript/langchain/guardrails
+      - title: LangChain JavaScript tools (wrapToolCall returning a ToolMessage)
+        url: https://docs.langchain.com/oss/javascript/langchain/tools
+      - title: LangChain JavaScript runtime (runtime.context, runtime.serverInfo)
+        url: https://docs.langchain.com/oss/javascript/langchain/runtime
+      - title: LangChain JavaScript multi-agent subagents
+        url: https://docs.langchain.com/oss/javascript/langchain/multi-agent/subagents
+      - title: LangChain JavaScript MCP (MCPAdapter, @langchain/mcp-adapters 2.0)
+        url: https://docs.langchain.com/oss/javascript/langchain/mcp/index
+      - title: LangChain JavaScript MCP connections (listTools, cacheMode, server-name prefixes)
+        url: https://docs.langchain.com/oss/javascript/langchain/mcp/connections
+      - title: LangChain JavaScript MCP authentication (authProvider, per-user authentication)
+        url: https://docs.langchain.com/oss/javascript/langchain/mcp/auth
+      - title: LangGraph JavaScript checkpointers (MemorySaver, PostgresSaver, durability)
+        url: https://docs.langchain.com/oss/javascript/langgraph/checkpointers
+      - title: LangGraph JavaScript Graph API (recursionLimit, default 25)
+        url: https://docs.langchain.com/oss/javascript/langgraph/graph-api
+      - title: piiMiddleware (JavaScript API reference)
+        url: https://reference.langchain.com/javascript/langchain/index/piiMiddleware
+      - title: humanInTheLoopMiddleware (JavaScript API reference)
+        url: https://reference.langchain.com/javascript/langchain/index/humanInTheLoopMiddleware
+      - title: createMiddleware (JavaScript API reference)
+        url: https://reference.langchain.com/javascript/langchain/index/createMiddleware
+      - title: MCPAdapter (JavaScript API reference)
+        url: https://reference.langchain.com/javascript/langchain-mcp-adapters/MCPAdapter
+      - title: SerializerProtocol, JavaScript checkpoint package (no encrypted serializer)
+        url: https://reference.langchain.com/javascript/langchain-langgraph-checkpoint/index/SerializerProtocol
+      - title: Auth in @langchain/langgraph-sdk (JavaScript API reference; authenticate and on)
+        url: https://reference.langchain.com/javascript/langchain-langgraph-sdk/auth/Auth
+      - title: RunsClient.cancel (JavaScript API reference)
+        url: https://reference.langchain.com/javascript/langchain-langgraph-sdk/client/RunsClient/cancel
+      - title: AssistantsClient.setLatest (JavaScript API reference)
+        url: https://reference.langchain.com/javascript/langchain-langgraph-sdk/client/AssistantsClient/setLatest
+      - title: langgraphjs auth types (auth.on events such as threads:create and store)
+        url: https://github.com/langchain-ai/langgraphjs/blob/main/libs/sdk/src/auth/types.ts
+      - title: langgraphjs CLI configuration schema (auth.path for JavaScript graphs)
+        url: https://github.com/langchain-ai/langgraphjs/blob/main/libs/langgraph-cli/src/utils/config.mts
+      - title: langgraphjs JsonPlusSerializer (no pickle fallback or options)
+        url: https://github.com/langchain-ai/langgraphjs/blob/main/libs/checkpoint/src/serde/jsonplus.ts
+      - title: "@langchain/auth 0.1.0 types (authenticate options userId and agentId)"
+        url: https://cdn.jsdelivr.net/npm/@langchain/auth@0.1.0/dist/types.d.ts
+      - title: Cancel runs (JavaScript tab; no cancelMany in the JavaScript SDK)
+        url: https://docs.langchain.com/langsmith/cancel-run
+      - title: Set up Agent Auth (JavaScript tab, @langchain/auth)
+        url: https://docs.langchain.com/langsmith/agent-auth
+      - title: Assistant configuration (JavaScript tab, setLatest)
+        url: https://docs.langchain.com/langsmith/configuration-cloud
