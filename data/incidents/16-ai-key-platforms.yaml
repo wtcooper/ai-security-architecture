@@ -8,19 +8,21 @@ date: 2026-10
 dateRange: 9–21 October 2026
 category: identity
 perspective: target
-archetype: archManagedAgentRuntime
+# OpenCode Console is the one of the three with a drawing in the catalogue: a hosted service beside
+# a coding agent that keeps the team's model key and calls the model provider with it, the vendor
+# column of the third-party coding agent drawing. Railway and Andromeda held the same kind of key
+# for other kinds of platform, and are told through that box.
+archetype: archCodingAgentThirdParty
 caveat: >
   The link between the three intrusions, and the distillation motive, are the vendors' own
   claims; no third party has confirmed them, and none has disclosed a root cause.
 breaks:
-  - control: D3-CTS
-    how: "Hand the platform a short-lived, scoped token per workload, not a standing provider key it must store."
   - control: D3-CH
-    how: "One key per tool and platform, rotated on schedule, so a breach at one revokes one key rather than all of them."
-  - control: AML.M0036
-    how: "Provider-side spend limits and alerts turn a stolen key into a capped bill and an alarm."
+    how: "Keep the model key in your own gateway's vault and give tools short-lived access, so no vendor's cloud holds a lasting key to steal."
   - control: cap-ai-vendor-assessment
     how: "Ask how a platform stores and decrypts customer secrets before pasting a key into it."
+  - control: cap-agent-kill-switch
+    how: "With the key behind your gateway, revoking a tool's access there cuts it off at once, without rotating at the provider and in every tool."
 summary:
   - >
     A managed platform that calls models on its customers' behalf has to hold their provider
@@ -58,7 +60,7 @@ steps:
       variables, API keys among them, encrypted for its deployments. Both designs mean the
       platform must be able to decrypt the keys at run time — the keys the CLI keeps locally
       were, by OpenCode's account, never at risk.
-    path: [entry->managedRuntime, managedRuntime, govSecrets]
+    path: [harness->vendorService, vendorService, vendorService->provider]
     risks:
       - riskCrossTenantCredentialPropagation
     sources:
@@ -75,7 +77,7 @@ steps:
       anomalous activity in the systems that store customer environment variables on the morning
       of 21 October, and for some of them the attacker may have obtained decrypted contents. None
       has said how the intruder got in.
-    path: [govSecrets, govIdentity]
+    path: [vendorService]
     risks:
       - riskCrossTenantCredentialPropagation
       - riskSensitiveDataDisclosure
@@ -96,7 +98,7 @@ steps:
       Anthropic for one, about $1,700 for another, €200 of Google usage followed by a suspended
       project for a third. OpenCode called the breach part of a large-scale distillation attack:
       someone else's paid model access, used to copy a frontier model's behaviour.
-    path: [managedRuntime]
+    path: [provider]
     risks:
       - riskEconomicDenialOfWallet
       - riskModelReverseEngineering
@@ -113,11 +115,11 @@ steps:
     title: Rotation becomes the outage
     phase: exposed
     narrative: >
-      Railway asked upstream providers to revoke all keys and paused every deployment while it
+      Railway asked upstream providers to revoke keys proactively and paused every deployment while it
       investigated, so customers could not ship until builds were restored. OpenCode's advice
       carried the trap: deleting a key from Console does not revoke it. Every customer had to
       rotate at the provider, update every tool that used the old key, and read back their bills.
-    path: [agentDef->managedRuntime, managedRuntime]
+    path: [provider, vendorService->provider, harness->vendorService]
     risks:
       - riskSensitiveDataDisclosure
     sources:
@@ -125,16 +127,21 @@ steps:
         url: https://blog.railway.com/p/security-disclosure-wednesday-october-21st
         publisher: Railway
         date: 2026-10-21
+      - title: "OpenCode Console breach may have exposed provider API keys"
+        url: https://thehackernews.com/2026/10/opencode-console-breach-may-have.html
+        publisher: The Hacker News
+        date: 2026-10-19
   - n: 5
     title: Where this chain breaks
     phase: mitigated
     narrative: >
-      Prefer platforms that never hold a standing provider key: a short-lived token scoped to one
-      workload is worth little a day later. Where a key must be stored, make it one key per tool,
-      rotated on a schedule, so a breach at one platform revokes one key. Set spend limits and
-      alerts at the provider, which turn a stolen key into a capped bill and an early warning.
-      And before pasting a key into anyone's console, ask how they store and decrypt it.
-    path: [entry->managedRuntime, managedRuntime, govSecrets, govPolicy]
+      Keep the provider key in your own AI gateway's vault and route the tools through it, so no
+      vendor's cloud holds a standing key: what a tool gets is short-lived access, worth little a
+      day later, and revoking it at the gateway cuts every copy off at once. Where a vendor must
+      hold a key, ask before pasting it in how they store and decrypt it, and make it one key per
+      tool so a breach at one platform revokes one key. Spend limits and alerts at the provider
+      turn a stolen key into a capped bill and an early warning.
+    path: [harness->aiGateway, aiGateway->provider, vendorService, govSecrets, govObservability]
     sources:
       - title: "OpenCode Console breach may have exposed provider API keys"
         url: https://thehackernews.com/2026/10/opencode-console-breach-may-have.html
