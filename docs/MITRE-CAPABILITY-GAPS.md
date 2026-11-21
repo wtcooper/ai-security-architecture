@@ -2,9 +2,11 @@
 
 > The MITRE catalogue is now the **Controls** catalogue (`data/overlay/mitigations.yaml`, `/controls`); the data still calls a control a `mitigation`. This assessment retains its historical filename. Technology-capability source selection is tracked in [the options assessment](TECHNOLOGY-CAPABILITY-TAXONOMIES.md).
 
-Implemented 2026-09-18. **59 canonical MITRE controls; no custom control IDs.**
-35 D3FEND defensive techniques from 1.6.0 and 24 ATLAS mitigations from 2026.09.
-CoSAI components, risks, controls, personas and existing framework mappings are unchanged.
+Implemented 2026-09-18; moved to ATLAS 2026.10 on 2026-11-21. **60 canonical MITRE controls; no
+custom control IDs.** 35 D3FEND defensive techniques from 1.6.0 and 25 ATLAS mitigations from
+2026.10, which added AI Agent External Resource Lifecycle Management (`AML.M0043`) to the
+selection. CoSAI components, risks, controls, personas and existing framework mappings are
+unchanged.
 
 ## What is missing?
 
@@ -14,16 +16,18 @@ technologies, user transparency/data controls, user education and internal polic
 The last two are deliberately outside a technology catalogue; ATLAS does include the
 nontechnical mitigation AML.M0018 User Training.
 
-The clearest technical vocabulary gap is privacy-preserving computation: the inspected pinned
-releases do not explicitly name differential privacy, secure aggregation, secure multiparty
-computation or homomorphic inference as controls. Generic encryption is not an equivalent.
+The clearest technical vocabulary gap is privacy-preserving computation. ATLAS 2026.10 adds
+Privacy-Preserving AI Training and Inference (`AML.M0041`: differential privacy, federated
+learning, secure multiparty computation and homomorphic encryption), but it is not yet in this
+selection, so the two privacy-enhancing-technology controls below keep their gap records until it
+is profiled and pinned. Generic encryption is not an equivalent.
 Other gaps are properties or organizational requirements that cannot be inferred from a broad
 MITRE function. They stay recorded against CoSAI controls without inventing control names.
 
 | CoSAI control | Mapping | Remaining requirement |
 | --- | --- | --- |
-| Privacy Enhancing Technologies for Model Training | unmapped — Encrypt Sensitive Information (`AML.M0012`) | No sufficiently explicit control for differential privacy, secure aggregation, privacy-preserving federated training, or evaluated anonymization/synthetic-data privacy. Ordinary encryption and access control do not establish these guarantees. |
-| Privacy Enhancing Technologies for Inference | partial — Generative AI Guardrails (`AML.M0020`), Encrypt Sensitive Information (`AML.M0012`) | Guardrails cover sensitive-data detection and redaction. Secure multiparty inference, homomorphic computation and privacy-preserving query mechanisms are not explicitly represented. Message/file encryption does not imply encrypted computation. |
+| Privacy Enhancing Technologies for Model Training | unmapped — Encrypt Sensitive Information (`AML.M0012`) | No selected control for differential privacy, secure aggregation, privacy-preserving federated training, or evaluated anonymization/synthetic-data privacy. ATLAS 2026.10 adds Privacy-Preserving AI Training and Inference, which names differential privacy, federated learning and secure multiparty computation, but it is not yet in this selection. Ordinary encryption and access control do not establish these guarantees. |
+| Privacy Enhancing Technologies for Inference | partial — Generative AI Guardrails (`AML.M0020`), Encrypt Sensitive Information (`AML.M0012`) | Guardrails cover sensitive-data detection and redaction. Secure multiparty inference, homomorphic computation and privacy-preserving query mechanisms are not represented in this selection; ATLAS 2026.10's Privacy-Preserving AI Training and Inference names them but is not yet selected. Message/file encryption does not imply encrypted computation. |
 | Isolated and Confidential Computing | partial — Hardware-based Process Isolation (`D3-HBPI`), Execution Isolation (`D3-EI`) | Hardware process isolation is represented. Confidential-memory guarantees, workload attestation, measurement-bound key release and side-channel protections require explicit implementation evidence beyond that technique. |
 | User Data Management | partial — Generative AI Guardrails (`AML.M0020`), Memory Hardening (`AML.M0031`), Data Inventory (`D3-DI`), Access Mediation (`D3-AMED`) | Guardrails, inventory, access mediation and memory hardening cover constituent functions. End-to-end consent and purpose enforcement, user-data retention/deletion across all stores and provider copies, and proving those commitments remain outside these mappings. ATLAS Memory Hardening does include retention/deletion for agent memory. |
 | Training Data Management | partial — Maintain AI Dataset Provenance (`AML.M0025`), Sanitize Training Data (`AML.M0007`) | Dataset provenance and sanitization contribute, but provenance does not establish legal authorization, consent or permitted purpose for training/evaluation data. Data-use approval and provenance interpretation remain explicit implementation and governance requirements. |
@@ -32,7 +36,7 @@ MITRE function. They stay recorded against CoSAI controls without inventing cont
 | Internal Policies and Education | unmapped | Internal policy authoring, publication and employee education remain people/process obligations. ATLAS AML.M0018 User Training is related but is not a technical control. |
 | Product Governance | partial — Validate AI Model (`AML.M0008`), Operational Risk Assessment (`D3-ORA`) | Model validation and operational risk assessment support governance. Ownership, policy approvals, supplier assurance, release authorization and accountable decisions are not implemented merely by deploying those controls. |
 | Risk Governance | partial — Operational Risk Assessment (`D3-ORA`) | Operational Risk Assessment provides a standardized concept. Residual-risk acceptance, supplier evidence evaluation and ongoing governance workflows still need organizational processes and evidence; a tool does not fulfill them automatically. |
-| Agent Observability | partial — AI Telemetry Logging (`AML.M0024`), System File Analysis (`D3-SFA`) | AI telemetry and system-file tampering analysis are represented. Immutable retention, non-repudiation and complete audit-chain guarantees need separate implementation evidence. Observable execution events do not reveal complete internal model reasoning. |
+| Agent Observability | partial — AI Telemetry Logging and Monitoring (`AML.M0024`), System File Analysis (`D3-SFA`) | AI telemetry and system-file tampering analysis are represented. Immutable retention, non-repudiation and complete audit-chain guarantees need separate implementation evidence. Observable execution events do not reveal complete internal model reasoning. |
 | Model and Data Integrity Management | partial — Code Signing (`AML.M0013`), Verify AI Artifacts (`AML.M0014`), File Integrity Monitoring (`D3-FIM`) | Code/artifact signing, verification and integrity monitoring are represented. Signed-media provenance interoperability (for example C2PA), watermark semantics and authenticity of generated media are not fully specified by these controls. Authenticity is not truth. |
 | Orchestrator and Route Integrity | partial — System Configuration Permissions (`D3-SCP`), File Integrity Monitoring (`D3-FIM`), Message Authentication (`D3-MAN`) | Configuration permissions and integrity monitoring support route protection. Signed route manifests, binding responses to the chosen model, and end-to-end route/provenance checks must be verified as application-specific implementations. |
 
@@ -46,7 +50,8 @@ MITRE function. They stay recorded against CoSAI controls without inventing cont
   memory retention, deletion and recovery; that is not all enterprise data lifecycle management.
 - **Governance support:** D3-ORA Operational Risk Assessment and AML.M0008 Validate AI Model
   contribute to CoSAI governance. They do not replace supplier assurance or accountable approvals.
-- **Audit and recovery:** AML.M0024 captures telemetry; D3-SFA detects system-file/log tampering.
+- **Audit and recovery:** AML.M0024 captures and monitors telemetry and, since ATLAS 2026.10,
+  asks for it to be protected from change or deletion; D3-SFA detects system-file/log tampering.
   D3-RC/RS/RD restore configuration, software and databases. None alone establishes immutable
   audit storage or safe progressive rollout.
 
@@ -54,7 +59,7 @@ MITRE function. They stay recorded against CoSAI controls without inventing cont
 
 The authoritative snapshots and license notices are under [data/mitre](../data/mitre/README.md).
 [MITRE D3FEND 1.6.0](https://d3fend.mitre.org/ontologies/d3fend/1.6.0/d3fend.json) and
-[ATLAS 2026.09](https://github.com/mitre-atlas/atlas-data/blob/v2026.09/dist/v6/ATLAS-2026.09.yaml)
+[ATLAS 2026.10](https://github.com/mitre-atlas/atlas-data/blob/v2026.10/dist/v6/ATLAS-2026.10.yaml)
 supply the canonical definitions. This report's CoSAI crosswalk and gap judgments are authored
 here. Claims about absence are scoped to those snapshots, not every future MITRE release.
 The selection is an application profile, not the entire MITRE catalogue. Specialized predictive
@@ -90,7 +95,7 @@ placement and evidence after running it; automatic ID translation is not securit
 | Privacy-enhancing technologies (`capabilityPetTooling`) | Retired; retain requirement under CoSAI gap assessment |
 | Retrieval & vector store security (`capabilityRagSecurity`) | Generative AI Guardrails (`AML.M0020`), Input and Output Validation for AI Agent Components (`AML.M0033`) |
 | AI security posture management (`capabilityAiSpm`) | Configuration Inventory (`D3-CI`), Asset Vulnerability Enumeration (`D3-AVE`) |
-| AI bill of materials & artifact signing (`capabilityAiBom`) | AI Bill of Materials (`AML.M0023`), Code Signing (`AML.M0013`), Verify AI Artifacts (`AML.M0014`) |
+| AI bill of materials & artifact signing (`capabilityAiBom`) | Maintain an AI Bill of Materials (`AML.M0023`), Code Signing (`AML.M0013`), Verify AI Artifacts (`AML.M0014`) |
 | Model artifact scanning & safe deserialization (`capabilityModelScanning`) | File Analysis (`D3-FA`), Restrict Library Loading (`AML.M0011`) |
 | Model weight protection (`capabilityModelWeightProtection`) | Control Access to AI Models and Data at Rest (`AML.M0005`) |
 | Encryption & key management for AI assets (`capabilityEncryptionKeyManagement`) | Encrypt Sensitive Information (`AML.M0012`) |
@@ -111,10 +116,10 @@ placement and evidence after running it; automatic ID translation is not securit
 | Model hardening & adversarial training (`capabilityModelHardening`) | Predictive AI Model Hardening (`AML.M0003`), Generative AI Model Alignment (`AML.M0022`) |
 | System prompt & instruction hierarchy management (`capabilitySystemPromptManagement`) | System Configuration Permissions (`D3-SCP`), Generative AI Guidelines (`AML.M0021`) |
 | Content provenance & watermarking (`capabilityContentProvenance`) | Retired; retain requirement under CoSAI gap assessment |
-| Agent observability & tracing (`capabilityAgentObservability`) | AI Telemetry Logging (`AML.M0024`) |
+| Agent observability & tracing (`capabilityAgentObservability`) | AI Telemetry Logging and Monitoring (`AML.M0024`) |
 | Agent & tool registry (`capabilityAgentRegistry`) | Asset Inventory (`D3-AI`) |
-| Tool permission scoping & least agency (`capabilityToolPermissionScoping`) | AI Agent Tools Permissions Configuration (`AML.M0028`) |
-| Runtime action authorization (`capabilityAgentRuntimeEnforcement`) | Access Mediation (`D3-AMED`), AI Agent Authority Expansion Controls (`AML.M0037`), Restrict AI Agent Tool Invocation on Untrusted Data (`AML.M0030`), Input and Output Validation for AI Agent Components (`AML.M0033`) |
+| Tool permission scoping & least agency (`capabilityToolPermissionScoping`) | Enforce Access Controls for AI Agent Tools (`AML.M0028`) |
+| Runtime action authorization (`capabilityAgentRuntimeEnforcement`) | Enforce Access Controls for AI Agent Tools (`AML.M0028`, added 2026-11-21), Access Mediation (`D3-AMED`), AI Agent Authority Expansion Controls (`AML.M0037`), Restrict AI Agent Tool Invocation on Untrusted Data (`AML.M0030`), Input and Output Validation for AI Agent Components (`AML.M0033`) |
 | Human-in-the-loop approval & escalation (`capabilityHitlControls`) | Human In-the-Loop for AI Agent Actions (`AML.M0029`) |
 | Agent memory & context protection (`capabilityMemoryProtection`) | Memory Hardening (`AML.M0031`) |
 | Agent behavioural & goal-drift detection (`capabilityBehavioralDriftDetection`) | AI Agent Scope Drift Detection (`AML.M0038`) |
@@ -126,7 +131,7 @@ placement and evidence after running it; automatic ID translation is not securit
 | AI red teaming (`capabilityAiRedTeaming`) | AI Red Team (`AML.M0035`) |
 | Model & agent evaluation harnesses (`capabilityModelEvals`) | Validate AI Model (`AML.M0008`) |
 | AI-aware detection & response (`capabilityAiDetectionResponse`) | Resource Access Pattern Analysis (`D3-RAPA`) |
-| Audit logging & non-repudiation (`capabilityAuditLogging`) | AI Telemetry Logging (`AML.M0024`), System File Analysis (`D3-SFA`) |
+| Audit logging & non-repudiation (`capabilityAuditLogging`) | AI Telemetry Logging and Monitoring (`AML.M0024`), System File Analysis (`D3-SFA`) |
 | Endpoint detection & response (`capabilityEdr`) | Process Analysis (`D3-PA`), Process Termination (`D3-PT`) |
 | Browser detection & response (`capabilityBrowserDetectionResponse`) | Web Session Activity Analysis (`D3-WSAA`) |
 | Application security testing for AI systems (`capabilityAppSecTesting`) | System Vulnerability Assessment (`D3-SYSVA`), Dynamic Analysis (`D3-DA`) |
@@ -136,7 +141,7 @@ placement and evidence after running it; automatic ID translation is not securit
 | Shadow AI discovery (`capabilityShadowAiDiscovery`) | Asset Inventory (`D3-AI`) |
 | Third-party risk management platform for AI vendors (`capabilityAiTprm`) | Operational Risk Assessment (`D3-ORA`) |
 | Threat modelling tooling for AI systems (`capabilityThreatModeling`) | Operational Risk Assessment (`D3-ORA`) |
-| Model registry & documentation generation (`capabilityModelDocumentation`) | Operational Risk Assessment (`D3-ORA`), Asset Inventory (`D3-AI`) |
+| Model registry & documentation generation (`capabilityModelDocumentation`) | Maintain an AI Bill of Materials (`AML.M0023`, added 2026-11-21), Operational Risk Assessment (`D3-ORA`), Asset Inventory (`D3-AI`) |
 
 ## Verification
 

@@ -127,7 +127,7 @@ CoSAI controls, Components, Personas, Frameworks).
 | **Incidents** | A list of real 2025–26 incidents, newest first, filtered by attack type and architecture. Each opens its own page: a step-by-step walk across its reference architecture, every step sourced, ending at the controls that would have broken the chain — each a link to its row on the pattern's Enable tab. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Reference › CoSAI controls** (`/reference/cosai-controls/`) | The 35 CoSAI controls in six groups. A CoSAI control's status rolls up from the catalogue controls that deliver it. |
-| **Controls** (`/controls/`) | The full catalogue — 59 MITRE mitigations and 17 authored specialisations — as a matrix of NIST CSF category × deployment surface, tinted by status; one switch regroups the rows by CoSAI control group (`/controls?by=cosai`). Filter by pattern, risk category, stack layer or source. A control's detail shows the MITRE definition, the authored implementation scope, example technologies, its CSF category, the CoSAI controls it contributes to and the patterns that pin it. |
+| **Controls** (`/controls/`) | The full catalogue — 60 MITRE mitigations and 17 authored specialisations — as a matrix of NIST CSF category × deployment surface, tinted by status; one switch regroups the rows by CoSAI control group (`/controls?by=cosai`). Filter by pattern, risk category, stack layer or source. A control's detail shows the MITRE definition, the authored implementation scope, example technologies, its CSF category, the CoSAI controls it contributes to and the patterns that pin it. |
 | **Reference** (`/reference/`) | What each reference page is for, how risk is described, and where the data comes from. |
 | **Reference › Clouds & on-premises** (`/reference/clouds/`) | One platform at a time (AWS, Azure, Google Cloud, your own data centre): the patterns mapped onto it, each with the vendor reference architecture it follows, and the cloud's own setting for every control under its NIST CSF category, with where it is set, the value to set, why, and the patterns that use it. |
 | **Reference › Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. |
@@ -225,7 +225,7 @@ and always writes "CoSAI control" for the layer above it:
 | **Controls** | MITRE D3FEND + ATLAS, 59, plus 17 authored specialisations (`cap-*`) | The actionable control at a place in the data flow ("Outbound Traffic Filtering on the sandbox egress"); the pins on every drawing and the rows on its Enable tab | **yes** |
 | Tools | registry, 54 | Named products; each an instance of one pattern, with its own security settings | adoption |
 
-A control is a MITRE mitigation. The 59 MITRE entries are the citable vocabulary; each
+A control is a MITRE mitigation. The 60 MITRE entries are the citable vocabulary; each
 carries the CoSAI controls it supports, the risks it addresses, example technologies that
 deliver it, and an authored decision per surface (endpoint / cloud / third-party SaaS). Where
 one MITRE entry is too coarse to report on, an authored **specialisation** in
@@ -237,7 +237,7 @@ record is still called `mitigation`, because its identifier is MITRE's; the app 
 **control**.
 
 Canonical identifiers, names and definitions come from checksum-pinned snapshots in
-`data/mitre/` (D3FEND 1.6.0, ATLAS 2026.09). The selection, implementation guidance, example
+`data/mitre/` (D3FEND 1.6.0, ATLAS 2026.10). The selection, implementation guidance, example
 technologies, deployment responsibility and CoSAI crosswalk are authored in
 `data/overlay/mitigations.yaml`. The build rejects invented IDs and overrides of upstream names
 or definitions, and checks each specialisation against its parent.
@@ -279,7 +279,7 @@ you have approved (`aks: { status: enabled }`), shown on each option in the choo
 
 ### Control families: NIST CSF
 
-[`data/overlay/enablement.yaml`](data/overlay/enablement.yaml) puts every one of the 76 controls
+[`data/overlay/enablement.yaml`](data/overlay/enablement.yaml) puts every one of the 77 controls
 under exactly one **NIST CSF 2.0 category**, and that grouping is used everywhere a list of
 controls is shown: the bands of a pattern's Enable tab (in CSF order: Govern, Identify, Protect,
 Detect, Respond, Recover) and the rows of the control catalogue. Category names and functions

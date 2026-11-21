@@ -52,7 +52,7 @@ const PAGES = [
     href: ROUTES.frameworks,
     label: "Frameworks",
     count: `${visibleFrameworks.length}`,
-    blurb: "Crosswalks to NIST CSF, OWASP, MITRE ATLAS, STRIDE, NIST AI RMF, ISO and the EU AI Act: pick an entry and see what maps to it.",
+    blurb: "Crosswalks to NIST CSF, OWASP, MITRE ATLAS, STRIDE, NIST AI RMF and ISO: pick an entry and see what maps to it.",
     when: "To answer an audit or compliance question.",
   },
   {

@@ -113,7 +113,7 @@ prose, `lifecycleStage`, and mapped controls).
 ## Mitigations
 
 Canonical identifiers, names and definitions are vendored from MITRE D3FEND 1.6.0 and
-MITRE ATLAS 2026.09. See [the source manifest](mitre/sources.yaml) for release URLs, retrieval
+MITRE ATLAS 2026.10. See [the source manifest](mitre/sources.yaml) for release URLs, retrieval
 dates, SHA-256 checksums and license notices. The build verifies snapshot checksums and resolves
 only selected D3FEND defensive-technique descendants and ATLAS mitigation records.
 Upstream definitions are imported unmodified; their own reference syntax is retained.
@@ -135,7 +135,10 @@ CoSAI control IDs. It introduces no mitigation identifiers. The scope and limita
 and organization posture are conservatively reassessed where scope changes; original evidence
 is retained. Retired references are preserved in `data/migrations/capabilities-v1-retired.yaml`.
 The org example is explicitly illustrative, and no migrated evidence receives a fresh
-verification date merely because the identifier changed.
+verification date merely because the identifier changed. With ATLAS 2026.10, two specialisations
+moved to a closer MITRE parent (`AML.M0028` for agent action policy enforcement, `AML.M0023` for
+the model registry), so each new parent was added as the first destination of the former ID that
+specialisation restores; the earlier destinations stay.
 
 ## Reference architectures
 
@@ -215,7 +218,7 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   registries, File storage, and Sandboxed tools where a remote execution service is the
   destination; architecture-specific destinations (e.g. Paired devices) may extend the list
   but never rename its members. **The permission gate is standard**: every architecture with
-  an agent harness and a tool surface pins `AML.M0028` (AI Agent Tools Permissions Configuration) on the crossing
+  an agent harness and a tool surface pins `AML.M0028` (Enforce Access Controls for AI Agent Tools) on the crossing
   between them — the OS permission layer, per-tool grants and action-catalogue validation are
   all this one control in surface-specific dress. Sandboxing is drawn as containment (a
   labelled frame on the drawing, a Sandboxed tools item where it lives inside an
@@ -337,11 +340,12 @@ the search words a reader might use for it.
 
 A control is a MITRE mitigation from the selection above, or an authored specialisation of
 one. `data/overlay/specializations.yaml` is original work: 17 specialisations with `cap-*`
-keys, each naming exactly one MITRE parent — three under Operational Risk Assessment
-(`D3-ORA`), two each under Generative AI Guardrails (`AML.M0020`), Access Mediation (`D3-AMED`)
-and Asset Inventory (`D3-AI`), and one each under `AML.M0033`, `D3-OTF`, `D3-PT`, `AML.M0008`,
-`AML.M0024` and `AML.M0014`. A specialisation is a distinct enforcement point, never one
-technology split by risk type: sensitive-data redaction (a DLP point) and retrieval grounding
+keys, each naming exactly one MITRE parent — four under Generative AI Guardrails
+(`AML.M0020`), two each under Operational Risk Assessment (`D3-ORA`) and Asset Inventory
+(`D3-AI`), and one each under `AML.M0033`, `D3-OTF`, `D3-PT`, `AML.M0008`, `AML.M0024`,
+`AML.M0014`, Access Mediation (`D3-AMED`), Enforce Access Controls for AI Agent Tools
+(`AML.M0028`) and Maintain an AI Bill of Materials (`AML.M0023`). A specialisation is a
+distinct enforcement point, never one technology split by risk type: sensitive-data redaction (a DLP point) and retrieval grounding
 checks (the retrieval path) sit beside Generative AI Guardrails, while injection screening and
 output policy stay inside it. The `cap-*` identifiers are repository keys only; the parent is
 the citable mitigation and the sole source of canonical names and definitions. Each specialisation

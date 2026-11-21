@@ -1,7 +1,9 @@
 # Vendored MITRE mitigation sources
 
 - D3FEND 1.6.0: complete upstream JSON-LD distribution, including its ontology metadata.
-- ATLAS 2026.09: complete release YAML. The bytes were also checked against the release tag.
+- ATLAS 2026.10 (released 2026-10-28, data format 6.1.0): complete release YAML. The bytes were
+  also checked against the release tag and against the same file on the main branch. The
+  Apache 2.0 notice in `atlas/LICENSE` is unchanged at that tag.
 
 See [sources.yaml](sources.yaml) for exact URLs, versions, retrieval dates and SHA-256 digests.
 License notices accompany each source: [D3FEND](d3fend/LICENSE.md), [ATLAS](atlas/LICENSE).
