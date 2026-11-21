@@ -688,7 +688,7 @@ Highlights below are Google's original mapping, not ours.
 - Prompt/Response Cache Poisoning (`riskPromptResponseCachePoisoning`)
 - Stale Agent Identity Binding (`riskStaleAgentIdentityBinding`)
 
-### 4b. Controls no pattern pins — 21 of 76
+### 4b. Controls no pattern pins — 21 of 77
 
 - Configuration Inventory (`D3-CI`)
 - Restrict Library Loading (`AML.M0011`)
@@ -1070,7 +1070,7 @@ Highlights below are Google's original mapping, not ours.
 | Remote MCP server you publish | build | draft | 6 | _none_ |
 | Self-hosted model inference | build | draft | 6 | Credential Hardening |
 | Agentic software factory | build | draft | 5 | _none_ |
-| Model training & release pipeline | build | draft | 7 | Execution Isolation, AI Telemetry Logging |
+| Model training & release pipeline | build | draft | 7 | Execution Isolation, AI Telemetry Logging and Monitoring |
 | Browser AI agents & extensions | use | draft | 7 | _none_ |
 | First-party coding & desktop agents | hybrid | draft | 6 | Multi-factor Authentication |
 | Third-party coding & desktop agents | use | draft | 9 | Agent Kill Switch and Quarantine |
@@ -1097,7 +1097,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 21 | 2026-10-30 |  |
 | Claude (claude.ai) | anthropic | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 22 | 2026-10-30 |  |
 | Claude Desktop (local MCP servers, desktop extensions and device policy) | anthropic | Third-party coding & desktop agents | 2026-10 | 18/18 | _none_ | 21 | 2026-10-30 |  |
-| Claude Duet | anthropic | Persistent managed agents | 2026-10 | 14/14 | _none_ | 8 | 2026-10-30 |  |
+| Claude Duet | anthropic | Persistent managed agents | 2026-10 | 15/15 | _none_ | 8 | 2026-10-30 |  |
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 19 | 2026-10-30 |  |
 | Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-10 | 16/16 | _none_ | 25 | 2026-10-30 |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 22 | 2026-10-30 |  |
@@ -1108,7 +1108,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | CrewAI | crewai | Multi-agent workflow | 2026-11 | 21/21 | _none_ | 28 | 2026-11-21 |  |
 | Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 26 | 2026-10-30 |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 32 | 2026-10-30 |  |
-| Grok Bot | cursor | Persistent managed agents | 2026-10 | 14/14 | _none_ | 25 | 2026-10-30 |  |
+| Grok Bot | cursor | Persistent managed agents | 2026-10 | 15/15 | _none_ | 26 | 2026-11-21 |  |
 | llama.cpp server (llama-server) | ggml | Local model runtime | 2026-10 | 12/12 | _none_ | 33 | 2026-10-30 |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 16 | 2026-10-30 |  |
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 29 | 2026-10-30 |  |
@@ -1124,13 +1124,13 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Gemini Enterprise Workflow Builder (chat agents and workflows) | google | UI/low-code managed agent runtime | 2026-10 | 11/11 | _none_ | 12 | 2026-10-30 |  |
 | LangChain and LangGraph | langchain | Multi-agent workflow | 2026-11 | 21/21 | _none_ | 28 | 2026-11-21 |  |
 | LM Studio | lmstudio | Local model runtime | 2026-09 | 12/12 | _none_ | 13 | 2026-10-30 |  |
-| Meta Muse | meta | Persistent managed agents | 2026-10 | 14/14 | _none_ | 6 | 2026-10-30 |  |
+| Meta Muse | meta | Persistent managed agents | 2026-10 | 15/15 | _none_ | 6 | 2026-10-30 |  |
 | Microsoft Agent Framework | microsoft | Multi-agent workflow | 2026-11 | 21/21 | _none_ | 28 | 2026-11-21 |  |
 | Microsoft Copilot in Edge (Microsoft 365 Copilot Chat in the Edge for Business side pane, browsing with Copilot) | microsoft | Browser AI agents & extensions | 2026-10 | 15/15 | _none_ | 17 | 2026-10-30 |  |
 | Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ | 32 | 2026-10-30 |  |
 | Microsoft Foundry Agent Service (prompt agents, hosted agents, Responses API) | microsoft | Managed agent service in your cloud | 2026-11 | 21/21 | _none_ | 48 | 2026-11-18 |  |
 | Microsoft 365 Copilot (Microsoft Copilot app, Copilot Chat, in-app Copilot, agents and connectors) | microsoft | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 16 | 2026-10-30 |  |
-| MLflow Tracking Server and Model Registry | mlflow | Model training & release pipeline | 2026-09 | 12/13 | AI Telemetry Logging | 29 | 2026-10-30 |  |
+| MLflow Tracking Server and Model Registry | mlflow | Model training & release pipeline | 2026-09 | 12/13 | AI Telemetry Logging and Monitoring | 29 | 2026-10-30 |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ | 38 | 2026-10-30 |  |
 | Ollama | ollama | Local model runtime | 2026-09 | 12/12 | _none_ | 19 | 2026-10-30 |  |
 | OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-10 | 16/16 | _none_ | 26 | 2026-10-30 |  |
@@ -1140,7 +1140,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 32 | 2026-10-30 |  |
 | Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 19 | 2026-10-30 |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/21 | _none_ | 28 | 2026-10-30 |  |
-| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 14/14 | _none_ | 17 | 2026-10-30 |  |
+| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 15/15 | _none_ | 18 | 2026-11-21 |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 18 | 2026-10-30 |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ | 37 | 2026-10-30 |  |
 | opencode | opencode | First-party coding & desktop agents | 2026-09 | 17/18 | Multi-factor Authentication | 19 | 2026-10-30 |  |
@@ -1167,15 +1167,15 @@ Each first-party cloud architecture as built on each cloud (data/clouds/): the s
 
 ## 6. MITRE mitigation provenance and CoSAI gaps
 
-- MITRE D3FEND 1.6.0: 44 canonical entries.
-- MITRE ATLAS 2026.09: 32 canonical entries.
+- MITRE D3FEND 1.6.0: 42 canonical entries.
+- MITRE ATLAS 2026.10: 35 canonical entries.
 - 31/35 CoSAI controls have supporting mappings; this is not fulfillment.
 - 0 tool-mitigation rows require reassessment after migration.
 
 | CoSAI control | Mapping | Remaining requirement |
 | --- | --- | --- |
-| Privacy Enhancing Technologies for Model Training | unmapped | No sufficiently explicit control for differential privacy, secure aggregation, privacy-preserving federated training, or evaluated anonymization/synthetic-data privacy. Ordinary encryption and access control do not establish these guarantees. |
-| Privacy Enhancing Technologies for Inference | partial | Guardrails cover sensitive-data detection and redaction. Secure multiparty inference, homomorphic computation and privacy-preserving query mechanisms are not explicitly represented. Message/file encryption does not imply encrypted computation. |
+| Privacy Enhancing Technologies for Model Training | unmapped | No selected control for differential privacy, secure aggregation, privacy-preserving federated training, or evaluated anonymization/synthetic-data privacy. ATLAS 2026.10 adds Privacy-Preserving AI Training and Inference, which names differential privacy, federated learning and secure multiparty computation, but it is not yet in this selection. Ordinary encryption and access control do not establish these guarantees. |
+| Privacy Enhancing Technologies for Inference | partial | Guardrails cover sensitive-data detection and redaction. Secure multiparty inference, homomorphic computation and privacy-preserving query mechanisms are not represented in this selection; ATLAS 2026.10's Privacy-Preserving AI Training and Inference names them but is not yet selected. Message/file encryption does not imply encrypted computation. |
 | Isolated and Confidential Computing | partial | Hardware process isolation is represented. Confidential-memory guarantees, workload attestation, measurement-bound key release and side-channel protections require explicit implementation evidence beyond that technique. |
 | User Data Management | partial | Guardrails, inventory, access mediation and memory hardening cover constituent functions. End-to-end consent and purpose enforcement, user-data retention/deletion across all stores and provider copies, and proving those commitments remain outside these mappings. ATLAS Memory Hardening does include retention/deletion for agent memory. |
 | Training Data Management | partial | Dataset provenance and sanitization contribute, but provenance does not establish legal authorization, consent or permitted purpose for training/evaluation data. Data-use approval and provenance interpretation remain explicit implementation and governance requirements. |

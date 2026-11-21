@@ -14,14 +14,14 @@ its status rolls up from the catalogue controls that support it.
 | Prompt-attack and jailbreak classifiers, harm-category filters, denied topics, policy classifiers | Generative AI Guardrails (`AML.M0020`) — input and output classification stay in the parent |
 | RAG source trust scoring, grounding and tool-call validation | Retrieval Trust and Grounding Checks (`cap-retrieval-grounding-checks`, under `AML.M0020`) |
 | IdP with SSO and phishing-resistant MFA | Multi-factor Authentication (`D3-MFA`) |
-| Policy engine over agent tool calls, tool allowlists with escalation | Agent Action Policy Enforcement (`cap-agent-action-policy-enforcement`, under `D3-AMED`) |
+| Policy engine over agent tool calls, tool allowlists with escalation | Agent Action Policy Enforcement (`cap-agent-action-policy-enforcement`, under `AML.M0028`) |
 | Identity-scoped retrieval, oversharing analysis | Data Access Governance for Retrieval (`cap-data-access-governance`, under `D3-AMED`) |
 | Secure web gateway, egress proxy, workload network segmentation | Agent Egress Control (`cap-agent-egress-control`, under `D3-OTF`) |
 | Agent and MCP server registry | Agent and Tool Registry (`cap-agent-tool-registry`, under `D3-AI`) |
 | CASB or network discovery of unsanctioned AI, endpoint agent inventory | Shadow AI Discovery (`cap-shadow-ai-discovery`, under `D3-AI`) |
 | Vendor risk (TPRM) platform with AI questionnaires | AI Vendor Risk Assessment (`cap-ai-vendor-assessment`, under `D3-ORA`) |
 | Threat modelling practice or platform | AI System Threat Modelling (`cap-ai-threat-modeling`, under `D3-ORA`) |
-| Model registry, model cards | Model Registry and Documentation (`cap-model-documentation`, under `D3-ORA`) |
+| Model registry, model cards | Model Registry and Documentation (`cap-model-documentation`, under `AML.M0023`) |
 | Agent tracing and observability | Agent Execution Tracing (`cap-agent-tracing`, under `AML.M0024`) |
 | MCP tool definition scanning, hash pinning, server allow-lists | Tool and MCP Server Integrity (`cap-mcp-tool-integrity`, under `AML.M0014`) |
 | Agent kill switch, credential revocation on trigger | Agent Kill Switch and Quarantine (`cap-agent-kill-switch`, under `D3-PT`) |
@@ -30,10 +30,11 @@ its status rolls up from the catalogue controls that support it.
 | Model and agent evaluation harness | Validate AI Model (`AML.M0008`) |
 | Adversarial testing programme | AI Red Team (`AML.M0035`) |
 | Model and artifact signing | Code Signing (`AML.M0013`) |
-| AI bill of materials, dependency inventory | AI Bill of Materials (`AML.M0023`) |
+| AI bill of materials, dependency inventory | Maintain an AI Bill of Materials (`AML.M0023`) |
 | Encryption and key management for AI assets, BYOK/CMEK | Encrypt Sensitive Information (`AML.M0012`) |
 | Rate limiting, quotas, spend controls | Limit AI Service Query Volume and Rate (`AML.M0004`) |
-| Per-tool permission grants, OS permission layer | AI Agent Tools Permissions Configuration (`AML.M0028`) |
+| Per-tool permission grants, OS permission layer | Enforce Access Controls for AI Agent Tools (`AML.M0028`) |
+| Owner, end date and cleanup for what agents create (accounts, keys, previews, schedules) | AI Agent External Resource Lifecycle Management (`AML.M0043`) |
 | Execution sandbox for agent tools | Execution Isolation (`D3-EI`) |
 | Human approval of agent actions | Human In-the-Loop for AI Agent Actions (`AML.M0029`) |
 
