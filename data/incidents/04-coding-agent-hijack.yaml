@@ -1,20 +1,21 @@
 id: coding-agent-hijack
-title: "Coding agents hijacked through repository files, issues and PR comments"
+title: "Coding agents hijacked through the instruction files and settings they trust"
 subtitle: >
-  Coding agents read issues, pull-request comments and instruction files as trusted context.
-  In 2026 attackers started writing to all three.
+  Coding agents read instruction files as standing orders and run the hooks in their own
+  settings. In 2026 attackers wrote to both, first by hand and then with a worm.
 date: 2026-08
-dateRange: April – August 2026
+dateRange: May – August 2026
 category: promptInjection
 perspective: target
+# The developer's own machine: poisoned instruction files and settings reach a local agent through
+# the packages it installs. The same year's comment-driven attacks on agents running as CI workflows
+# replay on the hosted agent runs incident, with the cloud drawings.
 archetype: archCodingAgentThirdParty
 breaks:
-  - control: cap-input-guardrails
-    how: "Issue and PR content from non-collaborators is untrusted input, not instructions."
+  - control: AML.M0031
+    how: "The agent writes only its own memory files, and any change to rules, hooks and settings is reviewed like code, so a planted directive or hook is seen before it runs."
   - control: cap-agent-action-policy-enforcement
     how: "Bound what the agent may run without a human confirming, and run only the hooks the organisation deploys, so a hook the worm writes into .claude/settings.json never fires."
-  - control: D3-CH
-    how: "CI agents get their own scoped, short-lived credentials, so a hijacked run reaches little."
   - control: D3-FA
     how: "Packages come from the mirror, scanned on admission, and .claude/ and .vscode/ are watched like a startup folder, so a worm-published version or a planted hook is caught."
 summary:
@@ -23,10 +24,10 @@ summary:
     `.cursorrules`, issue threads, PR comments, CI logs. Most of those are writable by people
     who have no commit access.
   - >
-    Attackers used that. Hostile GitHub comments steered Claude Code, Gemini CLI and Copilot
-    Agent into running attacker-chosen actions. The Claude Code GitHub Action was driven into
-    exfiltrating secrets. TrapDoor went upstream of all of it and poisoned instruction files
-    distributed through npm, PyPI and crates.io.
+    Attackers used that. TrapDoor went upstream and poisoned instruction files distributed
+    through npm, PyPI and crates.io, so the agent read the attacker's directives as its own.
+    The same year's hostile GitHub comments reached agents running as CI workflows,
+    and are told with the hosted agent runs.
   - >
     This is the only case in this set where the agent's *system instructions* are the target,
     which makes instruction files a supply-chain artefact that needs the same provenance
@@ -38,7 +39,6 @@ summary:
     — and then republishes itself through every package its stolen credentials can reach. What
     TrapDoor did by hand to instruction files, CHAINDROP does at 1.3 billion monthly downloads.
 patterns:
-  - Social Engineering of AI Agents
   - Config-as-Code Execution
   - Tool Poisoning
   - Credential Theft via AI Tools
@@ -80,46 +80,6 @@ steps:
         publisher: Awesome AI Agent Attacks timeline
         date: 2026-05-24
   - n: 2
-    title: A comment on a pull request becomes a command
-    phase: introduced
-    narrative: >
-      Claude Code, Gemini CLI and Copilot Agent were hijacked through GitHub comments and PR
-      bodies. Anyone able to comment could reach the agent's context — no repository write
-      access required. Azure DevOps MCP had the same shape, via hidden PR comments.
-    components:
-      - actorExternalSources
-      - componentAgentUserQuery
-      - componentAgentInputHandling
-      - componentRAGContent
-    path: [sourceControl->toolPlane]
-    risks:
-      - riskPromptInjection
-    sources:
-      - title: "Claude Code, Gemini CLI, Copilot Agent hijacked via GitHub comments"
-        url: https://github.com/webpro255/awesome-ai-agent-attacks
-        publisher: Awesome AI Agent Attacks timeline
-        date: 2026-04-15
-  - n: 3
-    title: The agent acts with the pipeline's credentials
-    phase: exposed
-    narrative: >
-      In CI the agent holds real credentials. The Claude Code GitHub Action was driven into
-      exfiltrating secrets — the injected instruction executed with the permissions of the
-      workflow, not of the person who wrote the comment.
-    components:
-      - componentReasoningCore
-      - componentTools
-      - componentOrchestrationOutputHandling
-    path: [toolPlane->sourceControl, toolPlane->openWeb]
-    risks:
-      - riskRogueActions
-      - riskPromptInjection
-    sources:
-      - title: "Claude Code GitHub Action prompt-injection secret exfiltration"
-        url: https://github.com/webpro255/awesome-ai-agent-attacks
-        publisher: Awesome AI Agent Attacks timeline
-        date: 2026-06-05
-  - n: 4
     title: Poisoned context persists
     phase: exposed
     narrative: >
@@ -137,7 +97,7 @@ steps:
       - title: "Awesome AI agent attacks — 2026 timeline"
         url: https://github.com/webpro255/awesome-ai-agent-attacks
         publisher: webpro255
-  - n: 5
+  - n: 3
     title: The agent's config file becomes a worm's home
     phase: exposed
     narrative: >
@@ -172,35 +132,53 @@ steps:
         url: https://unit42.paloaltonetworks.com/chaindrop-npm-worm-analysis/
         publisher: Unit 42, Palo Alto Networks
         date: 2026-08-06
-  - n: 6
+  - n: 4
     title: Where this chain breaks
     phase: mitigated
     narrative: >
-      Treat instruction files as code: signed, reviewed, provenance-checked. Treat repository
-      content from non-collaborators as untrusted input. Give CI agents their own scoped,
-      short-lived credentials, and require a second factor that a stolen publishing token cannot
-      satisfy. Bound what an agent may execute without a human confirming. And watch the agent's
-      own configuration directories the way you would watch a startup folder — CHAINDROP is the
-      proof that `.claude/` and `.vscode/` are now execution surfaces, not preferences.
+      Treat instruction files as code: signed, reviewed, provenance-checked. Let the agent write
+      only its own memory files, and review any change to its rules, hooks and settings the way
+      you review code. Lock the permission rules and hooks through the vendor's managed
+      settings, so only the hooks the organisation deploys ever fire. Take packages from a mirror
+      that scans them on admission. And watch the agent's own configuration directories the way
+      you would watch a startup folder — CHAINDROP is the proof that `.claude/` and `.vscode/`
+      are now execution surfaces, not preferences.
     components:
       - componentAgentInputHandling
       - componentAgentSystemInstruction
       - componentReasoningCore
       - componentTools
       - componentOrchestrationInputHandling
-    path: [toolPlane->memory, toolPlane->aiGateway, aiGateway->hostedTools, govSupplyChain, govSecrets]
+    path: [toolPlane->memory, toolPlane->registry, sources->registry, vendorService, govSupplyChain]
     sources:
       - title: "Securing agentic apps: how to vet the tools your AI agents depend on"
         url: https://workos.com/blog/mcp-supply-chain-security
         publisher: WorkOS
 alsoSeen:
+  - title: "Comment and Control: GitHub comments steer Claude Code, Gemini CLI and Copilot agents into leaking their keys"
+    date: April – June 2026
+    note: >
+      Pull-request titles, issue bodies and comments drove three vendors' agents into posting
+      the API keys and tokens their jobs held, and the Claude Code GitHub Action's file-read
+      tool was later shown to reach the runner's process environment. All of them ran as GitHub
+      Actions workflows rather than on a developer's machine, so the chain is replayed with the
+      hosted agent runs, on the cloud drawings.
+    sources:
+      - title: "Comment and Control: prompt injection through GitHub comments into hosted CI agents"
+        url: https://labs.cloudsecurityalliance.org/research/csa-research-note-comment-control-github-prompt-injection-20/
+        publisher: Cloud Security Alliance
+        date: 2026-04-17
+      - title: "Securing CI/CD in an agentic world: the Claude Code GitHub Action case"
+        url: https://www.microsoft.com/en-us/security/blog/2026/06/05/securing-ci-cd-in-agentic-world-claude-code-github-action-case/
+        publisher: Microsoft Security
+        date: 2026-06-05
   - title: "Clinejection — a compromised release of an open-source coding agent CLI"
     date: 2026
     note: >
       The first-party half of this pattern: a harness release published with stolen publisher
       tokens, so the supply chain delivered the agent itself. Plays out on the first-party
-      coding agent drawing (archCodingAgentFirstParty), whose private-registry mirror and
-      version pinning are the answering controls.
+      coding agent drawing, whose private-registry mirror and version pinning are the
+      answering controls.
     sources:
       - title: "Clinejection — supply-chain compromise of an open-source coding agent CLI"
         url: https://adnanthekhan.com/posts/clinejection/

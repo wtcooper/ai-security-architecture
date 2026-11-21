@@ -8,17 +8,22 @@ date: 2026-03
 dateRange: Late February – 9 March 2026
 category: exposed
 perspective: target
-archetype: archEnterpriseAiChat
+# Lilli is McKinsey's own platform, built and run by the firm: the chat agent you build, where
+# the front end, the store behind it and the system prompts are all the operator's. Not the
+# enterprise AI chat drawing, which is a product an organisation buys from a vendor.
+archetype: archChatAgent
 caveat: >
   The access figures are CodeWall's own; McKinsey's forensic review found no evidence that client
   data was accessed.
 breaks:
   - control: D3-APA
-    how: "No endpoint of an AI platform answers without an access policy — 22 did, and their documentation was public."
-  - control: D3-DI
-    how: "Know what sits in the platform's database: chat history, files and the system prompts, side by side."
+    how: "No endpoint of the front end answers until a signed-in user is bound to the request — 22 did, and their documentation was public."
+  - control: AML.M0031
+    how: "Conversation state kept apart per user and session, so one query cannot reach 46.5 million messages."
   - control: cap-sensitive-data-redaction
     how: "Chat history kept in plaintext is the prize; redact or minimise it before it is stored."
+  - control: cap-staged-rollout-gate
+    how: "System prompts are instructions changed through a tested release, not rows any API call can rewrite."
 summary:
   - >
     Lilli is McKinsey's internal generative AI platform, used by about 72% of its staff and
@@ -48,7 +53,7 @@ steps:
       CodeWall's agent suggested McKinsey, citing its public responsible-disclosure policy and
       recent updates to Lilli. It had no credentials and no insider knowledge; CodeWall calls the
       run "fully autonomous from researching the target, analysing, attacking, and reporting".
-    path: [openWeb]
+    path: [user]
     sources:
       - title: "AI vs AI: Agent hacked McKinsey's chatbot and gained full read-write access in just two hours"
         url: https://www.theregister.com/2026/03/09/mckinsey_ai_chatbot_hacked
@@ -61,7 +66,7 @@ steps:
       Publicly exposed API documentation listed more than 200 endpoints. Twenty-two of them
       required no authentication at all, and the agent could call them straight from the
       internet.
-    path: [openWeb->vendor]
+    path: [user->entry, entry]
     risks:
       - riskInsecureIntegratedComponent
     sources:
@@ -77,7 +82,7 @@ steps:
       reflected verbatim in database error messages — which, as the agent iterated, began
       returning live production data. CodeWall says it had full read and write access within two
       hours: 46.5 million chat messages in plaintext, 728,000 files and 57,000 accounts.
-    path: [openWeb->vendor, vendor]
+    path: [user->entry, entry, memory]
     risks:
       - riskInsecureIntegratedComponent
       - riskSensitiveDataDisclosure
@@ -94,7 +99,7 @@ steps:
       could have rewritten the answers, guardrails and cited sources that tens of thousands of
       consultants rely on — "no code change, just a single UPDATE statement wrapped in a single
       HTTP call".
-    path: [vendor, vendor->browser, browser->employee]
+    path: [memory, memory->localTools, agent->entry, entry->user]
     risks:
       - riskInsecureModelOutput
     sources:
@@ -106,17 +111,34 @@ steps:
     title: Where this chain breaks
     phase: mitigated
     narrative: >
-      Every endpoint of an AI platform sits behind an access policy, and its documentation is not
-      published to the internet. Know what the platform's database holds — chat history, files
-      and the prompts that govern every answer — and do not keep the history in plaintext. The
-      system prompts are configuration that changes behaviour for every user: keep them out of
-      the application database, under change control.
-    path: [openWeb->vendor, vendor, govIdentity, govPolicy]
+      Every endpoint of the front end binds a signed-in user before it answers, and its
+      documentation is not published to the internet. Keep each user's conversations apart in
+      the store, and do not keep the history in plaintext. The system prompts are instructions
+      that change behaviour for every user: keep them out of the application database, and
+      change them only through a tested release.
+    path: [user->entry, entry, memory, localTools->memory, govIdentity, govSupplyChain]
     sources:
       - title: "Autonomous agent hacked McKinsey's AI in 2 hours"
         url: https://www.govinfosecurity.com/autonomous-agent-hacked-mckinseys-ai-in-2-hours-a-31007
         publisher: GovInfoSecurity
         date: 2026-03-13
+alsoSeen:
+  - title: "Meta's AI support tool hands 20,225 Instagram accounts to the wrong people"
+    date: June 2026
+    note: >
+      Another assistant a company built and ran itself, failing an ordinary check rather than
+      being tricked: Meta's AI-powered High Touch Support tool sent password-reset links to email
+      addresses that did not belong to the account, and attackers took over accounts without
+      two-factor authentication. Meta disabled the tool and invalidated the links.
+    sources:
+      - title: "Meta Says 20,000 Instagram Accounts Hacked via AI Tool Abuse"
+        url: https://www.securityweek.com/meta-says-20000-instagram-accounts-hacked-via-ai-tool-abuse/
+        publisher: SecurityWeek
+        date: 2026-06-08
+      - title: "Meta AI support data breach affects 20,000 Instagram accounts"
+        url: https://www.bleepingcomputer.com/news/security/meta-ai-support-data-breach-affects-20-000-instagram-accounts/
+        publisher: BleepingComputer
+        date: 2026-06-08
 sources:
   - title: "AI vs AI: Agent hacked McKinsey's chatbot and gained full read-write access in just two hours"
     url: https://www.theregister.com/2026/03/09/mckinsey_ai_chatbot_hacked
