@@ -7,6 +7,12 @@
 # url that resolved on its verified date, the baseline value, and the controls on the drawing
 # it delivers. setVia "code" marks a control no Azure setting provides: the organisation builds it
 # into its own agent.
+#
+# 2026-11-21: the Azure Firewall row split in two so each cites the page for its platform: firewallEgress
+# (Container Apps and Foundry's delegated agent subnet, container-apps/use-azure-firewall) and aksFirewallEgress
+# (aks/limit-egress-traffic), which the AKS sandbox, the AKS training compute and every AKS hosting option use.
+# aksOutboundUserDefinedRouting (D3-OTF, aks/egress-outboundtype) describes the same AKS setting for the remote MCP
+# server's AKS option. agentToolApproval now cites agent-framework/agents/tools/tool-approval (updated 2026-10-28).
 id: cloudAzure
 name: Microsoft Azure
 short: Azure
@@ -477,16 +483,17 @@ settings:
     verified: "2026-11-18"
   - id: agentToolApproval
     builtWith: Microsoft Agent Framework
-    name: Tool Approval (human in the loop)
+    name: "Tool approval (ApprovalRequiredAIFunction in C#, approval_mode in Python)"
     where: Your agent code — Microsoft Agent Framework tool approval on write tools
     setVia: [code]
     area: tools
-    default: Tools run without approval
-    recommended: Approval required on every tool that writes to a system of record
-    why: A person confirms each consequential action in the conversation before it happens.
+    default: Tools run without approval; once required, an approval is bound to the request it answers
+    recommended: "Approval required on every tool that writes to a system of record. Approval-response binding left on (never DisableApprovalResponseBinding or disable_approval_response_binding); on a Harness Agent, no auto-approval rules for write tools, and a new session when the tool set changes"
+    value: "Required on every write, bound to its request"
+    why: A person confirms each consequential action in the conversation before it happens, and the answer approves only the call it was asked about; a Harness Agent's standing approvals persist in the session and can match a replacement tool of the same name.
     mitigations: [AML.M0029]
-    url: https://learn.microsoft.com/en-us/agent-framework/agents/tools/
-    verified: "2026-10-30"
+    url: https://learn.microsoft.com/en-us/agent-framework/agents/tools/tool-approval
+    verified: "2026-11-21"
   - id: agentOperatorApproval
     name: "Tool approval (ApprovalRequiredAIFunction in C#, approval_mode on the @tool decorator in Python)"
     where: Your agent code — the approval request is routed to an operator work queue and the session resumes on the answer
@@ -782,16 +789,29 @@ settings:
   # --- Network -------------------------------------------------------------------------
   - id: firewallEgress
     name: Azure Firewall application rules (via user-defined routes)
-    where: "Route table on the workload's subnet (the Container Apps environment subnet, or the AKS node subnet with outbound type userDefinedRouting) → Azure Firewall › Application rules"
+    where: "Route table on the agent's subnet delegated to Microsoft.App/environments (the Container Apps environment, or Foundry's agent subnet), 0.0.0.0/0 to the firewall → Azure Firewall › Application rules"
     setVia: [cloudPolicy]
     area: network
     default: Direct outbound internet
-    recommended: "All outbound from the agent or sandbox subnet through Azure Firewall, with an FQDN allowlist. On AKS, follow \"Limit network traffic with Azure Firewall in AKS\", which sets the cluster's outbound type to userDefinedRouting, routes 0.0.0.0/0 to the firewall and allows the AzureKubernetesService FQDN tag"
+    recommended: "All outbound from the agent's subnet through Azure Firewall, with an FQDN allowlist of the hosts the agent needs plus those the platform itself requires, which for Container Apps are the names Microsoft lists for Microsoft Artifact Registry and the underlying AKS cluster"
     value: "Through Azure Firewall with an FQDN allowlist"
     why: The agent and its tools reach only the hosts you list; anything else is dropped and logged.
     mitigations: [cap-agent-egress-control]
+    requires: On Container Apps, a workload profiles environment
     url: https://learn.microsoft.com/en-us/azure/container-apps/use-azure-firewall
-    verified: "2026-11-18"
+    verified: "2026-11-21"
+  - id: aksFirewallEgress
+    name: Azure Firewall application rules (outbound type userDefinedRouting)
+    where: "AKS cluster outbound type userDefinedRouting; route table on the node subnet (0.0.0.0/0 to the firewall's private IP) → Azure Firewall › Application rules"
+    setVia: [cloudPolicy]
+    area: network
+    default: Outbound through a Standard Load Balancer (outbound type loadBalancer), unfiltered
+    recommended: "Outbound type userDefinedRouting with the node subnet's default route on Azure Firewall, an application rule for the AzureKubernetesService FQDN tag so the cluster keeps working, and an FQDN allowlist for everything the pods may reach"
+    value: "userDefinedRouting through Azure Firewall, FQDN allowlist"
+    why: The nodes have no outbound path but the firewall, so pods reach only the hosts you list; anything else is dropped and logged.
+    mitigations: [cap-agent-egress-control]
+    url: https://learn.microsoft.com/en-us/azure/aks/limit-egress-traffic
+    verified: "2026-11-21"
   - id: foundryPublicNetworkAccess
     name: Public network access
     where: "Foundry, Foundry IQ (Azure AI Search) and Azure Cosmos DB › Networking"
@@ -1989,8 +2009,8 @@ implementations:
         bindings:
           - { block: agent, service: "Your agent in pods on Azure Kubernetes Service", builtWith: "Microsoft Agent Framework", note: "Runs as a Deployment behind an internal Service, under a Kubernetes service account federated to its own managed identity. Agent Framework's prerelease self-hosting packages cover your container.", url: https://learn.microsoft.com/en-us/agent-framework/hosting/self-hosting/ }
           - { block: localTools, service: "AKS Pod Sandboxing (Kata Containers)", note: "Each sandbox pod runs in its own Kata pod VM on an Azure Linux node pool. The Agent Sandbox extension (preview) adds a Sandbox resource per session but needs the preview v2 runtime and AKS Standard.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
-        dropSettings: [agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
-        addSettings: [aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel, aksDisableLocalAccounts, aksInternalLoadBalancer]
+        dropSettings: [firewallEgress, agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
+        addSettings: [aksFirewallEgress, aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel, aksDisableLocalAccounts, aksInternalLoadBalancer]
         differences:
           - at: agent->gateway
             text: "By default an AKS cluster has unrestricted outbound internet access, so the agent's pods can reach hosts other than the gateway. The drawing holds only once the outbound type is userDefinedRouting through Azure Firewall, and the firewall must then also allow the outbound network rules and FQDNs that the cluster itself requires."
@@ -2323,8 +2343,8 @@ implementations:
           - { block: planner, service: "Your agent in pods on Azure Kubernetes Service", builtWith: "Microsoft Agent Framework", note: "Runs as a Deployment or as KEDA-started Jobs under a Kubernetes service account federated to its own managed identity. Agent Framework's hosting guide covers self-hosting in your own container.", url: https://learn.microsoft.com/en-us/agent-framework/hosting/ }
           - { block: events, service: "Azure Service Bus queues and KEDA scaled jobs on AKS", note: "The KEDA add-on's azure-servicebus trigger creates a Kubernetes Job as queue messages arrive and authenticates with workload identity. A Kubernetes CronJob covers timers.", url: https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity }
           - { block: localTools, service: "AKS Pod Sandboxing (Kata Containers)", note: "Each sandbox pod runs in its own Kata VM on an Azure Linux node pool. The Agent Sandbox cluster extension (preview) adds per-session claims but needs the preview v2 runtime and AKS Standard.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
-        dropSettings: [agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
-        addSettings: [aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksKedaTriggerAuth, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel]
+        dropSettings: [firewallEgress, agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
+        addSettings: [aksFirewallEgress, aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksKedaTriggerAuth, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel]
         differences:
           - at: planner->gateway
             text: "By default an AKS cluster has unrestricted outbound internet access (through a load balancer public IP, or a managed NAT gateway on AKS Automatic), so the agent's pods can reach hosts other than the gateway. The drawing holds only once the outbound type is userDefinedRouting through Azure Firewall, which must then also allow the cluster's own required FQDNs."
@@ -2668,8 +2688,8 @@ implementations:
         bindings:
           - { block: harness, service: "Your workflow in pods on Azure Kubernetes Service", builtWith: "Microsoft Agent Framework", note: "Self-hosted Durable Extension (preview): a Durable Task worker in your pods connects to Durable Task Scheduler. Microsoft's hosting table puts AKS on the standalone Durable Task SDKs.", url: https://learn.microsoft.com/en-us/azure/durable-task/common/choose-orchestration-framework }
           - { block: localTools, service: "AKS Pod Sandboxing (Kata Containers)", note: "Each sandbox pod runs in its own Kata pod VM on an Azure Linux node pool. The Agent Sandbox extension (preview) adds a Sandbox resource per session but needs the preview v2 runtime and AKS Standard.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
-        dropSettings: [agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
-        addSettings: [aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel, aksKedaTriggerAuth, aksDisableLocalAccounts, entraSidecarWorkloadIdentity]
+        dropSettings: [firewallEgress, agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
+        addSettings: [aksFirewallEgress, aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel, aksKedaTriggerAuth, aksDisableLocalAccounts, entraSidecarWorkloadIdentity]
         differences:
           - at: harness->gateway
             text: "By default an AKS cluster has unrestricted outbound internet access, so the workflow's pods can reach hosts other than the gateway. The drawing holds only once the outbound type is userDefinedRouting through Azure Firewall, and the firewall must then also allow the outbound network rules and FQDNs that the cluster itself requires."
@@ -3733,7 +3753,7 @@ implementations:
         bindings:
           - { block: trainJob, service: "Azure ML job on AKS (Kubernetes compute target)", note: "The Azure Machine Learning extension, installed with enableTraining=True, runs each job as pods in the namespace named at attach, on GPU node pools you size, patch and isolate.", url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere }
         dropSettings: [amlComputeIdentity]
-        addSettings: [aksNetworkPolicy, aksGpuNodeTaints, firewallEgress, aksNodeOsUpgradeChannel, aksContainerLogs, defenderContainerVa, amlKubernetesComputeIdentity, amlKubernetesInstanceType, amlKubernetesNamespace]
+        addSettings: [aksNetworkPolicy, aksGpuNodeTaints, aksFirewallEgress, aksNodeOsUpgradeChannel, aksContainerLogs, defenderContainerVa, amlKubernetesComputeIdentity, amlKubernetesInstanceType, amlKubernetesNamespace]
         differences:
           - at: trainJob
             text: "The workspace's managed virtual network isolates compute that Azure Machine Learning creates; an attached AKS cluster is outside it. Microsoft's pattern is an AKS cluster in its own virtual network with private endpoints there for the workspace and its storage, registry and vault, plus whatever firewall and network policy the builder adds."
@@ -4020,7 +4040,7 @@ implementations:
           - { block: harness, service: "Your episode harness on AKS, driving the session over HTTP", build: true, note: "Runs beside the orchestrator, not in the sandbox, because a session with outbound traffic disabled cannot call the inference runtime; it sends each action through the pool management endpoint.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage }
           - { block: localTools, service: "Shell, file and browser tool server in the session image", build: true, note: "An HTTP server in your image on the pool's target port; anything after the management endpoint in the request path is forwarded to it.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage }
           - { block: platform, service: "Azure Monitor session logs (Log Analytics)", note: "Console output and session lifecycle events reach Log Analytics through the environment's logging. Sessions get no identity by default, and no shared volume is documented.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container }
-        dropSettings: [aksPodSandboxing, aksFqdnFiltering]
+        dropSettings: [aksPodSandboxing, aksFqdnFiltering, aksFirewallEgress]
         addSettings: [sessionPoolEgress, sessionExecutorRole, sessionPoolIdentityLifecycle, sessionPoolLifecycle, sessionStopApi, sessionPoolLogs]
         differences:
           - at: harness->inference
@@ -4124,7 +4144,7 @@ implementations:
       - aksEntraIdAuthorisation
       - aksPodSandboxing
       - aksNetworkPolicy
-      - firewallEgress
+      - aksFirewallEgress
       - aksGpuNodeTaints
       - aksFqdnFiltering
       - artifactsFeedReader
@@ -4744,8 +4764,8 @@ implementations:
         bindings:
           - { block: harness, service: "Your coding agent in a Kata pod on AKS", build: true, note: "Claimed per build from a SandboxWarmPool by your orchestrator; runs under a service account federated to a narrowly scoped identity.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
           - { block: nativeTools, service: "AKS Pod Sandboxing with Agent Sandbox (preview)", note: "Each build's commands run in a pod VM with its own guest kernel on a dedicated Azure Linux node pool; the claim is deleted when the build ends.", url: https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing }
-        dropSettings: [sandboxPerBuild, sandboxEgressPolicy]
-        addSettings: [aksPodSandboxing, aksFqdnFiltering, aksNetworkPolicy, aksWorkloadIdentity, aksImdsRestriction, aksContainerLogs, aksAgentSandboxClaim]
+        dropSettings: [firewallEgress, sandboxPerBuild, sandboxEgressPolicy]
+        addSettings: [aksFirewallEgress, aksPodSandboxing, aksFqdnFiltering, aksNetworkPolicy, aksWorkloadIdentity, aksImdsRestriction, aksContainerLogs, aksAgentSandboxClaim]
         differences:
           - at: nativeTools
             text: "The Agent Sandbox extension and the kata-vm-isolation-v2 runtime it requires are both preview, excluded from service-level agreements and not meant for production. They need Kubernetes 1.35, a v6 VM family and a region with the right AKS release, and installing the extension does not itself enable Pod Sandboxing."

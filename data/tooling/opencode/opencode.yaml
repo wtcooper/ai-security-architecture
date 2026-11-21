@@ -14,6 +14,15 @@
 # share appears only in the config schema (opencode.ai/config.json); autoupdate never installs updates (notify
 # only); experimental.policies is OpenCode 2 only; the GitHub page no longer documents a share input.
 # Latest npm opencode-ai is 1.19.5 (2026-10-28).
+# 2026-11-21: opencode.ai/docs now opens on V2 (latest); V1 pages moved under opencode.ai/v1/docs/ and V1 config
+# still loads (docs/migrate-v1). Config says "Settings alone cannot stop users from adding providers, MCP servers,
+# agents, or plugins; use policies in managed configuration", and docs/policies documents top-level policies
+# (experimental.policies still merges) outranking user and project files, so the policiesProviderUse and
+# policiesMcpSkillPlugin rows were added. permissionBash had a reviewer's instruction pasted into its name; it is
+# permission.bash again, cited to the V1 page. Still open, from migrate-v1: the other permission.* rows (V2
+# permissions with actions shell, edit, read; external_directory is allowed by default in V2), snapshot (snapshots),
+# subagent_depth (ignored at top level in V2; experimental.subagent_depth), server (ignored in V2) and urls that
+# now land on V2 pages.
 vendor: opencode
 family: opencode
 tools:
@@ -732,9 +741,35 @@ tools:
         mitigations: []
         url: https://opencode.ai/docs/config/
         verified: "2026-10-30"
+      - id: policiesProviderUse
+        name: policies (action provider.use)
+        where: Managed opencode.json(c) in the system directory or the macOS ai.opencode.managed profile → policies; or an OpenCode Console workspace's Providers policies
+        setVia: [mdm, adminConsole]
+        area: data
+        default: No statements, so every provider is allowed
+        recommended: A deny for "*" followed by an allow for the organisation gateway's provider id only
+        value: "Deny every provider, then allow the gateway's"
+        why: A denied provider disappears however it became known (catalogue, environment variable, saved account, plugin or config), and no user or project file can allow it again; V1's enabled_providers is turned into the same policy.
+        mitigations: [D3-CH, cap-agent-egress-control]
+        requires: OpenCode 2
+        url: https://opencode.ai/docs/policies/
+        verified: "2026-11-21"
+      - id: policiesMcpSkillPlugin
+        name: policies (actions mcp.use, skill.use and plugin.use)
+        where: Managed opencode.json(c) in the system directory or the macOS ai.opencode.managed profile → policies
+        setVia: [mdm]
+        area: tools
+        default: No statements, so every configured MCP server, skill and plugin loads
+        recommended: A deny for "*" on each action, followed by allows for the approved MCP server names, skill ids and plugin packages
+        value: "Deny all, then allow the approved ones"
+        why: Settings alone cannot stop a user or a repository adding servers, skills or plugins; a denied one is removed or not loaded however it was configured. It admits by name only, so version pinning stays with the mcp and plugin rows.
+        mitigations: [cap-agent-tool-registry]
+        requires: OpenCode 2.2.3 or later on every client
+        url: https://opencode.ai/docs/policies/
+        verified: "2026-11-21"
       - id: permissionBash
-        name: permissions.shell (V2; and rename permission.* rows to permissions.*, drop permission.doom_loop or mark it V1-only, snapshot -> snapshots, subagent_depth -> experimental.subagent_depth, enabled_providers -> policies provider.use)
-        where: managed opencode.json → permission.bash
+        name: permission.bash
+        where: managed opencode.json → permission.bash (V1 syntax, still read by V2, which calls it permissions with action shell)
         setVia: [mdm, configFile]
         area: tools
         default: '"allow"'
@@ -742,8 +777,8 @@ tools:
         value: "ask, allow read-only, deny destructive"
         why: Every other shell command waits for approval, and deny rules hold even under --auto.
         mitigations: [cap-agent-action-policy-enforcement, AML.M0029, AML.M0028]
-        url: https://opencode.ai/docs/permissions/
-        verified: "2026-10-30"
+        url: https://opencode.ai/v1/docs/permissions/
+        verified: "2026-11-21"
       - id: permissionEdit
         name: permission.edit
         where: managed opencode.json → permission.edit

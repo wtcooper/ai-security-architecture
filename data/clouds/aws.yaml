@@ -7,6 +7,12 @@
 # resolved on its verified date, the baseline value, and the controls on the drawing it
 # delivers. setVia "code" marks a control no AWS setting provides: the organisation builds it into
 # its own agent or service.
+#
+# 2026-11-21: gatewayMcpSupportedVersions from gateway-using-mcp-call, gateway-target-MCPservers, the
+# MCPGatewayConfiguration and UpdateGateway API references and AWS's blog "How AgentCore Gateway supports the MCP
+# 2026-07-28 spec" (28 July 2026); that a gateway created earlier lists only 2025-03-26 and 2025-11-25 is shown in
+# dev.classmethod.jp/en/articles/agentcore-gateway-enable-mcp-2026-07-28/. The Runtime session difference on the
+# remote MCP server mapping is from runtime-mcp-protocol-contract and gateway-headers (X-Amzn- headers refused).
 id: cloudAws
 name: Amazon Web Services
 short: AWS
@@ -486,6 +492,22 @@ settings:
       command: "aws bedrock-agentcore-control get-gateway-target --gateway-identifier <gateway-id> --target-id <target-id> --region <region> --query targetConfiguration.mcp.mcpServer"
       expect: "The output for each MCP server target includes mcpToolSchema, with an s3 uri or inlinePayload that matches the reviewed release, next to the endpoint."
       url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/get-gateway-target.html
+  - id: gatewayMcpSupportedVersions
+    name: supportedVersions (protocolConfiguration.mcp)
+    where: "AgentCore Gateway › protocolConfiguration.mcp.supportedVersions, set by CreateGateway or UpdateGateway; UpdateGateway replaces the whole gateway configuration, so send the complete list and every other field you keep"
+    setVia: [apiCli]
+    area: tools
+    default: "The versions chosen at creation. Gateways created before 28 July 2026 lack 2026-07-28, and a request without a version header is served as 2025-03-26"
+    recommended: "2026-07-28 only on the gateway that publishes your server. An older version stays listed only while a named client still needs it, and comes off once that client has moved"
+    value: "2026-07-28 only"
+    why: "The Mcp-Method and Mcp-Name headers, and the gateway's refusal of a header-bound field that contradicts the body, exist only in 2026-07-28; older versions keep the initialize handshake and Mcp-Session-Id. Where the account is not enabled for version updates, the list is fixed at creation."
+    mitigations: [AML.M0028]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using-mcp-call.html
+    verified: "2026-11-21"
+    check:
+      command: "aws bedrock-agentcore-control get-gateway --gateway-identifier <gateway-id> --region <region> --query protocolConfiguration.mcp.supportedVersions"
+      expect: "The list is 2026-07-28 alone, or also names an older version only while a named client is still moving."
+      url: https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore-control/get-gateway.html
   - id: gatewayRequestInterceptor
     name: REQUEST interceptor
     where: AgentCore Gateway › Interceptors (a Lambda function); its execution role limited to that function
@@ -2934,6 +2956,9 @@ implementations:
       - at: gateway->service
         text: "The gateway does not pass the caller's token to an MCP server target. It signs in again with client credentials, token exchange, SigV4 or an API key. Only token exchange keeps the user and tenant in the token your service sees; Cognito cannot do it."
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
+      - at: gateway->service
+        text: "MCP 2026-07-28 has no Mcp-Session-Id. Runtime keys each session, and its microVM, on X-Amzn-Bedrock-AgentCore-Runtime-Session-Id and starts a new one for a request with neither header, each counting against the active-session quota. The gateway cannot propagate X-Amzn- headers, so keep the server stateless, with state in your own store, and watch the quota."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-mcp-protocol-contract.html
       - at: service->authServer
         text: "Runtime's inbound authorizer checks the token's signature, issuer, client, audience and scopes before your code runs. Your handlers see the token only if Authorization is on the request header allowlist. Add that if handlers must read the tenant or check revocation."
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-header-allowlist.html
@@ -3047,7 +3072,7 @@ implementations:
           network: "PUBLIC or VPC network mode; in VPC mode AWS places network interfaces in your subnets and your security groups control what the server reaches."
           identity: "An IAM execution role that AgentCore Runtime assumes, plus a workload identity from AgentCore Identity for outbound OAuth and API keys."
           accepts: "Streamable HTTP at 0.0.0.0:8000/mcp, stateless or stateful, built with any MCP SDK, as an ARM64 container image or a direct code package."
-          workload: "Requests with one session ID reach one microVM; a request may run 15 minutes, a stream 60 minutes, and a session 8 hours or 15 idle minutes."
+          workload: "Requests with one session ID reach one microVM, and one with no ID starts a new session; a request may run 15 minutes, a stream 60 minutes, and a session 8 hours or 15 idle minutes."
           portability: "The server is a standard Streamable HTTP MCP server in a container; the invocation address, inbound authoriser and session headers are AgentCore-specific."
           effort: "Your team owns the server code, image rebuilds, execution role and authoriser settings; AWS operates capacity, scaling and session isolation."
           fits: "AWS's MCP guidance says to use Runtime when the solution needs a custom MCP server or a target that AgentCore Gateway does not support."
@@ -3287,6 +3312,7 @@ implementations:
       - policyEngineEnforce
       - gatewayRateLimits
       - gatewayMcpToolSchema
+      - gatewayMcpSupportedVersions
       - toolDefinitionPinning
       - inspectorCodeSecurity
       - ecrEnhancedScanning
