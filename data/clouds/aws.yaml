@@ -249,7 +249,7 @@ settings:
     where: AgentCore Memory › (memory) › Short-term memory (raw event) expiration
     setVia: [cloudPolicy, apiCli]
     area: data
-    recommended: 30 days, events keyed by actorId and sessionId
+    recommended: 30 days for raw events, keyed by actorId and sessionId; and recordExpiryDurationDays on every long-term strategy (minimum 31), because extracted records otherwise never expire
     why: Conversation state ages out instead of accumulating client material, and each read is scoped to one user's session.
     mitigations: [AML.M0031]
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory-create-a-memory-store.html
@@ -311,15 +311,15 @@ settings:
     verified: "2026-10-30"
 
   - id: durableConfig
-    name: DurableConfig (RetentionPeriodInDays, KMSKeyArn)
+    name: DurableConfig (ExecutionTimeout, RetentionPeriodInDays, KMSKeyArn)
     where: Lambda › (workflow function) › durable configuration, set at creation
     setVia: [cloudPolicy, apiCli]
     area: data
     default: 14 days' history; Lambda's default encryption
-    recommended: History retained 14 days, encrypted under your customer managed KMS key
-    value: "14 days, under your customer managed KMS key"
-    why: Checkpoints hold every step's payload; your key decides who can read the journal, and it does not outlive the debugging window.
-    mitigations: []
+    recommended: ExecutionTimeout set to the longest legitimate run; history retained 14 days, encrypted under your customer managed KMS key
+    value: "Bounded run; 14 days, under your KMS key"
+    why: A run cannot go on past its longest legitimate length; checkpoints hold every step's payload, so your key decides who can read the journal, and it does not outlive the debugging window.
+    mitigations: [AML.M0036]
     url: https://docs.aws.amazon.com/lambda/latest/dg/durable-configuration.html
     verified: "2026-10-30"
 
@@ -1488,7 +1488,7 @@ settings:
     verified: "2026-11-18"
   - id: harnessAdminScp
     name: "Deny harness create and update outside the pipeline role"
-    where: "AWS Organizations › Service control policies › Deny CreateHarness, UpdateHarness, CreateHarnessEndpoint, UpdateHarnessEndpoint, CreateAgentRuntime, UpdateAgentRuntime, CreateGateway, CreateGatewayTarget"
+    where: "AWS Organizations › Service control policies › Deny CreateHarness, UpdateHarness, CreateHarnessEndpoint, UpdateHarnessEndpoint, CreateAgentRuntime, UpdateAgentRuntime, CreateGateway, CreateGatewayTarget, and InvokeAgentRuntimeCommand and InvokeAgentRuntimeCommandShell outside a break-glass role; on JWT-authorised harnesses list in allowedClients only the front end's client"
     setVia: [cloudPolicy]
     area: identity
     default: "Not set"
