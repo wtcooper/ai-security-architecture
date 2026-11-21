@@ -1,0 +1,1335 @@
+# LangGraph: one entity per product × reference architecture. Facts are dated (asOf) and cite the
+# vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Scope: LangGraph (Python langgraph, TypeScript @langchain/langgraph) with LangChain v1's create_agent and
+# its middleware, which the docs present as the way to build a LangGraph agent ("Middleware is not a separate
+# runtime: hooks run inside the compiled LangGraph that create_agent returns"; LangGraph v1 deprecated
+# create_react_agent in favour of create_agent), LangSmith tracing, and LangSmith Agent Server (renamed from
+# LangSmith Deployment; langgraph-api, langgraph-cli, langgraph-sdk) as the documented way to run it.
+# Exclusions: Deep Agents (create_deep_agent) and Managed Deep Agents are separate harnesses on LangGraph and
+# are not assessed; the sandbox backends and FilesystemMiddleware that create_agent imports from the deepagents
+# package, and LangSmith Sandboxes, are left out with them. LangSmith Fleet (no-code), Studio, Engine, and the
+# LangSmith LLM Gateway and Tool Gateway (gateway products, the drawing's gateway box) are not recorded here.
+# langgraph-supervisor is no longer actively maintained (migrate/langgraph-supervisor); the subagents pattern
+# replaces it.
+# 2026-11-21: read docs.langchain.com as .md (llms.txt index; oss/python and oss/javascript langgraph and
+# langchain pages; langsmith agent-server, auth, custom-auth, store-auth, agent-auth, aes-encryption, cli,
+# configure-ttl, env-var-cloud, env-var-self-hosted, cancel-run, use-webhooks, server-a2a, server-mcp,
+# mask-inputs-outputs, redact-secrets, trace-with-opentelemetry, usage-and-billing, cloud, agent-registry,
+# deploy-to-agent-environment, configuration-cloud, manage-agent-server, pytest, data-storage-and-privacy), all
+# 200; every cited HTML URL answered 200 with no redirect. reference.langchain.com DockerExecutionPolicy,
+# HostExecutionPolicy and ShellToolMiddleware read as HTML (200). Versions from pypi.org/pypi/<pkg>/json and
+# registry.npmjs.org; downloads from pypistats.org/api/packages/langgraph/recent. github.com and
+# www.npmjs.com answered 403 to curl and the GitHub API is not enabled for this session: the advisory list
+# came from api.osv.dev and each GHSA page below was then read on github.com with WebFetch (200);
+# www.npmjs.com also refused WebFetch (403), so npm figures come from the registry API only. Validated
+# 2026-11-21: the training statement was corrected against www.langchain.com/terms-of-service (Enterprise) and
+# www.langchain.com/standard-terms-of-service (Standard), both updated 2026-11-19, which disagree; the EMEA and
+# pricing FAQs say LangChain does not train; the LangSmith docs pages read do not state one.
+vendor: langchain
+family: LangGraph
+tools:
+  - id: toolLangGraph
+    name: LangGraph
+    surfaceClasses:
+      - sdkFramework
+    variants:
+      - name: langgraph (Python)
+        class: sdkFramework
+        url: https://docs.langchain.com/oss/python/langgraph/overview
+      - name: "@langchain/langgraph (TypeScript, LangGraph.js)"
+        class: sdkFramework
+        url: https://docs.langchain.com/oss/javascript/langgraph/overview
+      - name: "langchain v1 create_agent and middleware (Python)"
+        class: sdkFramework
+        url: https://docs.langchain.com/oss/python/langchain/agents
+      - name: "langchain v1 createAgent and middleware (TypeScript)"
+        class: sdkFramework
+        url: https://docs.langchain.com/oss/javascript/langchain/overview
+      - name: LangSmith Agent Server (langgraph-api, langgraph-cli; Cloud, Hybrid, self-hosted or standalone)
+        class: sdkFramework
+        url: https://docs.langchain.com/langsmith/deploy-overview
+      - name: LangSmith tracing (langsmith SDK, OpenTelemetry)
+        class: sdkFramework
+        url: https://docs.langchain.com/langsmith/trace-with-langgraph
+    architecture: archAgentWorkflow
+    fills: [harness, orchestration, subagents]
+    builder:
+      kind: framework
+      what: "LangChain's open-source runtime for durable, stateful agent graphs, with create_agent and middleware to build agents on it; any model."
+      languages: ["Python", "TypeScript"]
+      usage:
+        downloads: 61332797
+        registry: PyPI
+        package: langgraph
+        asOf: "2026-11"
+        url: https://pypistats.org/packages/langgraph
+      also:
+        - architecture: archChatAgent
+          fills: [agent]
+          url: https://docs.langchain.com/oss/python/langchain/frontend/human-in-the-loop
+        - architecture: archActionAgent
+          fills: [planner]
+          url: https://docs.langchain.com/langsmith/cron-jobs
+        - architecture: archAgentFederation
+          fills: [harness]
+          url: https://docs.langchain.com/langsmith/server-a2a
+    status: ga
+    asOf: "2026-11"
+    summary:
+      - >-
+        An open-source orchestration runtime (MIT; Python langgraph 1.2.24 and TypeScript @langchain/langgraph 1.7.5
+        on 2026-11-21) that runs agents as graphs of shared state, nodes and edges inside the customer's own
+        process. LangChain v1's create_agent builds the usual model-and-tools loop as a compiled LangGraph, with
+        middleware (human-in-the-loop, PII redaction, call limits, retries, a shell tool) running as its nodes; a
+        supervisor calls specialist agents wrapped as tools, or a hand-built StateGraph routes between them. Tools,
+        MCP clients and stdio MCP servers run in that process with its credentials; models are reached through
+        LangChain's provider integrations with the keys the process holds.
+      - >-
+        State is journalled by a checkpointer at every super-step, keyed by thread_id, which is what makes runs
+        durable, resumable after an interrupt and replayable; long-term memory lives in a store. Both are the
+        deployer's database (Postgres, MongoDB, SQLite) unless the graph runs on LangSmith Agent Server, which
+        injects its own Postgres checkpointer and store and adds authentication handlers, encryption at rest,
+        TTLs, cron, webhooks, run cancellation and MCP and A2A endpoints, on LangSmith Cloud, Hybrid, self-hosted
+        or as a standalone server. What leaves the process: prompts and tool results to the model provider,
+        traces to LangSmith when tracing is on (it is on by default on Agent Server, payloads included), and on
+        Agent Server whatever its MCP, A2A and webhook routes return.
+      - >-
+        Nearly every control is code the deployer writes against a documented primitive: interrupt_on rules,
+        wrap_tool_call policy hooks, PIIMiddleware detectors, call limits and recursion_limit, per-agent tool
+        lists, and @auth handlers. The switches are on the services: Agent Server's langgraph.json keys and
+        environment variables (auth path, route flags, TTLs, serde allowlist, AES keys, webhook URL policy) and
+        LangSmith's tracing, masking and Agent Registry. Beta parts are marked where used: the langchain.mcp
+        namespace, AutoModeMiddleware, Agent Auth and DeltaChannel.
+    facts:
+      - label: Plans
+        value: >-
+          langgraph and langchain are free MIT packages (pip install langgraph, npm install @langchain/langgraph);
+          Agent Server's langgraph-api is Elastic-2.0. Hosting on LangSmith Cloud needs a Plus plan or above,
+          self-hosted with a control plane needs Enterprise, and a standalone server needs a LangSmith licence.
+        url: https://docs.langchain.com/langsmith/deploy-overview
+      - label: Inference & routing
+        value: >-
+          Any provider through LangChain chat-model integrations (create_agent(model="provider:model") or a model
+          object); LangGraph itself does not require LangChain. Keys come from the process environment (for
+          example OPENAI_API_KEY); the LangSmith LLM Gateway is a separate product.
+        url: https://docs.langchain.com/oss/python/langchain/agents
+      - label: Data leaving the device
+        value: >-
+          Model inputs and tool results to the provider; traces to LangSmith when LANGSMITH_TRACING is true
+          (Agent Server default true), inputs and outputs included unless hidden; one analytics event per CLI
+          command unless LANGGRAPH_CLI_NO_ANALYTICS=1; licence checks from a standalone server. Checkpoints and
+          store stay in the deployer's database, or LangChain's regional Postgres on LangSmith Cloud.
+        url: https://docs.langchain.com/langsmith/data-storage-and-privacy
+      - label: Retention & training
+        value: >-
+          LangChain's Enterprise Terms of Service rule out training on Customer Data; its Standard Terms of Service
+          (both updated 2026-11-19) allow it unless the customer opts out, though its EMEA and pricing FAQs say it
+          does not train. LangSmith Cloud traces are kept 14 days (base) or
+          180 days (extended, default), 14 and 400 days on BYOC and self-hosted, then deleted. Agent Server
+          threads, checkpoints and store items do not expire unless TTLs are set.
+        url: https://docs.langchain.com/langsmith/usage-and-billing
+      - label: Docs index
+        value: >-
+          docs.langchain.com (llms.txt index): oss/python and oss/javascript for LangGraph and LangChain,
+          langsmith for Agent Server, tracing and administration; API reference at reference.langchain.com
+        url: https://docs.langchain.com/oss/python/langgraph/overview
+      - label: Regions
+        value: >-
+          LangSmith Cloud runs in GCP US (default), GCP EU, GCP APAC, AWS US and Azure US; data stays in the
+          sign-up region except authentication data (Supabase on AWS) and billing data (US).
+        url: https://docs.langchain.com/langsmith/cloud
+      - label: Security policy
+        value: >-
+          Open-source vulnerabilities go to the LangChain Open Source VDP on Intigriti, LangSmith ones to the
+          LangChain VDP; the policy tells builders to limit permissions, anticipate misuse and sandbox agents.
+        url: https://docs.langchain.com/oss/python/security-policy
+    items:
+      - title: Treat the checkpoint store as input that can execute
+        body:
+          - >-
+            Four 2025-26 advisories were code execution when a run loaded a checkpoint or cache entry that an
+            attacker could write. Keep langgraph at 1.0.10 or later and langgraph-checkpoint at 4.1.1 or later,
+            leave checkpointer.serde allowed_json_modules at its LangChain-safe default, keep pickle_fallback off,
+            and let only the server's own principal write to the checkpoint database.
+        links:
+          - title: Checkpointers (serializer and encryption)
+            url: https://docs.langchain.com/oss/python/langgraph/checkpointers
+          - title: LangGraph CLI configuration file (checkpointer.serde)
+            url: https://docs.langchain.com/langsmith/cli
+      - title: Authenticate before you expose Agent Server
+        body:
+          - >-
+            The LangSmith API key identifies only its owner, and a self-hosted or standalone Agent Server has no
+            authentication by default. Every assistant is also served as an MCP tool at /mcp and an A2A agent at
+            /a2a/{assistant_id}. Add an @auth.authenticate handler and default-deny @auth.on handlers, and turn
+            off the route groups you do not use with the http disable flags.
+        links:
+          - title: Authentication and access control
+            url: https://docs.langchain.com/langsmith/auth
+          - title: MCP endpoint in Agent Server
+            url: https://docs.langchain.com/langsmith/server-mcp
+    riskNotes:
+      - risk: riskRogueActions
+        note: >-
+          Execution is at least once: a retry re-runs the whole node, a resume after interrupt() restarts the node
+          from its beginning, replay re-executes every node after the chosen checkpoint including API calls, and
+          Agent Server re-queues a failed background run up to BG_JOB_MAX_RETRIES (3) from its last checkpoint.
+          The docs tell builders to derive idempotency keys from state that is already durable.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Each super-step checkpoint writes the full value of every state channel, tool results included; Agent
+          Server store namespaces are shared across callers until a store handler scopes them; tracing is on by
+          default on Agent Server with payloads; and A2A publishes every tool result and the whole context's
+          history unless A2A_ALLOWED_TOOL_CALL_RESULTS and historyScope narrow them.
+      - risk: riskRunawayAgentToolLoops
+        note: >-
+          Python's default recursion limit is 10,007 super-steps (create_agent sets 9,999; TypeScript defaults to
+          25), model and tool call limits default to none, ToolCallLimitMiddleware's default exit_behavior
+          "continue" lets the run go on, node timeouts apply only to async nodes, and an Agent Server background
+          run may last 86,400 seconds.
+      - risk: riskInsecureIntegratedComponent
+        note: >-
+          The persistence libraries are where 2025-26 advisories cluster: code execution through checkpoint and
+          cache deserialisation, SQL injection in the SQLite checkpointer and store, NoSQL operator injection in
+          MongoDBSaver.list(), and namespace leaks across segment boundaries and dotted labels in the Postgres and
+          SQLite stores.
+      - risk: riskOrchestratorRouteHijacking
+        note: >-
+          In the handoffs pattern a tool call updates a state variable that switches the active agent or its
+          tools and prompt, so model output chooses the route; in the subagents pattern the supervisor's model
+          picks which specialist to call and with what task text.
+      - risk: riskAgentDelegationChainOpacity
+        note: >-
+          Subagents called inside tool functions cannot be statically discovered, so get_state with subgraphs does
+          not return their state; they appear as nested runs in a LangSmith trace, which holds at most 25,000 runs.
+      - risk: riskToolSourceProvenance
+        note: >-
+          MCPAdapter adapts whatever tools a server advertises on list_tools(), with the server's own name,
+          version and annotations as metadata; it rejects string targets that are not http(s) URLs so a
+          configured or model-supplied string cannot launch a local file, but pins no definition.
+    controls:
+      - mitigation: AML.M0031
+        coverage: partial
+        mechanism: >-
+          A checkpointer per thread_id (PostgresSaver, MongoDBSaver, or Agent Server's injected Postgres) with
+          EncryptedSerializer or LANGGRAPH_AES_KEY; checkpointer.serde allowlist; checkpointer.ttl and store.ttl;
+          @auth.on.store namespace scoping; nothing validates what a step writes
+        steps:
+          - title: Scope and encrypt the journal
+            body:
+              - >-
+                Compile with a persistent checkpointer, use a new UUID thread_id per case, and pass
+                serde=EncryptedSerializer.from_pycryptodome_aes() (on Agent Server set LANGGRAPH_AES_KEY).
+            url: https://docs.langchain.com/oss/python/langgraph/checkpointers
+          - title: Isolate long-term memory per user
+            body:
+              - >-
+                Register an @auth.on.store handler that prefixes value["namespace"] with ctx.user.identity; Agent
+                Server store namespaces are otherwise shared across all callers.
+            url: https://docs.langchain.com/langsmith/store-auth
+          - title: Expire what is kept
+            body:
+              - >-
+                Set checkpointer.ttl (strategy "delete", default_ttl in minutes) and store.ttl default_ttl in
+                langgraph.json; without them threads and items never expire.
+            url: https://docs.langchain.com/langsmith/configure-ttl
+        note: >-
+          Partial by this drawing's rule, as for the Claude Agent SDK and OpenAI Agents SDK: scoping, encryption and
+          expiry are configuration, but nothing validates what a step writes. Every super-step checkpoint stores
+          the full state, tool results included; new input never clears a thread; update_state forks a new
+          checkpoint from any point. Whoever can write the checkpoint store can change what a resumed run reads and,
+          on versions before the 2025-26 fixes, get code executed on load. Postgres and SQLite stores leaked across
+          namespaces before 3.1.1 and 3.1.3 (SQLite 3.1.2). AES key rotation needs the gRPC checkpointer and Go store; TTLs apply
+          only to threads and items created after they are set.
+        verified: "2026-11-21"
+      - mitigation: cap-staged-rollout-gate
+        coverage: partial
+        mechanism: >-
+          Agent Server revisions built from a Git ref, assistant versions with set_latest rollback, agent
+          environments (development, staging, production) and LangSmith offline evaluation with a pytest
+          integration; no gate that holds a release on an evaluation result
+        steps:
+          - title: Release production from a tag
+            body:
+              - >-
+                In Agent Server Settings set Git Ref (Branch or Tag) to a release tag such as refs/tags/v1.0.0, for
+                which Deploy on push is unavailable, and keep staging on its own environment.
+            url: https://docs.langchain.com/langsmith/manage-agent-server
+          - title: Gate the tag on LangSmith evaluations in CI
+            body:
+              - >-
+                Run the agent's dataset tests marked @pytest.mark.langsmith in CI against the staging build and
+                fail the pipeline on failed assertions before the tag is promoted.
+            url: https://docs.langchain.com/langsmith/pytest
+          - title: Roll back by assistant version
+            body:
+              - >-
+                Keep the previous assistant version and make it active again with client.assistants.set_latest
+                (TypeScript setLatest) when production behaviour regresses.
+            url: https://docs.langchain.com/langsmith/configuration-cloud
+        note: >-
+          Partial on the compound rule: versioning and rollback are settable in LangSmith (assistant versions,
+          revisions, environments) and LangSmith supplies the evaluation, but the gate is the deployer's CI and no
+          progressive or canary release is documented. The Claude and OpenAI SDKs are external because their
+          vendors supply neither versioning nor evaluation for the release path. set_latest changes the
+          configuration for future runs only; a revision rebuilds code.
+        verified: "2026-11-21"
+      - mitigation: cap-agent-tracing
+        coverage: native
+        mechanism: >-
+          LangSmith tracing (LANGSMITH_TRACING with LANGSMITH_API_KEY): every model call and tool invocation is a
+          run, a request's runs form one trace and turns link into a thread; on by default on Agent Server;
+          OpenTelemetry export to the deployer's collector (LANGSMITH_OTEL_ENABLED, OTEL_EXPORTER_OTLP_ENDPOINT)
+        steps:
+          - title: Trace to an approved workspace
+            body:
+              - >-
+                Set LANGSMITH_TRACING=true, LANGSMITH_API_KEY, LANGSMITH_ENDPOINT for the firm's region (or a BYOC or
+                self-hosted instance) and LANGSMITH_AGENT_ID with LANGSMITH_AGENT_ENVIRONMENT.
+            url: https://docs.langchain.com/langsmith/trace-with-langgraph
+          - title: Fan the spans out to your collector
+            body:
+              - >-
+                Set LANGSMITH_OTEL_ENABLED=true and OTEL_EXPORTER_OTLP_ENDPOINT to the firm's OpenTelemetry Collector;
+                on Agent Server add LS_APM_OTEL_ENABLED for the server's own spans.
+            url: https://docs.langchain.com/langsmith/trace-with-opentelemetry
+          - title: Decide what payload is captured
+            body:
+              - >-
+                Set LANGSMITH_HIDE_INPUTS and LANGSMITH_HIDE_OUTPUTS, or a Client anonymizer, where the trace store
+                is not approved for prompts and tool results.
+            url: https://docs.langchain.com/langsmith/mask-inputs-outputs
+        note: >-
+          Native on the rule applied to the OpenAI Agents SDK and Claude Agent SDK: every model and tool call is a
+          run in one trace per request, subagents nest as runs, and export goes to LangSmith or an OTLP collector.
+          Defaults: off in a self-run process until LANGSMITH_TRACING and a key are set, on for Agent Server,
+          payloads included. Limits: a trace holds at most 25,000 runs and later runs are rejected; caller identity
+          is whatever metadata the application adds; LangSmith deletes traces after 14 or 180 days on Cloud.
+          Emission is not tamper-resistant audit: the collector and SIEM supply that.
+        verified: "2026-11-21"
+      - mitigation: D3-APA
+        coverage: partial
+        mechanism: >-
+          Agent Server custom auth: an @auth.authenticate handler on every request and @auth.on handlers per
+          resource and action (threads.create_run, assistants.read, crons, store) that tag owners, filter or deny;
+          LangSmith API key (x-api-key) by default on LangSmith, no authentication by default when self-hosted
+        steps:
+          - title: Authenticate every request
+            body:
+              - >-
+                Point langgraph.json auth.path at a langgraph_sdk.Auth instance whose @auth.authenticate handler
+                validates the IdP token and returns the user's identity and permissions.
+            url: https://docs.langchain.com/langsmith/custom-auth
+          - title: Deny by default, then allow per action
+            body:
+              - >-
+                Register a global @auth.on that rejects unhandled requests, then owner-scoped handlers for
+                threads.create, threads.read, threads.create_run, assistants and crons.
+            url: https://docs.langchain.com/langsmith/auth
+          - title: Turn off the routes you do not use
+            body:
+              - >-
+                Set http.disable_store, disable_mcp, disable_a2a, disable_meta or disable_ui to true in
+                langgraph.json for route groups the deployment does not serve.
+            url: https://docs.langchain.com/langsmith/cli
+        note: >-
+          Partial on the hook rule: Agent Server enforces whatever the deployer's handlers decide at its own
+          listener, unlike the SDK-only frameworks, which have none, but ships no policy beyond the API key, and
+          without a custom handler it "sees only the API-key owner". Runs inherit the thread's handlers, so whoever
+          may create_run on a thread may resume its interrupts. 2026 advisories show the hooks' edges: incomplete
+          assistant authorisation in run creation (CVE-2026-55236), actions= ignored on resource decorators
+          (CVE-2026-104873), JavaScript namespace rewrites not applied (CVE-2026-118668). Outside Agent Server,
+          LangGraph has no listener and this is the application's endpoint.
+        verified: "2026-11-21"
+      - mitigation: D3-AA
+        coverage: partial
+        mechanism: >-
+          No per-agent principal inside a graph; Agent Server authenticates callers and exposes assistant_id,
+          graph_id and the user on runtime.server_info; Agent Auth (beta) issues OAuth tokens scoped to an
+          assistant or agent ID and a user
+        steps:
+          - title: Authenticate every caller
+            body:
+              - >-
+                Configure auth.path with an @auth.authenticate handler so each run carries a verified identity in
+                langgraph_auth_user and runtime.server_info.user.
+            url: https://docs.langchain.com/langsmith/auth
+          - title: Give each agent its own tool credential
+            body:
+              - >-
+                Call the Agent Auth client.authenticate(provider=..., scopes=[...], user_id=..., agent_id=...) in
+                the agent's tool so the token is scoped to that agent and that user.
+            url: https://docs.langchain.com/langsmith/agent-auth
+        note: >-
+          Partial by this drawing's rule, as for the Claude and OpenAI SDKs: the framework neither mints nor
+          authenticates per-agent identities. Nodes and tool-wrapped subagents of one graph share the process,
+          environment and model keys; an agent's name labels traces and its A2A card but is not a principal. Agent
+          Auth is beta and scopes tokens to the calling assistant by default, so subagents inside one assistant
+          share that scope unless agent_id is passed. Minting and revoking credentials for other systems is the
+          deployer's.
+        verified: "2026-11-21"
+      - mitigation: D3-CH
+        coverage: partial
+        mechanism: >-
+          Keys read from the process environment; LANGGRAPH_AES_JSON_KEYS encrypting named credential fields at
+          rest; Agent Auth (beta) storing and refreshing OAuth tokens outside graph state; LangSmithSecret and the
+          SDK anonymizer for traces; IAM authentication for Agent Server's Postgres and Redis
+        steps:
+          - title: Keep credentials out of graph state
+            body:
+              - >-
+                Fetch a user's credentials from the secret store inside the node, keyed by langgraph_auth_user, as
+                the custom-auth guide says, and list any credential field that must persist in
+                LANGGRAPH_AES_JSON_KEYS.
+            url: https://docs.langchain.com/langsmith/custom-auth
+          - title: Broker OAuth tokens
+            body:
+              - >-
+                Configure an OAuth provider for each downstream system in Agent Auth and obtain tokens with
+                client.authenticate instead of placing keys in the environment.
+            url: https://docs.langchain.com/langsmith/agent-auth
+          - title: Remove static database passwords
+            body:
+              - >-
+                On self-hosted Agent Server set AGENT_POSTGRES_IAM_AUTH_PROVIDER and
+                AGENT_REDIS_IAM_AUTH_PROVIDER to aws, azure or gcp with a password-free connection URI.
+            url: https://docs.langchain.com/langsmith/configure-iam-auth
+        note: >-
+          Partial by this drawing's rule: the framework uses whatever key the environment gives it and brokers
+          nothing per step except through Agent Auth (beta). State is journalled at every step, so a token a tool
+          returns or a node writes persists and is traced unless the field is AES-encrypted and masked with
+          LangSmithSecret (Python, langsmith 0.12.3+), whose masking applies to LangSmith uploads only and is lost
+          through f-strings and Pydantic models. Whatever @auth.authenticate returns reaches every node's config.
+        verified: "2026-11-21"
+      - mitigation: cap-agent-action-policy-enforcement
+        coverage: partial
+        mechanism: >-
+          wrap_tool_call middleware that can refuse a call without running it; InterruptOnConfig when predicates
+          as the escalate path; AutoModeMiddleware (beta) blocking listed tools on a decision model's score;
+          ToolCallLimitMiddleware; no declarative policy language
+        steps:
+          - title: Decide every consequential call in middleware
+            body:
+              - >-
+                Add a @wrap_tool_call middleware that checks the caller (runtime context or server_info.user), the
+                tool name and its args, and returns a refusing ToolMessage without calling the handler.
+            url: https://docs.langchain.com/oss/python/langchain/middleware/custom
+          - title: Escalate instead of deny
+            body:
+              - >-
+                Give the tool's InterruptOnConfig a deterministic when predicate over request.tool_call["args"] so
+                risky arguments pause for a person.
+            url: https://docs.langchain.com/oss/python/langchain/human-in-the-loop
+          - title: Add a model check for irreversible tools (beta)
+            body:
+              - >-
+                List irreversible tools in AutoModeMiddleware(tools=[...], classifier=...) so calls scored 0.5 or
+                higher return an error instead of running.
+            url: https://docs.langchain.com/oss/python/langchain/middleware/built-in
+        note: >-
+          Partial by the rule applied to the OpenAI Agents SDK (policy functions the deployer writes); the Claude
+          Agent SDK is native only because it ships declarative deny rules, which LangChain does not. The hook runs
+          outside the model, per call, before the tool, and covers MCP tools passed to create_agent; it exists only
+          in agents built with create_agent, so nodes of a hand-built StateGraph call tools with no hook.
+          AutoModeMiddleware is a probabilistic classifier, not policy. The intersection of requester grant and
+          agent identity is the deployer's to compute.
+        verified: "2026-11-21"
+      - mitigation: AML.M0028
+        coverage: partial
+        mechanism: >-
+          A tools list per create_agent (each subagent its own), wrap_model_call filtering tools per request,
+          args_schema from Pydantic models or JSON schemas, MCP tools passed explicitly from list_tools()
+        steps:
+          - title: Give every specialist only its own tools
+            body:
+              - >-
+                Build each subagent with create_agent(tools=[...]) holding only its task's tools, wrap it as a tool
+                for the supervisor, and pass it only the task description.
+            url: https://docs.langchain.com/oss/python/langchain/multi-agent/subagents
+          - title: Filter tools by the caller's grant
+            body:
+              - >-
+                Add a @wrap_model_call middleware that calls handler(request.override(tools=...)) with only the
+                tools the run's context entitles.
+            url: https://docs.langchain.com/oss/python/langchain/tools
+          - title: Type and constrain arguments
+            body:
+              - >-
+                Declare each action with @tool(args_schema=...) using a Pydantic model with constrained fields.
+            url: https://docs.langchain.com/oss/python/langchain/tools
+        note: >-
+          Partial by the per-hop rule for this drawing, as on toolClaudeAgentSdk: a subagent's grant narrows by tool
+          list only; argument limits come from schemas and a wrap_tool_call hook. Isolated input (task description
+          only) is the default; forked input passes the parent's history. Filtering in wrap_model_call hides tools
+          from the model, the filtering approach pre-registers every tool at creation, and whether a hidden tool named by
+          the model is refused is not documented. Every tool runs with the process's authority.
+        verified: "2026-11-21"
+      - mitigation: D3-CTS
+        coverage: partial
+        mechanism: >-
+          Per-server auth on FastMCP clients in a ClientGroup, a per-user token built in the graph factory from the
+          Agent Server-authenticated user, Agent Auth tokens scoped by agent_id and user_id; no on-behalf-of
+          exchange in the framework
+        steps:
+          - title: One credential per MCP server
+            body:
+              - >-
+                Build a ClientGroup with its own auth on each Client, so every server authenticates independently.
+            url: https://docs.langchain.com/oss/python/langchain/mcp/auth
+          - title: A token for the user who started the run
+            body:
+              - >-
+                In the graph factory read runtime.user.identity, exchange it for a per-user token and build the MCP
+                client with it; key any tool-list cache by that identity.
+            url: https://docs.langchain.com/oss/python/langchain/mcp/auth
+          - title: Agent-scoped OAuth tokens
+            body:
+              - >-
+                Pass agent_id and user_id to Agent Auth client.authenticate so a token belongs to one agent and one
+                user.
+            url: https://docs.langchain.com/langsmith/agent-auth
+        note: >-
+          Partial by this drawing's rule: scoping is per MCP server and, with Agent Auth (beta), per agent and user;
+          the exchange itself (token_for in the docs) is the deployer's, and there is no passthrough guard, since a
+          server receives whatever token its client carries. Everything @auth.authenticate returns, tokens
+          included, is placed in every node's config as langgraph_auth_user, so subagents share it.
+        verified: "2026-11-21"
+      - mitigation: AML.M0036
+        coverage: partial
+        mechanism: >-
+          recursion_limit raising GraphRecursionError (Python default 10,007, create_agent 9,999, TypeScript 25);
+          ModelCallLimitMiddleware and ToolCallLimitMiddleware run and thread limits; per-node timeout and
+          RetryPolicy (langgraph 1.2+, async nodes); BG_JOB_TIMEOUT_SECS on Agent Server; no token or cost budget
+        steps:
+          - title: Cap steps on every run
+            body:
+              - >-
+                Pass recursion_limit as a top-level config key on each run, or set LANGGRAPH_DEFAULT_RECURSION_LIMIT
+                on Agent Server.
+            url: https://docs.langchain.com/oss/python/langgraph/graph-api
+          - title: Cap model and tool calls
+            body:
+              - >-
+                Add ModelCallLimitMiddleware(run_limit=..., exit_behavior="end") and ToolCallLimitMiddleware with
+                per-tool run_limit to every agent and subagent.
+            url: https://docs.langchain.com/oss/python/langchain/middleware/built-in
+          - title: Bound time
+            body:
+              - >-
+                Set add_node(timeout=TimeoutPolicy(run_timeout=...)) or set_node_defaults on async nodes, and
+                BG_JOB_TIMEOUT_SECS for Agent Server background runs.
+            url: https://docs.langchain.com/oss/python/langgraph/fault-tolerance
+        note: >-
+          Partial by the rule applied to the OpenAI Agents SDK (step and call limits, no token or cost budget); the
+          Claude Agent SDK is native because it enforces a spend cap across the agent tree. Python's default
+          recursion limit is high enough to be no cost bound; call limits default to none, and "continue" lets the
+          run go on; the docs do not say a parent's limit counts its subagents' calls; sync nodes reject timeouts;
+          RetryPolicy re-runs a node up to 3 attempts by default. Spend ceilings belong to the gateway.
+        verified: "2026-11-21"
+      - mitigation: cap-input-guardrails
+        coverage: partial
+        mechanism: >-
+          before_agent, before_model and wrap_tool_call middleware as attach points for the deployer's classifier;
+          no injection classifier ships (PIIMiddleware detects identifiers, AutoModeMiddleware scores tool calls,
+          not content)
+        steps:
+          - title: Screen the request before the loop
+            body:
+              - >-
+                Add a before_agent guardrail middleware that sends the user's input to your injection classifier and
+                ends the run on a hit.
+            url: https://docs.langchain.com/oss/python/langchain/guardrails
+          - title: Screen tool results before they re-enter context
+            body:
+              - >-
+                In a wrap_tool_call middleware run the classifier on the handler's ToolMessage and return a
+                quarantine notice instead on a hit.
+            url: https://docs.langchain.com/oss/python/langchain/middleware/custom
+        note: >-
+          Partial by this drawing's rule: the hooks are attach points and nothing ships, although the guardrails
+          page lists injection blocking as a use case. Only content passing through a create_agent agent is
+          screened: web, MCP and subagent results arrive as tool results and can be checked there, but store
+          memories read inside a node, the system prompt and inputs to hand-built StateGraph nodes enter without a
+          hook unless the deployer adds one.
+        verified: "2026-11-21"
+      - mitigation: cap-sensitive-data-redaction
+        coverage: native
+        mechanism: >-
+          PIIMiddleware with built-in detectors (email, credit_card, ip, mac_address, url) or custom regex and
+          functions, strategies block, redact, mask or hash, on input (default), output and tool results;
+          LangSmith hide_inputs, hide_outputs and anonymizer for traces; A2A_ALLOWED_TOOL_CALL_RESULTS
+        steps:
+          - title: Redact inside the loop
+            body:
+              - >-
+                Add PIIMiddleware per type with apply_to_tool_results=True and apply_to_output=True, plus custom
+                detectors for national identifiers and API keys.
+            url: https://docs.langchain.com/oss/python/langchain/middleware/built-in
+          - title: Keep payloads out of traces
+            body:
+              - >-
+                Set LANGSMITH_HIDE_INPUTS and LANGSMITH_HIDE_OUTPUTS, or a Client anonymizer that masks client data.
+            url: https://docs.langchain.com/langsmith/mask-inputs-outputs
+          - title: Limit what A2A peers receive
+            body:
+              - >-
+                Set A2A_ALLOWED_TOOL_CALL_RESULTS to the tools a peer needs and have clients send historyScope
+                "task".
+            url: https://docs.langchain.com/langsmith/server-a2a
+        note: >-
+          Native: a detector ships, is switched on per type and is enforced by the agent before the model sees the
+          content, the rule that rates hooks-only SDKs partial because nothing ships. Boundaries: five built-in
+          types (names, phone numbers and national IDs need custom detectors); output and tool results are off by
+          default; streamed redaction holds back 128 characters, so longer matches can leak their start; the input
+          checkpoint is saved before any node runs, so the journal keeps the request as received; only create_agent
+          agents have the middleware.
+        verified: "2026-11-21"
+      - mitigation: cap-retrieval-grounding-checks
+        coverage: partial
+        mechanism: >-
+          The store's semantic search index (store.index in langgraph.json) isolated per user by an @auth.on.store
+          handler; no ingest screening or grounding check ships
+        steps:
+          - title: Isolate the store's index per user
+            body:
+              - >-
+                Register an @auth.on.store handler that rewrites or validates value["namespace"] so every search
+                runs only over the caller's own namespace.
+            url: https://docs.langchain.com/langsmith/store-auth
+        note: >-
+          Partial: the one retrieval index LangGraph ships is the store's semantic search, used for long-term
+          memory, and its per-tenant isolation is settable (shared by default); two 2026 advisories were namespace
+          leaks in the Postgres and SQLite stores. Trust tiers, poisoning screens at ingest and grounding checks
+          on output are not provided. Retrievers and vector stores from LangChain integrations are the
+          application's stores and belong on those records.
+        verified: "2026-11-21"
+      - mitigation: AML.M0029
+        coverage: native
+        mechanism: >-
+          HumanInTheLoopMiddleware interrupt_on per tool with allowed_decisions (approve, edit, reject, respond),
+          interrupt_mode "per_call" and when predicates; LangGraph interrupt() with a typed response_schema; the
+          paused run held in the checkpointer until Command(resume=...)
+        steps:
+          - title: Gate consequential tools
+            body:
+              - >-
+                Add HumanInTheLoopMiddleware(interrupt_on={...}, interrupt_mode="per_call") with allowed_decisions
+                approve and reject on every write tool, and a persistent checkpointer.
+            url: https://docs.langchain.com/oss/python/langchain/human-in-the-loop
+          - title: Validate the reviewer's answer
+            body:
+              - >-
+                In hand-built nodes call interrupt(payload, response_schema=Model) with a Pydantic model so invalid
+                resume values raise a ValidationError and the resume can be retried on the same thread.
+            url: https://docs.langchain.com/oss/python/langgraph/interrupts
+          - title: Let only approvers resume
+            body:
+              - >-
+                A resume is a run on the thread (runs.wait with command), so restrict @auth.on.threads.create_run on
+                paused threads to authenticated approvers.
+            url: https://docs.langchain.com/langsmith/add-human-in-the-loop
+        note: >-
+          Native on the rule applied to the OpenAI Agents SDK and Claude Agent SDK: a built-in primitive holds the
+          exact call in the checkpointer until a decision arrives, and edits are checked against Pydantic schemas.
+          The deployer supplies the approver, UI and authentication; no approver identity is recorded. Boundaries:
+          opt-in per tool and needs a checkpointer; a when predicate that returns False on resume runs the tool and
+          ignores a reject; respond counts as a successful tool result; the node re-runs from its start on resume;
+          the persistent shell does not support interrupts; AutoModeMiddleware is not human approval.
+        verified: "2026-11-21"
+      - mitigation: cap-data-access-governance
+        coverage: partial
+        mechanism: >-
+          The Agent Server-authenticated user (langgraph_auth_user, runtime.server_info.user) and runtime.context
+          carried to tools; per-user MCP clients built in the graph factory; Agent Auth per-user OAuth (beta);
+          @auth.on owner filters on threads and store namespaces
+        steps:
+          - title: Carry the requester's token to each data tool
+            body:
+              - >-
+                Build each MCP client in the graph factory with a token exchanged for runtime.user.identity, and
+                pass the user's context to function tools through runtime.context.
+            url: https://docs.langchain.com/oss/python/langchain/mcp/auth
+          - title: Scope threads and memory to the user
+            body:
+              - >-
+                Tag resources with the owner and return an owner filter in @auth.on handlers; scope store namespaces
+                in @auth.on.store.
+            url: https://docs.langchain.com/langsmith/auth
+        note: >-
+          Partial on the same rule as the Claude Agent SDK's per-query MCP headers (a per-call attach point):
+          retrieval runs with the requester's entitlements only when the deployer obtains and passes that user's
+          token; the framework runs no on-behalf-of exchange. Cached MCP tool lists must be isolated per user.
+          Oversharing analysis of the sources is outside the framework.
+        verified: "2026-11-21"
+      - mitigation: D3-EI
+        coverage: partial
+        mechanism: >-
+          ShellToolMiddleware execution_policy: HostExecutionPolicy (default, no filesystem or network
+          sandboxing), DockerExecutionPolicy (a container per agent run, network off by default, read_only_rootfs,
+          user) or CodexSandboxExecutionPolicy; every other tool, stdio MCP server and the graph run in the
+          application process
+        steps:
+          - title: Run agent shells in Docker
+            body:
+              - >-
+                Pass ShellToolMiddleware(execution_policy=DockerExecutionPolicy(...)) for any agent whose commands
+                follow untrusted input; keep HostExecutionPolicy for an already isolated container or VM.
+            url: https://docs.langchain.com/oss/python/langchain/middleware/built-in
+          - title: Harden the container
+            body:
+              - >-
+                Keep network_enabled False, set read_only_rootfs=True and a non-root user, review extra_run_args,
+                and run the Docker daemon rootless.
+            url: https://reference.langchain.com/python/langchain/agents/middleware/shell_tool/DockerExecutionPolicy
+          - title: Contain the process itself
+            body:
+              - >-
+                Run the graph or Agent Server in a container with read-only credentials, as the security policy
+                advises, since tools run with its privileges.
+            url: https://docs.langchain.com/oss/python/security-policy
+        note: >-
+          Partial on the core sandbox rule (as on toolClaudeAgentSdk and toolOpenaiAgentsSdk): isolation exists
+          only for the shell tool, only when the deployer picks Docker or the Codex sandbox; the default "offers no
+          filesystem or network sandboxing". Outside: every Python or JavaScript tool, stdio MCP servers and the
+          graph. On LangSmith Cloud the Agent Server container is LangChain's and its boundary is not documented.
+          Code sandboxes from the deepagents package and LangSmith Sandboxes are not assessed here.
+        verified: "2026-11-21"
+      - mitigation: cap-agent-tool-registry
+        coverage: partial
+        mechanism: >-
+          LangSmith Agent Registry (Cloud, agent-based workspaces): an identifier per agent, four environments and
+          audit-logged changes; assistants versioned on Agent Server; tools and subagents declared per create_agent
+          in code; MCP tools discovered from each server
+        steps:
+          - title: Register every agent
+            body:
+              - >-
+                Create each agent in Agent Registry with a stable identifier and deploy with --agent-id and
+                --agent-environment so deployments and traces attach to it.
+            url: https://docs.langchain.com/langsmith/agent-registry
+          - title: Declare each agent's tools in reviewed code
+            body:
+              - >-
+                Give every create_agent an explicit tools list and build subagents only from reviewed definitions.
+            url: https://docs.langchain.com/oss/python/langchain/multi-agent/subagents
+          - title: Pass only approved MCP tools
+            body:
+              - >-
+                From MCPAdapter.list_tools() pass create_agent only the tool names your registry approves.
+            url: https://docs.langchain.com/oss/python/langchain/mcp/tools
+        note: >-
+          Partial by the registry rule applied to every SDK on this drawing: Agent Registry records agents but not
+          tool servers, versions of what they serve or an approval state, and nothing consults it before a tool
+          is offered or an agent runs; it is not available on self-hosted LangSmith. The tool catalogue is whatever
+          the process constructs.
+        verified: "2026-11-21"
+      - mitigation: cap-agent-kill-switch
+        coverage: partial
+        mechanism: >-
+          Agent Server runs.cancel (action interrupt or rollback), cancel_many by status across a deployment,
+          on_disconnect "cancel", crons.delete, deleting the Agent Server; RunControl.request_drain in a self-run
+          process; revoking the LangSmith key or the caller's IdP access
+        steps:
+          - title: Stop running work
+            body:
+              - >-
+                Call client.runs.cancel_many(status="all") for the deployment, or runs.cancel with
+                action="rollback" to delete the run's checkpoints so it cannot be resumed.
+            url: https://docs.langchain.com/langsmith/cancel-run
+          - title: Stop scheduled starts
+            body:
+              - >-
+                Delete the assistant's crons with client.crons.delete and revoke the credentials callers use.
+            url: https://docs.langchain.com/langsmith/cron-jobs
+          - title: Drain a self-run process
+            body:
+              - >-
+                Pass control=RunControl() to invoke or stream and call request_drain(); the graph stops at the next
+                superstep boundary with a resumable checkpoint.
+            url: https://docs.langchain.com/oss/python/langgraph/fault-tolerance
+        note: >-
+          Partial by this drawing's rule: Agent Server documents stopping the worker that runs a run, so active
+          work stops, but the delay is not documented, an in-flight tool call may already have acted, rollback
+          reverts only the thread's state, and nothing quarantines the agent: new runs, crons, MCP and A2A calls
+          are accepted until auth changes, the assistant is deleted (which interrupts its running runs and deletes
+          its crons) or the server is deleted. request_drain waits for running nodes and does
+          not cancel asyncio tasks or threads.
+        verified: "2026-11-21"
+      - mitigation: cap-mcp-tool-integrity
+        coverage: partial
+        mechanism: >-
+          MCPAdapter (langchain.mcp, beta) with targets fixed in code; string targets that are not http(s) URLs
+          rejected; list_tools() with cache_mode; tool metadata carrying the server's name, version and
+          annotations; no hashing or pinning of definitions
+        steps:
+          - title: Admit only named tools
+            body:
+              - >-
+                Pass create_agent only the approved names from MCPAdapter.list_tools().
+            url: https://docs.langchain.com/oss/python/langchain/mcp/tools
+          - title: Fix server targets in code
+            body:
+              - >-
+                Give MCPAdapter an https URL or a Path you control; never build a target from model or user input.
+            url: https://docs.langchain.com/oss/python/langchain/mcp/index
+          - title: Gate destructive tools
+            body:
+              - >-
+                Use a HumanInTheLoopMiddleware when predicate that reads the tool's MCP destructive_hint annotation.
+            url: https://docs.langchain.com/oss/python/langchain/mcp/tools
+        note: >-
+          Partial by core rule 1: fixed targets and a name filter admit tools but verify nothing a server serves;
+          nothing hashes descriptions or schemas, and a changed definition is accepted on the next list_tools().
+          Annotations such as destructive_hint are the server's own claim. The langchain.mcp namespace is beta
+          (langchain[mcp] 1.4.0 and later).
+        verified: "2026-11-21"
+      - mitigation: cap-agent-egress-control
+        coverage: partial
+        mechanism: >-
+          DockerExecutionPolicy network_enabled (False by default) for the shell tool; Agent Server webhooks.url
+          policy (allowed_domains, require_https, allowed_ports, disable_loopback) over a built-in SSRF block of
+          metadata endpoints; nothing for in-process tools, MCP clients or model calls
+        steps:
+          - title: Keep shell containers offline
+            body:
+              - >-
+                Leave DockerExecutionPolicy network_enabled at False for agent shells that need no network.
+            url: https://reference.langchain.com/python/langchain/agents/middleware/shell_tool/DockerExecutionPolicy
+          - title: Allowlist webhook targets
+            body:
+              - >-
+                Set webhooks.url.allowed_domains to the firm's receivers and require_https to true in
+                langgraph.json.
+            url: https://docs.langchain.com/langsmith/use-webhooks
+          - title: Bound the host at the network
+            body:
+              - >-
+                Run Agent Servers in your own network (Hybrid or self-hosted) behind an egress proxy that allows only
+                the AI gateway, the package mirror and approved tools.
+            url: https://docs.langchain.com/langsmith/hybrid
+        note: >-
+          Partial on the same finding as the Claude and OpenAI SDKs: the framework's only network switch is the
+          Docker shell's on or off. In-process tools (the local tools this pin sits on), MCP connections, model
+          calls and tracing leave through the host network, which the deployer restricts; the webhook policy bounds
+          only where the server posts run results. On LangSmith Cloud the container's egress is LangChain's.
+        verified: "2026-11-21"
+      - mitigation: D3-FA
+        coverage: external
+        mechanism: >-
+          None in the framework; admission scanning at the internal registry the Agent Server image build and the
+          runtime's package managers pull from
+        evidence:
+          - title: Set up a build machine on a restricted network, every package from an internal registry (2026-11-21)
+            url: https://docs.langchain.com/langsmith/self-host-restricted-network-build
+          - title: LangGraph CLI configuration file, image_distro and keep_pkg_tools (2026-11-21)
+            url: https://docs.langchain.com/langsmith/cli
+        note: >-
+          External (package firewall or artifact-repository scanning at the mirror), as for the Claude and OpenAI
+          SDKs: LangGraph scans nothing it loads. Integration points: the restricted-network guide points pip, uv
+          and the image build at an internal registry such as Artifactory or Nexus; langgraph.json image_distro
+          "wolfi" and keep_pkg_tools false (the default) slim the image. Checkpoint deserialisation is state, not a
+          model or dependency file, and is covered on AML.M0031. No model weights load.
+        verified: "2026-11-21"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md). The framework
+    # runs inside the application, so most rows are parameters, middleware and environment variables in the
+    # deployer's code; Agent Server rows are langgraph.json keys and environment variables, and LangSmith rows
+    # are its own settings. Verified 2026-11-21 against docs.langchain.com and reference.langchain.com.
+    settings:
+      - id: agentServerAuth
+        name: auth.path with @auth.authenticate
+        where: langgraph.json › auth › path, naming a langgraph_sdk.Auth instance with an @auth.authenticate handler
+        setVia: [configFile, code]
+        area: identity
+        default: LangSmith API key in x-api-key on LangSmith; no authentication when self-hosted
+        requires: Agent Server
+        recommended: A handler that validates the firm's IdP token on every request and returns the end user's identity and permissions
+        value: "IdP token validated on every request"
+        why: Without it the server sees only the API-key owner, so every caller acts as that owner, and a self-hosted server accepts anyone who can reach it.
+        mitigations: [D3-APA, D3-AA]
+        url: https://docs.langchain.com/langsmith/custom-auth
+        verified: "2026-11-21"
+      - id: authorizationHandlers
+        name: "@auth.on handlers"
+        where: The Auth instance › @auth.on (global), @auth.on.threads.create, .read, .create_run, @auth.on.assistants, @auth.on.crons
+        setVia: [code]
+        area: identity
+        default: None registered
+        requires: Agent Server with custom auth
+        recommended: A global handler that rejects unhandled requests, plus per-action handlers that tag owner metadata on create and return an owner filter on read, search and create_run
+        value: "Default-deny, owner-scoped threads and runs"
+        why: One user cannot read, resume or start runs on another user's threads, assistants or crons; runs inherit their thread's handlers.
+        mitigations: [D3-APA, cap-data-access-governance]
+        url: https://docs.langchain.com/langsmith/auth
+        verified: "2026-11-21"
+      - id: storeAuth
+        name: "@auth.on.store"
+        where: The Auth instance › @auth.on.store, rewriting or validating value["namespace"]
+        setVia: [code]
+        area: data
+        default: Store namespaces shared across all callers
+        requires: Agent Server with custom auth
+        recommended: Prepend ctx.user.identity to every namespace, or reject any namespace not starting with it; register it explicitly when a global handler denies by default
+        value: "Namespace prefixed with the caller's identity"
+        why: Long-term memories and the store's semantic index stay per user, so one user's agent cannot read, overwrite or be steered by another's memories.
+        mitigations: [AML.M0031, cap-data-access-governance, cap-retrieval-grounding-checks]
+        url: https://docs.langchain.com/langsmith/store-auth
+        verified: "2026-11-21"
+      - id: disableRoutes
+        name: http route disable flags
+        where: langgraph.json › http › disable_meta, disable_store, disable_ui, disable_mcp, disable_a2a
+        setVia: [configFile]
+        area: network
+        default: Every route group served, MCP and A2A included
+        requires: Agent Server
+        recommended: true for every route group the deployment does not use, including disable_mcp and disable_a2a unless a client needs them
+        value: "Unused route groups off"
+        why: Every assistant is otherwise also an MCP tool and an A2A agent, and the meta routes publish /docs, /info, /metrics and /openapi.json.
+        mitigations: [D3-APA]
+        url: https://docs.langchain.com/langsmith/cli
+        verified: "2026-11-21"
+      - id: agentAuth
+        name: Agent Auth client.authenticate
+        where: langchain_auth Client(...).authenticate(provider, scopes, user_id, agent_id) in a tool or node (JavaScript @langchain/auth)
+        setVia: [code]
+        area: identity
+        default: Tokens scoped to the calling assistant ID
+        requires: Beta; LangSmith
+        recommended: One OAuth provider per downstream system, the narrowest scopes, user_id set to the authenticated caller, and agent_id for any subagent that needs its own token
+        value: "Narrow scopes, per user and per agent"
+        why: Each agent gets an OAuth token for one user and one scope set, stored and refreshed outside graph state, instead of a shared key in the environment.
+        mitigations: [D3-AA, D3-CH, D3-CTS]
+        url: https://docs.langchain.com/langsmith/agent-auth
+        verified: "2026-11-21"
+      - id: perUserMcpAuth
+        name: MCPAdapter with per-user auth
+        where: Graph factory › MCPAdapter(Client(config, auth=BearerAuth(...))) built from runtime.user; ClientGroup for per-server credentials
+        setVia: [code]
+        area: identity
+        default: Whatever auth the client is built with, shared by every run
+        requires: langchain[mcp] 1.4.0+ (beta); Agent Server for runtime.user
+        recommended: A token exchanged for the authenticated caller in the graph factory, one ClientGroup member per server, and any tool-list cache keyed by user
+        value: "Per-user token, one client per server"
+        why: Each MCP call carries only that user's authority for that one server, and one user's cached tool list or token never serves another.
+        mitigations: [D3-CTS, cap-data-access-governance, D3-CH]
+        url: https://docs.langchain.com/oss/python/langchain/mcp/auth
+        verified: "2026-11-21"
+      - id: checkpointer
+        name: checkpointer with thread_id and durability
+        where: graph.compile(checkpointer=PostgresSaver or MongoDBSaver), config["configurable"]["thread_id"], durability= on invoke or stream
+        setVia: [code]
+        area: data
+        default: No checkpointer (examples use InMemorySaver, lost on restart)
+        recommended: A persistent checkpointer, a new UUID thread_id per case, and durability="sync" on runs with side effects
+        value: "Postgres, one thread per case, sync durability"
+        why: Interrupts survive a restart, a resumed run does not redo committed steps, and one case's state never seeds another's run.
+        mitigations: [AML.M0031, AML.M0029]
+        url: https://docs.langchain.com/oss/python/langgraph/checkpointers
+        verified: "2026-11-21"
+      - id: aesEncryption
+        name: EncryptedSerializer with LANGGRAPH_AES_KEY and LANGGRAPH_AES_JSON_KEYS
+        where: serde=EncryptedSerializer.from_pycryptodome_aes() on the checkpointer; on Agent Server the LANGGRAPH_AES_KEY and LANGGRAPH_AES_JSON_KEYS environment variables
+        setVia: [code, configFile]
+        area: data
+        default: Unset (persisted state not encrypted)
+        recommended: A 32-byte key from the firm's secret manager (AES-256), with credential-bearing field names listed in LANGGRAPH_AES_JSON_KEYS
+        value: "AES-256 key from the secret manager"
+        why: Checkpoint blobs and named JSON fields in threads, runs, crons and the store are unreadable in the database without the key; encrypted fields cannot be searched.
+        mitigations: [AML.M0031, D3-CH]
+        url: https://docs.langchain.com/langsmith/aes-encryption
+        verified: "2026-11-21"
+      - id: checkpointerSerde
+        name: checkpointer.serde (allowed_json_modules, pickle_fallback)
+        where: langgraph.json › checkpointer › serde; JsonPlusSerializer(pickle_fallback=...) in a self-run process
+        setVia: [configFile, code]
+        area: data
+        default: allowed_json_modules limited to LangChain-safe defaults
+        requires: Agent Server 0.5+ for the langgraph.json keys
+        recommended: Leave allowed_json_modules at the default (list only your own state classes, never true), leave pickle_fallback off, and keep langgraph-checkpoint at 4.1.1 or later
+        value: "Default allowlist, no pickle fallback"
+        why: Whoever can write to the checkpoint store cannot make a resumed run rebuild arbitrary Python objects; four 2025-26 advisories were code execution on checkpoint or cache load.
+        mitigations: [AML.M0031]
+        url: https://docs.langchain.com/langsmith/cli
+        verified: "2026-11-21"
+      - id: dataTtl
+        name: checkpointer.ttl and store.ttl
+        where: langgraph.json › checkpointer › ttl (strategy, default_ttl, sweep_interval_minutes) and store › ttl (default_ttl, refresh_on_read)
+        setVia: [configFile]
+        area: data
+        default: Threads and store items never expire
+        requires: Agent Server
+        recommended: Checkpoints with strategy "delete" and default_ttl 43200 (30 days); store default_ttl matched to the memory's purpose with refresh_on_read false
+        value: "Threads deleted after 30 days"
+        why: Journalled state, tool results included, is not kept indefinitely; TTLs apply only to threads and items created after they are set.
+        mitigations: [AML.M0031]
+        url: https://docs.langchain.com/langsmith/configure-ttl
+        verified: "2026-11-21"
+      - id: humanInTheLoop
+        name: HumanInTheLoopMiddleware (interrupt_on, interrupt_mode)
+        where: create_agent(middleware=[HumanInTheLoopMiddleware(interrupt_on={...}, interrupt_mode="per_call")]) (TypeScript humanInTheLoopMiddleware)
+        setVia: [code]
+        area: tools
+        default: No middleware (tools run unapproved); batched mode once added
+        requires: A checkpointer; langchain 1.4.6+ for per_call
+        recommended: Every tool that changes records, moves money or sends data out in interrupt_on with allowed_decisions approve and reject, per_call mode, and only deterministic when predicates
+        value: "per_call approval on every consequential tool"
+        why: The run pauses in the checkpointer with the exact call until a person decides; a when predicate that turns False on resume runs the tool and ignores the reject.
+        mitigations: [AML.M0029]
+        url: https://docs.langchain.com/oss/python/langchain/human-in-the-loop
+        verified: "2026-11-21"
+      - id: toolPolicyMiddleware
+        name: wrap_tool_call
+        where: "@wrap_tool_call middleware (or AgentMiddleware.wrap_tool_call) on create_agent, returning a ToolMessage instead of calling the handler"
+        setVia: [code]
+        area: tools
+        default: None
+        recommended: A policy check on every consequential tool that reads the caller from runtime context or server_info and the call's name and args, and refuses before the tool runs
+        value: "Policy check before every consequential tool"
+        why: A call the policy forbids never executes, whatever the model asked, MCP tools included; agents not built with create_agent have no such hook.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028]
+        url: https://docs.langchain.com/oss/python/langchain/middleware/custom
+        verified: "2026-11-21"
+      - id: perAgentTools
+        name: tools per subagent (create_agent)
+        where: create_agent(model=..., tools=[...]) for each specialist wrapped as a supervisor tool; @wrap_model_call with request.override(tools=...)
+        setVia: [code]
+        area: tools
+        recommended: Each specialist built with only the tools its task needs and given only the task description, plus a wrap_model_call filter that drops tools the caller's grant does not cover
+        value: "Only the tools each specialist needs"
+        why: A hijacked supervisor reaches a write tool only through the one specialist that holds it, and the model is not offered a tool the caller may not use.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://docs.langchain.com/oss/python/langchain/multi-agent/subagents
+        verified: "2026-11-21"
+      - id: mcpToolList
+        name: MCPAdapter.list_tools
+        where: MCPAdapter(target).list_tools(cache_mode=...), then the tools passed to create_agent
+        setVia: [code]
+        area: tools
+        default: Every tool the server advertises; cache_mode "use"
+        requires: langchain[mcp] 1.4.0+ (beta)
+        recommended: Pass create_agent only the approved tool names, fix each target in code as an https URL or a Path, and never build a target from model or user input
+        value: "Approved tool names, targets fixed in code"
+        why: Tools a server adds or renames are never offered, and a string from config or a model cannot launch a local file as an MCP subprocess.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028]
+        url: https://docs.langchain.com/oss/python/langchain/mcp/tools
+        verified: "2026-11-21"
+      - id: guardrailHooks
+        name: before_agent and wrap_tool_call guardrail middleware
+        where: AgentMiddleware.before_agent (or @before_agent) and wrap_tool_call on create_agent, calling your classifier
+        setVia: [code]
+        area: tools
+        default: None
+        recommended: Your injection classifier on the user's request before the first model call and on every tool result carrying external content, ending the run or replacing the result on a hit
+        value: "Injection classifier on input and tool results"
+        why: Injected instructions in a request, web page, MCP result or subagent reply are stopped before the model reasons over them; LangChain ships no classifier.
+        mitigations: [cap-input-guardrails]
+        url: https://docs.langchain.com/oss/python/langchain/guardrails
+        verified: "2026-11-21"
+      - id: piiMiddleware
+        name: PIIMiddleware
+        where: create_agent(middleware=[PIIMiddleware(pii_type, strategy=..., apply_to_input=..., apply_to_output=..., apply_to_tool_results=...)]) (TypeScript piiMiddleware)
+        setVia: [code]
+        area: data
+        default: Strategy redact; input on, output and tool results off
+        recommended: email, credit_card and ip plus custom detectors for national identifiers and API keys, with apply_to_tool_results and apply_to_output true
+        value: "Input, output and tool results on"
+        why: Identifiers in requests, tool results and replies are redacted before the model and the client see them; output redaction also covers the stream from langchain 1.3.2.
+        mitigations: [cap-sensitive-data-redaction]
+        url: https://docs.langchain.com/oss/python/langchain/middleware/built-in
+        verified: "2026-11-21"
+      - id: recursionLimit
+        name: recursion_limit
+        where: Run config › recursion_limit (top level, not under configurable), or LANGGRAPH_DEFAULT_RECURSION_LIMIT; TypeScript recursionLimit
+        setVia: [code, configFile]
+        area: tools
+        default: Python 10,007 super-steps (create_agent 9,999; Agent Server env var 10,011); TypeScript 25
+        recommended: An explicit limit sized to the workflow on every run, and server-wide with LANGGRAPH_DEFAULT_RECURSION_LIMIT on Agent Server
+        value: "Explicit, sized to the workflow"
+        why: A looping graph ends with GraphRecursionError after a bounded number of steps instead of running for thousands of model and tool calls.
+        mitigations: [AML.M0036]
+        url: https://docs.langchain.com/oss/python/langgraph/graph-api
+        verified: "2026-11-21"
+      - id: callLimits
+        name: ModelCallLimitMiddleware and ToolCallLimitMiddleware
+        where: create_agent(middleware=[ModelCallLimitMiddleware(run_limit=..., thread_limit=..., exit_behavior=...), ToolCallLimitMiddleware(tool_name=..., run_limit=...)])
+        setVia: [code]
+        area: tools
+        default: No limits; ToolCallLimitMiddleware exit_behavior "continue"
+        recommended: A run_limit on model calls for every agent and subagent, per-tool run limits on expensive or external tools, and exit_behavior "end" or "error"
+        value: "run_limit on every agent, exit end or error"
+        why: A runaway agent stops at a fixed number of model or tool calls; with "continue" the model only sees an error and the run goes on.
+        mitigations: [AML.M0036]
+        url: https://docs.langchain.com/oss/python/langchain/middleware/built-in
+        verified: "2026-11-21"
+      - id: bgJobTimeout
+        name: BG_JOB_TIMEOUT_SECS and BG_JOB_MAX_RETRIES
+        where: Agent Server environment variables
+        setVia: [configFile]
+        area: tools
+        default: 86400 seconds; 3 retries
+        requires: Agent Server
+        recommended: A timeout sized to the longest legitimate run, and retries left at 3 only where every side-effecting node is idempotent
+        value: "Longest legitimate run, not 24 hours"
+        why: A stuck or looping background run ends with status timeout, and a failed run is not replayed against systems that would repeat its side effects.
+        mitigations: [AML.M0036, cap-agent-kill-switch]
+        url: https://docs.langchain.com/langsmith/env-var-cloud
+        verified: "2026-11-21"
+      - id: shellExecutionPolicy
+        name: execution_policy (ShellToolMiddleware)
+        where: ShellToolMiddleware(execution_policy=DockerExecutionPolicy(network_enabled=False, read_only_rootfs=True, user=...))
+        setVia: [code]
+        area: tools
+        default: HostExecutionPolicy (no filesystem or network sandboxing)
+        recommended: DockerExecutionPolicy with network_enabled False, read_only_rootfs True and a non-root user, on a locked-down Docker daemon, for any agent whose commands follow untrusted input
+        value: "DockerExecutionPolicy, no network, read-only root"
+        why: Commands run in a separate container per agent run with no network, instead of on the host where they can change anything the process user reaches.
+        mitigations: [D3-EI, cap-agent-egress-control]
+        url: https://reference.langchain.com/python/langchain/agents/middleware/shell_tool/DockerExecutionPolicy
+        verified: "2026-11-21"
+      - id: webhookUrlPolicy
+        name: webhooks.url (allowed_domains, require_https, disable_loopback)
+        where: langgraph.json › webhooks › url
+        setVia: [configFile]
+        area: network
+        default: No domain allowlist; ports 443 and 80; disable_loopback true from langgraph-api 0.10.0
+        requires: Agent Server
+        recommended: allowed_domains limited to the firm's receivers, require_https true, and disable_loopback left true
+        value: "Firm receivers only, HTTPS"
+        why: Run results posted on completion go only to approved hosts over TLS, and a run cannot aim a webhook at the server's own routes (CVE-2026-55235).
+        mitigations: [cap-agent-egress-control]
+        url: https://docs.langchain.com/langsmith/use-webhooks
+        verified: "2026-11-21"
+      - id: langsmithTracing
+        name: LANGSMITH_TRACING with LANGSMITH_API_KEY and LANGSMITH_ENDPOINT
+        where: Process or Agent Server environment
+        setVia: [configFile]
+        area: audit
+        default: Off in a self-run process until set; true on Agent Server
+        recommended: true, to a workspace in the firm's approved region (LANGSMITH_ENDPOINT) or a BYOC or self-hosted LangSmith, with LANGSMITH_AGENT_ID and LANGSMITH_AGENT_ENVIRONMENT set
+        value: "true, to the firm's region or own instance"
+        why: Every model call and tool call is a run in one trace per request, linked into threads, so an incident can be reconstructed step by step.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.langchain.com/langsmith/trace-with-langgraph
+        verified: "2026-11-21"
+      - id: hideInputsOutputs
+        name: LANGSMITH_HIDE_INPUTS / LANGSMITH_HIDE_OUTPUTS
+        where: Environment variables, or Client(hide_inputs=..., hide_outputs=..., anonymizer=...) in the LangSmith SDK
+        setVia: [configFile, code]
+        area: audit
+        default: Unset (inputs and outputs sent)
+        recommended: An anonymizer or hide_inputs and hide_outputs functions that mask client data, or true where the trace store is not approved for prompts and tool results
+        value: "Mask client data before upload"
+        why: Traces keep their structure while prompts, tool arguments and results that carry client material stay out of LangSmith.
+        mitigations: [cap-sensitive-data-redaction, cap-agent-tracing]
+        url: https://docs.langchain.com/langsmith/mask-inputs-outputs
+        verified: "2026-11-21"
+      - id: otelExport
+        name: LANGSMITH_OTEL_ENABLED with OTEL_EXPORTER_OTLP_ENDPOINT
+        where: Process environment; on Agent Server also LS_APM_OTEL_ENABLED for server spans
+        setVia: [configFile]
+        area: audit
+        default: Unset
+        recommended: true, exporting to the firm's OpenTelemetry Collector, which fans out to the SIEM and to LangSmith
+        value: "true, to the firm's collector"
+        why: Agent spans reach the SIEM under the firm's retention and alerting, not only LangSmith's 14 or 180 days.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.langchain.com/langsmith/trace-with-opentelemetry
+        verified: "2026-11-21"
+      - id: cancelRun
+        name: runs.cancel and cancel_many (action interrupt or rollback)
+        where: Agent Server API › POST /threads/{thread_id}/runs/{run_id}/cancel; client.runs.cancel_many(status=...); on_disconnect="cancel"
+        setVia: [apiCli]
+        area: tools
+        default: action interrupt (run and checkpoints kept)
+        requires: Agent Server
+        recommended: Wired to an operator stop that calls cancel_many with status "all", rollback where the partial state must not be resumed, and on_disconnect "cancel" on interactive runs
+        value: "Operator stop wired to cancel_many"
+        why: Running work stops at the worker, and with rollback its checkpoints are deleted so nobody can resume it; tool calls already made are not undone.
+        mitigations: [cap-agent-kill-switch]
+        url: https://docs.langchain.com/langsmith/cancel-run
+        verified: "2026-11-21"
+      - id: agentRegistry
+        name: Agent Registry (--agent-id, --agent-environment)
+        where: LangSmith › Agent Registry; langgraph deploy --agent-id <id> --agent-environment <env>, or LANGSMITH_AGENT_ID and LANGSMITH_AGENT_ENVIRONMENT
+        setVia: [adminConsole, apiCli, configFile]
+        area: audit
+        requires: LangSmith Cloud, agent-based workspace
+        recommended: Every agent registered once with a stable identifier, each deployment bound to development, staging or production, and traces addressed to it
+        value: "Every agent registered and addressed"
+        why: The firm has one place listing the agents it runs and where each runs, with created, updated and deleted agents in the audit log.
+        mitigations: [cap-agent-tool-registry, cap-agent-tracing]
+        url: https://docs.langchain.com/langsmith/agent-registry
+        verified: "2026-11-21"
+      - id: releaseControl
+        name: Git Ref (Branch or Tag) and Deploy on push; assistant versions
+        where: LangSmith › Agent Servers › Agent Server Settings; client.assistants.update and set_latest
+        setVia: [adminConsole, apiCli]
+        area: tools
+        default: Deploy on push available for a branch
+        requires: LangSmith Cloud
+        recommended: Production built from a release tag (Deploy on push is unavailable for tags) promoted after the staging evaluation passes, with the previous assistant version kept for set_latest rollback
+        value: "Release tags; rollback by assistant version"
+        why: A push to a branch does not reach production unreviewed, and a regressing configuration is reverted for all future runs with one call.
+        mitigations: [cap-staged-rollout-gate]
+        url: https://docs.langchain.com/langsmith/manage-agent-server
+        verified: "2026-11-21"
+      - id: a2aToolResults
+        name: A2A_ALLOWED_TOOL_CALL_RESULTS and historyScope
+        where: Agent Server environment variable; historyScope "task" in the A2A request or the LangGraph-A2A-History-Scope header
+        setVia: [configFile]
+        area: sharing
+        default: All tool results published; history scope "context"
+        requires: langgraph-api 0.12.4+ (allowlist), 0.15.0+ (historyScope)
+        recommended: Only the tool names a peer needs, and historyScope "task" on every client
+        value: "Named tool results only, task history"
+        why: A peer agent receives the reply, not every tool result and earlier turn of the context, which may carry another task's data.
+        mitigations: [cap-sensitive-data-redaction]
+        url: https://docs.langchain.com/langsmith/server-a2a
+        verified: "2026-11-21"
+    advisories:
+      - title: >-
+          CVE-2025-64439 (GHSA-wwqv-p2pp-99h5): remote code execution in the "json" mode of JsonPlusSerializer
+          when loading checkpoints (langgraph-checkpoint, fixed 3.0.0)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-wwqv-p2pp-99h5
+        date: "2025-11"
+      - title: >-
+          CVE-2026-27794 (GHSA-mhr3-j7m5-c7c9): BaseCache backends defaulted to pickle fallback, so a writer to
+          the cache could get code executed on read (langgraph-checkpoint, fixed 4.0.0)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-mhr3-j7m5-c7c9
+        date: "2026-02"
+      - title: >-
+          CVE-2026-28277 (GHSA-g48c-2wqr-h844): unsafe msgpack deserialisation in checkpoint loading (langgraph,
+          fixed 1.0.10)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-g48c-2wqr-h844
+        date: "2026-03"
+      - title: >-
+          CVE-2026-48775 (GHSA-fjqc-hq36-qh5p): the default JSON serializer could rebuild arbitrary objects from
+          checkpoint data (langgraph-checkpoint, fixed 4.1.1)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-fjqc-hq36-qh5p
+        date: "2026-05"
+      - title: >-
+          CVE-2025-8709 (GHSA-4h97-wpxp-3757): SQL injection through filter operators in the SQLite store
+          (langgraph-checkpoint-sqlite, fixed 2.0.11)
+        url: https://github.com/advisories/GHSA-4h97-wpxp-3757
+        date: "2025-10"
+      - title: >-
+          CVE-2025-64104 (GHSA-7p73-8jqx-23r8): SQL injection through filter keys in SqliteStore
+          (langgraph-checkpoint-sqlite, fixed 2.0.11)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-7p73-8jqx-23r8
+        date: "2025-10"
+      - title: >-
+          CVE-2025-67644 (GHSA-9rwj-6rc7-p77c): SQL injection through metadata filter keys in the SQLite
+          checkpointer's list method (langgraph-checkpoint-sqlite, fixed 3.0.1)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-9rwj-6rc7-p77c
+        date: "2025-12"
+      - title: >-
+          CVE-2026-55253 (GHSA-533j-2v4q-mw5h): NoSQL operator injection in MongoDBSaver.list() and
+          MongoDBStore.search() exposing other tenants' data (langgraph-checkpoint-mongodb 0.3.0,
+          langgraph-store-mongodb 0.4.0)
+        url: https://github.com/langchain-ai/langchain-mongodb/security/advisories/GHSA-533j-2v4q-mw5h
+        date: "2026-06"
+      - title: >-
+          CVE-2026-71433 (GHSA-47pj-3jcm-6whg): namespace prefix matching crossed segment boundaries in the
+          Postgres and SQLite stores (fixed 3.1.1)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-47pj-3jcm-6whg
+        date: "2026-07"
+      - title: >-
+          CVE-2026-115883 (GHSA-6hmw-9432-67qq): namespace labels containing a dot reached other namespaces in the
+          Postgres and SQLite stores (Postgres 3.1.3, SQLite 3.1.2)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-6hmw-9432-67qq
+        date: "2026-10"
+      - title: >-
+          CVE-2026-55235 (GHSA-2c9q-c2q9-qgqv): relative webhook targets reached Agent Server's in-process routes
+          without authentication (langgraph-api, fixed 0.10.0)
+        url: https://github.com/langchain-ai/helm/security/advisories/GHSA-2c9q-c2q9-qgqv
+        date: "2026-06"
+      - title: >-
+          CVE-2026-55236 (GHSA-jfj5-wrj9-63x4): incomplete assistant authorisation in run creation exposed another
+          user's private assistant (langgraph-api, fixed 0.10.0)
+        url: https://github.com/langchain-ai/helm/security/advisories/GHSA-jfj5-wrj9-63x4
+        date: "2026-06"
+      - title: >-
+          CVE-2026-118668 (GHSA-4hm6-w6qq-w73v): JavaScript custom auth namespace rewrites not applied, allowing
+          cross-user Store access (langgraph-api, fixed 0.15.0)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-4hm6-w6qq-w73v
+        date: "2026-09"
+      - title: >-
+          CVE-2026-104873 (GHSA-fvww-7h3r-vfhp): custom auth silently ignored actions= on resource decorators
+          (langgraph-sdk, fixed 0.4.4)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-fvww-7h3r-vfhp
+        date: "2026-08"
+      - title: >-
+          CVE-2026-48776 (GHSA-w39p-vh2g-g8g5): unencoded identifiers in SDK request paths could reach a different
+          resource (langgraph-sdk, fixed 0.3.15)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-w39p-vh2g-g8g5
+        date: "2026-05"
+      - title: >-
+          CVE-2026-118667 (GHSA-3fx2-cqw9-xr3c): unencoded identifiers in v3 streaming could redirect
+          authenticated GET requests (langgraph 1.2.14, langgraph-sdk 0.4.6)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-3fx2-cqw9-xr3c
+        date: "2026-10"
+      - title: >-
+          CVE-2026-115885 (GHSA-8prr-f582-jqq3): langgraph deploy --verbose printed the registry push token
+          (langgraph-cli, fixed 0.4.32)
+        url: https://github.com/langchain-ai/langgraph/security/advisories/GHSA-8prr-f582-jqq3
+        date: "2026-10"
+      - title: >-
+          CVE-2026-55443 (GHSA-gr75-jv2w-4656): path traversal and sandbox escape in LangChain's file-search agent
+          middleware and loaders (langchain, fixed 1.3.9)
+        url: https://github.com/langchain-ai/langchain/security/advisories/GHSA-gr75-jv2w-4656
+        date: "2026-06"
+      - title: >-
+          CVE-2025-68664 (GHSA-c67j-w6g6-q2cm): serialisation injection in langchain-core dumps/loads enabling
+          secret extraction (fixed 1.2.5 and 0.3.81)
+        url: https://github.com/langchain-ai/langchain/security/advisories/GHSA-c67j-w6g6-q2cm
+        date: "2025-12"
+    sources:
+      - title: LangGraph overview (Python)
+        url: https://docs.langchain.com/oss/python/langgraph/overview
+      - title: LangGraph overview (TypeScript)
+        url: https://docs.langchain.com/oss/javascript/langgraph/overview
+      - title: Runtimes, frameworks and harnesses
+        url: https://docs.langchain.com/oss/python/concepts/products
+      - title: What's new in LangGraph v1 (create_react_agent deprecated for create_agent)
+        url: https://docs.langchain.com/oss/python/releases/langgraph-v1
+      - title: LangChain agents (create_agent)
+        url: https://docs.langchain.com/oss/python/langchain/agents
+      - title: Middleware overview
+        url: https://docs.langchain.com/oss/python/langchain/middleware/overview
+      - title: Prebuilt middleware
+        url: https://docs.langchain.com/oss/python/langchain/middleware/built-in
+      - title: Human-in-the-loop (LangChain)
+        url: https://docs.langchain.com/oss/python/langchain/human-in-the-loop
+      - title: Interrupts (LangGraph)
+        url: https://docs.langchain.com/oss/python/langgraph/interrupts
+      - title: Checkpointers
+        url: https://docs.langchain.com/oss/python/langgraph/checkpointers
+      - title: Fault tolerance
+        url: https://docs.langchain.com/oss/python/langgraph/fault-tolerance
+      - title: Multi-agent subagents
+        url: https://docs.langchain.com/oss/python/langchain/multi-agent/subagents
+      - title: Model Context Protocol (MCPAdapter)
+        url: https://docs.langchain.com/oss/python/langchain/mcp/index
+      - title: LangSmith Agent Server
+        url: https://docs.langchain.com/langsmith/agent-server
+      - title: Authentication and access control
+        url: https://docs.langchain.com/langsmith/auth
+      - title: LangGraph CLI and langgraph.json
+        url: https://docs.langchain.com/langsmith/cli
+      - title: A2A endpoint in Agent Server
+        url: https://docs.langchain.com/langsmith/server-a2a
+      - title: Data storage and privacy (CLI, Agent Server, Studio)
+        url: https://docs.langchain.com/langsmith/data-storage-and-privacy
+      - title: Prevent logging of sensitive data in traces
+        url: https://docs.langchain.com/langsmith/mask-inputs-outputs
+      - title: Redact secrets from traces (LangSmithSecret, SDK anonymizer)
+        url: https://docs.langchain.com/langsmith/redact-secrets
+      - title: LangChain security policy
+        url: https://docs.langchain.com/oss/python/security-policy
+      - title: LangChain EMEA (no training on customer data)
+        url: https://www.langchain.com/emea
+      - title: LangChain Enterprise Terms of Service, 4.2 Customer Data (no training)
+        url: https://www.langchain.com/terms-of-service
+      - title: LangChain Standard Terms of Service, 4.2 Customer Data (training unless the customer opts out)
+        url: https://www.langchain.com/standard-terms-of-service
+      - title: langgraph on GitHub
+        url: https://github.com/langchain-ai/langgraph
