@@ -15,8 +15,6 @@ selfManaged: true
 boundary: Enterprise data centre
 
 notOffered:
-  - architecture: archSoftwareFactory
-    why: "The mapping is being researched and checked."
   - architecture: archCloudManagedAgent
     why: "A managed agent service is run by a cloud provider. In your own data centre nobody runs the agent loop for you, so you build and host the agent yourself."
     instead: archChatAgent
@@ -1436,6 +1434,248 @@ settings:
     url: https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains
     verified: "2026-11-18"
   # <<< more hosting rows
+  # >>> software factory rows (the settings that build and guard the factory and the apps it makes)
+  - id: gitlabAgentProjectToken
+    name: "Project access tokens (role and scopes)"
+    where: "GitLab › the app's project › Settings › Access tokens: role, scopes, expiry date; minted per app by the Backstage action gitlab:projectAccessToken:create"
+    setVia: [apiCli, adminConsole]
+    area: identity
+    default: "Expiry is 365 days from today if none is entered; gitlab:projectAccessToken:create defaults to accessLevel 40 (Maintainer) and read_repository unless set"
+    requires: "Project access tokens are in every licence on GitLab Self-Managed; they reach one project only"
+    recommended: "One token per app project for the agent: role Developer, scope write_repository only (no api, registry or runner scopes), an expiry of days rather than a year, readable only by that app's builds; merge requests opened with the merge_request.create push option."
+    value: "Developer, write_repository only, days to expiry"
+    why: "The token reaches one project and can push branches but cannot merge to the protected branch or call the API, so whatever the agent is talked into stays on a branch."
+    mitigations: [AML.M0028]
+    url: https://docs.gitlab.com/user/project/settings/project_access_tokens/
+    verified: "2026-11-21"
+  - id: gitlabProtectedBranch
+    name: "Protected branches and Pipelines must succeed"
+    where: "GitLab › project › Settings › Repository › Protected branches (Allowed to merge, Allowed to push and merge, Allowed to force push); Settings › Merge requests › Merge checks › Pipelines must succeed"
+    setVia: [adminConsole, apiCli]
+    area: tools
+    default: "The default branch is protected automatically; Pipelines must succeed is off until selected"
+    recommended: "Default branch: Allowed to push and merge No one; Allowed to merge Maintainers, held only by the factory's merge bot, never the agent's Developer token; force push off; Pipelines must succeed on, and Skipped pipelines are considered successful left off so a push with ci.skip cannot merge."
+    value: "Push: No one; merge: Maintainers; pipeline must pass"
+    why: "Code reaches the default branch only through a merge request whose pipeline passed, merged by the factory and never by the agent that wrote it."
+    mitigations: [AML.M0028, D3-SYSVA]
+    url: https://docs.gitlab.com/user/project/repository/branches/protected/
+    verified: "2026-11-21"
+  - id: gitlabExternalCiConfig
+    name: "CI/CD configuration file (stored in another project)"
+    where: "GitLab › the app's project › Settings › CI/CD › General pipelines › CI/CD configuration file: <file>@<platform group>/<pipeline project>"
+    setVia: [adminConsole, apiCli]
+    area: tools
+    default: ".gitlab-ci.yml in the app's own repository, which anyone who can push to it may change"
+    recommended: "Every app project points at the platform team's pipeline file in a project only the platform team can write; deploy and signing credentials kept in protected variables, which pipelines on unprotected branches do not receive."
+    value: "Platform-owned file in another project"
+    why: "The agent can push code but cannot change the jobs that build, scan and sign it, so it cannot skip a scan by editing the pipeline."
+    mitigations: [D3-SYSVA, AML.M0028]
+    url: https://docs.gitlab.com/ci/pipelines/settings/#specify-a-custom-cicd-configuration-file
+    verified: "2026-11-21"
+  - id: sandboxClaimLifecycle
+    name: "SandboxClaim lifecycle (shutdownTime, ttlSecondsAfterFinished, shutdownPolicy)"
+    where: "agent-sandbox › SandboxClaim (extensions.agents.x-k8s.io) › spec.lifecycle: shutdownTime, ttlSecondsAfterFinished, shutdownPolicy"
+    setVia: [code]
+    area: tools
+    default: "No scheduled expiry when neither field is set; shutdownPolicy Retain"
+    recommended: "Your orchestrator creates one claim per build with a shutdownTime at the build's hard deadline, ttlSecondsAfterFinished of a few minutes at most and shutdownPolicy Delete; no volume outlives the build; leftover claims are swept and alerted on."
+    value: "Deadline per build, short ttl, Delete"
+    why: "Each build's sandbox is made for that build and destroyed after it, so nothing one build installed or wrote is there for the next."
+    mitigations: [D3-EI]
+    url: https://agent-sandbox.sigs.k8s.io/docs/api/
+    verified: "2026-11-21"
+  - id: argocdOwnerSync
+    name: "Manual sync, with the sync action granted per app to its owner"
+    where: "Argo CD › Application spec.syncPolicy with no automated block; argocd-rbac-cm policy.csv: p, <role>, applications, sync, <project>/<app>, allow and g, <owner group>, <role>; argocd-cm application.sync.requireOverridePrivilegeForRevisionSync"
+    setVia: [configFile]
+    area: sharing
+    default: "Automated sync is opt-in; a user with sync may pass any revision, because requireOverridePrivilegeForRevisionSync defaults to 'false'"
+    recommended: "No automated sync on production Applications; one role per app whose only group is that app's owner group from Keycloak, holding sync on that app alone; requireOverridePrivilegeForRevisionSync 'true' and override granted to nobody; policy.default role:readonly at most."
+    value: "Manual; sync for the owner's group only"
+    why: "A release reaches real data only when the app's named owner, signed in with a second factor, syncs the revision the pipeline committed, and the requester cannot do it for them."
+    mitigations: [AML.M0029]
+    url: https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/
+    verified: "2026-11-21"
+  - id: argocdAppProject
+    name: "AppProject per app, with sync impersonation (destinationServiceAccounts)"
+    where: "Argo CD › AppProject › spec.sourceRepos, destinations (server, namespace), clusterResourceWhitelist, namespaceResourceBlacklist, destinationServiceAccounts; argocd-cm application.sync.impersonation.enabled"
+    setVia: [configFile]
+    area: identity
+    default: "The default project permits any source repository, any cluster and all resource kinds; impersonation is off, so syncs use the controller's cluster-admin-level role"
+    requires: "Sync impersonation is a beta feature, since Argo CD v3.5.0"
+    recommended: "One project per app: its environment repository only, its namespace only, no cluster-scoped kinds, SecurityPolicy, NetworkPolicy, ResourceQuota and RBAC kinds blacklisted; impersonation on, with a per-app ServiceAccount limited to that namespace; nothing in the default project."
+    value: "One repository, one namespace, per-app account"
+    why: "The deploy identity of one app can change only that app's namespace and cannot loosen its own sign-in, network policy or quota, so one release cannot touch another app."
+    mitigations: [D3-NI, D3-ACH]
+    url: https://argo-cd.readthedocs.io/en/stable/operator-manual/app-sync-using-impersonation/
+    verified: "2026-11-21"
+  - id: argoRolloutsCanary
+    name: "Canary strategy (setWeight, pause), abort and rollbackWindow"
+    where: "Argo Rollouts › Rollout spec.strategy.canary: steps (setWeight, pause), trafficRouting, analysis; spec.rollbackWindow.revisions; the abort command"
+    setVia: [configFile]
+    area: sharing
+    default: "With no steps a canary behaves like a rolling update; without a traffic router, weights are approximated by replica count"
+    requires: "Exact percentages need trafficRouting; Gateway API routing is a traffic router plugin, and Argo Rollouts calls its plugin system alpha"
+    recommended: "Every app as a Rollout: setWeight 10, then pause with no duration until the owner promotes, analysis on error rate, then full; rollbackWindow.revisions of 2 or more; on-call may abort, which reverts the steps and makes the previous ReplicaSet active."
+    value: "10% first, pause for the owner, abort to stable"
+    why: "A release that misbehaves with real data reaches few people first and is undone in one step, without a new build."
+    mitigations: [cap-staged-rollout-gate]
+    url: https://argoproj.github.io/argo-rollouts/features/canary/
+    verified: "2026-11-21"
+  - id: keycloakRequired2fa
+    name: "Conditional 2FA sub-flow with OTP default"
+    where: "Keycloak › Authentication › a copy of the browser flow › Browser - Conditional 2FA (OTP Form, WebAuthn Authenticator, Recovery Authentication Code Form) and Condition - credential; bound as the realm's browser flow"
+    setVia: [identityProvider]
+    area: identity
+    default: "The default browser flow asks for a second factor only from users who have set one up; WebAuthn and recovery codes are Disabled"
+    recommended: "In the realm of the factory and its apps, a copied browser flow in which a user with no second factor must set up OTP before continuing; WebAuthn Authenticator Alternative; Condition - credential kept so a passkey counts; used by the intake, Argo CD and every app client."
+    value: "Second factor required for every user"
+    why: "A stolen password alone then opens no generated app and approves no release, including for users who never set up a factor."
+    mitigations: [D3-MFA]
+    url: https://www.keycloak.org/docs/latest/server_admin/index.html#twofa-conditional-workflow-examples
+    verified: "2026-11-21"
+  - id: envoyGatewayOidcDefault
+    name: "SecurityPolicy OIDC authentication (Gateway and HTTPRoute targets)"
+    where: "Envoy Gateway › SecurityPolicy › spec.targetRefs (Gateway or HTTPRoute), spec.oidc: provider.issuer, clientID, clientSecret, redirectURL, logoutPath"
+    setVia: [clusterPolicy]
+    area: identity
+    default: "No SecurityPolicy: a route on the Gateway is served without sign-in. A route-level policy replaces the Gateway-level one unless mergeType is set"
+    recommended: "A Gateway-level OIDC policy against Keycloak, so no route on the apps Gateway is ever anonymous; for each app and preview a platform-owned route policy with that app's own Keycloak client; apps cannot create SecurityPolicy (AppProject blacklist and Kyverno)."
+    value: "OIDC on the Gateway, plus one per app route"
+    why: "Every generated app and preview sits behind the identity provider whatever the agent wrote, and only the platform can change the policy in front of it."
+    mitigations: [D3-APA]
+    url: https://gateway.envoyproxy.io/docs/tasks/security/oidc/
+    verified: "2026-11-21"
+  - id: semgrepScanPipeline
+    name: "semgrep scan with --error, local rules and --metrics off"
+    where: "Semgrep Community Edition › pipeline step semgrep scan --config <rules directory> --error --metrics off --sarif-output <file>"
+    setVia: [apiCli]
+    area: tools
+    default: "Exit code 0 even with findings unless --error is passed; --metrics auto sends metrics when rules are pulled from the Semgrep Registry"
+    recommended: "On every push, semgrep scan with --error against a rules directory kept in the platform's pipeline project (registry rules reviewed and copied in), --metrics off, ERROR-severity findings stopping the release, and the SARIF kept with the release."
+    value: "--error, local rules, metrics off"
+    why: "Nobody reads this code, so a static scan that fails the build on serious findings is part of the only review it gets, and it runs without leaving the data centre."
+    mitigations: [D3-SYSVA]
+    url: https://docs.semgrep.dev/cli-reference
+    verified: "2026-11-21"
+  - id: gitleaksScanPipeline
+    name: "gitleaks git (fails on any leak)"
+    where: "gitleaks › pipeline step gitleaks git with --log-opts set to the merge request's commit range, --redact and the platform's config (--config); --exit-code"
+    setVia: [apiCli]
+    area: data
+    default: "Exits 1 when leaks are found; uses its default rules when no config is given"
+    requires: "gitleaks is feature complete and now receives security patches only; its maintainer has moved to Betterleaks"
+    recommended: "Every push scans the merge request's commits with gitleaks git and --redact, using a platform-owned config that extends the default rules (useDefault = true); any finding fails the pipeline, and a found secret is rotated in Vault, not just deleted."
+    value: "Every commit scanned; any leak fails"
+    why: "Agents paste keys into code, and a commit that holds one is stopped before it is merged, built into a release or copied by other tools."
+    mitigations: [D3-CH]
+    url: https://github.com/gitleaks/gitleaks
+    verified: "2026-11-21"
+  - id: syftSbomRelease
+    name: "SBOM for every release (syft -o cyclonedx-json)"
+    where: "Syft › pipeline step syft <image> -o cyclonedx-json=<file> (or spdx-json), kept and signed with the release candidate"
+    setVia: [apiCli]
+    area: tools
+    recommended: "For every release candidate, an SBOM of the built image in CycloneDX or SPDX JSON, stored with the release; the factory writes the coding agent's version and the models used, taken from the build's trace, into the release record beside it."
+    value: "CycloneDX SBOM with every release"
+    why: "When a package turns out to be harmful, every app that contains it, and the agent and model that wrote it, is found by searching the SBOMs and release records."
+    mitigations: [AML.M0023]
+    url: https://github.com/anchore/syft
+    verified: "2026-11-21"
+  - id: kyvernoAppBaseline
+    name: "ValidatingPolicy (validationActions: Deny) for app and preview namespaces"
+    where: "Kyverno › ValidatingPolicy (policies.kyverno.io/v1): matchConstraints, validations (CEL expression, message), validationActions; the same policies run in the pipeline with the Kyverno CLI"
+    setVia: [clusterPolicy, apiCli]
+    area: tools
+    default: "No policy: anything the Kubernetes API accepts is admitted"
+    requires: "ValidatingPolicy is stable in Kyverno v1.20.0"
+    recommended: "Deny in every app and preview namespace, and checked in the pipeline before release: no LoadBalancer or NodePort Service, no SecurityPolicy, HTTPRoutes only on the apps Gateway, restricted pod security, no hostPath, images from Harbor by digest, egress only to approved connectors."
+    value: "Deny, checked in the pipeline and at admission"
+    why: "A setting the agent chose can open an app to the world even when its code is clean, so manifests are held to the baseline before release and again at the cluster."
+    mitigations: [D3-ACH]
+    url: https://kyverno.io/docs/policy-types/validating-policy/
+    verified: "2026-11-21"
+  - id: vsoAppSecrets
+    name: "VaultAuth with VaultStaticSecret and VaultDynamicSecret (Vault Secrets Operator)"
+    where: "Vault Secrets Operator › in the app's namespace: VaultAuth (method: kubernetes, kubernetes.role, kubernetes.serviceAccount), VaultStaticSecret (mount, type kv-v2, path, refreshAfter, destination), VaultDynamicSecret; Vault › auth/kubernetes/role/<app>"
+    setVia: [clusterPolicy, apiCli]
+    area: data
+    default: "The operator writes each secret into a Kubernetes Secret in the namespace"
+    recommended: "Per app: a Vault role bound to its ServiceAccount and namespace with a policy for its own path only; a VaultAuth using that ServiceAccount; database credentials as a VaultDynamicSecret; the agent and the pipeline hold no Vault access to app paths."
+    value: "Per-app role and path, delivered at run time"
+    why: "Each app receives its secrets at run time under its own identity, so no secret is written into a repository or seen by the agent that built the app."
+    mitigations: [D3-CH]
+    url: https://developer.hashicorp.com/vault/docs/deploy/kubernetes/vso/sources/vault
+    verified: "2026-11-21"
+  - id: cnpgAppDatabase
+    name: "Cluster per app on an encrypted StorageClass (ceph-csi encrypted)"
+    where: "CloudNativePG › Cluster in the app's namespace (storage.storageClass); ceph-csi RBD StorageClass parameters encrypted and encryptionKMSID, with encryptionKMSType vault in the KMS configuration"
+    setVia: [clusterPolicy]
+    area: data
+    default: "CloudNativePG delegates encryption at rest to the storage class, and ceph-csi encryption is disabled by default"
+    recommended: "One CloudNativePG Cluster per app in its own namespace, on a StorageClass with encrypted \"true\" and Vault as the KMS; NetworkPolicy admitting that app's pods, the cluster's own instances and the operator on 8000 and 5432; backups to the app's own bucket; removed with the app."
+    value: "One database per app, encrypted volumes"
+    why: "Each app's records sit in a store no other app can reach, encrypted on disk, and are removed or archived when the app is retired."
+    mitigations: [D3-NI]
+    url: https://cloudnative-pg.io/docs/1.30/security
+    verified: "2026-11-21"
+  - id: appQuarantineRunbook
+    name: "Quarantine an app: deny policy, client disabled, leases revoked, deny sync window"
+    where: "Cilium › CiliumNetworkPolicy with ingressDeny for the app's namespace; Keycloak › the app's client › Enabled; Vault › sys/leases/revoke-prefix/<app path>; Argo CD › AppProject syncWindows (kind: deny)"
+    setVia: [clusterPolicy, identityProvider, apiCli]
+    area: network
+    recommended: "A runbook on-call can run without the factory or the owner: a prepared deny policy for the app's namespace (deny overrides every allow), its Keycloak client disabled, its Vault leases revoked by prefix, a deny sync window so nothing redeploys it; drilled and timed."
+    value: "Offline in minutes, without the factory"
+    why: "An app leaking data stops at once and its credentials stop working, even when its owner cannot be reached and the factory itself is down."
+    mitigations: [cap-agent-kill-switch]
+    url: https://docs.cilium.io/en/stable/security/policy/deny/
+    verified: "2026-11-21"
+  - id: backstageAppRegister
+    name: "Component entity with spec.owner, spec.lifecycle and an end-date annotation"
+    where: "Backstage › Software Catalog › catalog-info.yaml (kind: Component): spec.owner, spec.lifecycle, spec.dependsOn (its database and connectors as Resources), metadata.annotations (your own end-date key); registered by catalog:register"
+    setVia: [code]
+    area: audit
+    recommended: "Every app registered at creation by the Backstage template: owner the named app owner, never the requester alone; lifecycle; its data and connectors as dependsOn Resources; an end date under your own annotation prefix; a scheduled job retires or asks to renew apps past it."
+    value: "Owner, data, connectors and end date per app"
+    why: "Every generated app has a named owner, a list of what it touches and a date it ends unless renewed. Backstage holds the record; the retirement job is yours to build."
+    mitigations: [D3-AI]
+    url: https://backstage.io/docs/features/software-catalog/descriptor-format
+    verified: "2026-11-21"
+  - id: squidAiAccessLog
+    name: "access_log filtered to requests for AI services"
+    where: "Squid › squid.conf: acl <name> dstdomain <AI model API and app-builder domains>; access_log daemon:<file> <format> <acl>"
+    setVia: [configFile]
+    area: audit
+    default: "One access log of every request, in the squid format"
+    recommended: "A separate log of requests to AI model APIs and AI app-building services that did not come from LiteLLM or the mirror, sent to the SIEM and reviewed each week against the Backstage register; each source host is brought into the factory or shut down."
+    value: "Logged, reviewed against the register weekly"
+    why: "Apps built with AI outside the factory reach AI services through the same outbound proxy, so its log shows which hosts they run on."
+    mitigations: [cap-shadow-ai-discovery]
+    url: https://www.squid-cache.org/Doc/config/access_log/
+    verified: "2026-11-21"
+  - id: factoryAppTraceId
+    name: "One app id from request to release (Langfuse sessionId and labels)"
+    where: "Your intake and factory code › the app id as the Langfuse sessionId, in the branch and merge request, as a CI/CD variable and image label, and as a label on the Argo CD Application"
+    setVia: [code]
+    area: audit
+    recommended: "The intake mints an app id and a request id; every agent trace carries them as its Langfuse session, and every merge request, pipeline, SBOM and Argo CD sync names them, so one report shows who asked, what the agent did, what the checks found and who synced."
+    value: "One id across trace, pipeline and sync"
+    why: "When an app misbehaves, who asked for it, what built it and who let it run are found from one id, not by matching timestamps across five tools."
+    mitigations: [cap-agent-tracing]
+    url: https://langfuse.com/docs/observability/features/sessions
+    verified: "2026-11-21"
+  - id: knativeActivatorIngress
+    name: "Ingress from the activator (knative-serving namespace)"
+    where: "Kubernetes › NetworkPolicy in the agent's namespace: ingress from the knative-serving namespace (namespaceSelector) and from the intake's pods only"
+    setVia: [clusterPolicy]
+    area: network
+    recommended: "Beside default deny, ingress from the knative-serving namespace (activator, autoscaler) and the networking layer's gateway, through which the intake's calls arrive, and nothing else; egress to LiteLLM, the sandbox router and GitLab only."
+    value: "Ingress: activator and intake only"
+    why: "Knative routes requests through its shared activator when the agent is scaled down, so the agent's namespace must admit that hop and no other caller."
+    mitigations: [D3-NI]
+    url: https://knative.dev/docs/serving/request-flow/
+    verified: "2026-11-21"
+  # <<< software factory rows
 
 implementations:
   - architecture: archChatAgent
@@ -3270,3 +3510,219 @@ implementations:
       - lokiRetentionImmutability
       - litellmAgentKillSwitch
       - postgresRowSecurity
+  # >>> software factory mapping (checked against the vendor's pages by two people)
+  - architecture: archSoftwareFactory
+    asOf: "2026-11"
+    verified: "2026-11-21"
+    reference:
+      - title: "Set up IDP Reference Implementation on Local Machine | CNOE"
+        url: https://cnoe.io/docs/reference-implementation/local
+      - title: "Coding Agents | Agent Sandbox"
+        url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/coding-agents/
+      - title: "Claude Code in Agent Sandbox | Agent Sandbox"
+        url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/claude-code-sandbox/
+      - title: "CNCF Platforms White Paper | CNCF TAG App Delivery"
+        url: https://tag-app-delivery.cncf.io/whitepapers/platforms/
+    summary:
+      - "The factory runs on the organisation's own Kubernetes. A coding agent CLI such as Claude Code or OpenCode works in a fresh agent-sandbox pod on gVisor or Kata per build, calls models through LiteLLM Proxy and installs from Nexus. GitLab Self-Managed holds one project per app and GitLab CI builds and scans; Argo CD with Argo Rollouts is the deploy gate, synced only by the app's owner. Each app gets its own namespace behind Envoy Gateway and Keycloak, Vault secrets, a CloudNativePG database and a Backstage entry."
+    bindings:
+      - { block: intake, service: "Intake chat service with guardrails", build: true, note: "Signs the requester in through Keycloak (approved groups only), screens the request and each upload with /guardrails/apply_guardrail, writes the spec and starts the Backstage template.", url: https://docs.litellm.ai/docs/apply_guardrail }
+      - { block: previews, service: "ApplicationSet Pull Request generator", note: "One preview Application and namespace per open merge request, from the image built for head_sha; test data, default-deny egress. Only admins may create ApplicationSets.", url: https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Pull-Request/ }
+      - { block: deployGate, service: "Argo CD manual sync and Rollouts canary", note: "Syncs the release the pipeline committed to the app's environment repository only when the owner's group syncs it; Rollouts sends it to a few users first and abort returns to stable.", url: https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/ }
+      - { block: harness, service: "Agent CLI on agent-sandbox", build: true, note: "agent-sandbox's examples run the CLI in the sandbox pod, driven from outside through its Python client; your orchestrator claims one sandbox per build and adds the templates and skills.", url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/claude-code-sandbox/ }
+      - { block: nativeTools, service: "SandboxClaim on gVisor or Kata", note: "One SandboxClaim per build via warmPoolRef to a SandboxWarmPool built from a reviewed SandboxTemplate, deleted when the build ends; an explicit egress list admits only LiteLLM, Nexus and GitLab.", url: https://agent-sandbox.sigs.k8s.io/docs/api/ }
+      - { block: gateway, service: "LiteLLM Proxy (models, MCP, skills)", note: "Holds the provider key, gives each build a scoped, expiring virtual key, meters spend and serves the platform's skills from its Skills Hub, where admins review and publish them.", url: https://docs.litellm.ai/docs/skills_gateway }
+      - { block: registry, service: "Nexus Repository and Harbor", note: "Nexus proxies npm and PyPI behind routing rules; Harbor holds images. Community Edition pauses new components beyond 40,000 components or 100,000 requests a day.", url: https://help.sonatype.com/en/routing-rules.html }
+      - { block: sourceControl, service: "GitLab Self-Managed, project per app", note: "Created from the template by Backstage's publish:gitlab action; the default branch is protected and merges need a passing pipeline. Code owner approval needs Premium.", url: https://docs.gitlab.com/user/project/repository/branches/protected/ }
+      - { block: pipeline, service: "GitLab CI on Kubernetes runners", note: "Runs from a CI file in the platform's own project, a pod per job with runtime_class_name set, since tests run generated code. Trivy, Semgrep and gitleaks scan; Syft writes the SBOM.", url: https://docs.gitlab.com/runner/executors/kubernetes/ }
+      - { block: appTenant, service: "One namespace per app", note: "Default-deny network policy, quota, its own ServiceAccount and Keycloak client. It shares the cluster's control plane and nodes; a dedicated cluster is the step up.", url: https://kubernetes.io/docs/concepts/security/multi-tenancy/ }
+      - { block: appHosting, service: "Argo Rollout behind Envoy Gateway", note: "A Gateway-level OIDC SecurityPolicy covers every route, and a platform-owned route policy uses the app's own Keycloak client; secrets arrive through the Vault Secrets Operator.", url: https://gateway.envoyproxy.io/docs/tasks/security/oidc/ }
+      - { block: appData, service: "CloudNativePG per app on Ceph", note: "CloudNativePG leaves encryption at rest to the storage class, so the class sets ceph-csi encryption with Vault as the KMS; only the app's namespace may connect.", url: https://cloudnative-pg.io/docs/1.30/security }
+      - { block: orgData, service: "Systems of record via token exchange", build: true, note: "Each approved connector is its own Keycloak client; the app exchanges the user's token for one with that audience alone, so the connector applies the user's entitlements.", url: https://www.keycloak.org/securing-apps/token-exchange }
+      - { block: provider, service: "Approved model API or vLLM, via LiteLLM", note: "Reached only from LiteLLM, which holds the key; neither the sandbox nor any generated app has a route to it.", url: https://docs.litellm.ai/docs/providers }
+      - { block: sources, service: "Public npm and PyPI, via Nexus only", note: "Through the outbound proxy; nothing inside the data centre installs from them directly.", url: https://help.sonatype.com/en/routing-rules.html }
+    sources:
+      intake: https://docs.litellm.ai/docs/apply_guardrail
+      previews: https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Pull-Request/
+      deployGate: https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/
+      harness: https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/claude-code-sandbox/
+      nativeTools: https://agent-sandbox.sigs.k8s.io/docs/api/
+      gateway: https://docs.litellm.ai/docs/skills_gateway
+      registry: https://help.sonatype.com/en/routing-rules.html
+      sourceControl: https://docs.gitlab.com/user/project/repository/branches/protected/
+      pipeline: https://docs.gitlab.com/runner/executors/kubernetes/
+      appTenant: https://kubernetes.io/docs/concepts/security/multi-tenancy/
+      appHosting: https://gateway.envoyproxy.io/docs/tasks/security/oidc/
+      appData: https://cloudnative-pg.io/docs/1.30/security
+      orgData: https://www.keycloak.org/securing-apps/token-exchange
+      provider: https://docs.litellm.ai/docs/providers
+      sources: https://help.sonatype.com/en/routing-rules.html
+    differences:
+      - at: harness
+        text: "agent-sandbox's coding agent examples run the agent CLI inside the sandbox pod, so the agent and the code it runs share one pod and one network, and its LiteLLM key and GitLab token sit beside generated code. The Claude Code example notes that a proxy holding the provider key does not make the sandbox credential-free. Issue both per build, short-lived."
+        url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/claude-code-sandbox/
+      - at: nativeTools
+        text: "A SandboxTemplate with no networkPolicy gets the controller's default, which allows the public internet and blocks private ranges: the opposite of the drawing, where only the gateway, the mirror and GitLab are reachable. Set an explicit egress list, or Unmanaged with Cilium default deny, and give every claim an expiry, since a sandbox without one lives until deleted."
+        url: https://agent-sandbox.sigs.k8s.io/docs/api/
+      - at: nativeTools->sourceControl
+        text: "GitLab has no per-branch token: a Developer token with write_repository can push any unprotected branch and send push options such as ci.skip. The limit is the protected branch plus Pipelines must succeed, under which a skipped pipeline blocks merging. Code owner approval and deployment approvals need Premium, and secret push protection Ultimate."
+        url: https://docs.gitlab.com/user/project/repository/branches/protected/
+      - at: appOwner->deployGate
+        text: "Argo CD has no approval step: the owner approves by syncing, which RBAC allows only to that app's owner group. Its history shows who synced which revision, not a separate approval, and by default anyone with sync may pass another revision unless requireOverridePrivilegeForRevisionSync is 'true'. GitLab's deployment approvals keep a record but need Premium."
+        url: https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/
+      - at: appTenant
+        text: "A namespace is not a separate account: apps share the control plane, nodes and kernel. Argo CD's controller holds a cluster-admin-level role by default, and sync impersonation, narrowing each sync to a per-app ServiceAccount, is beta since v3.5.0. vCluster says shared nodes are no security boundary for untrusted tenants; private nodes need vCluster Platform, free tier included."
+        url: https://argo-cd.readthedocs.io/en/stable/operator-manual/app-sync-using-impersonation/
+      - at: appUsers->appHosting
+        text: "Envoy Gateway applies a Gateway-level OIDC policy to every route on that Gateway, but a route-level SecurityPolicy replaces it entirely unless mergeType is set, and it lives in the route's own namespace. An app that may deploy one can switch its own sign-in off, so SecurityPolicy has to stay outside what an app's deploy identity can create."
+        url: https://gateway.envoyproxy.io/docs/concepts/gateway_api_extensions/security-policy/
+      - at: sources->registry
+        text: "Nexus Community Edition does not scan for malware or hold back new releases: routing rules match request paths only, and quarantine of malicious or newly released components is Sonatype Repository Firewall, a paid product. Without it, the age hold sits in the client, such as npm's min-release-age (off by default), set in the app template."
+        url: https://help.sonatype.com/en/repository-firewall-best-practices.html
+      - at: pipeline->previews
+        text: "Here the pipeline does not deploy previews itself: it publishes the image, and an Argo CD ApplicationSet creates one preview per open merge request, so no cluster credential sits in a branch pipeline that runs generated code. Previews are behind the Gateway's sign-in like apps; limiting one to its requester and owner needs a per-preview group."
+        url: https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Pull-Request/
+    alsoNeeded:
+      - service: "Keycloak"
+        role: identity
+        why: "One realm for the intake, GitLab, Argo CD and each app's own client, with group-based access, the second-factor flow and token exchange for connectors."
+        url: https://www.keycloak.org/guides
+      - service: "Envoy Gateway"
+        role: ingress
+        why: "The shared front door for previews and apps, where the OIDC SecurityPolicies sit and canary weights are applied."
+        url: https://gateway.envoyproxy.io/docs/
+      - service: "HashiCorp Vault or OpenBao, with the Vault Secrets Operator"
+        role: secrets
+        why: "HashiCorp Vault with the Vault Secrets Operator"
+        url: https://developer.hashicorp.com/vault/docs/deploy/kubernetes/vso
+      - service: "cert-manager with an internal certificate authority"
+        role: keys
+        why: "Every service in the factory and every app hostname needs a certificate from an authority you run."
+        url: https://cert-manager.io/docs/
+      - service: "Harbor with a proxy cache"
+        role: registry
+        why: "Stores the sandbox, runner and app images inside the data centre; public images enter only through its proxy cache."
+        url: https://goharbor.io/docs/2.16.0/administration/configure-proxy-cache/
+      - service: "Squid outbound proxy"
+        role: network
+        why: "The only route out for Nexus, LiteLLM and the scanner data mirrors, and the log the shadow-AI review reads."
+        url: https://www.squid-cache.org/Doc/config/access_log/
+      - service: "Backstage with the GitLab scaffolder module"
+        role: other
+        why: "Its templates create each app's GitLab project, token and catalog entry; the catalog is the app register."
+        url: https://backstage.io/docs/features/software-catalog/descriptor-format
+      - service: "Kyverno"
+        role: other
+        why: "Admission policy for app and preview namespaces, and the same rules checked in the pipeline."
+        url: https://kyverno.io/docs/policy-types/validating-policy/
+      - service: "Ceph with ceph-csi"
+        role: other
+        why: "Block storage with per-volume LUKS encryption, keys in Vault, for every app database."
+        url: https://raw.githubusercontent.com/ceph/ceph-csi/devel/docs/rbd/deploy.md
+      - service: "Mirrored Trivy databases and Semgrep rules"
+        role: other
+        why: "Scanning inside a closed network needs Trivy's databases mirrored to your registry and Semgrep's rules copied in, both refreshed by you."
+        url: https://trivy.dev/docs/latest/guide/advanced/self-hosting/
+      - service: "Grafana Loki and the SIEM"
+        role: logging
+        why: "GitLab, Argo CD, Kubernetes audit and proxy logs kept with retention you set, beside Langfuse's agent traces."
+        url: https://grafana.com/docs/loki/latest/operations/storage/retention/
+    quickstart:
+      - title: "Overview | Agent Sandbox"
+        url: https://agent-sandbox.sigs.k8s.io/docs/getting_started/overview/
+      - title: "Claude Code in Agent Sandbox | Agent Sandbox"
+        url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/claude-code-sandbox/
+      - title: "Getting Started - Argo CD - Declarative GitOps CD for Kubernetes"
+        url: https://argo-cd.readthedocs.io/en/stable/getting_started/
+    hosting:
+      - id: kubernetes
+        kind: cluster
+        name: "Kubernetes (agent-sandbox on gVisor or Kata)"
+        url: https://agent-sandbox.sigs.k8s.io/docs/getting_started/overview/
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "Your orchestrator creates one SandboxClaim per build from a SandboxWarmPool of a reviewed template; gVisor or Kata Containers, set by RuntimeClass, separates each pod."
+          patching: "Your organisation patches the nodes, Kubernetes, the agent-sandbox controller and router, gVisor or Kata, the agent CLI and its images."
+          data: "Specs, code and build output sit in the sandbox pod on your nodes, then in GitLab and Harbor; prompts and code leave only through LiteLLM to the provider."
+          network: "Without an explicit policy a SandboxTemplate allows the public internet and blocks private ranges; your policy narrows it to LiteLLM, Nexus and GitLab."
+          identity: "Template-made sandbox pods get no ServiceAccount token by default; a claim can pass only plain spec.env values, if the template's envVarsInjectionPolicy allows it."
+          accepts: "Any OCI image, so any agent CLI, language or toolchain; agent-sandbox has examples for Claude Code, OpenCode, Aider and a LangGraph coding agent."
+          workload: "A build runs until its claim's shutdownTime or ttlSecondsAfterFinished; warm pools keep sandboxes pre-started; parallel builds are bounded by nodes and quotas."
+          portability: "Sandbox objects and images move to any Kubernetes cluster with agent-sandbox installed; the RuntimeClass name is the runtime-specific part."
+          effort: "Your team operates the cluster, agent-sandbox, the sandbox runtime on its nodes, warm pools, and the LiteLLM, GitLab and Argo CD around them."
+          fits: "agent-sandbox lists coding agents among its use cases, isolating generated code that may fail, loop or behave unexpectedly from your infrastructure."
+        sources:
+          - https://agent-sandbox.sigs.k8s.io/docs/
+          - https://agent-sandbox.sigs.k8s.io/docs/api/
+          - https://agent-sandbox.sigs.k8s.io/docs/use-cases/coding-agents/
+          - https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/claude-code-sandbox/
+          - https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/opencode-sandbox/
+          - https://agent-sandbox.sigs.k8s.io/docs/use-cases/ci-cd/
+          - https://agent-sandbox.sigs.k8s.io/docs/use-cases/gvisor-isolation/
+          - https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/README.md
+          - https://kubernetes.io/docs/concepts/security/multi-tenancy/
+          - https://docs.gitlab.com/runner/executors/kubernetes/
+      - id: knative
+        kind: runtime
+        name: "Knative Serving"
+        url: https://knative.dev/docs/serving/
+        asOf: "2026-11"
+        compare:
+          runs: "Knative Serving starts the agent's pods on requests; with containerConcurrency 1 a pod runs one build at a time, and each build's commands run in their own sandbox."
+          patching: "You do: the cluster and nodes, Knative Serving and its networking layer, upgraded one minor version at a time, agent-sandbox, and the agent image."
+          data: "Specs and code are processed in the agent's pods on your servers; an idle instance may be killed, so state lives in GitLab, the sandbox or a store you run."
+          network: "Services are private on the cluster domain until a domain name is configured; the activator and queue-proxy join the path; egress stays your NetworkPolicy."
+          identity: "Revision pods run as the namespace's default ServiceAccount unless serviceAccountName is set; tokens and RBAC are those of Kubernetes."
+          accepts: "Any container that serves HTTP; runtimeClassName, persistent volume claims and init containers are extensions behind flags that are off by default."
+          workload: "Each build request ends at timeoutSeconds (default 300, at most 600 unless raised); idle Revisions scale to zero, and the first build after idle waits for a pod."
+          portability: "The agent stays an HTTP container; moving off means replacing the Knative Service, its routing and autoscaling with Kubernetes objects."
+          effort: "You still operate everything: the cluster, Knative's activator and autoscaler, a networking layer, agent-sandbox for the builds, and every upgrade."
+          fits: "Knative's runtime contract describes stateless computation at request or event scale, with little or no long-term runtime state in the container."
+        sources:
+          - https://knative.dev/docs/serving/
+          - https://knative.dev/docs/serving/request-flow/
+          - https://knative.dev/docs/serving/configuration/config-defaults/
+          - https://knative.dev/docs/serving/configuration/feature-flags/
+          - https://knative.dev/docs/serving/autoscaling/concurrency/
+          - https://knative.dev/docs/serving/autoscaling/scale-to-zero/
+          - https://knative.dev/docs/serving/services/private-services/
+          - https://knative.dev/docs/install/yaml-install/serving/install-serving-with-yaml/
+          - https://knative.dev/docs/install/upgrade/upgrade-installation/
+          - https://raw.githubusercontent.com/knative/specs/main/specs/serving/runtime-contract.md
+          - https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/claude-code-sandbox/
+        summary: "The factory's agent loop runs as a Knative Service on your cluster, started by the intake's request and scaled to zero between builds, while each build's commands still run in their own agent-sandbox claim, driven through the sandbox router. Knative adds its activator and queue-proxy to the path and ends every request at its timeout, so a build must finish within it or be split into steps. You install and upgrade Knative, and you still operate everything."
+        bindings:
+          - { block: harness, service: "Your agent loop as a Knative Service (Knative Serving)", build: true, note: "Calls LiteLLM and drives each build's agent-sandbox claim through the sandbox client; containerConcurrency 1, cluster-local, its own serviceAccountName.", url: https://knative.dev/docs/serving/ }
+        addSettings: [knativeRequestLimits, knativeScaleBounds, knativeClusterLocalVisibility, knativeActivatorIngress]
+        differences:
+          - at: harness
+            text: "A build is one request, and Knative ends it at timeoutSeconds: default 300, at most 600 unless max-revision-timeout-seconds is raised, together with the activator's terminationGracePeriodSeconds. A build that runs longer has to be split into steps the intake drives, or stay on the Kubernetes option."
+            url: https://knative.dev/docs/serving/configuration/config-defaults/
+          - at: harness
+            text: "Knative scales pods with traffic, not per build: with containerConcurrency 1 a pod takes one request at a time and then the next, and an idle container may be killed or have its CPU withheld. Nothing may live only in the pod between builds, and every command the agent runs still belongs in a per-build sandbox."
+            url: https://raw.githubusercontent.com/knative/specs/main/specs/serving/runtime-contract.md
+          - at: intake->harness
+            text: "At low or zero traffic a build request passes through the activator, which every Knative Service shares, and always through the queue-proxy beside the agent; the first build after idle waits for a pod to start. Default-deny policy has to admit the knative-serving namespace and the networking layer's gateway."
+            url: https://knative.dev/docs/serving/request-flow/
+          - at: harness
+            text: "runtimeClassName, persistent volume claims and init containers are Knative extensions behind flags that are never on by default, so the agent's own pod runs under the node's default runtime unless the runtime class flag is turned on for the cluster."
+            url: https://knative.dev/docs/serving/configuration/feature-flags/
+        alsoNeeded:
+          - service: "Knative Serving (controller, autoscaler, activator)"
+            role: other
+            why: "Runs and scales the agent's Service; you install it and upgrade it one minor version at a time, and its activator is shared by every Service."
+            url: https://knative.dev/docs/install/upgrade/upgrade-installation/
+          - service: "A Knative networking layer"
+            role: ingress
+            why: "Kourier, Contour, Istio or the Gateway API plugin, which is beta; the agent stays cluster-local and is reached only by the intake."
+            url: https://knative.dev/docs/install/yaml-install/serving/install-serving-with-yaml/
+        quickstart:
+          - title: "Overview - Knative"
+            url: https://knative.dev/docs/serving/
+          - title: "Configure the Defaults ConfigMap - Knative"
+            url: https://knative.dev/docs/serving/configuration/config-defaults/
+          - title: "Claude Code in Agent Sandbox | Agent Sandbox"
+            url: https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/claude-code-sandbox/
+    settings: [keycloakGroupsAccess, keycloakTokenLifetimes, keycloakTokenExchange, litellmVirtualKeys, litellmApplyGuardrail, agentSandboxTemplate, k8sRuntimeClassSandbox, k8sNetworkPolicyDefaultDeny, nexusProxyAllowlist, trivyScanPipeline, langfuseTracing, gitlabAgentProjectToken, gitlabProtectedBranch, gitlabExternalCiConfig, sandboxClaimLifecycle, argocdOwnerSync, argocdAppProject, argoRolloutsCanary, keycloakRequired2fa, envoyGatewayOidcDefault, semgrepScanPipeline, gitleaksScanPipeline, syftSbomRelease, kyvernoAppBaseline, vsoAppSecrets, cnpgAppDatabase, appQuarantineRunbook, backstageAppRegister, squidAiAccessLog, factoryAppTraceId]
+  # <<< software factory mapping
