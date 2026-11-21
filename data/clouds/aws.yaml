@@ -11,9 +11,6 @@ id: cloudAws
 name: Amazon Web Services
 short: AWS
 
-notOffered:
-  - architecture: archSoftwareFactory
-    why: "The mapping is being researched and checked."
 settings:
   # --- Identity & access ---------------------------------------------------------------
   - id: idcAppAssignment
@@ -1612,6 +1609,279 @@ settings:
     url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/compliance-validation.html
     verified: "2026-11-18"
   # <<< managed agent service rows
+  # >>> software factory rows (the settings that build and guard the factory and the apps it makes)
+  - id: buildSessionPerTask
+    name: "Isolated sessions (runtimeSessionId) and lifecycleConfiguration (maxLifetime)"
+    where: "AgentCore Runtime › microVM compute; your dispatcher's InvokeAgentRuntime call with a new runtimeSessionId; StopRuntimeSession at the end"
+    setVia: [apiCli, code]
+    area: tools
+    default: "A reused session ID returns to the same session and its files"
+    recommended: "Start every build with a new session ID on microVM compute, set maxLifetime to the build's budget, stop the session when the branch is pushed, and attach no session storage or shared S3 Files or EFS mount to the build runtime."
+    value: "New microVM session per build, stopped at the end"
+    why: "Generated code and its packages run here before any check has looked at them, so each build gets a machine of its own that is destroyed afterwards."
+    mitigations: [D3-EI]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html
+    verified: "2026-11-21"
+  - id: agentRoleNoDeployScp
+    name: "Service control policy on the factory OU (deny deploy, approval and direct model calls)"
+    where: "AWS Organizations › Policies › Service control policies › attached to the factory account, condition aws:PrincipalArn on the runtime's execution role"
+    setVia: [cloudPolicy]
+    area: identity
+    recommended: "Deny that role sts:AssumeRole into app accounts, codepipeline:PutApprovalResult and UpdatePipeline, codebuild:UpdateProject, ecs:*, iam:* and bedrock:InvokeModel*; leave it gateway invoke, AgentCore Identity token calls and its own logs."
+    value: "No deploy, approval or direct model rights"
+    why: "Any code in the session can read the role's credentials from the metadata service, so the role must not be able to deploy, approve, change the pipeline or reach models around the gateway."
+    mitigations: [AML.M0028]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-credentials-management.html
+    verified: "2026-11-21"
+  - id: githubAgentAppToken
+    name: "Repository permissions and installation access token (repositories, permissions)"
+    where: "GitHub › Organization settings › Developer settings › GitHub Apps › (app) › Edit › Permissions & events; repository access under Third-party Access › GitHub Apps › Configure; token minted per build"
+    setVia: [adminConsole, apiCli]
+    area: identity
+    default: "A token gets every repository and permission of the installation"
+    recommended: "Grant Contents and Pull requests read and write and Metadata read; never Workflows, Administration or Actions. Mint each build's token for its one repository; tokens expire after one hour."
+    value: "One repository; Contents and PRs; no Workflows"
+    why: "The agent can push a branch and open a pull request and nothing more: it cannot edit workflow files, change settings or reach another app's repository."
+    mitigations: [AML.M0028]
+    url: https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app
+    verified: "2026-11-21"
+  - id: githubDefaultBranchRuleset
+    name: "Rulesets: Require a pull request before merging, Require status checks to pass, Restrict updates"
+    where: "GitHub › Organization › Settings › Rulesets › branch ruleset on the default branch of every app repository; bypass list"
+    setVia: [adminConsole]
+    area: tools
+    default: "No ruleset; anyone with write access can push to the default branch"
+    recommended: "Require a pull request and the pipeline's status checks, block force pushes and restrict deletions on the default branch; the bypass list holds only the platform's merge identity, never the agent's app."
+    value: "PR and checks required; agent not on bypass list"
+    why: "Whatever the agent is talked into stays on a branch; only the platform's own identity, after the checks, can change what the app is built from."
+    mitigations: [AML.M0028]
+    url: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets
+    verified: "2026-11-21"
+  - id: githubPushProtection
+    name: "Push protection (GitHub Secret Protection) with delegated bypass"
+    where: "GitHub › Organization › Settings › Advanced Security › security configuration › Secret Protection › Push protection; delegated bypass reviewers"
+    setVia: [adminConsole]
+    area: data
+    default: "Off; once on, anyone with write access can bypass by giving a reason"
+    recommended: "Apply a security configuration to every app repository with Secret Protection and push protection on, and turn on delegated bypass so only the platform security team can approve a push that carries a secret."
+    value: "On, bypass by security team only"
+    why: "Agents paste keys into code. A push that carries one is refused before it reaches the repository, and the agent cannot wave it through."
+    mitigations: [D3-CH]
+    url: https://docs.github.com/en/code-security/secret-scanning/introduction/about-push-protection
+    verified: "2026-11-21"
+  - id: codeArtifactAdmission
+    name: "External connection on an admission repository only, with version age gating"
+    where: "AWS CodeArtifact › domain › sandbox repository (no external connection); admission repository with the external connection; CopyPackageVersions by the admission pipeline's role"
+    setVia: [apiCli, code]
+    area: tools
+    default: "A repository with an external connection fetches any public package on first request"
+    recommended: "Give the sandbox's repository no external connection. An admission job reads the upstream publish time CodeArtifact keeps, rejects versions newer than 7 days, scans with Inspector and only then copies the version across."
+    value: "No external connection; 7-day quarantine"
+    why: "Agents invent package names that attackers then register. A version becomes installable only after it has aged and been checked, not the moment someone asks."
+    mitigations: [D3-FA]
+    url: https://docs.aws.amazon.com/codeartifact/latest/ug/package-version-age-gating.html
+    verified: "2026-11-21"
+  - id: codeBuildProjectBuildspec
+    name: "Buildspec (defined in the build project)"
+    where: "AWS CodeBuild › build project in the tooling account › Buildspec: inline in the project, or an S3 object the platform owns"
+    setVia: [adminConsole, apiCli]
+    area: tools
+    default: "buildspec.yml at the root of the source"
+    recommended: "Define each app's build, test and scan commands in its CodeBuild project, not in the repository, and keep project and pipeline in the platform's tooling account where neither the agent nor the app can change them."
+    value: "Project-defined, not from the repository"
+    why: "With the default, the agent's own branch decides what the build runs, scans included. A buildspec held in the project keeps the pipeline out of the agent's reach."
+    mitigations: [AML.M0028, D3-SYSVA]
+    url: https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
+    verified: "2026-11-21"
+  - id: inspectorScanAction
+    name: "InspectorScan action (CriticalThreshold, HighThreshold)"
+    where: "AWS CodePipeline › build stage › action provider InspectorScan, InspectorRunMode SourceCodeScan, then ECRImageScan on the pushed image"
+    setVia: [apiCli]
+    area: tools
+    recommended: "Run InspectorScan on the source and on the image with CriticalThreshold 0 and HighThreshold 0, so any critical or high finding fails the stage, and keep the SBOM output artifact with the release."
+    value: "Fail on any critical or high finding"
+    why: "Nobody reads this code, so the scan has to stop the release by itself; its SBOM output is the bill of materials for the release."
+    mitigations: [D3-SYSVA, AML.M0023]
+    url: https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-InspectorScan.html
+    verified: "2026-11-21"
+  - id: cfnGuardHookBaseline
+    name: "Guard Hook (Hook mode Fail)"
+    where: "AWS CloudFormation › Hooks › Guard Hook activated in every app account by the blueprint; your Guard rules in S3; create and update actions"
+    setVia: [cloudPolicy, code]
+    area: tools
+    recommended: "Rules that fail a stack when a listener rule forwards without authenticate-cognito, a bucket allows public access, a task security group accepts traffic from anywhere, or a connector outside the app's approved list is named."
+    value: "Active, Hook mode Fail"
+    why: "A setting the agent chose can open an app to the world even when its code is clean. The Hook refuses the change before the resource exists."
+    mitigations: [D3-ACH]
+    url: https://docs.aws.amazon.com/cloudformation-cli/latest/hooks-userguide/guard-hooks-activate-hooks.html
+    verified: "2026-11-21"
+  - id: codePipelineOwnerApproval
+    name: "Manual approval action (codepipeline:PutApprovalResult)"
+    where: "AWS CodePipeline › app pipeline › Approve stage › Manual approval action; IAM Identity Center permission set for the owner"
+    setVia: [cloudPolicy, identityProvider]
+    area: identity
+    recommended: "One approval action per app pipeline after every check, with the preview as the URL for review; grant PutApprovalResult on that pipeline/stage/action ARN only, not AWSCodePipelineApproverAccess, in a permission set for the owner, never the requester."
+    value: "Owner only, on that one action"
+    why: "The person who asked cannot read the code, so someone accountable decides when this exact build may meet real data."
+    mitigations: [AML.M0029]
+    url: https://docs.aws.amazon.com/codepipeline/latest/userguide/approvals-iam-permissions.html
+    verified: "2026-11-21"
+  - id: identityCenterMfa
+    name: "Prompt users for MFA: Every time they sign in (always-on)"
+    where: "IAM Identity Center › Settings › Authentication › Multi-factor authentication › Configure; If a user does not yet have a registered MFA device"
+    setVia: [identityProvider]
+    area: identity
+    requires: "Identity Center directory or Active Directory identity source; with an external IdP the Multi-factor authentication section is not shown and the IdP enforces MFA"
+    recommended: "Always-on, and Require them to register an MFA device at sign in; never the email one-time password. Owners who approve and users of every generated app sign in through it."
+    value: "Always-on MFA, device required"
+    why: "A stolen password should not open an app that holds company data, or approve a release."
+    mitigations: [D3-MFA]
+    url: https://docs.aws.amazon.com/singlesignon/latest/userguide/mfa-getting-started.html
+    verified: "2026-11-21"
+  - id: ecsCanaryRollback
+    name: "Deployment strategy CANARY (canaryConfiguration: canaryPercent, canaryBakeTimeInMinutes), bakeTimeInMinutes and CloudWatch alarms with rollback"
+    where: "Amazon ECS › app service › deploymentConfiguration: strategy CANARY, canaryConfiguration, bakeTimeInMinutes, alarms"
+    setVia: [apiCli, configFile]
+    area: tools
+    recommended: "canaryPercent 5 to 10 with a canary bake time long enough to see real traffic, alarms on errors and latency with rollback true, and a bake time that keeps the last revision ready."
+    value: "Canary 5 to 10%, alarm rollback on"
+    why: "A release that misbehaves with real data reaches a few requests first and goes back to the last good revision in minutes."
+    mitigations: [cap-staged-rollout-gate]
+    url: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deploy-canary-service.html
+    verified: "2026-11-21"
+  - id: appOuGuardrailScp
+    name: "Service control policy on the Generated apps OU (pipeline deploys, platform edits listeners, no peering)"
+    where: "AWS Organizations › Service control policies › Generated apps OU; Deny unless aws:PrincipalArn is the pipeline's deploy role or the platform role"
+    setVia: [cloudPolicy]
+    area: identity
+    recommended: "Deny ECS service and task definition changes, ELB listener and rule changes, iam:* and stack changes except to the deploy role, platform role and ECS infrastructure role; deny VPC peering and transit gateway attachments."
+    value: "Pipeline-only deploys; listeners locked; no peering"
+    why: "A release reaches an app only through the gate, nobody in the app's account can drop the sign-in rule in front of it, and no app can route to another."
+    mitigations: [AML.M0029, D3-APA, D3-NI]
+    url: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html
+    verified: "2026-11-21"
+  - id: accountPerAppBlueprint
+    name: "Account Factory Customization (AFC) blueprint"
+    where: "AWS Control Tower › Account Factory › create account from the blueprint in the hub account; Generated apps OU and Generated app previews OU"
+    setVia: [adminConsole, apiCli]
+    area: network
+    recommended: "Vend a production and a preview account per app from one blueprint holding its VPC, ECS cluster, Cognito user pool, KMS key and deploy role; the preview account gets test data and no connector access."
+    value: "Own prod and preview account per app"
+    why: "One faulty or hostile app then cannot reach another app's data or the tools that built it, and closing the account retires all of it."
+    mitigations: [D3-NI]
+    url: https://docs.aws.amazon.com/controltower/latest/userguide/af-customization-page.html
+    verified: "2026-11-21"
+  - id: ecsSecretsValueFrom
+    name: "secrets (valueFrom) in the container definition"
+    where: "Amazon ECS › task definition › containerDefinitions › secrets, a Secrets Manager ARN in the app's account; execution role scoped to those secrets"
+    setVia: [configFile]
+    area: data
+    recommended: "Reference every secret by ARN in secrets, keep it in the app's own account with a resource policy naming that app's execution role, and let the agent write only the secret's name."
+    value: "Secrets Manager ARN, injected at start"
+    why: "The secret reaches the container when the task starts and never appears in the repository, the image or the agent's session."
+    mitigations: [D3-CH]
+    url: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/secrets-envvar-secrets-manager.html
+    verified: "2026-11-21"
+  - id: latticeConnectorAuthPolicy
+    name: "Auth type AWS_IAM with an auth policy"
+    where: "Amazon VPC Lattice › connector service shared to the app accounts through AWS RAM › Access › Auth policy"
+    setVia: [cloudPolicy]
+    area: identity
+    recommended: "Set AWS_IAM on every connector service and allow only the task roles of the apps approved for that connector; the app signs with SigV4 under its own role and never forwards a user's token."
+    value: "AWS_IAM; approved app roles only"
+    why: "One app's credential then opens that app's connectors and no other system the platform can reach."
+    mitigations: [D3-CTS]
+    url: https://docs.aws.amazon.com/vpc-lattice/latest/ug/auth-policies.html
+    verified: "2026-11-21"
+  - id: connectorEntitlementFilter
+    name: "Entitlement filter in each connector"
+    where: "Your connector code behind VPC Lattice; the user taken from the load balancer's signed x-amzn-oidc-data claims the app forwards"
+    setVia: [code]
+    area: data
+    recommended: "Accept a call only from an approved app role, verify the claims' signature and signer ARN, apply that user's entitlements to every query, and return nothing when the claims are missing."
+    value: "Only rows the signed-in user may see"
+    why: "Otherwise each user sees whatever the app itself can read."
+    mitigations: [cap-data-access-governance]
+    url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-authenticate-users.html
+    verified: "2026-11-21"
+  - id: intakePromptAttackFilter
+    name: "Prompt attacks filter, through ApplyGuardrail"
+    where: "Amazon Bedrock Guardrails › guardrail › Content filters › Prompt attacks; the intake Lambda calls ApplyGuardrail on the request and the text of every upload"
+    setVia: [code, apiCli]
+    area: data
+    recommended: "Standard tier; block jailbreak, prompt injection and prompt leakage at High on the request and on text extracted from each upload, refuse the spec if the guardrail cannot answer, and scan the upload bucket for malware."
+    value: "Block at High, fail closed"
+    why: "A file anyone wrote can tell the agent to add a back door or send out a secret; screening at intake stops it before it becomes the spec."
+    mitigations: [cap-input-guardrails]
+    url: https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-prompt-attack.html
+    verified: "2026-11-21"
+  - id: appStoreEndpointPolicy
+    name: "Bucket policy (aws:SourceVpce) and default encryption with the app's KMS key"
+    where: "Amazon S3 (or DynamoDB) in the app's account › Permissions › Bucket policy; Properties › Default encryption SSE-KMS with that app's key"
+    setVia: [cloudPolicy]
+    area: data
+    recommended: "Deny access unless the request arrives through the app's own VPC endpoint, encrypt with a key only the app's task role and the platform can use, and keep the store in the app's account so it goes with it."
+    value: "Own endpoint only; own KMS key"
+    why: "The store then answers only its own app, so a fault or compromise in another app cannot reach its records."
+    mitigations: [D3-NI]
+    url: https://docs.aws.amazon.com/AmazonS3/latest/userguide/example-bucket-policies-vpc-endpoint.html
+    verified: "2026-11-21"
+  - id: gatewayInferenceConnector
+    name: "Inference connector target (credentialProviderType GATEWAY_IAM_ROLE or API_KEY)"
+    where: "AgentCore Gateway › target › inference connector (bedrock-mantle, bedrock-runtime, anthropic or openai); API keys in the AgentCore Identity token vault"
+    setVia: [apiCli]
+    area: tools
+    recommended: "Point the agent's model client at the gateway's inference target; the gateway's role or a vaulted API key calls the provider, and the agent's role holds no bedrock:InvokeModel."
+    value: "Credential held by the gateway"
+    why: "The agent holds no model credential, so nothing leaked from a session works elsewhere, and every call is metered at one crossing."
+    mitigations: [D3-CH]
+    url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-inference-connector.html
+    verified: "2026-11-21"
+  - id: factoryReleaseRecord
+    name: "Release record (spec, session, commit, checks, approval, release)"
+    where: "Your factory register keyed by app and release: spec version, AgentCore session ID, agent and model version, commit, InspectorScan SBOM, approval result, ECS deployment ID"
+    setVia: [code]
+    area: audit
+    recommended: "Write one record per release from the pipeline, with the SBOM and the agent and model version, into the log archive account where the factory cannot delete it."
+    value: "One record per release, in the log archive"
+    why: "When an app misbehaves, or a package turns out to be harmful, you can find who asked, what the agent did, who approved and every app affected."
+    mitigations: [AML.M0023, cap-agent-tracing]
+    url: https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-InspectorScan.html
+    verified: "2026-11-21"
+  - id: appQuarantine
+    name: "Quarantine SCP and fixed-response listener action"
+    where: "AWS Organizations › deny-all SCP attached to the app's account; Application Load Balancer › listener › default and rule actions set to fixed-response 503"
+    setVia: [cloudPolicy, apiCli]
+    area: network
+    recommended: "Keep a deny-all SCP that exempts only the break-glass role. To take an app down, attach it to the account and set the listener's actions to fixed-response 503, from the runbook, without a release."
+    value: "Deny-all SCP and 503 at the load balancer"
+    why: "The SCP stops what the app's credentials can do at once, but running tasks keep serving users, so the load balancer has to stop the traffic too."
+    mitigations: [cap-agent-kill-switch]
+    url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/rule-action-types.html
+    verified: "2026-11-21"
+  - id: configShadowAiQuery
+    name: "Advanced queries on an organization aggregator"
+    where: "AWS Config › organization aggregator › Advanced queries for AWS::Amplify::App, AWS::AppRunner::Service and AWS::Bedrock types; ListAggregateDiscoveredResources for AWS::BedrockAgentCore::Runtime"
+    setVia: [apiCli]
+    area: audit
+    recommended: "Run the query weekly from the security account and raise a ticket for each match in an account the factory did not vend; bring the app in through the factory or shut it down."
+    value: "Weekly, every account outside the factory"
+    why: "An app made in a vendor's tool or a personal account has no owner, no checks and no end date."
+    mitigations: [cap-shadow-ai-discovery]
+    url: https://docs.aws.amazon.com/config/latest/developerguide/querying-AWS-resources.html
+    verified: "2026-11-21"
+  - id: appAccountTags
+    name: "Account tags (owner, data, end date) and a tag policy"
+    where: "AWS Organizations › AWS accounts › (app account) › Tags; Policies › Tag policies on the Generated apps OU; CloseAccount at the end date"
+    setVia: [cloudPolicy]
+    area: audit
+    recommended: "Tag each app account with owner, data class and end date at vending; list them as Required tag keys in the tag policy and check them in the vending code; remind the owner and close the account unless renewed."
+    value: "Owner, data and end date on every account"
+    why: "Apps outlive the reason, and the people, they were built for; a closed account retires the app and its data together."
+    mitigations: [D3-AI]
+    url: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_tag-policies.html
+    verified: "2026-11-21"
+  # <<< software factory rows
 
 implementations:
   - architecture: archChatAgent
@@ -4435,3 +4705,276 @@ implementations:
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/vpc-interface-endpoints.html
     settings: [albAuthenticate, runtimeExecutionRole, runtimeVpcMode, networkFirewallDomains, gatewayMcpPrivateEndpoint, kbMetadataFilter, cloudTrailDataEvents, iamRevokeSessions, bedrockDenyApiKeys, agentCoreInterfaceEndpoints, agentCoreNetworkPerimeterScp, gatewayIamInboundPolicy, harnessAdminScp, regionDenyScp, bedrockModelAllowlistScp, securityHubAgentCoreControls, agentStateKmsKey, agentFilesEfsEncryption, kbAclAwareness, webSearchDomainFilter, agentLogGroupKms, awsArtifactAgentCoreReview]
   # <<< managed agent service mapping
+  # >>> software factory mapping (checked against the vendor's pages by two people)
+  - architecture: archSoftwareFactory
+    asOf: "2026-11"
+    verified: "2026-11-21"
+    reference:
+      - title: "It's safe to close your laptop now: Hosting coding agents on Amazon Bedrock AgentCore (AWS Machine Learning Blog)"
+        url: https://aws.amazon.com/blogs/machine-learning/its-safe-to-close-your-laptop-now-hosting-coding-agents-on-amazon-bedrock-agentcore/
+      - title: "Extend Claude Code to remote sessions on Amazon Bedrock AgentCore with security controls (AWS Machine Learning Blog)"
+        url: https://aws.amazon.com/blogs/machine-learning/extend-claude-code-to-remote-sessions-on-amazon-bedrock-agentcore-with-security-controls/
+      - title: "Deployment Pipeline Reference Architecture (DPRA) for AWS workloads"
+        url: https://aws-samples.github.io/aws-deployment-pipeline-reference-architecture/
+      - title: "Organizing Your AWS Environment Using Multiple Accounts (AWS whitepaper)"
+        url: https://docs.aws.amazon.com/whitepapers/latest/organizing-your-aws-environment/organizing-your-aws-environment.html
+    summary:
+      - "Each build runs your coding agent (Claude Code on the Claude Agent SDK, or another CLI agent) in its own Amazon Bedrock AgentCore Runtime session in VPC mode, calling models through AgentCore Gateway, installing from AWS CodeArtifact and pushing a branch to GitHub. A platform-owned CodePipeline with CodeBuild and Amazon Inspector builds, scans and deploys previews; the app owner approves in CodePipeline; an ECS canary deploy releases to one Control Tower account per app, behind an ALB that signs users in."
+    bindings:
+      - { block: intake, service: "Intake app on CloudFront and Lambda", build: true, note: "Screens the request and uploads with Bedrock Guardrails before writing the spec to DynamoDB; the same shape AWS uses to queue tasks for its remote coding agent sample.", url: https://aws.amazon.com/blogs/machine-learning/extend-claude-code-to-remote-sessions-on-amazon-bedrock-agentcore-with-security-controls/ }
+      - { block: harness, service: "Agent on AgentCore Runtime", builtWith: "Claude Agent SDK (Claude Code)", note: "One runtime per app repository and one session per build, as in AWS's sample. Codex, Kiro CLI or OpenCode package the same way as a container image.", url: https://aws.amazon.com/blogs/machine-learning/extend-claude-code-to-remote-sessions-on-amazon-bedrock-agentcore-with-security-controls/ }
+      - { block: nativeTools, service: "AgentCore Runtime session microVM", note: "Shell, files and tests run in the session's own microVM; your dispatcher can run deterministic steps with InvokeAgentRuntimeCommand. Tools must be in the image.", url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-execute-command.html }
+      - { block: gateway, service: "Amazon Bedrock AgentCore Gateway", note: "Inference connector targets hold the model credential; MCP targets serve the platform's tools. AWS's post mounts shared skills from S3 Files instead.", url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-inference-connector.html }
+      - { block: provider, service: "Amazon Bedrock (Claude models)", note: "The gateway's connectors also reach the Anthropic and OpenAI APIs with a vaulted key.", url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-inference-connector.html }
+      - { block: registry, service: "AWS CodeArtifact repositories", note: "The sandbox reads a repository with no external connection; an admission pipeline copies versions in after age and Inspector checks.", url: https://docs.aws.amazon.com/codeartifact/latest/ug/package-version-age-gating.html }
+      - { block: sources, service: "Public registries (npm, PyPI, Maven)", url: https://docs.aws.amazon.com/codeartifact/latest/ug/external-connection.html }
+      - { block: sourceControl, service: "GitHub, one repository per app", note: "Wired to CodePipeline through AWS CodeConnections. Inspector Code Security connects to GitHub and GitLab, not CodeCommit.", url: https://docs.aws.amazon.com/inspector/latest/user/code-security-assessments-connect-github.html }
+      - { block: pipeline, service: "AWS CodePipeline (V2) with AWS CodeBuild", note: "One platform-owned pipeline per app in the tooling account, started on push and pull request; buildspec held in the project; InspectorScan action; deploys the preview.", url: https://docs.aws.amazon.com/codepipeline/latest/userguide/pipelines-filter.html }
+      - { block: previews, service: "ECS on Fargate, per-app preview account", note: "Behind an ALB authenticate-cognito rule whose user pool federates only to an Identity Center app assigned to the requester and owner; test data, no connector network.", url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-authenticate-users.html }
+      - { block: deployGate, service: "CodePipeline approval and ECS canary", note: "The owner approves one execution; a CloudFormation deploy action then updates the app's stack in its account, and ECS shifts traffic by the service's canary settings.", url: https://docs.aws.amazon.com/codepipeline/latest/userguide/approvals.html }
+      - { block: appTenant, service: "One AWS account per app", note: "An Account Factory Customization blueprint creates the VPC, cluster, user pool, keys and deploy role in a Generated apps OU.", url: https://docs.aws.amazon.com/controltower/latest/userguide/af-customization-page.html }
+      - { block: appHosting, service: "ECS on Fargate, ALB with sign-in", note: "A standard ECS service, not Express Mode, so the blueprint owns the listener rules. App Runner is closed to new customers.", url: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express-service-work.html }
+      - { block: appData, service: "DynamoDB, Aurora or S3, per app", note: "Encrypted with the app's own KMS key and reachable only through the app's VPC endpoints.", url: https://docs.aws.amazon.com/AmazonS3/latest/userguide/example-bucket-policies-vpc-endpoint.html }
+      - { block: orgData, service: "Systems of record via VPC Lattice", build: true, note: "Each connector is a VPC Lattice service shared to the app accounts approved for it.", url: https://docs.aws.amazon.com/vpc-lattice/latest/ug/auth-policies.html }
+    sources:
+      intake: https://aws.amazon.com/blogs/machine-learning/extend-claude-code-to-remote-sessions-on-amazon-bedrock-agentcore-with-security-controls/
+      harness: https://aws.amazon.com/blogs/machine-learning/extend-claude-code-to-remote-sessions-on-amazon-bedrock-agentcore-with-security-controls/
+      nativeTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-execute-command.html
+      gateway: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-inference-connector.html
+      provider: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-inference-connector.html
+      registry: https://docs.aws.amazon.com/codeartifact/latest/ug/package-version-age-gating.html
+      sources: https://docs.aws.amazon.com/codeartifact/latest/ug/external-connection.html
+      sourceControl: https://docs.aws.amazon.com/inspector/latest/user/code-security-assessments-connect-github.html
+      pipeline: https://docs.aws.amazon.com/codepipeline/latest/userguide/pipelines-filter.html
+      previews: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-authenticate-users.html
+      deployGate: https://docs.aws.amazon.com/codepipeline/latest/userguide/approvals.html
+      appTenant: https://docs.aws.amazon.com/controltower/latest/userguide/af-customization-page.html
+      appHosting: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express-service-work.html
+      appData: https://docs.aws.amazon.com/AmazonS3/latest/userguide/example-bucket-policies-vpc-endpoint.html
+      orgData: https://docs.aws.amazon.com/vpc-lattice/latest/ug/auth-policies.html
+    differences:
+      - at: nativeTools->sourceControl
+        text: "A Network Firewall rule that admits github.com admits every repository on it, so the agent's one-repository token, not the network, limits where a push goes. To hold pushes at the network, CodeCommit (open to new customers again since November 2025) takes a VPC endpoint whose policy can name repositories, but Inspector Code Security does not scan it."
+        url: https://docs.aws.amazon.com/codecommit/latest/userguide/codecommit-and-interface-VPC.html
+      - at: harness
+        text: "Any code in the session can read the runtime's execution-role credentials from the microVM metadata service. AWS's coding-agent sample lets that role call Bedrock directly; for the gateway to be the only model path, use an inference target and leave bedrock:InvokeModel, and every deploy permission, out of the role."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-credentials-management.html
+      - at: sources->registry
+        text: "CodeArtifact does not scan packages or hold back new ones: a repository with an external connection fetches any public package the moment a client asks. Age gating is a check you run against the upstream publish times it keeps, and Inspector findings flag workloads using packages it has marked malicious. Admission is yours to build."
+        url: https://docs.aws.amazon.com/codeartifact/latest/ug/package-version-age-gating.html
+      - at: pipeline
+        text: "Inspector Code Security scans only the default branch, and a pull request when it is opened; with pull request triggers only, the top 25 critical or high findings appear in GitHub alone. The InspectorScan action that can fail a CodePipeline stage checks packages from an SBOM, so a SAST finding stops a release only if you add a SAST step of your own."
+        url: https://docs.aws.amazon.com/inspector/latest/user/code-security-assessments-create-configuration.html
+      - at: previews
+        text: "No preview path is private by default. ECS Express Mode without subnets uses the default VPC's public subnets, an internet-facing load balancer and public task IPs, with no sign-in; Amplify Hosting gives each pull request its own URL, protected at most by a shared password or WAF IP rules. Here previews sit behind sign-in for the requester and owner."
+        url: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express-service-work.html
+      - at: appOwner->deployGate
+        text: "A CodePipeline approval does not know who asked for the app: anyone holding PutApprovalResult on that action can approve, and an unanswered approval fails after seven days unless its timeout is set (5 minutes to 60 days). Owner, never requester, holds only because the factory grants that permission to the owner alone."
+        url: https://docs.aws.amazon.com/codepipeline/latest/userguide/approvals.html
+      - at: deployGate
+        text: "ECS canary shifts a percentage of requests, not a chosen group of users, so the first users of a release are whoever the load balancer picks. ECS does not check image signatures at launch; to accept only signed releases, sign with ECR managed signing and verify in a deployment lifecycle hook Lambda."
+        url: https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-signing-verification.html
+      - at: appUsers->appHosting
+        text: "No AWS hosting tier puts sign-in in front by default. App Runner is closed to new customers, Express Mode's load balancer has no authentication and its API cannot change load balancer settings, and Amplify offers a password. The blueprint writes the sign-in rule, and one account per app matters: Express Mode shares a load balancer among up to 25 services in a VPC."
+        url: https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html
+    alsoNeeded:
+      - service: "AWS IAM Identity Center"
+        role: identity
+        why: "Workforce sign-in with MFA for requesters, owners and app users; one SAML application per app whose assignments decide who may sign in; the owner's approval permission set."
+        url: https://docs.aws.amazon.com/singlesignon/latest/userguide/assignuserstoapp.html
+      - service: "Amazon Cognito user pool in each app account"
+        role: identity
+        why: "Federates to that app's Identity Center application and backs the ALB's authenticate-cognito action."
+        url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-authenticate-users.html
+      - service: "AgentCore Identity"
+        role: identity
+        why: "Keeps the GitHub App credential and provider API keys in its token vault and hands the session short-lived tokens."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity-idp-github.html
+      - service: "AWS CodeConnections"
+        role: other
+        why: "Connects each app pipeline to GitHub for push and pull request triggers."
+        url: https://docs.aws.amazon.com/codepipeline/latest/userguide/connections-github.html
+      - service: "Amazon VPC with NAT gateway and AWS Network Firewall"
+        role: network
+        why: "VPC-mode sessions get no internet from public subnets; private subnets route through NAT and the firewall's domain allowlist."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+      - service: "Amazon VPC Lattice service network, shared with AWS RAM"
+        role: network
+        why: "Carries connector traffic from approved app accounts to enterprise systems without peering."
+        url: https://docs.aws.amazon.com/vpc-lattice/latest/ug/auth-policies.html
+      - service: "AWS Certificate Manager"
+        role: ingress
+        why: "ALB sign-in actions work only on HTTPS listeners, which need a certificate."
+        url: https://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html
+      - service: "AWS KMS"
+        role: keys
+        why: "A customer managed key per app account for its store, logs and secrets."
+        url: https://docs.aws.amazon.com/kms/latest/developerguide/overview.html
+      - service: "AWS Secrets Manager"
+        role: secrets
+        why: "Each app's secrets in its own account, injected by ECS at task start; backs AgentCore Identity's vault."
+        url: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/secrets-envvar-secrets-manager.html
+      - service: "Amazon ECR with managed signing"
+        role: registry
+        why: "Holds the agent image and each app's images; managed signing signs on push with AWS Signer."
+        url: https://docs.aws.amazon.com/AmazonECR/latest/userguide/managed-signing.html
+      - service: "Your app register"
+        role: registry
+        why: "AWS Service Catalog AppRegistry is closed to new customers, so the register is the account tags plus the factory's own table."
+        url: https://docs.aws.amazon.com/servicecatalog/latest/arguide/intro-app-registry.html
+      - service: "Amazon CloudWatch, AWS CloudTrail and AWS Config"
+        role: logging
+        why: "Agent traces, the record of approvals and deployments, and the organisation-wide resource inventory."
+        url: https://docs.aws.amazon.com/config/latest/developerguide/querying-AWS-resources.html
+      - service: "Amazon GuardDuty Malware Protection for S3"
+        role: other
+        why: "Scans the intake's upload bucket before a file reaches the spec."
+        url: https://docs.aws.amazon.com/guardduty/latest/ug/gdu-malware-protection-s3.html
+    quickstart:
+      - title: "Get started with AgentCore Runtime using the AgentCore CLI"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-get-started-cli.html
+      - title: "Creating an Amazon ECS canary deployment"
+        url: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deploy-canary-service.html
+      - title: "Customize accounts with Account Factory Customization (AFC)"
+        url: https://docs.aws.amazon.com/controltower/latest/userguide/af-customization-page.html
+    hosting:
+      - id: agentCoreRuntime
+        kind: runtime
+        name: "Amazon Bedrock AgentCore Runtime"
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "Your coding agent runs in a container AWS hosts, one microVM per session; a fresh session ID for every build keeps one build from another."
+          patching: "AWS patches the host and microVM; you rebuild the agent image, with its CLI, git and toolchains, from a patched base and redeploy the runtime."
+          data: "Spec, clone and build output live in the session microVM in your account's Region and go with it, unless you attach session storage (preview), S3 Files or EFS."
+          network: "PUBLIC or VPC mode; in VPC mode traffic leaves through network interfaces in your subnets, so security groups, NAT and Network Firewall decide what a build reaches."
+          identity: "The runtime's IAM execution role, readable by any code in the microVM through its metadata service, plus an AgentCore workload identity for gateway and GitHub tokens."
+          accepts: "Any agent and toolchain in a container image or code package; AWS names Claude Code, Codex, Kiro, OpenCode, Cursor CLI and Gemini CLI as hostable."
+          workload: "A session runs up to 8 hours and ends after 15 idle minutes by default; builds run in parallel within account quotas and bill for CPU and memory used."
+          portability: "The agent is an ordinary container; starting a session, InvokeAgentRuntimeCommand and StopRuntimeSession are AgentCore calls your dispatcher makes."
+          effort: "You own the agent image, dispatcher, execution role, VPC egress, GitHub App and gateway targets; AWS runs microVM capacity, isolation and scaling."
+          fits: "AWS's coding-agent samples run one task per Runtime session in your VPC and end in a pull request that a person reviews and merges."
+        sources:
+          - https://aws.amazon.com/blogs/machine-learning/extend-claude-code-to-remote-sessions-on-amazon-bedrock-agentcore-with-security-controls/
+          - https://aws.amazon.com/blogs/machine-learning/its-safe-to-close-your-laptop-now-hosting-coding-agents-on-amazon-bedrock-agentcore/
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-execute-command.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-filesystem-configurations.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-vpc.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-credentials-management.html
+          - https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html
+      - id: eksSandboxPods
+        kind: cluster
+        name: "Amazon EKS with isolated pods (Nitro Sandbox)"
+        url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+        asOf: "2026-11"
+        compare:
+          runs: "Your agent runs as Kubernetes Jobs or pods; each build's pod in its own Nitro Sandbox (runtimeClassName isolated-sandbox) keeps one build from another."
+          patching: "AWS patches the control plane, and nodes too with EKS Auto Mode; otherwise you patch node AMIs, the Nitro Sandbox AMI among them, and your images."
+          data: "Spec, clone and build output stay on node storage and EBS or EFS volumes in your account; an EBS volume attaches to one sandbox at a time."
+          network: "Pods get VPC addresses and no limits until network policy is enforced; Auto Mode adds DNS-based egress rules, and a network-isolated pod has no network at all."
+          identity: "An IAM role per service account through EKS Pod Identity; a sandboxed pod sees surrogate metadata, not the node's role."
+          accepts: "Any agent and toolchain in a container on supported EC2 instance types; privileged containers get privileges inside their sandbox only."
+          workload: "Jobs have no session cap; you size node pools for parallel builds and carry idle capacity, or let Karpenter or Auto Mode add nodes as builds queue."
+          portability: "Jobs and pods use the Kubernetes API and move to other clusters; the isolated-sandbox runtime class and Pod Identity are EKS features."
+          effort: "You run the cluster, sandbox node pools, network policy, a dispatcher that creates one Job per build, scaling and logging."
+          fits: "Suits a platform team that already runs EKS on Kubernetes 1.36 or later and wants build pods beside its other workloads."
+        sources:
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-limitations.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-metadata-credentials.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-getting-started.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/auto-net-pol.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+          - https://docs.aws.amazon.com/eks/latest/userguide/automode.html
+        summary: "Each build runs as a Kubernetes Job on Amazon EKS whose pod uses the isolated-sandbox runtime class, so it gets its own Nitro Sandbox (a Firecracker microVM). Gateway, mirror, pipeline, deploy gate and app tenancy are unchanged. You now carry what AgentCore Runtime did for each build: starting and stopping the sandbox, egress policy at the pod, the agent's Pod Identity role, node capacity for parallel builds, and the cluster itself."
+        bindings:
+          - { block: harness, service: "Your coding agent as Kubernetes Jobs on Amazon EKS", builtWith: "Claude Agent SDK (Claude Code)", note: "A dispatcher creates one Job per build under a Pod Identity role that holds no deploy rights.", url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html }
+          - { block: nativeTools, service: "Nitro Sandbox pod (runtimeClassName isolated-sandbox)", note: "Hardware-isolated per pod; egress limited by DNS-based network policy and Network Firewall.", url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html }
+        dropSettings: [buildSessionPerTask, runtimeVpcMode]
+        addSettings: [eksIsolatedPods, eksPodIdentity, eksAppNetworkPolicy, eksImdsHopLimit, eksAgentQuarantine, eksControlPlaneLogs, eksSandboxPodSpecRbac, eksPrivateEndpoint]
+        differences:
+          - at: nativeTools
+            text: "Pods share the node's kernel unless runtimeClassName isolated-sandbox is set, which needs Kubernetes 1.36 or later and supported instance types. The network-isolated annotation removes every network device, so a build that must reach the gateway, mirror and GitHub relies on network policy instead."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html
+          - at: nativeTools->registry
+            text: "Kubernetes enforces no network policy until you switch it on (enableNetworkPolicy on the VPC CNI, or the Auto Mode Network Policy Controller), and DNS-based egress rules exist only in EKS Auto Mode. Until then a build pod reaches anything the VPC routes to."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/auto-net-pol.html
+          - at: harness
+            text: "There is no session stop call. Ending a build means deleting its Job, and stopping the agent means deleting its Pod Identity association; credentials already issued stay valid until they expire unless the role's sessions are revoked."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
+        alsoNeeded:
+          - service: "EKS Auto Mode or Karpenter node pools on Nitro Sandbox instance types"
+            role: other
+            why: "Builds need nodes that can host sandboxes; Runtime supplied the microVMs."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-getting-started.html
+          - service: "Network Policy Controller (Auto Mode) or VPC CNI network policy agent"
+            role: network
+            why: "Without it no egress policy takes effect on the build pods."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html
+          - service: "EKS Pod Identity Agent"
+            role: identity
+            why: "Serves each pod its role's credentials; Runtime used the execution role."
+            url: https://docs.aws.amazon.com/eks/latest/userguide/pod-id-agent-setup.html
+          - service: "Amazon CloudWatch Observability EKS add-on"
+            role: logging
+            why: "Collects container logs and metrics; Runtime wrote them to CloudWatch for you."
+            url: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Observability-EKS-addon.html
+        quickstart:
+          - title: "Getting started with sandboxes on Amazon EKS"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/sandboxing-getting-started.html
+          - title: "Create an EKS Auto Mode cluster"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/getting-started-automode.html
+          - title: "Use network policies with EKS Auto Mode"
+            url: https://docs.aws.amazon.com/eks/latest/userguide/auto-net-pol.html
+      - id: kiroCloudSessions
+        kind: managed
+        name: "Kiro autonomous mode in cloud sessions (Kiro Web)"
+        url: https://kiro.dev/docs/web/autonomous-mode/
+        asOf: "2026-11"
+        compare:
+          runs: "Kiro runs its agent harness in a managed cloud sandbox it provisions for each session; you configure the environment and connect repositories, not the compute."
+          patching: "Kiro, an AWS product, maintains the sandbox and the agent; you keep your project's environment configuration and steering files current."
+          data: "Repositories are cloned into the sandbox; sessions and files persist in Kiro's cloud in us-east-1 or eu-central-1 until deleted, not in your AWS account."
+          network: "Per environment: Connections access only, Common dependencies, Open internet or a custom domain allow-list; the sandbox cannot sit in your VPC."
+          identity: "Users sign in through IAM Identity Center, Okta or Entra ID; repository access is the Kiro GitHub or GitLab app and the user's own write permission."
+          accepts: "GitHub and GitLab repositories; in autonomous mode the agent picks the model; MCP servers and environment settings are configured per sandbox."
+          workload: "Tasks run in the background and in parallel and can be scheduled hourly, daily or by cron, at most hourly; a run opens a pull or merge request when it has changes."
+          portability: "Steering and .kiro configuration live in the repository; sessions, sandboxes and scheduled tasks are Kiro's and do not move."
+          effort: "An administrator turns on Cloud Sessions and installs the GitHub app; you set environments, internet access and secrets; Kiro runs the rest."
+          fits: "AWS points Amazon Q Developer IDE users to Kiro; its pages describe work on connected repositories that ends in a pull or merge request for review."
+        sources:
+          - https://kiro.dev/docs/autonomous-agent/
+          - https://kiro.dev/docs/web/autonomous-mode/
+          - https://kiro.dev/docs/cloud-sessions/
+          - https://kiro.dev/docs/web/sandbox/
+          - https://kiro.dev/docs/web/sandbox/internet-access/
+          - https://kiro.dev/docs/web/sandbox/environment-variables/
+          - https://kiro.dev/docs/web/github/
+          - https://kiro.dev/docs/web/automations/
+          - https://kiro.dev/docs/enterprise/governance/
+          - https://kiro.dev/docs/enterprise/deployment-options/
+          - https://kiro.dev/docs/privacy-and-security/data-protection/
+          - https://kiro.dev/docs/guides/running-kiro-in-the-cloud/
+          - https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/q-developer-ide-end-of-support.html
+        offers:
+          - name: "Autonomous mode (Kiro Web)"
+            what: "Takes a task end to end in an isolated sandbox, delegates steps to sub-agents and opens a pull or merge request; it never merges automatically. No preview label on the page."
+            url: https://kiro.dev/docs/web/autonomous-mode/
+          - name: "Cloud sessions"
+            what: "The Kiro harness in a managed sandbox, started from Web, IDE, CLI or Mobile in the profile's Region; off by default for Identity Center organisations, formerly labelled Kiro Web (Preview)."
+            url: https://kiro.dev/docs/cloud-sessions/
+          - name: "Sandbox internet access"
+            what: "Three access levels or a custom allow-list of domains for each sandbox environment, with secrets injected as environment variables the agent can read."
+            url: https://kiro.dev/docs/web/sandbox/internet-access/
+          - name: "GitHub integration (Kiro Agent app)"
+            what: "Issues labelled kiro or a /kiro comment assign work; the app asks for write access to Actions, Checks, Contents, Issues, Pull requests and Workflows."
+            url: https://kiro.dev/docs/web/github/
+          - name: "Scheduled tasks"
+            what: "Run a prompt against connected repositories in autonomous mode on an hourly, daily or cron schedule and open a pull request when there are changes."
+            url: https://kiro.dev/docs/web/automations/
+    settings: [idcAppAssignment, albAuthenticate, runtimeVpcMode, networkFirewallDomains, inspectorCodeSecurity, agentCoreObservability, buildSessionPerTask, agentRoleNoDeployScp, githubAgentAppToken, githubDefaultBranchRuleset, githubPushProtection, codeArtifactAdmission, codeBuildProjectBuildspec, inspectorScanAction, cfnGuardHookBaseline, codePipelineOwnerApproval, identityCenterMfa, ecsCanaryRollback, appOuGuardrailScp, accountPerAppBlueprint, ecsSecretsValueFrom, latticeConnectorAuthPolicy, connectorEntitlementFilter, intakePromptAttackFilter, appStoreEndpointPolicy, gatewayInferenceConnector, factoryReleaseRecord, appQuarantine, configShadowAiQuery, appAccountTags]
+  # <<< software factory mapping
