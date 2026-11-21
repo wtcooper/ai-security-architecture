@@ -85,7 +85,7 @@ async function loadIncidents(): Promise<Incident[]> {
  * (the 2026-08 `flows:` mechanism in particular) must not survive as silently ignored data.
  */
 const ARCHETYPE_KEYS = new Set([
-  "id", "surface", "rank", "title", "abbrev", "summary", "description", "distinguishedBy",
+  "id", "surface", "rank", "title", "abbrev", "summary", "overview", "description", "distinguishedBy",
   "exemplars", "blocks", "edges", "zones", "pins", "walkthrough", "scenarios", "deviations",
   "sources",
 ]);
@@ -672,6 +672,9 @@ function checkArchetypes(
 
     if (!arch.summary?.length) fail(`${where}: needs a summary`);
     if (!arch.description?.length) fail(`${where}: needs a description`);
+    // What How it works opens with: what the pattern is and what sets it apart, in a few sentences.
+    if (!arch.overview?.trim()) fail(`${where}: needs an overview: what it is and what sets it apart, in at most 420 characters`);
+    else if (arch.overview.trim().length > 420) fail(`${where}: overview is ${arch.overview.trim().length} characters; keep it to 420`);
     if (!arch.sources?.length) fail(`${where}: needs at least one source`);
     if (!arch.blocks?.length) fail(`${where}: needs blocks`);
     // Every architecture declares its ownership bands. Mandatory since the 2026-08-30

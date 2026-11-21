@@ -320,7 +320,7 @@ test("a platform's hosting options are compared on the same rows; a variant keep
       assert.match(choose, new RegExp(`who runs ${hostingWords(a.id).thing}`), `${where}: says what is hosted`);
       if (!AGENT_PATTERNS.includes(a.id)) assert.doesNotMatch(choose, /Who runs the agent loop|managed agent service/, `${where}: no agent wording`);
       // The page compares and does not rank: it says so, and marks no option as the one to pick. (A cell may quote the vendor's own guidance.)
-      assert.match(choose, /Nothing here ranks the options/, `${where}: says it does not rank`);
+      assert.match(choose, /Not ranked/, `${where}: says it does not rank`);
       assert.doesNotMatch(choose, /data-recommended|data-rank/, `${where}: no option is marked as the one to pick`);
     }
   }

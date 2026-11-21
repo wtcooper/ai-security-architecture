@@ -146,7 +146,7 @@ test("the Enable tab opens as folded steps; a lit control opens the controls, ba
     }
     // Nothing is recorded in data/org/controls.yaml, so the rows carry no status column of "Not set".
     assert.doesNotMatch(html, />Not set</, `${arch.id}: no empty status column`);
-    assert.equal([...html.matchAll(/data-baseline/g)].length, isBaseline(arch.mitigations[0]) ? 1 : 0, `${arch.id}: the open row says when every AI deployment needs it`);
+    assert.equal([...html.matchAll(/data-baseline/g)].length, arch.mitigations.filter(isBaseline).length, `${arch.id}: a row says when every AI deployment needs it`);
   }
 });
 
@@ -166,10 +166,8 @@ test("a control row is one line of reference; what to do and why are in the open
     // Each category has a plain heading and one sentence on what it is for; the CSF name is the reference beside it.
     for (const g of controlGroups(arch)) assert.ok(table.includes(esc(g.plain)) && table.includes(esc(g.title)) && table.includes(esc(g.blurb)), `${arch.id}: ${g.id} heading`);
     assert.equal([...table.matchAll(/data-definition/g)].length, 1, `${arch.id}: one definition, in the open row`);
-    const guidance = dataset.guidance.find((g) => g.archetype === arch.id)!;
-    const how = renderToStaticMarkup(<ArchetypeDetail archetype={arch} />);
-    assert.match(how, new RegExp(`How to govern this pattern[^<]*(<[^>]+>\\s*)*${guidance.items.length}`), `${arch.id}: guidance is a section of How it works`);
-    assert.doesNotMatch(page(arch.id, "tab=enable"), /data-guidance-item/, `${arch.id}: Enable carries no guidance prose`);
+    // The open row holds what it takes to put the control in place, and nothing tucked behind a further fold.
+    assert.doesNotMatch(table, /In detail|Reduces here|Delivered by:/, `${arch.id}: no extra detail in the open row`);
   }
 });
 
@@ -229,7 +227,7 @@ test("a pattern opens on How it works, with a link to Enable; a tab link opens t
   assert.match(linked, new RegExp(`id="setting-${tool.id}-|not catalogued row by row`), "the product's settings are open");
 });
 
-test("nothing version 1 showed about a pattern is missing: its summary, how it works, examples, deviations and sources", () => {
+test("a pattern page shows its summary and examples in the header, and How it works opens on its overview", () => {
   const text = (blocks: unknown) => (Array.isArray(blocks) ? blocks.map((b) => (Array.isArray(b) ? b.join(" ") : String(b))).join(" ") : String(blocks ?? "")).replace(/\s+/g, " ").trim();
   const seen = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ");
   for (const arch of dataset.archetypes) {
@@ -237,11 +235,11 @@ test("nothing version 1 showed about a pattern is missing: its summary, how it w
     assert.ok(enable.includes(text(arch.summary).slice(0, 80)), `${arch.id}: the summary is in the header`);
     for (const e of arch.exemplars ?? []) assert.ok(enable.includes(e.name), `${arch.id}: example ${e.name} is named in the header`);
     const how = page(arch.id, "tab=overview");
-    assert.ok(seen(how).includes(text(arch.description).slice(0, 80)), `${arch.id}: how it works`);
-    // The other sections fold; each is present with its count, and opens to the full text.
-    assert.match(how, /Why this is its own pattern/, arch.id);
+    // How it works opens on the overview: what it is and what sets it apart. Guidance, the authors' notes on the
+    // drawing and a separate "why its own pattern" are not for the reader.
+    assert.ok(seen(how).includes(arch.overview.trim().slice(0, 80)), `${arch.id}: the overview`);
+    assert.doesNotMatch(how, /How to govern this pattern|Why this is its own pattern|departs from the catalogue|data-guidance-item/, `${arch.id}: no authors' sections`);
     if (arch.exemplars?.length) assert.match(how, new RegExp(`Examples[^<]*(<[^>]+>\\s*)*${arch.exemplars.length}`), `${arch.id}: examples section`);
-    if (arch.deviations?.length) assert.match(how, /Where this drawing departs from the catalogue/, `${arch.id}: deviations section`);
     assert.match(how, /Sources/, arch.id);
   }
 });
@@ -352,7 +350,7 @@ test("an open control gives each cloud option's place, value and reason; How it 
   for (const a of dataset.archetypes) {
     const products = cloudProductsFor(a.id);
     if (!products.length) continue;
-    assert.match(page(a.id, `tab=overview&cloud=${cloudSlug(products[0].id)}`), /data-cloud-comparison/, `${a.id}: the comparison opens with a cloud chosen`);
+    if (products.length > 1) assert.match(page(a.id, `tab=overview&cloud=${cloudSlug(products[0].id)}`), /side by side/, `${a.id}: the platforms can be compared side by side`);
     const list = renderToStaticMarkup(<ComponentList archetype={a} cloud={products[0]} />);
     assert.equal([...list.matchAll(/data-component-service/g)].length, products[0].implementation.bindings.length, `${a.id}: every named component shows its service`);
     const table = renderToStaticMarkup(<CloudComparison archetype={a} products={products} />);
@@ -393,4 +391,28 @@ test("Reference › Clouds lists every pattern on a cloud and an option for ever
   const detail = renderToStaticMarkup(<ControlDetail mitigation={dataset.mitigations.find((m) => m.id === "D3-OTF")!} />);
   assert.match(detail, /data-control-clouds/);
   for (const c of cloudOptionsForControl("D3-OTF")) assert.ok(detail.includes(esc(c.cloud.name)), `the control names ${c.cloud.name}`);
+});
+
+test("Enable's layouts: A puts the first setting and its value in each control row, B lists every setting under its control, C leads with the settings", () => {
+  const arch = dataset.archetypes.find((a) => a.id === "archChatAgent")!;
+  const [product] = cloudProductsFor(arch.id);
+  const render = (layout: "current" | "a" | "b" | "c") =>
+    renderToStaticMarkup(<EnablePanel archetype={arch} open={arch.mitigations[0]} onOpen={() => {}} onShowDrawing={() => {}} tool={product.id} onPickTool={() => {}} cloud={product} layout={layout} />);
+  const current = render("current");
+  assert.match(current, /data-control-table="names"/);
+  assert.ok(current.indexOf('id="controls"') < current.indexOf('id="tools"'), "controls, then settings");
+  const a = render("a");
+  assert.match(a, /data-control-table="inline"/);
+  assert.match(a, /data-recommended-value/, "a recommended value is in the rows");
+  const b = render("b");
+  assert.match(b, /data-control-table="checklist"/);
+  assert.doesNotMatch(b, /id="tools"/, "no separate settings step");
+  const listed = arch.mitigations.reduce((n, id) => n + optionsFor(product, id).length, 0);
+  assert.equal([...b.matchAll(/data-checklist="/g)].length, arch.mitigations.length, "every control has its list");
+  assert.ok([...b.matchAll(/data-setting-value/g)].length >= listed, "every setting under its control shows the value to set");
+  const c = render("c");
+  assert.ok(c.indexOf('id="choose"') < c.indexOf('id="tools"') && c.indexOf('id="tools"') < c.indexOf('id="controls"'), "choose, the settings, then the controls");
+  assert.match(c, />What to set</);
+  // Every setting shown anywhere says what to set it to, apart from the default.
+  for (const html of [current, a, b, c]) assert.doesNotMatch(html, /Default: /, "the default never reads as the value to set");
 });

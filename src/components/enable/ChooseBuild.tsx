@@ -131,8 +131,7 @@ function HostingComparison({ platform, patternId }: { platform: CloudProduct; pa
           </div>
         ))}
         <p className="mt-3 max-w-3xl text-[12px] leading-snug text-ink-3">
-          Each cell is taken from the vendor&rsquo;s own pages{asOf ? `, read in ${asOf}` : ""}. Nothing here ranks the options: which is right depends on what your organisation has approved and what the work
-          needs. A rule that usually holds: take the most managed option your organisation has approved that still meets your data-boundary and control requirements.
+          From the vendor&rsquo;s own pages{asOf ? `, read in ${asOf}` : ""}. Not ranked: take the most managed option your organisation has approved that meets your data and control requirements.
           {sources.length > 0 && (
             <>
               {" "}Sources:{" "}

@@ -6,28 +6,36 @@
  * picking a chip on the drawing opens its row. The open row is the drawing's highlight, so the
  * two can never disagree.
  *
- * A row is one line of reference, not prose: the control, your organisation's own controls that
- * deliver it, where it goes on the drawing, the chosen product's settings for it, and its status
- * once the organisation records one. The band above a group carries the one sentence that says
- * what the group is for. What to do and why, the settings in full, the risks it reduces and the
- * catalogue's definition are in the open row.
+ * A row is one line of reference: the control, your organisation's own controls that deliver
+ * it, where it goes on the drawing, the chosen product's settings for it, and its status once
+ * the organisation records one. The band above a group carries the one sentence that says what
+ * the group is for. The open row holds only what it takes to put the control in place: what to
+ * do and why, each setting with the value to set, your own controls, and the way to the drawing
+ * and the full definition.
+ *
+ * Three ways to show the settings are offered while one is chosen (`variant`): their names in a
+ * column (`names`), the first setting and its value in the row (`inline`), or every setting
+ * listed under its control (`checklist`).
  */
 import Link from "next/link";
 import { Fragment } from "react";
 
 import { OrgControlList, OrgControlNames } from "@/components/OrgControls";
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
-import { controlName, isBaseline, riskCode, risksForMitigation, status as statusFile, statusFor, type Product } from "@/lib/data";
+import { controlName, isBaseline, status as statusFile, statusFor, type Product } from "@/lib/data";
 import type { Archetype, ProductSetting } from "@/lib/types";
 import { NativeOptions } from "@/components/cloud/CloudViews";
 import { optionsFor, productShort } from "@/components/cloud/model";
 import { placementsFor, type ControlGroup } from "./model";
 import { controlHref } from "@/lib/routes";
+import { Recommended, recommendedOf, SetVia, SettingLink, ValueChip } from "./SettingParts";
 
 /** True once the organisation has recorded a status for any control (data/org/controls.yaml). */
 export const anyControlStatus = Object.values(statusFile).some((s) => s.status);
 
 export const BASELINE_HELP = "Needed by every AI deployment, whatever the pattern: set up once and reused.";
+
+export type ControlVariant = "names" | "inline" | "checklist";
 
 /** A product's settings for one control, in a few words: up to two names, then how many more. */
 function SettingNames({ short, options }: { short: string; options: ProductSetting[] }) {
@@ -43,6 +51,32 @@ function SettingNames({ short, options }: { short: string; options: ProductSetti
   );
 }
 
+/** The first setting for a control and the value to set it to, with how many more there are. */
+function FirstSetting({ short, options, tagged }: { short: string; options: ProductSetting[]; tagged: boolean }) {
+  if (!options.length) return null;
+  const [first] = options;
+  const { value } = recommendedOf(first);
+  return (
+    <span className="block min-w-0" data-option-names title={options.map((s) => s.name).join(" · ")}>
+      <span className="block truncate font-semibold text-ink">
+        {tagged && <span className="font-normal text-ink-3">{short}: </span>}
+        {first.name}
+      </span>
+      <span className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
+        {value ? <ValueChip text={value} /> : <span className="text-ink-2">see the open row</span>}
+        {options.length > 1 && <span className="text-[11.5px] text-ink-3">+{options.length - 1} more</span>}
+      </span>
+    </span>
+  );
+}
+
+const GRIDS = {
+  plain: "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1fr)]",
+  status: "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1fr)_96px]",
+  settings: "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.4fr)]",
+  both: "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.4fr)_96px]",
+} as const;
+
 export function ControlTable({
   groups,
   archetype,
@@ -51,6 +85,7 @@ export function ControlTable({
   onShowDrawing,
   product = null,
   products = product ? [product] : [],
+  variant = "names",
 }: {
   groups: ControlGroup[];
   archetype: Archetype;
@@ -63,26 +98,20 @@ export function ControlTable({
   onOpen: (id: string | null) => void;
   /** Brings the drawing back into view; offered in an open row. */
   onShowDrawing?: () => void;
+  /** How the chosen product's settings are shown. */
+  variant?: ControlVariant;
 }) {
   const number = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
-  const pinnedRisks = new Set(archetype.risks);
-  const withSettings = products.length > 0;
-  // Columns: chip · control · where it goes · (the chosen product's settings) · (status, once any is recorded).
-  // Written out in full so the style build finds every one.
-  const GRID = withSettings
-    ? anyControlStatus
-      ? "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.4fr)_96px]"
-      : "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.4fr)]"
-    : anyControlStatus
-      ? "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1fr)_96px]"
-      : "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1fr)]";
+  const withSettings = products.length > 0 && variant !== "checklist";
+  const GRID = GRIDS[withSettings ? (anyControlStatus ? "both" : "settings") : anyControlStatus ? "status" : "plain"];
+  const tagged = products.length > 1;
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-paper" data-control-table>
+    <div className="overflow-hidden rounded-xl border border-line bg-paper" data-control-table={variant}>
       <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${GRID}`}>
         <span aria-label="Chip on the drawing" />
         <span>Control</span>
         <span>Where it goes</span>
-        {withSettings && <span>Settings</span>}
+        {withSettings && <span>{variant === "inline" ? "Recommended setting" : "Settings"}</span>}
         {anyControlStatus && <StatusHeading className="md:justify-end" />}
       </div>
       {groups.map((group) => (
@@ -106,14 +135,11 @@ export function ControlTable({
           <ul className="divide-y divide-line border-b border-line last:border-b-0">
             {group.controls.map((m) => {
               const expanded = open === m.id;
-              const where = placementsFor(archetype.id, m.id);
-              const reduces = risksForMitigation(m.id).filter((r) => pinnedRisks.has(r.id));
+              const steps = placementsFor(archetype.id, m.id).steps;
+              const where = placementsFor(archetype.id, m.id).blocks;
               const own = statusFile[m.id];
-              const named = products.map((p) => ({
-                product: p,
-                options: optionsFor(p, m.id),
-              }));
-              const steps = where.steps;
+              const named = products.map((p) => ({ product: p, options: optionsFor(p, m.id) }));
+              const none = named.length > 0 && named.every(({ options }) => !options.length);
               return (
                 <li key={m.id} id={`control-${m.id}`} className="scroll-mt-24">
                   <button
@@ -132,25 +158,24 @@ export function ControlTable({
                       <span className="block font-semibold text-ink" data-control-name>
                         {controlName(m.id)}
                         {isBaseline(m.id) && (
-                          <span
-                            className="ml-2 inline-block rounded border border-line bg-mist px-1.5 py-px align-[1px] text-[10px] font-semibold text-ink-3"
-                            title={BASELINE_HELP}
-                          >
+                          <span className="ml-2 inline-block rounded border border-line bg-mist px-1.5 py-px align-[1px] text-[10px] font-semibold text-ink-3" title={BASELINE_HELP} data-baseline>
                             Every deployment
                           </span>
                         )}
                       </span>
                       <OrgControlNames controlId={m.id} className="text-[11.5px]" />
                     </span>
-                    <span className="col-start-2 text-[12px] leading-snug text-ink-3 md:col-start-auto">{where.blocks.join(" · ")}</span>
+                    <span className="col-start-2 text-[12px] leading-snug text-ink-3 md:col-start-auto">{where.join(" · ")}</span>
                     {withSettings && (
-                      <span className="col-start-2 min-w-0 text-[12px] leading-snug text-ink md:col-start-auto">
-                        {named.map(({ product: p, options }) => (
-                          <SettingNames key={p.id} short={productShort(p)} options={options} />
-                        ))}
-                        {named.every(({ options }) => !options.length) && (
-                          <span className="text-ink-3">None in {named.map(({ product: p }) => productShort(p)).join(" or ")}</span>
+                      <span className="col-start-2 min-w-0 space-y-1 text-[12px] leading-snug text-ink md:col-start-auto">
+                        {named.map(({ product: p, options }) =>
+                          variant === "inline" ? (
+                            <FirstSetting key={p.id} short={productShort(p)} options={options} tagged={tagged} />
+                          ) : (
+                            <SettingNames key={p.id} short={productShort(p)} options={options} />
+                          ),
                         )}
+                        {none && <span className="text-ink-3">No setting: {named.map(({ product: p }) => productShort(p)).join(" or ")} leaves it to you</span>}
                       </span>
                     )}
                     {anyControlStatus && (
@@ -159,68 +184,42 @@ export function ControlTable({
                       </span>
                     )}
                   </button>
+                  {/* The checklist lists every setting under its control, open or not. */}
+                  {variant === "checklist" && named.length > 0 && (
+                    <ul className="space-y-0 border-t border-dashed border-line bg-paper pb-1 md:pl-[60px]" data-checklist={m.id}>
+                      {named.flatMap(({ product: p, options }) =>
+                        options.map((s) => (
+                          <li key={`${p.id}-${s.id}`} className="grid grid-cols-1 gap-x-4 gap-y-1 px-4 py-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] md:pl-0" data-option-names>
+                            <div className="min-w-0 text-[12.5px] leading-snug">
+                              <SettingLink setting={s} />
+                              {tagged && <span className="ml-1.5 text-[11px] text-ink-3">{productShort(p)}</span>}
+                              <span className="mt-0.5 block">
+                                <SetVia setting={s} />
+                              </span>
+                            </div>
+                            <Recommended setting={s} why={false} />
+                          </li>
+                        )),
+                      )}
+                      {none && <li className="px-4 py-2 text-[12px] text-ink-3 md:pl-0">No setting: {named.map(({ product: p }) => productShort(p)).join(" or ")} leaves it to you.</li>}
+                    </ul>
+                  )}
                   {expanded && (
                     <div className="space-y-3 border-t border-line bg-mist/30 px-4 py-3.5 text-[12.5px] leading-relaxed text-ink-2 md:pl-[60px]">
-                      <div data-what-to-do>
-                        <p className="eyebrow">What to do</p>
-                        <ul className="mt-1 space-y-1.5">
-                          {steps.map((step, i) => (
-                            <li key={i}>
-                              {steps.length > 1 && (
-                                <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-3">At {step.where.join(" → ")}:</span>
-                              )}
-                              <span className="font-semibold text-ink" data-do>
-                                {step.do}
-                              </span>{" "}
-                              <span data-why>{step.why}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      {named.map(({ product: p, options }) => (
-                        <NativeOptions key={p.id} id={p.id} name={p.name} options={options} />
-                      ))}
+                      <ul className="space-y-1.5" data-what-to-do>
+                        {steps.map((step, i) => (
+                          <li key={i}>
+                            {steps.length > 1 && <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-3">At {step.where.join(" → ")}:</span>}
+                            <span className="font-semibold text-ink" data-do>
+                              {step.do}
+                            </span>{" "}
+                            <span data-why>{step.why}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {variant !== "checklist" && named.map(({ product: p, options }) => <NativeOptions key={p.id} id={p.id} name={p.name} options={options} />)}
                       <OrgControlList controlId={m.id} />
-                      {reduces.length > 0 && (
-                        <p className="text-[12px]">
-                          <span className="font-semibold text-ink">Reduces here: </span>
-                          {reduces.map((r, i) => (
-                            <span key={r.id}>
-                              {i > 0 && " · "}
-                              <span className="ident mr-1 text-[10px] font-bold text-ink-3">{riskCode(r.id)}</span>
-                              {r.title}
-                            </span>
-                          ))}
-                        </p>
-                      )}
-                      {steps.some((step) => step.note) && (
-                        <details data-detail>
-                          <summary className="cursor-pointer text-[12px] font-semibold text-ink-2">In detail</summary>
-                          <ul className="mt-1 space-y-1.5">
-                            {steps
-                              .filter((step) => step.note)
-                              .map((step, i) => (
-                                <li key={i}>
-                                  {steps.length > 1 && <span className="font-semibold text-ink">{step.where.join(" → ")}: </span>}
-                                  {step.note}
-                                </li>
-                              ))}
-                          </ul>
-                        </details>
-                      )}
-                      <div className="text-[12px] text-ink-3" data-definition>
-                        <p>
-                          <span className="font-semibold text-ink-2">The control: </span>
-                          {m.implementation}
-                        </p>
-                        <p className="mt-1">Delivered by: {m.examples.slice(0, 5).join(" · ")}</p>
-                        {isBaseline(m.id) && (
-                          <p className="mt-1" data-baseline>
-                            {BASELINE_HELP}
-                          </p>
-                        )}
-                      </div>
-                      <span className="flex flex-wrap gap-x-4">
+                      <span className="flex flex-wrap gap-x-4" data-definition>
                         {onShowDrawing && (
                           <button type="button" onClick={onShowDrawing} className="text-[12px] font-semibold text-introduced hover:underline">
                             ↑ See it on the drawing

@@ -40,11 +40,13 @@ export function checkSettings(
       if (!String(s[key] ?? "").trim()) ctx.fail(`${at}: needs ${key}`);
     }
     // A bare `true` or `1` in YAML is not text, and a page shows a non-text value as nothing: quote it.
-    for (const key of ["name", "where", "recommended", "why", "default", "requires"] as const) {
+    for (const key of ["name", "where", "recommended", "why", "default", "requires", "value"] as const) {
       const value = (s as unknown as Record<string, unknown>)[key];
       if (value !== undefined && typeof value !== "string") ctx.fail(`${at}: ${key} must be text; write "${String(value)}" in quotes`);
     }
     if (s.verified && !ISO_DAY.test(s.verified)) ctx.fail(`${at}: verified must be YYYY-MM-DD`);
+    // The value to set, in a few words: it is shown as a value, so a sentence does not belong here.
+    if (s.value !== undefined && (!s.value.trim() || s.value.trim().length > 60)) ctx.fail(`${at}: value is the recommended value in 1 to 60 characters; the sentence belongs in recommended`);
     if (s.url && !/^https:\/\//.test(s.url)) ctx.fail(`${at}: url must be https`);
     if (!SETTING_AREAS.includes(s.area)) ctx.fail(`${at}: area must be one of ${SETTING_AREAS.join(", ")}`);
     if (s.builtWith !== undefined && (typeof s.builtWith !== "string" || !s.builtWith.trim() || s.builtWith.length > 40)) ctx.fail(`${at}: builtWith names a framework or server in 1 to 40 characters`);

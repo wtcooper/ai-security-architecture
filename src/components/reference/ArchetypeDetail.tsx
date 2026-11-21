@@ -10,11 +10,10 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import { Prose } from "@/components/Prose";
 import { CloudComparison, OnCloud } from "@/components/cloud/CloudViews";
-import { bindingFor, cloudProductsFor, platformWords, type CloudProduct } from "@/components/cloud/model";
+import { bindingFor, cloudProductsFor, type CloudProduct } from "@/components/cloud/model";
 import { summaryOf } from "@/components/drawing/layout";
-import { controlName, componentChoiceFor, guidanceByArchetype, toolsForArchetype } from "@/lib/data";
+import { componentChoiceFor, toolsForArchetype } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
 import type { Archetype, ComponentChoice } from "@/lib/types";
 
@@ -31,13 +30,12 @@ function BuiltWith({ archetype, blockId, cloud }: { archetype: Archetype; blockI
       <span className="font-semibold text-ink">Built with: </span>
       {usual && (
         <>
-          {usual} in {cloud!.cloud.selfManaged ? "this mapping" : `${cloud!.cloud.short}'s guides`}, a default and not a requirement
-          {tools.length ? ". " : "."}
+          {usual} ({cloud!.cloud.selfManaged ? "this mapping's default" : `${cloud!.cloud.short}'s guides`})
+          {tools.length ? " · or " : ""}
         </>
       )}
       {tools.length > 0 && (
         <>
-          {usual ? "Catalogued with its settings: " : "your choice. Catalogued with its settings: "}
           {tools.map((t, i) => (
             <span key={t.id}>
               {i > 0 && " · "}
@@ -85,33 +83,22 @@ export function ArchetypeDetail({
   risks?: ReactNode;
 }) {
   const cloudProducts = cloudProductsFor(archetype.id);
-  const guidance = guidanceByArchetype.get(archetype.id);
-  // The first paragraph says how it works; the rest is there for whoever wants it.
-  const [lead, ...more] = archetype.description;
   return (
     <div className="rounded-xl border border-line bg-paper">
       {onEnable && (
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line bg-mist/50 px-5 py-3" data-enable-link>
           <p className="text-[13px] leading-snug text-ink-2">
-            To put this pattern in place: the {archetype.mitigations.length} controls it needs and the settings that deliver them.
+            The {archetype.mitigations.length} controls this pattern needs, and the settings that deliver them, are on Enable.
           </p>
           <button type="button" onClick={onEnable} className="rounded-md bg-ink px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-ink-2">
             How to enable it →
           </button>
         </div>
       )}
-      <Section title="How it works" count={null} defaultOpen>
-        <div className="max-w-3xl">
-          <Prose blocks={lead ? [lead] : []} size="sm" />
-          {more.length > 0 && (
-            <details className="mt-2" data-more>
-              <summary className="cursor-pointer text-[12.5px] font-semibold text-ink-2">More detail</summary>
-              <div className="mt-2">
-                <Prose blocks={more} size="sm" />
-              </div>
-            </details>
-          )}
-        </div>
+      <Section title="Overview" count={null} defaultOpen>
+        <p className="max-w-3xl text-[13.5px] leading-relaxed text-ink-2" data-overview>
+          {archetype.overview}
+        </p>
       </Section>
 
       {risks && archetype.risks.length > 0 && (
@@ -121,9 +108,6 @@ export function ArchetypeDetail({
       )}
 
       <Section key={`components-${cloud?.id ?? "generic"}`} title="Components" count={archetype.blocks.length} defaultOpen={Boolean(cloud)}>
-        <p className="mb-3 text-[12.5px] leading-snug text-ink-3">
-          Every box on the drawing, by the boundary it sits in, with what it holds{cloud ? ` and the ${platformWords(cloud.cloud).service} that plays it` : ""}.
-        </p>
         <ComponentList archetype={archetype} cloud={cloud} />
       </Section>
 
@@ -135,62 +119,17 @@ export function ArchetypeDetail({
         </div>
       )}
 
-      {cloudProducts.length > 0 && (
-        // Open when a cloud is chosen: the reader has asked how the pattern is built.
-        <Section key={cloud?.id ?? "generic"} title={cloudProducts.some((p) => p.cloud.selfManaged) ? "On each platform" : "On each cloud"} count={cloudProducts.length} defaultOpen={Boolean(cloud)}>
-          <p className="mb-3 max-w-3xl text-[12.5px] leading-snug text-ink-3">
-            What plays each component on {cloudProducts.map((p) => p.cloud.short).join(", ")}, side by side. A control-plane box is a
-            function, so its row lists the settings that deliver its controls; their values are on Enable.
-          </p>
+      {cloudProducts.length > 1 && (
+        <Section key={cloud?.id ?? "generic"} title={cloudProducts.some((p) => p.cloud.selfManaged) ? "Each platform side by side" : "Each cloud side by side"} count={cloudProducts.length}>
           <CloudComparison archetype={archetype} products={cloudProducts} />
         </Section>
       )}
 
-      {guidance && (
-        // The reasoning behind the controls, as prose. The steps themselves are on Enable.
-        <Section title={`How to govern this pattern${guidance.status === "draft" ? " · draft" : ""}`} count={guidance.items.length}>
-          <div className="max-w-3xl">
-            <Prose blocks={guidance.overview} size="sm" />
-            <ol className="mt-4 space-y-4">
-              {guidance.items.map((item) => (
-                <li key={item.title} data-guidance-item className="text-[13px] leading-snug text-ink-2">
-                  <p className="font-semibold text-ink">{item.title}</p>
-                  <div className="mt-1"><Prose blocks={item.body} size="sm" /></div>
-                  <p className="mt-1 text-[12px] text-ink-3">
-                    Controls:{" "}
-                    {item.mitigations
-                      .filter((id) => archetype.mitigations.includes(id))
-                      .map((id) => `${archetype.mitigations.indexOf(id) + 1} ${controlName(id)}`)
-                      .join(" · ")}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </Section>
-      )}
-
-      {archetype.distinguishedBy?.length ? (
-        <Section title="Why this is its own pattern" count={null}>
-          <Prose blocks={archetype.distinguishedBy} size="sm" />
-        </Section>
-      ) : null}
-
       {archetype.exemplars?.length ? (
         <Section title="Examples" count={archetype.exemplars.length}>
-          {archetype.exemplars.some((e) => e.fills) && (
-            <p className="mb-3 max-w-3xl text-[12.5px] leading-snug text-ink-3">
-              Each is an example of one box on the drawing: what that box is built with, not where the pattern runs. Where it runs is the Built on choice above the drawing.
-            </p>
-          )}
-          <ul className="space-y-2.5">
+          <ul className="space-y-2">
             {archetype.exemplars.map((e) => (
               <li key={e.name} className="text-[13px] leading-snug text-ink-2" data-example={e.name}>
-                {e.fills && (
-                  <span className="mr-2 inline-block rounded border border-line bg-mist px-1.5 py-px text-[10.5px] font-semibold text-ink-2" data-example-fills={e.fills}>
-                    {archetype.blocks.find((b) => b.id === e.fills)?.title ?? e.fills}
-                  </span>
-                )}
                 {e.url ? (
                   <a href={e.url} target="_blank" rel="noreferrer" className="font-semibold text-ink hover:text-introduced hover:underline">
                     {e.name} ↗
@@ -198,21 +137,12 @@ export function ArchetypeDetail({
                 ) : (
                   <span className="font-semibold text-ink">{e.name}</span>
                 )}
-                {e.asOf && <span className="ident ml-2 text-[10.5px] text-ink-3">as of {e.asOf}</span>}
+                {e.fills && (
+                  <span className="ml-2 inline-block rounded border border-line bg-mist px-1.5 py-px align-[1px] text-[10.5px] font-semibold text-ink-2" data-example-fills={e.fills} title="The box on the drawing it is an example of">
+                    {archetype.blocks.find((b) => b.id === e.fills)?.title ?? e.fills}
+                  </span>
+                )}
                 {e.note && <span className="mt-0.5 block">{e.note.trim()}</span>}
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : null}
-
-      {archetype.deviations?.length ? (
-        <Section title="Where this drawing departs from the catalogue's rules" count={archetype.deviations.length}>
-          <ul className="space-y-3">
-            {archetype.deviations.map((d) => (
-              <li key={d.subject} className="text-[13px] leading-snug text-ink-2">
-                <span className="font-semibold text-ink">{d.subject}</span>
-                <span className="mt-0.5 block">{d.reason.trim()}</span>
               </li>
             ))}
           </ul>
@@ -223,12 +153,7 @@ export function ArchetypeDetail({
         <ul className="space-y-1.5">
           {archetype.sources.map((s) => (
             <li key={s.url} className="text-[13px] leading-snug">
-              <a
-                href={s.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-ink-2 hover:text-introduced hover:underline"
-              >
+              <a href={s.url} target="_blank" rel="noreferrer" className="text-ink-2 hover:text-introduced hover:underline">
                 {s.title}
               </a>
             </li>
@@ -239,7 +164,6 @@ export function ArchetypeDetail({
   );
 }
 
-/** Every box of the pattern with its note and everything it holds: the full list behind the drawing's one-liners. */
 export function ComponentList({ archetype, cloud = null }: { archetype: Archetype; cloud?: CloudProduct | null }) {
   return (
       <div className="space-y-5">
@@ -268,17 +192,7 @@ export function ComponentList({ archetype, cloud = null }: { archetype: Archetyp
                 )}
                 {cloud && <OurChoice choice={componentChoiceFor(cloud.id, archetype.id, b.id)} />}
                 <BuiltWith archetype={archetype} blockId={b.id} cloud={cloud} />
-                  {b.note && <span className="mt-0.5 block">{b.note.trim()}</span>}
-                  {b.items?.length ? (
-                    <ul className="mt-1.5 space-y-1 border-l border-line pl-3">
-                      {b.items.map((it) => (
-                        <li key={it.label} className="text-[12.5px] leading-snug">
-                          <span className="font-medium text-ink">{it.label}</span>
-                          {it.note && <span className="text-ink-2">: {it.note.trim()}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
+                  {b.items?.length ? <span className="mt-0.5 block text-[12px] text-ink-3">Holds: {b.items.map((it) => it.label).join(" · ")}</span> : null}
                 </li>
               ))}
             </ul>

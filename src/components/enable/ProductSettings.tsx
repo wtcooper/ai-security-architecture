@@ -22,9 +22,10 @@ import { SettingCheck } from "./SettingCheck";
 import { adoptionFor, archetypeById, controlName, settingAdoptionFor, settingLinkFor, vendorById, type Product } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
 import type { AdoptionStatus, Archetype, ProductSetting } from "@/lib/types";
-import { ADOPTION_META, SETTING_VIA_META } from "./labels";
+import { ADOPTION_META } from "./labels";
 import { controlGroups, controlsDelivered, settingGroups } from "./model";
 import { ToolRecord } from "./ToolRecord";
+import { Recommended, SetVia } from "./SettingParts";
 
 export function AdoptionPill({ status, title }: { status: AdoptionStatus; title?: string }) {
   const m = ADOPTION_META[status];
@@ -212,20 +213,10 @@ export function SettingsTable({
                         </details>
                       )}
                     </div>
-                    <div className="flex flex-wrap content-start gap-1">
-                      {s.setVia.map((v) => (
-                        <span key={v} title={SETTING_VIA_META[v].blurb} className="rounded border border-line bg-mist px-1.5 py-px text-[10.5px] font-semibold text-ink-2">
-                          {SETTING_VIA_META[v].label}
-                        </span>
-                      ))}
+                    <div>
+                      <SetVia setting={s} />
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-ink" data-setting-value>
-                        {s.recommended}
-                      </p>
-                      {s.default && <p className="text-[11.5px] text-ink-3">Default: {s.default}</p>}
-                      <p className="mt-0.5 text-ink-2">{s.why}</p>
-                    </div>
+                    <Recommended setting={s} />
                     <div className="flex flex-wrap content-start gap-1">
                       {controls.length ? (
                         controls.map((id) => (

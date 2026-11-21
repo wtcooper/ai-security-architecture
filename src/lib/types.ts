@@ -590,6 +590,8 @@ export interface Archetype {
   abbrev?: string;
   /** One paragraph, shown in the picker. */
   summary: Paragraph[];
+  /** What How it works opens with: what the pattern is and what sets it apart from its nearest neighbour, in a few sentences. */
+  overview: string;
   description: Paragraph[];
   /** Why this is not a variant of the architecture next to it. */
   distinguishedBy?: Paragraph[];
@@ -758,8 +760,13 @@ export interface ProductSetting {
   area: SettingArea;
   /** The value out of the box, where the vendor documents one. */
   default?: string;
-  /** The baseline value. */
+  /** The baseline value, with how to apply it where that takes more than a word. */
   recommended: string;
+  /**
+   * The recommended value in a few words ("On", "Deny", "EgressDisabled", "Required on every write"),
+   * where `recommended` is a sentence. Shown as the value to set; `recommended` then explains it.
+   */
+  value?: string;
   /** One line: the path the recommended value closes. */
   why: string;
   /** Controls this setting delivers; each must be pinned on the drawing it is shown on. */

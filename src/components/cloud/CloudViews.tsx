@@ -6,33 +6,12 @@
  * side-by-side table of all three clouds under How it works.
  */
 import { Prose } from "@/components/Prose";
-import { SETTING_VIA_META } from "@/components/enable/labels";
+import { SettingCard } from "@/components/enable/SettingParts";
 import type { Archetype, ProductSetting } from "@/lib/types";
 import { CLOUD_ROLES } from "@/lib/types";
 import { bindingFor, controlPlaneOptions, differencesFor, platformWords, ROLE_LABEL, type CloudProduct } from "./model";
 
-/** A setting's name as a link to the vendor's page for it. */
-function SettingName({ setting }: { setting: ProductSetting }) {
-  return (
-    <a href={setting.url} target="_blank" rel="noreferrer" className="font-semibold text-ink hover:text-introduced hover:underline">
-      {setting.name}
-      <span className="ml-0.5 text-introduced">↗</span>
-    </a>
-  );
-}
-
-/** One line for a folded control row: the names of the cloud's options for it. */
-export function OptionNames({ short, options }: { short: string; options: ProductSetting[] }) {
-  if (!options.length) return null;
-  return (
-    <span className="mt-1 block text-[12px] leading-snug text-ink" data-option-names>
-      <span className="font-semibold">{short}: </span>
-      {options.map((s) => s.name).join(" · ")}
-    </span>
-  );
-}
-
-/** Under an open control: each of the product's own settings that delivers it, with where it is set, the value to set and why. */
+/** Under an open control: each of the product's own settings that delivers it, with the value to set. */
 export function NativeOptions({ id, name, options }: { id: string; name: string; options: ProductSetting[] }) {
   if (!options.length) return null;
   return (
@@ -40,23 +19,8 @@ export function NativeOptions({ id, name, options }: { id: string; name: string;
       <p className="eyebrow">Set it in {name}</p>
       <ul className="mt-1.5 space-y-2">
         {options.map((s) => (
-          <li key={s.id} className="rounded-lg border border-line bg-paper px-3 py-2.5">
-            <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[13px] leading-snug">
-              <SettingName setting={s} />
-              {s.setVia.map((v) => (
-                <span key={v} title={SETTING_VIA_META[v].blurb} className="rounded border border-line bg-mist px-1.5 py-px text-[10.5px] font-semibold text-ink-2">
-                  {SETTING_VIA_META[v].label}
-                </span>
-              ))}
-            </p>
-            <p className="ident mt-0.5 break-words text-[10.5px] leading-snug text-ink-3">{s.where}</p>
-            <p className="mt-1.5 text-[12.5px] leading-snug">
-              <span className="font-semibold text-ink">Set to: </span>
-              <span className="text-ink">{s.recommended}</span>
-            </p>
-            {s.default && <p className="text-[11.5px] leading-snug text-ink-3">Default: {s.default}</p>}
-            <p className="mt-0.5 text-[12.5px] leading-snug text-ink-2">{s.why}</p>
-            {s.requires && <p className="mt-1 text-[11.5px] text-ink-3">Requires: {s.requires}</p>}
+          <li key={s.id}>
+            <SettingCard setting={s} />
           </li>
         ))}
       </ul>
@@ -64,7 +28,6 @@ export function NativeOptions({ id, name, options }: { id: string; name: string;
   );
 }
 
-/** How it works: every component, and what plays it on each cloud the pattern is mapped to, side by side. */
 export function CloudComparison({ archetype, products }: { archetype: Archetype; products: CloudProduct[] }) {
   const blocks = archetype.blocks.filter((b) => products.some((p) => bindingFor(p, b.id)));
   const governance = archetype.blocks.filter((b) => b.kind === "governance" && products.some((p) => controlPlaneOptions(archetype, p, b).length));
@@ -144,10 +107,6 @@ export function OnCloud({ archetype, product }: { archetype: Archetype; product:
         <p className="eyebrow">Where {own ? "running it on-premises" : cloud.short} differs from the drawing</p>
         {differences.length ? (
           <>
-            <p className="mt-1 text-[12.5px] leading-snug text-ink-3">
-              The drawing is the same wherever the pattern runs. These are the places where {own ? "your own data centre" : cloud.short} does something else, each marked ≠ on the
-              drawing.
-            </p>
             <ul className="mt-2 space-y-2.5">
               {differences.map((d, i) => (
                 <li key={i} data-difference={d.key} className="text-[13px] leading-snug text-ink-2">
@@ -173,11 +132,6 @@ export function OnCloud({ archetype, product }: { archetype: Archetype; product:
       {needed.length > 0 && (
         <div>
           <p className="eyebrow">{own ? "Also yours to run" : `Also needed on ${cloud.short}`}</p>
-          <p className="mt-1 text-[12.5px] leading-snug text-ink-3">
-            {own
-              ? "What a cloud provider would otherwise run for you. None of it is a box on the drawing, and all of it is your team's to operate."
-              : "Services you stand up that are not boxes on the drawing."}
-          </p>
           <dl className="mt-2 grid gap-x-6 gap-y-3 text-[13px] leading-snug sm:grid-cols-[max-content_minmax(0,1fr)]">
             {CLOUD_ROLES.filter((role) => needed.some((n) => n.role === role)).map((role) => (
               <div key={role} className="contents">
