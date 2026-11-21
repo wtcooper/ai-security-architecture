@@ -37,7 +37,26 @@ const downloads = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 :
  * its languages and how widely it is used, so a reader can tell an open framework from a
  * provider's SDK from a coding agent's runtime before picking one.
  */
-function FrameworkCards({ frameworks, selected, onPick }: { frameworks: Product[]; selected: string | null; onPick: (id: string) => void }) {
+/** True when a platform's mapping builds the box with this framework ("Agent Development Kit (ADK)" names Google's ADK). */
+const isDefault = (name: string, defaults: string[]) => {
+  const bare = (x: string) => x.replace(/\([^)]*\)/g, "").trim().toLowerCase();
+  return defaults.some((d) => bare(name).includes(bare(d)) || bare(d).includes(bare(name)));
+};
+
+function FrameworkCards({
+  frameworks,
+  selected,
+  onPick,
+  defaults = [],
+  defaultLabel = "",
+}: {
+  frameworks: Product[];
+  selected: string | null;
+  onPick: (id: string) => void;
+  /** What the chosen platform's mapping builds the box with, marked on its card. */
+  defaults?: string[];
+  defaultLabel?: string;
+}) {
   const tools = frameworks.flatMap((p) => (p.kind === "tool" ? [p.tool] : []));
   const groups = BUILDER_GROUPS.map((g) => ({ ...g, tools: tools.filter((t) => (t.builder?.kind ?? "framework") === g.kind) })).filter((g) => g.tools.length);
   const counted = tools.some((t) => t.builder?.usage);
@@ -63,7 +82,16 @@ function FrameworkCards({ frameworks, selected, onPick }: { frameworks: Product[
                     <span className="text-[13px] font-semibold leading-snug text-ink">{t.name}</span>
                     {a.set && <AdoptionPill status={a.status} title={a.note ?? "Recorded in data/org/products.yaml"} />}
                   </span>
-                  {t.builder && <span className="mt-0.5 block text-[11px] text-ink-3">{t.builder.languages.join(" · ")}</span>}
+                  {t.builder && (
+                    <span className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[11px] text-ink-3">
+                      {t.builder.languages.join(" · ")}
+                      {isDefault(t.name, defaults) && (
+                        <span className="rounded border border-line bg-mist px-1.5 py-px text-[10.5px] font-semibold text-ink-2" data-framework-default>
+                          {defaultLabel}
+                        </span>
+                      )}
+                    </span>
+                  )}
                   {t.builder && <span className="mt-1.5 block text-[12.5px] leading-snug text-ink-2" data-framework-what>{t.builder.what}</span>}
                   {t.builder?.usage && (
                     <span className="mt-auto block pt-1.5 text-[11px] text-ink-3" title={`${t.builder.usage.package} on ${t.builder.usage.registry}, ${t.builder.usage.asOf}`}>
@@ -301,7 +329,13 @@ export function ChooseBuild({
 
       {frameworks.length > 0 && (
         <ChoiceRow n="c" label="What you build it with" hint={`fills ${filled.length === 1 ? "the" : "these boxes:"} ${filled.join(", ")}${filled.length === 1 ? " box" : ""}`}>
-          <FrameworkCards frameworks={frameworks} selected={framework?.id ?? null} onPick={(id) => onPickFramework(id === framework?.id ? null : id)} />
+          <FrameworkCards
+            frameworks={frameworks}
+            selected={framework?.id ?? null}
+            onPick={(id) => onPickFramework(id === framework?.id ? null : id)}
+            defaults={defaults}
+            defaultLabel={platform ? (platform.cloud.selfManaged ? "This mapping's default" : `${platform.cloud.short}'s guides use it`) : ""}
+          />
           {defaults.length > 0 && !framework && (
             <p className="mt-1.5 text-[12px] leading-snug text-ink-3" data-default-framework>
               {short} build{platform!.cloud.selfManaged ? "s" : ""} it with {defaults.join(" and ")}. That is a default, not a requirement: any framework that fills the box runs there.
