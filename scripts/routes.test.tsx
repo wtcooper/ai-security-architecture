@@ -25,8 +25,8 @@ test("every pattern has its own address, and every control, tool and cloud link 
 });
 
 test("old pattern addresses forward to the new pattern page, keeping tab, product and control", () => {
-  const arch = dataset.archetypes.find((a) => toolsForArchetype(a.id).length)!;
-  const tool = toolsForArchetype(arch.id)[0];
+  const arch = dataset.archetypes.find((a) => toolsForArchetype(a.id).some((t) => t.architecture === a.id))!;
+  const tool = toolsForArchetype(arch.id).find((t) => t.architecture === arch.id)!;
   const base = `/patterns/${arch.slug}`;
   // /reference?archetype=… opened on the overview.
   assert.equal(legacyPatternTarget(q(`archetype=${arch.id}`), "", "overview"), base);
@@ -36,6 +36,11 @@ test("old pattern addresses forward to the new pattern page, keeping tab, produc
   // A product names its own pattern, even with a stale or missing archetype beside it.
   assert.equal(legacyPatternTarget(q(`tool=${tool.id}`), ""), `${base}?tool=${tool.id}`);
   assert.equal(legacyPatternTarget(q(`archetype=archNope&tool=${tool.id}`), ""), `${base}?tool=${tool.id}`);
+  // A framework offered on another pattern keeps the pattern the address names.
+  const shared = dataset.tools.find((t) => t.builder?.also?.length)!;
+  const other = shared.builder!.also![0].architecture;
+  const otherSlug = dataset.archetypes.find((a) => a.id === other)!.slug;
+  assert.equal(legacyPatternTarget(q(`archetype=${other}&tool=${shared.id}`), ""), `/patterns/${otherSlug}?tool=${shared.id}`);
   // An old capability anchor opens that control's row.
   const control = arch.mitigations[0];
   assert.equal(legacyPatternTarget(q(`archetype=${arch.id}&tab=enable`), `#capability-${control}`), `${base}#control-${control}`);

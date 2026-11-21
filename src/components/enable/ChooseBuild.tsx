@@ -76,7 +76,11 @@ function FrameworkCards({ frameworks, selected, onPick }: { frameworks: Product[
           </div>
         </div>
       ))}
-      {counted && <p className="text-[11.5px] text-ink-3">Most downloaded first within each group. Pick one to see its settings for this pattern.</p>}
+      {counted && (
+        <p className="text-[11.5px] text-ink-3">
+          Most downloaded first within each group. npm counts run higher than PyPI&apos;s, so compare within a language. Pick one to see its settings for this pattern.
+        </p>
+      )}
     </div>
   );
 }

@@ -12,14 +12,16 @@
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { archetypeById, cloudById, toolById } from "@/lib/data";
+import { archetypeById, cloudById, toolById, toolsForArchetype } from "@/lib/data";
 import { PATTERN_TABS, ROUTES, controlHref, patternHref, type PatternTab } from "@/lib/routes";
 
 /** Where an old pattern link goes now, or null when it names no pattern. Exported for the tests. */
 export function legacyPatternTarget(params: URLSearchParams, hash = "", defaultTab?: PatternTab): string | null {
   const toolId = params.get("tool");
   const tool = toolId ? toolById.get(toolId) : undefined;
-  const archetypeId = tool?.architecture ?? params.get("archetype");
+  // A framework offered on the pattern the address names stays there; otherwise it opens on its own.
+  const named = params.get("archetype");
+  const archetypeId = tool ? (named && toolsForArchetype(named).includes(tool) ? named : tool.architecture) : named;
   if (!archetypeId || !archetypeById.has(archetypeId)) return null;
   const linked = params.get("tab") as PatternTab | null;
   const product = toolId && (tool || cloudById.has(toolId)) ? toolId : undefined;
