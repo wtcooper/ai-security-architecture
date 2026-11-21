@@ -81,7 +81,7 @@ test("the settings step reads like the controls step: same headings, same order,
         for (const text of [st.name, st.recommended, st.why]) assert.ok(cell.includes(esc(text)), `${where} ${st.id}: shows "${text.slice(0, 30)}"`);
         for (const id of controlsDelivered(arch, st)) {
           assert.match(cell, new RegExp(`data-delivers="${id.replace(/[.]/g, "\\.")}"`), `${where} ${st.id}: delivers ${id}`);
-          assert.ok(cell.includes(esc(capName(id))) || cell.includes(`>${arch.mitigations.indexOf(id) + 1}<`), `${where} ${st.id}: names ${id}`);
+          assert.ok(cell.includes(esc(capName(id))), `${where} ${st.id}: names ${id}, not only its number`);
         }
       }
       // Nothing is recorded in data/org/controls.yaml, so there is no status column; the detail waits for a row to be opened.

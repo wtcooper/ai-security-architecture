@@ -23,12 +23,12 @@ export function ValueChip({ text }: { text: string }) {
 }
 
 /** Recommended value, then the default, then how to apply it: the cell a settings table shows. */
-export function Recommended({ setting, why = true }: { setting: ProductSetting; why?: boolean }) {
+export function Recommended({ setting, why = true, label = true }: { setting: ProductSetting; why?: boolean; /** Off under a "Set to" column heading. */ label?: boolean }) {
   const { value, how } = recommendedOf(setting);
   return (
     <div className="min-w-0 text-[12.5px] leading-snug" data-setting-value>
       <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-ink-3">Set to</span>
+        {label && <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-ink-3">Set to</span>}
         {value ? <ValueChip text={value} /> : <span className="font-semibold text-ink">{how}</span>}
         {setting.default && (
           <span className="text-[11.5px] text-ink-3" data-setting-default>
