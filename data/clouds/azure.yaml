@@ -11,9 +11,6 @@ id: cloudAzure
 name: Microsoft Azure
 short: Azure
 
-notOffered:
-  - architecture: archSoftwareFactory
-    why: "The mapping is being researched and checked."
 settings:
   # --- Identity & access ---------------------------------------------------------------
   - id: entraAssignmentRequired
@@ -1511,6 +1508,299 @@ settings:
     url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/web-search
     verified: "2026-11-18"
   # <<< managed agent service rows
+  # >>> software factory rows (the settings that build and guard the factory and the apps it makes)
+  - id: ghAppInstallationTokenScope
+    name: "Installation access token, restricted with repositories and permissions"
+    where: "GitHub App (factory agent) › POST /app/installations/{installation_id}/access_tokens with repositories or repository_ids and permissions"
+    setVia: [code, apiCli]
+    area: identity
+    default: "All repositories and permissions the installation was granted"
+    recommended: "Have the orchestrator, not the agent, mint each build's token for the one app repository with contents and pull requests write only. The token expires after an hour; the app is never a bypass actor on any ruleset."
+    value: "One repository; contents and pull requests write"
+    why: "The agent can push a branch and open a pull request in its own app's repository and nothing else, so whatever it is talked into stays on a branch."
+    mitigations: [AML.M0028]
+    url: https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app
+    verified: "2026-11-21"
+  - id: ghDefaultBranchRuleset
+    name: "Branch rulesets on the default branch (Require a pull request, Require status checks, Require workflows to pass before merging, Restrict updates)"
+    where: "GitHub organisation › Settings › Rulesets › New branch ruleset, targeting every factory repository"
+    setVia: [adminConsole, apiCli]
+    area: tools
+    default: "No ruleset; any writer can push or merge to the default branch"
+    recommended: "Active, empty bypass list: Require a pull request before merging, Require status checks to pass with the pipeline app as source, platform build and IaC workflows (no CodeQL in ruleset workflows), Block force pushes. Second ruleset: Restrict updates, merge app bypass only."
+    value: "Active; pipeline checks required; only pipeline merges"
+    why: "The agent cannot merge, skip a check or fake a status, and the build and scan definitions run from a repository it cannot write to."
+    mitigations: [AML.M0028, D3-SYSVA]
+    url: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets
+    verified: "2026-11-21"
+  - id: ghPushRulesetWorkflowPaths
+    name: "Restrict file paths (push ruleset)"
+    where: "GitHub organisation › Settings › Rulesets › New push ruleset › Restrict file paths: .github/**"
+    setVia: [adminConsole, apiCli]
+    area: tools
+    default: "Any writer can push changes to workflow files"
+    recommended: "Block pushes that touch .github/** (workflows, CODEOWNERS, Copilot setup steps) in every factory repository, with only the platform team able to bypass. Push rules apply to the whole fork network."
+    value: ".github/** blocked for all but the platform team"
+    why: "A workflow the agent wrote could request the preview deploy identity's token or drop a step. Blocking the path keeps pipeline definitions out of its reach."
+    mitigations: [AML.M0028]
+    url: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets
+    verified: "2026-11-21"
+  - id: ghEnvRequiredReviewers
+    name: "Required reviewers with self-review prevented (production environment)"
+    where: "GitHub repository › Settings › Environments › production › Deployment protection rules"
+    setVia: [adminConsole, apiCli]
+    area: identity
+    default: "No reviewers; administrators can bypass protection rules"
+    recommended: "Required reviewers: the app's owner team only, never the requester; prevent self-review on; administrator bypass disallowed; deployment branches limited to the default branch. Environment secrets stay unavailable until the owner approves the run."
+    value: "Owner team required, prevent self-review, no bypass"
+    why: "The named owner approves each exact release run before it meets real data, and nobody, administrators included, can deploy around that decision."
+    mitigations: [AML.M0029]
+    url: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments
+    verified: "2026-11-21"
+  - id: deployIdentityFederated
+    name: "Federated identity credential, entity type Environment (deploy identity)"
+    where: "Managed Identities › (app's deploy identity) › Federated credentials › GitHub Actions deploying Azure resources › Entity type: Environment"
+    setVia: [cloudPolicy, apiCli]
+    area: identity
+    default: "Microsoft's walkthrough stores a Contributor service principal secret in GitHub"
+    recommended: "One user-assigned identity per app, trusting only that repository's production environment, holding a custom role on the app's resource group without Microsoft.App/containerApps/listSecrets. Built-in Container Apps Contributor and Operator can read secret values."
+    value: "OIDC, production environment only; no listSecrets"
+    why: "Only a job that passed the owner's approval can get the deploy token, there is no stored secret to leak, and the identity cannot read the app's secrets."
+    mitigations: [D3-CH]
+    url: https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust-user-assigned-managed-identity
+    verified: "2026-11-21"
+  - id: appRevisionTrafficSplit
+    name: "Multiple revision mode with traffic weights (generated app)"
+    where: "Container Apps › (generated app) › Revision management; az containerapp ingress traffic set --revision-weight or --label-weight"
+    setVia: [apiCli, configFile]
+    area: tools
+    default: "Single revision mode; all traffic to the latest revision"
+    recommended: "Deploy each approved release as a new revision at a small weight and raise it in steps while the last good revision stays active under a label; on failure move all traffic back. Weights split requests, not named users."
+    value: "Multiple; new revision small share, last good kept"
+    why: "A release that misbehaves with real data reaches a share of requests first, and rolling back is a traffic change, not a rebuild."
+    mitigations: [cap-staged-rollout-gate]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/traffic-splitting
+    verified: "2026-11-21"
+  - id: sandboxPerBuild
+    name: "Sandbox per build, deleted after, with identitySettings lifecycle None"
+    where: "Container Apps Sandboxes › sandbox group › sandbox created per build (SDK or aca CLI); identitySettings at creation; AutoDeletePolicy"
+    setVia: [code, apiCli]
+    area: tools
+    default: "Group identities available in every sandbox; sandboxes kept until deleted"
+    recommended: "Create a new sandbox for each build from the platform image, delete it when the build ends and set an auto-delete policy as a backstop. Set every group identity's lifecycle to None so code in the sandbox can get no token."
+    value: "One sandbox per build, deleted; identities None"
+    why: "Generated code and its packages run in a microVM made for one build and gone after it, holding no token that reaches Azure."
+    mitigations: [D3-EI, D3-CH]
+    url: https://sandboxes.azure.com/docs/sandboxes/identity
+    verified: "2026-11-21"
+  - id: sandboxEgressPolicy
+    name: "Egress policy (defaultAction Deny) with NetworkEgressDecisions telemetry"
+    where: "Container Apps Sandboxes › sandbox › Egress policy (aca sandbox egress set --default Deny --rule host:Allow); telemetryConfig at creation"
+    setVia: [code, apiCli]
+    area: network
+    default: "No policy: outbound access unrestricted; no telemetry exported"
+    recommended: "At creation on every sandbox: default Deny with traffic inspection Full; Allow rules for the gateway, feed hosts and github.com; Transform rules injecting gateway and git credentials; NetworkEgressDecisions to Log Analytics."
+    value: "Deny by default; gateway, feed, repository allowed"
+    why: "Commands the agent runs never pass the gateway, so this list is the only limit on where they go, and every allowed or denied request is on record."
+    mitigations: [cap-agent-egress-control, cap-agent-tracing]
+    url: https://sandboxes.azure.com/docs/sandboxes/sandbox/egress
+    verified: "2026-11-21"
+  - id: ghPackageFirewall
+    name: "Package firewall policy (public preview, npm only)"
+    where: "GitHub enterprise › Policies › Package firewall; npm resolved through https://package-firewall.githubapp.com/npm/enterprises/<enterprise>"
+    setVia: [adminConsole]
+    area: tools
+    default: "Malware block on; vulnerabilities Critical only; minimum age 1 day"
+    recommended: "Have the admission pipeline resolve each requested npm package through the firewall before saving it to Azure Artifacts: malware, new install scripts and attestation downgrades blocked, High or higher, minimum age 7 days. Other ecosystems need their own check."
+    value: "Malware blocked, High or higher, minimum age 7 days"
+    why: "Azure Artifacts saves what a Collaborator installs without scanning it. Holding back very new versions and known malware catches the names agents invent and look-alikes registered for them."
+    mitigations: [D3-FA]
+    url: https://docs.github.com/en/enterprise-cloud@latest/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/protecting-endpoints-with-package-firewall
+    verified: "2026-11-21"
+  - id: ghCodeScanningMergeProtection
+    name: "Require code scanning results (branch ruleset)"
+    where: "GitHub organisation › Settings › Rulesets › branch ruleset › Require code scanning results › Required tools and alert thresholds"
+    setVia: [adminConsole, apiCli]
+    area: tools
+    default: "No code scanning rule; alerts are reported, merges not blocked"
+    requires: "GitHub Code Security"
+    recommended: "Add CodeQL and the Microsoft Security DevOps tools that upload SARIF, with Security alerts set to High or higher and Alerts to Errors, so a serious finding stops the merge and therefore the release."
+    value: "CodeQL and MSDO; High or higher blocks merge"
+    why: "Nobody reads this code, so the scans are its only review, and a serious finding has to stop the release rather than appear in a report."
+    mitigations: [D3-SYSVA]
+    url: https://docs.github.com/en/code-security/code-scanning/managing-your-code-scanning-configuration/set-code-scanning-merge-protection
+    verified: "2026-11-21"
+  - id: ghPushProtection
+    name: "Push protection with delegated bypass (GitHub Secret Protection)"
+    where: "GitHub enterprise or organisation › security configuration › Secret Protection › Push protection; delegated bypass reviewers"
+    setVia: [adminConsole]
+    area: tools
+    default: "Off for repositories; any writer can bypass a block by giving a reason"
+    requires: "GitHub Secret Protection"
+    recommended: "On for every factory repository, with delegated bypass so only the security team can approve a bypass request. The agent's GitHub App is never a bypass reviewer or exempt actor."
+    value: "On; bypass only with security team approval"
+    why: "Agents paste keys into code. A push holding one is refused before it reaches a repository that many people and tools read."
+    mitigations: [D3-CH]
+    url: https://docs.github.com/en/code-security/secret-scanning/introduction/about-push-protection
+    verified: "2026-11-21"
+  - id: apimConnectorClientIds
+    name: "validate-azure-ad-token with client-application-ids (per connector API)"
+    where: "API Management › APIs › (connector API for one system of record) › Inbound processing"
+    setVia: [cloudPolicy, configFile]
+    area: data
+    default: "No policy"
+    recommended: "One connector API per approved app and system, accepting only that app's managed identity in client-application-ids and the connector's audience. The backend applies the user's entitlements from an on-behalf-of token, never the user's own token."
+    value: "Only the approved app's identity accepted"
+    why: "One app's credential opens that app's connectors and nothing else, and what comes back is limited to what the signed-in user may see."
+    mitigations: [D3-CTS, cap-data-access-governance]
+    url: https://learn.microsoft.com/en-us/azure/api-management/validate-azure-ad-token-policy
+    verified: "2026-11-21"
+  - id: appContainerAppsRequireAuth
+    name: "Built-in authentication: Restrict access, Require authentication (Microsoft Entra ID)"
+    where: "Container Apps › (generated app or preview) › Authentication; az containerapp auth microsoft update"
+    setVia: [apiCli, cloudPolicy]
+    area: identity
+    default: "Not enabled: every request reaches the container"
+    recommended: "Deploy every generated app and preview from the platform template with the Microsoft provider and Require authentication, browsers redirected to Entra sign-in, HTTPS only, and Assignment required on the app's enterprise application."
+    value: "Entra ID provider, Require authentication"
+    why: "Sign-in runs in a platform sidecar before any request reaches code the agent wrote, so an app is never open because its code forgot a check."
+    mitigations: [D3-APA]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/authentication
+    verified: "2026-11-21"
+  - id: caRequireMfaStrength
+    name: "Conditional Access: Require authentication strength"
+    where: "Microsoft Entra admin center › Entra ID › Conditional Access › Policies › New policy"
+    setVia: [identityProvider]
+    area: identity
+    default: "No policy"
+    requires: "Microsoft Entra ID P1"
+    recommended: "All users, All resources, Multifactor authentication strength, emergency access accounts excluded, started in Report-only. Add Phishing-resistant MFA strength for app owners, since they approve releases after signing in to GitHub through Entra ID."
+    value: "MFA for all users; phishing-resistant for owners"
+    why: "A stolen password should not open an app that holds company data or approve its release. GitHub applies the second factor only at the Entra sign-in."
+    mitigations: [D3-MFA]
+    url: https://learn.microsoft.com/en-us/entra/identity/conditional-access/policy-all-users-mfa-strength
+    verified: "2026-11-21"
+  - id: appSubscriptionPerApp
+    name: "Subscription vending: one subscription per app (Online product line)"
+    where: "Platform automation with the subscription vending Bicep (avm/ptn/lz/sub-vending) or Terraform (avm-ptn-alz-sub-vending) module; Landing zones › Online management group"
+    setVia: [code, cloudPolicy]
+    area: network
+    default: "Apps share a subscription; corp-connected spokes reach each other through the hub firewall"
+    recommended: "Vend each app its own subscription under the Online management group, with a virtual network not peered to other apps or the factory, its own owner, budget and Defender for Cloud enrolment; connectors reached by private endpoint."
+    value: "Own subscription and unpeered network per app"
+    why: "One faulty or hostile app cannot reach another app's data or the tools that built it, and the policies above it apply before it exists."
+    mitigations: [D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/design-area/subscription-vending-product-lines
+    verified: "2026-11-21"
+  - id: policyContainerAppsBaseline
+    name: "Built-in Container Apps policy definitions"
+    where: "Azure Policy › assign at the factory apps management group: Container App environments should use network injection; Managed Identity should be enabled for Container Apps; Container Apps should only be accessible over HTTPS; Authentication should be enabled on Container Apps"
+    setVia: [cloudPolicy]
+    area: network
+    default: "Not assigned"
+    recommended: "Deny for network injection, managed identity and HTTPS only. Authentication should be enabled on Container Apps offers only AuditIfNotExists, so the pipeline must also check each app's authentication configuration before release."
+    value: "Deny where offered; authentication audited"
+    why: "A setting the agent chose cannot open an app or its network even when the template is bypassed, and the gap Azure Policy cannot deny is named."
+    mitigations: [D3-ACH, D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/policy-reference
+    verified: "2026-11-21"
+  - id: foundryDocumentAttackGuardrail
+    name: "Guardrail control: Document attack (Prompt Shields)"
+    where: "Foundry portal › project › Guardrails › Create guardrail › Document attack, assigned to the intake's model deployment"
+    setVia: [adminConsole, apiCli]
+    area: tools
+    default: "User prompt attack detection on; document attack detection off"
+    recommended: "Turn on Document attack, action block at user input, for the intake deployment; wrap each uploaded file's text, JSON-escaped, in <documents> delimiters; keep user prompt attack on; test every language used."
+    value: "Document attack on, action block"
+    why: "A file anyone wrote can tell the agent to add a back door. Screening it at intake keeps most such instructions out of the spec, though some will get through."
+    mitigations: [cap-input-guardrails]
+    url: https://learn.microsoft.com/en-us/azure/ai-services/content-safety/concepts/jailbreak-detection
+    verified: "2026-11-21"
+  - id: ghSbomAttestation
+    name: "Build provenance and SBOM attestations (actions/attest)"
+    where: "Platform build workflow › two actions/attest@v4 steps with subject-name, subject-digest and push-to-registry: one for provenance, one adding sbom-path (SPDX or CycloneDX JSON)"
+    setVia: [configFile]
+    area: audit
+    default: "No attestation and no bill of materials"
+    recommended: "Attest every release image with build provenance and an SBOM, record the agent and model version that wrote it in the build record, and verify the attestation with gh attestation verify before the deploy job runs."
+    value: "Provenance and SBOM per image, verified at deploy"
+    why: "When a package turns out to be harmful you can find every app that uses it in minutes, and the gate takes only images the pipeline built."
+    mitigations: [AML.M0023]
+    url: https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations
+    verified: "2026-11-21"
+  - id: msdoIacScan
+    name: "Microsoft Security DevOps action, IaC category"
+    where: "Platform build workflow › microsoft/security-devops-action with categories IaC (Template Analyzer, Checkov); SARIF uploaded to code scanning"
+    setVia: [configFile]
+    area: tools
+    default: "Not run"
+    recommended: "Scan each app's Bicep against the platform baseline (authentication configured, no public storage, managed identity, approved connectors only) on every push, and fail the release on findings through Require code scanning results."
+    value: "IaC checks on every push; findings block release"
+    why: "A setting the agent chose can expose an app whose code is clean, so settings are checked before release, not after."
+    mitigations: [D3-ACH, D3-SYSVA]
+    url: https://learn.microsoft.com/en-us/azure/defender-for-cloud/github-action
+    verified: "2026-11-21"
+  - id: ghAuditLogStreaming
+    name: "Audit log streaming, with API request events"
+    where: "GitHub enterprise › Settings › Audit log › Log streaming › Azure Event Hubs or Azure Blob Storage; Audit log › Settings › Enable API Request Events"
+    setVia: [adminConsole]
+    area: audit
+    default: "Not streamed; API request events off"
+    recommended: "Stream to an Event Hubs namespace feeding the Log Analytics workspace behind Microsoft Sentinel, with API request events on, and join it to intake, sandbox and deployment records by app and build ID."
+    value: "Streamed to Azure, API request events on"
+    why: "Pushes, workflow runs and the owner's approval land in the same record as who asked for the app and what was released."
+    mitigations: [cap-agent-tracing]
+    url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+    verified: "2026-11-21"
+  - id: appRevisionDeactivate
+    name: "Revision deactivate (generated app)"
+    where: "Container Apps › (generated app) › Revisions and replicas; az containerapp revision deactivate"
+    setVia: [apiCli, adminConsole]
+    area: audit
+    default: "Active revisions keep serving"
+    recommended: "In the stop runbook, deactivate every active revision, set Enabled for users to sign-in? to No on the enterprise app, then remove role assignments. RBAC removals take up to 10 minutes; group or app role changes can lag hours."
+    value: "All revisions deactivated; sign-in disabled"
+    why: "An app leaking data stops in minutes without the factory or a release, because deactivation stops every replica while role changes catch up."
+    mitigations: [cap-agent-kill-switch]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/revisions-manage
+    verified: "2026-11-21"
+  - id: mdcaGenAiDiscovery
+    name: "Cloud discovery, Generative AI category, with app discovery policies"
+    where: "Microsoft Defender portal › Cloud apps › Cloud discovery dashboard and Cloud app catalog (Generative AI category); app discovery policies"
+    setVia: [adminConsole]
+    area: sharing
+    default: "No discovery policy"
+    recommended: "Filter discovered apps on Generative AI to find app builders and coding tools in use, add a discovery policy that alerts and can unsanction by risk score and daily users, and pair it with the Defender CSPM AI workload inventory."
+    value: "Generative AI discovery policy on"
+    why: "An app made in a vendor's builder or a personal account has no owner, no checks and no end date. Finding it is the first step to bringing it in or closing it."
+    mitigations: [cap-shadow-ai-discovery]
+    url: https://learn.microsoft.com/en-us/security/security-for-ai/discover
+    verified: "2026-11-21"
+  - id: policyRequireTagRg
+    name: "Require a tag on resource groups (owner, end date)"
+    where: "Azure Policy › Definitions › built-in (Tags) › assign at the factory apps management group, effect deny, once per tag"
+    setVia: [cloudPolicy]
+    area: audit
+    default: "Not assigned"
+    recommended: "Require owner, owner group, data classification and end date tags on every app resource group, set by the vending pipeline, and run a scheduled job that retires apps past their end date unless the owner renews."
+    value: "Owner and end date required on every app"
+    why: "Apps outlive the reason and the people they were built for. A required owner and end date make the register and the retirement automatic."
+    mitigations: [D3-AI]
+    url: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/tag-policies
+    verified: "2026-11-21"
+  - id: aksAgentSandboxClaim
+    name: "Agent Sandbox cluster extension: SandboxTemplate, SandboxWarmPool and SandboxClaim (preview)"
+    where: "AKS › cluster extension (Agent Sandbox); SandboxTemplate with runtimeClassName kata-vm-isolation-v2 in the factory namespace; one SandboxClaim per build"
+    setVia: [clusterPolicy, configFile]
+    area: tools
+    default: "Extension not installed; pods use the default runc runtime"
+    recommended: "One SandboxClaim per build from a warm pool whose template uses kata-vm-isolation-v2, deleted when the build ends. The extension and the v2 runtime are preview, need Kubernetes 1.35 or later and supported v6 VM sizes, and are not for production use."
+    value: "One Kata v2 sandbox per build, deleted after"
+    why: "Each build's code runs in its own pod VM with a guest kernel, ready before the build starts and gone after it."
+    mitigations: [D3-EI]
+    url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+    verified: "2026-11-21"
+  # <<< software factory rows
 
 implementations:
   - architecture: archChatAgent
@@ -4277,3 +4567,255 @@ implementations:
         url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
     settings: [entraAssignmentRequired, apimValidateToken, apimMcpServers, searchDocumentAccess, tenantClaimValidation, storageCmk, firewallEgress, entraAgentDisable, storePrivateEndpoints, apimInternalVnet, cosmosCmk, searchCmk, policyAiServicesNetworkAccess, policyAiServicesKeyAccess, policyAiServicesCmk, policyAllowedLocations, foundryDiagnosticSetting, activityLogExport, entraAgentSignInLogs, storeDataPlaneRoles, webSearchSubscriptionBlock]
   # <<< managed agent service mapping
+  # >>> software factory mapping (checked against the vendor's pages by two people)
+  - architecture: archSoftwareFactory
+    asOf: "2026-11"
+    verified: "2026-11-21"
+    reference:
+      - title: "Subscription vending implementation guidance (Azure Architecture Center)"
+        url: https://learn.microsoft.com/en-us/azure/architecture/landing-zones/subscription-vending
+      - title: "Establish common subscription vending product lines (Cloud Adoption Framework)"
+        url: https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/design-area/subscription-vending-product-lines
+      - title: "Start your platform engineering journey (Microsoft platform engineering guide)"
+        url: https://learn.microsoft.com/en-us/platform-engineering/journey
+      - title: "Azure Container Apps Sandboxes overview"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/sandboxes-overview
+      - title: "Azure Container Apps Sandboxes samples (scenario 02: Copilot CLI in a sandbox with deny-default egress)"
+        url: https://github.com/Azure-Samples/azure-container-apps-sandboxes
+      - title: "Publish revisions with GitHub Actions in Azure Container Apps"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/github-actions
+    summary:
+      - "On Azure the factory's coding agent runs in Azure Container Apps Sandboxes, one hardware-isolated microVM per build with a deny-by-default egress policy, started by a Container Apps job. GitHub Enterprise Cloud holds a repository per app; GitHub Actions with GitHub Advanced Security builds, scans and attests, and a production environment with required reviewers is the deploy gate. Each app runs on Container Apps behind Entra ID sign-in, in its own vended subscription, with Key Vault, Azure Artifacts and API Management around it."
+    bindings:
+      - { block: intake, service: "Intake chat app on Container Apps", build: true, note: "Signs requesters in with Entra ID (assigned groups only), screens the request and uploaded files with Prompt Shields, writes the spec and starts a build through a Service Bus queue.", url: https://learn.microsoft.com/en-us/azure/ai-services/content-safety/concepts/jailbreak-detection }
+      - { block: previews, service: "Container Apps, per-app preview", note: "A container app per branch in its own environment, built-in auth with an Entra app set to Assignment required for requester and owner (Global Administrators still bypass), test data, no peering.", url: https://learn.microsoft.com/en-us/azure/container-apps/environment }
+      - { block: deployGate, service: "GitHub Actions production environment", note: "Required reviewers from the app's owner team, self-review prevented, admin bypass off; the job signs in to Azure by OIDC and shifts Container Apps revision traffic in steps.", url: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments }
+      - { block: harness, service: "Agent in Container Apps", build: true, note: "A Container Apps job creates a sandbox per build and starts the agent loop in it. Microsoft's platform images target GitHub Copilot CLI and Claude Code; model calls must go to your gateway.", url: https://techcommunity.microsoft.com/blog/appsonazureblog/azure-container-apps-sandboxes-now-generally-available/4559125 }
+      - { block: nativeTools, service: "Container Apps Sandboxes, one per build", note: "A hardware-isolated microVM per build, deleted when it ends. Egress policy Deny with the gateway, feed and repository allowed; credentials injected by the egress proxy, not held inside.", url: https://learn.microsoft.com/en-us/azure/container-apps/sandboxes-overview }
+      - { block: gateway, service: "Azure API Management (AI gateway)", note: "Validates the agent's Entra token, meters tokens and calls Foundry model deployments with its managed identity, so it holds no model key. MCP servers and the skills catalogue sit behind it.", url: https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities }
+      - { block: registry, service: "Azure Artifacts feed", note: "Only the admission pipeline holds Collaborator, so only it saves public packages; builds and agents read. Azure Artifacts runs no malware or package-age check itself.", url: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources?view=azure-devops }
+      - { block: sourceControl, service: "GitHub Enterprise Cloud (managed users)", note: "One repository per app from the template. The agent's GitHub App token covers that repository only; organisation rulesets require the platform's workflows and block edits to .github.", url: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets }
+      - { block: pipeline, service: "GitHub Actions with Advanced Security", note: "Required workflows build, test, run dependency review and IaC checks, attest with an SBOM and deploy previews; CodeQL runs by default setup, enforced by Require code scanning results.", url: https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations }
+      - { block: appTenant, service: "One subscription per app", note: "Created by subscription vending under the Online landing zone management group: own unpeered VNet, own identity, Key Vault and budget, tagged with owner and end date.", url: https://learn.microsoft.com/en-us/azure/architecture/landing-zones/subscription-vending }
+      - { block: appHosting, service: "Container Apps, one environment per app", note: "Built-in authentication with Entra ID in front, a user-assigned identity, secrets as Key Vault references, multiple revision mode for staged release. Not Container Apps Express.", url: https://learn.microsoft.com/en-us/azure/container-apps/authentication }
+      - { block: appData, service: "Azure SQL and Blob Storage, per app", note: "In the app's subscription, Entra-only authentication and shared key access off. Storage is encrypted at rest by default; add customer-managed keys where data needs them.", url: https://learn.microsoft.com/en-us/azure/storage/common/storage-service-encryption }
+      - { block: orgData, service: "Systems of record via API Management", build: true, note: "Reached only through connector APIs that accept the approved app's own identity and carry the user's entitlements by on-behalf-of exchange; the agent never reaches them.", url: https://learn.microsoft.com/en-us/azure/api-management/validate-azure-ad-token-policy }
+      - { block: provider, service: "Microsoft Foundry model deployments", note: "Called only by the gateway with its managed identity. Other providers, such as the Anthropic Messages API on API Management v2 tiers, can sit behind the same gateway.", url: https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities }
+      - { block: sources, service: "Public registries (npm, PyPI, NuGet)", note: "Reached only by the Azure Artifacts feed's upstream sources, never by a build sandbox.", url: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources?view=azure-devops }
+    sources:
+      intake: https://learn.microsoft.com/en-us/azure/ai-services/content-safety/concepts/jailbreak-detection
+      previews: https://learn.microsoft.com/en-us/azure/container-apps/environment
+      deployGate: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments
+      harness: https://techcommunity.microsoft.com/blog/appsonazureblog/azure-container-apps-sandboxes-now-generally-available/4559125
+      nativeTools: https://learn.microsoft.com/en-us/azure/container-apps/sandboxes-overview
+      gateway: https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities
+      registry: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources?view=azure-devops
+      sourceControl: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets
+      pipeline: https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations
+      appTenant: https://learn.microsoft.com/en-us/azure/architecture/landing-zones/subscription-vending
+      appHosting: https://learn.microsoft.com/en-us/azure/container-apps/authentication
+      appData: https://learn.microsoft.com/en-us/azure/storage/common/storage-service-encryption
+      orgData: https://learn.microsoft.com/en-us/azure/api-management/validate-azure-ad-token-policy
+      provider: https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities
+      sources: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources?view=azure-devops
+    differences:
+      - at: nativeTools
+        text: "A sandbox has unrestricted outbound access until an egress policy is set, and the documentation describes policies per sandbox, not a default for the group. Group managed identities are also offered to every sandbox unless their lifecycle is None. The orchestrator must apply both to every sandbox it creates."
+        url: https://sandboxes.azure.com/docs/sandboxes/sandbox/egress
+      - at: nativeTools->registry
+        text: "Microsoft's allow list for Azure Artifacts includes *.blob.core.windows.net, *.visualstudio.com and *.dedup.microsoft.com, so allowing the feed in the sandbox egress policy also opens every Azure Storage account. Run a package proxy in your own network, or accept that opening and watch the egress decisions."
+        url: https://learn.microsoft.com/en-us/azure/devops/organizations/security/allow-list-ip-url?view=azure-devops
+      - at: sources->registry
+        text: "Azure Artifacts saves any public package a Collaborator installs and documents no malware, look-alike or package-age check. GitHub Package Firewall does this for npm only, is public preview, and is documented in front of JFrog Artifactory rather than Azure Artifacts, so admission for other ecosystems is yours to build."
+        url: https://docs.github.com/en/enterprise-cloud@latest/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/protecting-endpoints-with-package-firewall
+      - at: appHosting
+        text: "Built-in authentication is off on a new container app, and once on, any user in the tenant can get a token unless Assignment required is set. The built-in policy for it can only audit, not deny, so identity in front of every app and preview holds only because the platform template and the pipeline check put it there."
+        url: https://learn.microsoft.com/en-us/azure/container-apps/authentication
+      - at: appHosting
+        text: "Container Apps Express, which Microsoft calls developer-first and agent-first, has no built-in authentication, no Key Vault references and no multiple revisions or traffic splitting. A factory deploying there would lose sign-in in front, vaulted secrets and staged release, so generated apps go to workload profiles environments."
+        url: https://learn.microsoft.com/en-us/azure/container-apps/express-overview
+      - at: appTenant
+        text: "Apps in one Container Apps environment share its virtual network and log destination, so isolation needs an environment per app. The corp-connected vending product line routes traffic between landing zones through the hub firewall; only the online line leaves app networks unpeered, which is the deliberate choice here."
+        url: https://learn.microsoft.com/en-us/azure/container-apps/environment
+      - at: appOwner->deployGate
+        text: "Required reviewers need read access to the repository, so every app owner needs an account in the GitHub enterprise. GitHub enforces no second factor itself for Enterprise Managed Users: Conditional Access applies at the Entra sign-in, not at the approval. Administrators can bypass protection rules unless the environment disallows it."
+        url: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments
+      - at: govObservability
+        text: "A removed Azure RBAC assignment can keep working for up to 10 minutes, and group or app role changes carried in managed identity tokens for hours, as tokens are cached about 24 hours with no forced refresh. The stop runbook therefore deactivates every revision first, then disables sign-in and removes roles."
+        url: https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
+    alsoNeeded:
+      - service: "Microsoft Entra ID (Enterprise Managed Users OIDC, Conditional Access, an enterprise app per generated app)"
+        role: identity
+        why: "Signs in requesters, owners and app users, carries Conditional Access to GitHub sign-in, and holds each app's assignment list."
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/configuring-authentication-for-enterprise-managed-users/about-support-for-your-idps-conditional-access-policy
+      - service: "Azure Firewall with route tables (hub)"
+        role: network
+        why: "Outbound filter for the orchestrator job's environment; unpeered Online app networks need their own firewall or NAT. User-defined routes need workload profiles environments."
+        url: https://learn.microsoft.com/en-us/azure/container-apps/use-azure-firewall
+      - service: "GitHub larger runners with Azure private networking"
+        role: network
+        why: "Lets the pipeline reach private app environments and the feed from a subnet whose NSG rules you set; standard hosted runners are not supported."
+        url: https://docs.github.com/en/enterprise-cloud@latest/organizations/managing-organization-settings/about-azure-private-networking-for-github-hosted-runners-in-your-organization
+      - service: "Azure Key Vault, one per app"
+        role: secrets
+        why: "Holds each app's secrets for Key Vault references; the app's identity holds Key Vault Secrets User on that vault only."
+        url: https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets
+      - service: "Azure Container Registry"
+        role: registry
+        why: "Holds attested release images; apps pull with managed identity and AcrPull rather than admin credentials."
+        url: https://learn.microsoft.com/en-us/azure/container-apps/github-actions
+      - service: "Azure DevOps organisation (for Azure Artifacts)"
+        role: registry
+        why: "Azure Artifacts feeds and their upstream sources live in an Azure DevOps organisation even when code and CI are on GitHub."
+        url: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources?view=azure-devops
+      - service: "Azure Service Bus queue"
+        role: other
+        why: "Carries confirmed specs from intake to the event-driven Container Apps job, so nothing needs the job's start permission, which can expose its secrets."
+        url: https://learn.microsoft.com/en-us/azure/container-apps/jobs
+      - service: "Log Analytics workspace with Microsoft Sentinel, data collection endpoint and rule"
+        role: logging
+        why: "Receives sandbox telemetry through the Logs Ingestion API, the GitHub audit stream and Azure activity, joined into one record per app."
+        url: https://sandboxes.azure.com/docs/sandboxes/telemetry
+      - service: "Microsoft Defender for Cloud (Defender CSPM, GitHub connector)"
+        role: other
+        why: "Discovers AI workloads across subscriptions and other clouds, and brings DevOps security findings from GitHub into one view."
+        url: https://learn.microsoft.com/en-us/azure/defender-for-cloud/ai-security-posture
+      - service: "Azure Policy and management groups"
+        role: other
+        why: "Apply the Container Apps, tag and location baselines to every vended subscription before an app resource exists."
+        url: https://learn.microsoft.com/en-us/azure/architecture/landing-zones/subscription-vending
+    quickstart:
+      - title: "Azure Container Apps Sandboxes overview"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/sandboxes-overview
+      - title: "Subscription vending implementation guidance"
+        url: https://learn.microsoft.com/en-us/azure/architecture/landing-zones/subscription-vending
+      - title: "Authenticate to Azure from GitHub Actions by OpenID Connect"
+        url: https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure-openid-connect
+    hosting:
+      - id: containerAppsSandboxes
+        kind: runtime
+        name: "Azure Container Apps Sandboxes, started per build by a Container Apps job"
+        url: https://learn.microsoft.com/en-us/azure/container-apps/sandboxes-overview
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "Your Container Apps job starts the coding agent in a sandbox per build; each sandbox is a hardware-isolated microVM with its own kernel, deleted when the build ends."
+          patching: "Microsoft runs the sandbox hosts and its platform images; you rebuild any custom disk image and the job's container image yourself."
+          data: "Specs, code and build output stay on the sandbox disk and volumes in your sandbox group until deleted; telemetry leaves only where you configure it."
+          network: "Outbound is unrestricted until an egress policy is set on each sandbox; a Deny default with host rules and VNet integration through a delegated subnet are offered."
+          identity: "Managed identities attach to the sandbox group; lifecycle None hides tokens from code, and the egress proxy can inject a secret or identity token instead."
+          accepts: "Any OCI image as the disk image, or Microsoft platform images aimed at GitHub Copilot CLI and Claude Code, with whatever language and toolchain it holds."
+          workload: "Sandboxes start in under a second and scale to thousands; tiers run from 0.25 to 16 cores; stopped sandboxes keep disk state and stop compute billing."
+          portability: "The image runs anywhere containers run; sandbox lifecycle, egress policy and credential injection are specific to the Sandboxes SDK, CLI and API."
+          effort: "Your team writes the orchestrator and sets egress, lifecycle and identity on every sandbox; there are no nodes, node pools or cluster to operate."
+          fits: "Microsoft lists sandboxes for agent workflows, untrusted code and ephemeral CI builds, and suggests considering them instead of dynamic sessions for new projects."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/container-apps/sandboxes-overview
+          - https://sandboxes.azure.com/docs/sandboxes/sandbox/egress
+          - https://sandboxes.azure.com/docs/sandboxes/identity
+          - https://sandboxes.azure.com/docs/sandboxes/sandbox/vnet
+          - https://sandboxes.azure.com/docs/sandboxes/telemetry
+          - https://sandboxes.azure.com/docs/sandboxes/sandbox/lifecycle
+          - https://techcommunity.microsoft.com/blog/appsonazureblog/azure-container-apps-sandboxes-now-generally-available/4559125
+          - https://github.com/Azure-Samples/azure-container-apps-sandboxes
+          - https://learn.microsoft.com/en-us/azure/container-apps/jobs
+          - https://mc.merill.net/message/AZ561262
+      - id: aksAgentSandbox
+        kind: cluster
+        name: "AKS Pod Sandboxing with the Agent Sandbox cluster extension (preview)"
+        url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+        asOf: "2026-11"
+        compare:
+          runs: "Your orchestrator claims a Sandbox pod per build from a warm pool; each runs under Kata VM isolation v2 (preview) with its own guest kernel."
+          patching: "You keep Kubernetes, the Azure Linux node image and the extension current; Azure manages the control plane."
+          data: "Code and build output stay on nodes and volumes in your subscription; the pod VM boundary isolates compute, not storage paths."
+          network: "Pods have unrestricted traffic until you add Cilium network policy, FQDN filtering and an outbound route to Azure Firewall."
+          identity: "Pods use Microsoft Entra Workload ID through a federated service account, and can reach the node's metadata service unless you block it."
+          accepts: "Linux images on Azure Linux x86-64 node pools of supported v6 VM sizes, with any coding agent you package; no Arm64 or host networking."
+          workload: "Warm pools keep Sandboxes ready before a build starts and use capacity while idle; parallel builds are bounded by the node pools you size."
+          portability: "Agent Sandbox and Kata Containers are open source and run on other Kubernetes clusters; identity, network and node pool wiring are redone."
+          effort: "Your team runs the cluster, Kata node pools, warm pools, network policy, firewall and logs; Defender for Containers does not assess Kata pods."
+          fits: "Microsoft describes the extension for isolated AI agent workloads on capacity you control; it is preview and not meant for production use."
+        sources:
+          - https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+          - https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing
+          - https://learn.microsoft.com/en-us/azure/aks/container-network-security-fqdn-filtering-concepts
+        summary: "The coding agent and its tools run in a Kata VM-isolated pod per build on AKS, claimed from a warm pool through the Agent Sandbox cluster extension (preview) on the kata-vm-isolation-v2 runtime (preview). Cilium network policy with FQDN filtering and Azure Firewall replace the sandbox egress policy, and Workload ID replaces the sandbox group identity. GitHub, the pipeline, the gate and the per-app subscriptions stay as mapped."
+        bindings:
+          - { block: harness, service: "Your coding agent in a Kata pod on AKS", build: true, note: "Claimed per build from a SandboxWarmPool by your orchestrator; runs under a service account federated to a narrowly scoped identity.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
+          - { block: nativeTools, service: "AKS Pod Sandboxing with Agent Sandbox (preview)", note: "Each build's commands run in a pod VM with its own guest kernel on a dedicated Azure Linux node pool; the claim is deleted when the build ends.", url: https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing }
+        dropSettings: [sandboxPerBuild, sandboxEgressPolicy]
+        addSettings: [aksPodSandboxing, aksFqdnFiltering, aksNetworkPolicy, aksWorkloadIdentity, aksImdsRestriction, aksContainerLogs, aksAgentSandboxClaim]
+        differences:
+          - at: nativeTools
+            text: "The Agent Sandbox extension and the kata-vm-isolation-v2 runtime it requires are both preview, excluded from service-level agreements and not meant for production. They need Kubernetes 1.35, a v6 VM family and a region with the right AKS release, and installing the extension does not itself enable Pod Sandboxing."
+            url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+          - at: nativeTools
+            text: "Microsoft Defender for Containers does not assess pods that run under the Kata runtime, so threat detection for build sandboxes must come from your own container logs and network flow records."
+            url: https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing
+          - at: harness
+            text: "Warm-pool Sandboxes consume compute while no build is using them, and in preview a single snapshot cannot be restored to several independent Sandboxes, so capacity for parallel builds is planned and paid for in node pools."
+            url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+        alsoNeeded:
+          - service: "Advanced Container Networking Services"
+            role: network
+            why: "FQDN filtering in Cilium network policy, which limits the build pods to the gateway, the feed and GitHub, depends on it."
+            url: https://learn.microsoft.com/en-us/azure/aks/container-network-security-fqdn-filtering-concepts
+          - service: "Quota for supported v6 VM sizes"
+            role: other
+            why: "Kata VM isolation v2 runs only on the Dasv6, Easv6, Fasv6 and related families the extension lists."
+            url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+        quickstart:
+          - title: "Agent Sandbox cluster extension (preview)"
+            url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
+          - title: "Pod sandboxing with Azure Kubernetes Service (AKS)"
+            url: https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing
+      - id: copilotCloudAgent
+        kind: managed
+        name: "GitHub Copilot in the cloud (GitHub, part of Microsoft)"
+        url: https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent
+        asOf: "2026-11"
+        compare:
+          runs: "GitHub runs the agent in a cloud sandbox or on a GitHub Actions runner per task; it works on one branch and opens one pull request per task."
+          patching: "GitHub maintains the agent, its models and the cloud sandbox; you maintain any self-hosted runners and the setup steps you add."
+          data: "Code and prompts are processed on GitHub's infrastructure or on your own runners, outside your Azure subscription."
+          network: "A firewall limits the agent's Bash tool to a recommended allowlist plus your entries; it is not compatible with self-hosted runners."
+          identity: "The agent pushes only to its own branch, cannot approve or merge, and the person who asked cannot approve its pull request."
+          accepts: "Repositories on GitHub only, not Azure Repos; Ubuntu x64 or Windows 64-bit runners; repository MCP servers, custom agents and skills."
+          workload: "A GitHub Actions session stops at 59 minutes and cannot be extended; cloud sandbox sessions can work across several repositories."
+          portability: "Instructions, skills and MCP configuration live in the repository; the agent itself runs only on GitHub."
+          effort: "Your team sets policies, firewall, rulesets and setup steps; there is no agent infrastructure to run unless you use self-hosted runners."
+          fits: "GitHub describes it for delegating tasks that end in a pull request, with workflows held until a person with write access approves them."
+        sources:
+          - https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent
+          - https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations
+          - https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment
+          - https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-firewall
+          - https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        offers:
+          - name: "Cloud sandbox, GitHub Actions and custom environments"
+            what: "Sessions run in a cloud sandbox, on GitHub Actions runners (larger runners with Azure private networking, or ephemeral self-hosted runners managed by ARC), or on a Linux machine you register."
+            url: https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment
+          - name: "Agent firewall"
+            what: "Internet access is limited by a firewall with a recommended allowlist on by default and organisation and repository custom allowlists; it covers the agent's Bash tool, not other MCP servers or setup steps."
+            url: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-firewall
+          - name: "copilot-setup-steps.yml"
+            what: "A single workflow job on the default branch that prepares the GitHub Actions environment before the agent starts; it does not apply to cloud sandbox sessions."
+            url: https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment
+          - name: "Built-in branch and review protections"
+            what: "The agent pushes to one copilot/ branch, cannot approve, merge or mark its pull request ready, the requester cannot approve it, and Actions workflows wait for approval by a user with write access."
+            url: https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations
+          - name: "Repository MCP servers, custom agents and agent skills"
+            what: "Connect tools and task-specific instructions to the agent; personal MCP servers and connectors apply to cloud sandbox sessions only."
+            url: https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent
+          - name: "Automations and integrations"
+            what: "Sessions can start on a schedule or on repository events, and from Microsoft Teams or Slack; events from users without write access are ignored by default."
+            url: https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent
+          - name: "Rulesets apply to the agent"
+            what: "A ruleset or branch protection rule can stop Copilot creating or updating pull requests, and administrators can grant it a ruleset bypass."
+            url: https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent
+          - name: "Copilot agent session events in the audit stream (public preview)"
+            what: "Agent session events can be streamed to Microsoft Agent 365 and Microsoft Purview, for enterprises that use Enterprise Managed Users or GitHub Enterprise Cloud with data residency."
+            url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+    settings: [entraAssignmentRequired, containerAppsKeyVaultSecrets, storageSharedKeyAccess, entraObo, firewallEgress, artifactsUpstream, apimValidateToken, ghAppInstallationTokenScope, ghDefaultBranchRuleset, ghPushRulesetWorkflowPaths, ghEnvRequiredReviewers, deployIdentityFederated, appRevisionTrafficSplit, sandboxPerBuild, sandboxEgressPolicy, ghPackageFirewall, ghCodeScanningMergeProtection, ghPushProtection, apimConnectorClientIds, appContainerAppsRequireAuth, caRequireMfaStrength, appSubscriptionPerApp, policyContainerAppsBaseline, foundryDocumentAttackGuardrail, ghSbomAttestation, msdoIacScan, ghAuditLogStreaming, appRevisionDeactivate, mdcaGenAiDiscovery, policyRequireTagRg]
+  # <<< software factory mapping
