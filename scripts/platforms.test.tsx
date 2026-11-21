@@ -321,7 +321,7 @@ test("a platform's hosting options are compared on the same rows; a variant keep
       assert.equal([...choose.matchAll(/data-compare-row="/g)].length, HOSTING_COMPARE.length, `${where}: every comparison row`);
       for (const o of options.filter((x) => x.kind === "managed" && x.pattern)) assert.match(choose, new RegExp(`data-hosting-pattern="${o.pattern}"`), `${where}: ${o.id} links to its pattern`);
       // The rows are worded for what the pattern hosts, so an agent is named only on an agent pattern.
-      assert.match(choose, new RegExp(`who runs ${hostingWords(a.id).thing}`), `${where}: says what is hosted`);
+      assert.match(choose, new RegExp(`who runs ${esc(hostingWords(a.id).thing)}`), `${where}: says what is hosted`);
       if (!AGENT_PATTERNS.includes(a.id)) assert.doesNotMatch(choose, /Who runs the agent loop|managed agent service/, `${where}: no agent wording`);
       // The page compares and does not rank: it says so, and marks no option as the one to pick. (A cell may quote the vendor's own guidance.)
       assert.match(choose, /Not ranked/, `${where}: says it does not rank`);
