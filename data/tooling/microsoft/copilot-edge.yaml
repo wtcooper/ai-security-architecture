@@ -14,6 +14,14 @@
 # The exemplar URL explore.microsoft.com/en-us/edge/copilot (200) is consumer marketing and documents no
 # administrator control. Microsoft identity, Purview audit and Service Trust Portal facts shared with
 # toolM365Copilot.
+# 2026-11-21: AllowBrowsingWithCopilot is obsolete (works on Edge 148 to 158, obsolete from 159) and
+# BrowsingWithCopilotAllowList and BlockList stopped working after 157; Edge 158 (Stable, 19 November 2026) added
+# CopilotBrowserUseAllowList and CopilotBrowserUseBlockList, and an unset allow list now allows every URL.
+# DeployEdge/microsoft-edge-management-browsing-with-copilot and fwlink 2341535 now redirect (301) to
+# copilot/cowork/cowork-local-browser, whose Microsoft 365 admin center setting Allow browser access (off by default)
+# replaced the allowBrowsingWithCopilot row as coworkBrowserAccess. EdgeCopilotEnabled lists Android and iOS 123+ only
+# (Windows and macOS not supported), so its row and the kill-switch steps say so. Still open: the AML.M0029 and AML.M0028
+# control rows, the variants and the summary describe browsing with Copilot and the old list names.
 vendor: microsoft
 family: Microsoft Copilot in Edge
 tools:
@@ -420,26 +428,28 @@ tools:
       - mitigation: cap-agent-kill-switch
         coverage: partial
         mechanism: >-
-          EdgeCopilotEnabled disabled (users cannot use Copilot in Edge); AllowBrowsingWithCopilot disabled;
-          CopilotCoworkToolActionsEnabled disabled; all support dynamic policy refresh; Edge management service
-          changes download within up to 90 minutes
+          CopilotCoworkToolActionsEnabled disabled (Copilot takes no browser actions; AllowBrowsingWithCopilot did
+          this on Edge 148 to 158 and stops working in 159); Allow browser access off in the Microsoft 365 admin
+          center's Cowork settings; EdgeCopilotEnabled disabled (Edge for Android and iOS only); the Edge policies
+          support dynamic policy refresh; Edge management service changes download within up to 90 minutes
         steps:
-          - title: Turn browsing off
+          - title: Turn browser actions off
             body:
               - >-
-                Set AllowBrowsingWithCopilot to Disabled for the affected group; Edge applies it on policy refresh
-                without a restart.
-            url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/AllowBrowsingWithCopilot
-          - title: Turn Copilot off
+                Set CopilotCoworkToolActionsEnabled to Disabled for the affected group; Edge applies it on policy
+                refresh without a restart.
+            url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/CopilotCoworkToolActionsEnabled
+          - title: Turn Copilot off on mobile
             body:
               - >-
-                Set EdgeCopilotEnabled to Disabled; users cannot use Copilot in Microsoft Edge.
+                Set EdgeCopilotEnabled to Disabled; users of Edge for Android and iOS cannot use Copilot. The policy
+                does not apply on Windows or macOS.
             url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/EdgeCopilotEnabled
         note: >-
           Partial on the kill-switch rule: the switches reach every managed browser without the user, but delivery
           through the Edge management service can take up to 90 minutes and the docs do not say that a browsing
           task already running stops when the policy refreshes.
-        verified: "2026-10-30"
+        verified: "2026-11-21"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # Every row is an Edge policy (Group Policy, Intune or the Edge management service Copilot tab) or a
     # Microsoft 365 control the side pane inherits; the Edge policies apply only to Entra profiles. Verified 2026-10-30.
@@ -468,15 +478,16 @@ tools:
         verified: "2026-10-30"
       - id: edgeCopilotEnabled
         name: EdgeCopilotEnabled
-        where: Edge policy › EdgeCopilotEnabled
+        where: Edge policy › EdgeCopilotEnabled (Edge for Android and iOS 123 and later; not supported on Windows or macOS)
         setVia: [mdm, adminConsole]
         area: tools
         default: Eligible users can use Copilot and turn it off
         recommended: Not configured; Disabled is the incident switch
-        why: Copilot stays available, and one policy removes it from every managed browser on refresh when something goes wrong.
+        value: "Not configured; Disabled in an incident"
+        why: Copilot stays available, and one policy removes it from every managed Edge on Android and iOS on refresh when something goes wrong; on Windows and macOS the policy does nothing.
         mitigations: [cap-agent-kill-switch]
         url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/EdgeCopilotEnabled
-        verified: "2026-10-30"
+        verified: "2026-11-21"
       - id: copilotChatIcon
         name: Microsoft365CopilotChatIconEnabled
         where: Edge policy, or Edge management service › Copilot tab › Copilot icon in the toolbar
@@ -533,52 +544,54 @@ tools:
         requires: Microsoft 365 Copilot licence
         url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/ShareBrowsingHistoryWithCopilotSearchAllowed
         verified: "2026-10-30"
-      - id: allowBrowsingWithCopilot
-        name: AllowBrowsingWithCopilot
-        where: Edge policy, or Edge management service › Copilot tab › Browse with Copilot
-        setVia: [mdm, adminConsole]
+      - id: coworkBrowserAccess
+        name: Allow browser access (Cowork Browsing)
+        where: Microsoft 365 admin center › Copilot › Settings › View All › Cowork settings › Allow browser access, limited to security groups
+        setVia: [adminConsole]
         area: tools
-        default: "Off; users can turn it on"
-        recommended: Enabled for a pilot group only; Disabled for everyone else
-        why: Copilot acting on sites in users' own sessions reaches only the people the firm is piloting it with, and the policy is the off switch.
+        default: "Off"
+        recommended: On for a pilot security group only; off for everyone else
+        value: "On for the pilot group only"
+        why: "Cowork acts in a hidden Edge tab with the user's own sign-ins, so only the people the firm is piloting it with get it. Microsoft's browsing with Copilot guidance now leads here; its AllowBrowsingWithCopilot policy works only on Edge 148 to 158."
         mitigations: [AML.M0029, cap-agent-kill-switch]
-        requires: Microsoft 365 Copilot licence; preview outside the EEA
-        url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/AllowBrowsingWithCopilot
-        verified: "2026-10-30"
+        url: https://learn.microsoft.com/en-us/copilot/cowork/cowork-local-browser
+        verified: "2026-11-21"
       - id: browsingAllowList
-        name: CopilotBrowserUseAllowList (Edge 158+; unset allows all URLs, so set it explicitly; BrowsingWithCopilotAllowList is obsolete after Edge 157). Rename browsingBlockList to CopilotBrowserUseBlockList the same way and update the urls.
-        where: Edge policy, or Edge management service › Browse with Copilot › Allowed sites
-        setVia: [mdm, adminConsole]
+        name: CopilotBrowserUseAllowList
+        where: Edge policy › CopilotBrowserUseAllowList (Edge 158 and later; BrowsingWithCopilotAllowList up to Edge 157)
+        setVia: [mdm]
         area: network
-        default: Empty (browsing with Copilot unavailable)
-        recommended: The work sites the pilot needs; the curated commonly used sites list only after review
+        default: Not configured, so every URL is allowed unless the block list matches it
+        recommended: "Set explicitly to the work sites the pilot needs, written as contoso.com or .contoso.com (the [*.] and *. forms match nothing); never '*', which also exempts intranet and private addresses from the private-network check"
         value: "The work sites the pilot needs"
-        why: Copilot can browse and act only on origins the firm listed, and users cannot add any.
+        why: Copilot can browse and act only on the URLs the firm listed, and users cannot change the list; left unset, it allows every URL.
         mitigations: [cap-agent-egress-control, AML.M0028, D3-CTS, cap-agent-action-policy-enforcement]
-        url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/BrowsingWithCopilotAllowList
-        verified: "2026-10-30"
+        url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/CopilotBrowserUseAllowList
+        verified: "2026-11-21"
       - id: browsingBlockList
-        name: BrowsingWithCopilotBlockList
-        where: Edge policy, or Edge management service › Browse with Copilot › Blocked sites
-        setVia: [mdm, adminConsole]
+        name: CopilotBrowserUseBlockList
+        where: Edge policy › CopilotBrowserUseBlockList (Edge 158 and later; BrowsingWithCopilotBlockList up to Edge 157)
+        setVia: [mdm]
         area: network
-        default: No exceptions
+        default: No URLs blocked
         recommended: Banking, payment, HR and client-portal origins
-        why: Sites where an agent action would move money or client data are excluded even if a broad allow list covers them.
+        value: "Banking, payment, HR and client portals"
+        why: Sites where an agent action would move money or client data stay blocked under a broad allow list; only an allow rule at least as specific lifts a block.
         mitigations: [cap-agent-egress-control, cap-agent-action-policy-enforcement]
-        url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/BrowsingWithCopilotBlockList
-        verified: "2026-10-30"
+        url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/CopilotBrowserUseBlockList
+        verified: "2026-11-21"
       - id: coworkToolActions
         name: CopilotCoworkToolActionsEnabled
-        where: Edge policy › CopilotCoworkToolActionsEnabled
+        where: Edge policy › CopilotCoworkToolActionsEnabled (Edge 152 and later)
         setVia: [mdm]
         area: tools
         default: Users choose in Settings
         recommended: Disabled outside the Cowork pilot group
-        why: Cowork cannot take actions in the browser for people who have not been through the pilot, and users cannot switch it on themselves.
+        value: "Disabled outside the pilot group"
+        why: Copilot cannot take browser actions, in Edge or in the Copilot app's built-in browser, for people outside the pilot, and users cannot switch it on; it applies on policy refresh, so it is also the off switch.
         mitigations: [AML.M0029, AML.M0028, cap-agent-kill-switch]
         url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/CopilotCoworkToolActionsEnabled
-        verified: "2026-10-30"
+        verified: "2026-11-21"
       - id: builtInAiApis
         name: BuiltInAIAPIsEnabled
         where: Edge policy › BuiltInAIAPIsEnabled

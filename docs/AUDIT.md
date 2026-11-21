@@ -1092,7 +1092,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Agent SDK | anthropic | Multi-agent workflow | 2026-10 | 21/21 | _none_ | 25 | 2026-10-30 |  |
 | Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 15/15 | _none_ | 19 | 2026-10-30 |  |
 | Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 29 | 2026-10-30 |  |
-| Claude Code on the web (cloud sessions) | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 25 | 2026-10-30 |  |
+| Claude Code on the web (cloud sessions) | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 25 | 2026-11-21 |  |
 | Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 28 | 2026-10-30 |  |
 | Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 21 | 2026-10-30 |  |
 | Claude (claude.ai) | anthropic | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 22 | 2026-10-30 |  |
@@ -1114,19 +1114,19 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 29 | 2026-10-30 |  |
 | GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-10 | 14/14 | _none_ | 31 | 2026-10-30 |  |
 | GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 31 | 2026-10-30 |  |
-| GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 21/21 | _none_ | 23 | 2026-10-30 |  |
+| GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 21/21 | _none_ | 23 | 2026-11-21 |  |
 | GitHub MCP server | github | Remote MCP server you publish | 2026-09 | 13/13 | _none_ | 23 | 2026-10-30 |  |
 | Google Agent Development Kit (ADK) | google | Agent-to-agent federation across platforms | 2026-11 | 8/13 | Access Policy Administration, AI Vendor Risk Assessment, Agent Kill Switch and Quarantine, Memory Hardening, Tool and MCP Server Integrity | 12 | 2026-11-15 |  |
 | Gemini Enterprise Agent Platform Agent Runtime (Vertex AI Agent Engine) | google | Managed agent service in your cloud | 2026-09 | 21/21 | _none_ | 32 | 2026-11-18 |  |
 | Gemini in Chrome (with Chrome auto browse) | google | Browser AI agents & extensions | 2026-10 | 15/15 | _none_ | 17 | 2026-10-30 |  |
-| Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 34 | 2026-10-30 |  |
+| Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 35 | 2026-11-21 |  |
 | Gemini Enterprise app (assistant, search and connected-data actions) | google | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 22 | 2026-10-30 |  |
 | Gemini Enterprise Workflow Builder (chat agents and workflows) | google | UI/low-code managed agent runtime | 2026-10 | 11/11 | _none_ | 12 | 2026-10-30 |  |
 | LangChain and LangGraph | langchain | Multi-agent workflow | 2026-11 | 21/21 | _none_ | 28 | 2026-11-21 |  |
 | LM Studio | lmstudio | Local model runtime | 2026-09 | 12/12 | _none_ | 13 | 2026-10-30 |  |
 | Meta Muse | meta | Persistent managed agents | 2026-10 | 15/15 | _none_ | 6 | 2026-10-30 |  |
 | Microsoft Agent Framework | microsoft | Multi-agent workflow | 2026-11 | 21/21 | _none_ | 28 | 2026-11-21 |  |
-| Microsoft Copilot in Edge (Microsoft 365 Copilot Chat in the Edge for Business side pane, browsing with Copilot) | microsoft | Browser AI agents & extensions | 2026-10 | 15/15 | _none_ | 17 | 2026-10-30 |  |
+| Microsoft Copilot in Edge (Microsoft 365 Copilot Chat in the Edge for Business side pane, browsing with Copilot) | microsoft | Browser AI agents & extensions | 2026-10 | 15/15 | _none_ | 17 | 2026-11-21 |  |
 | Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ | 32 | 2026-10-30 |  |
 | Microsoft Foundry Agent Service (prompt agents, hosted agents, Responses API) | microsoft | Managed agent service in your cloud | 2026-11 | 21/21 | _none_ | 48 | 2026-11-18 |  |
 | Microsoft 365 Copilot (Microsoft Copilot app, Copilot Chat, in-app Copilot, agents and connectors) | microsoft | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 16 | 2026-10-30 |  |
@@ -1135,7 +1135,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Ollama | ollama | Local model runtime | 2026-09 | 12/12 | _none_ | 19 | 2026-10-30 |  |
 | OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-10 | 16/16 | _none_ | 26 | 2026-10-30 |  |
 | OpenAI Agents SDK | openai | Single agent workflow | 2026-09 | 19/19 | _none_ | 24 | 2026-10-30 |  |
-| ChatGPT Enterprise (chatgpt.com) | openai | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 26 | 2026-10-30 |  |
+| ChatGPT Enterprise (chatgpt.com) | openai | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 26 | 2026-11-21 |  |
 | ChatGPT desktop app and Work Local | openai | Third-party coding & desktop agents | 2026-10 | 18/18 | _none_ | 21 | 2026-10-30 |  |
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 32 | 2026-10-30 |  |
 | Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 19 | 2026-10-30 |  |
@@ -1143,7 +1143,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | OpenAI Dots | openai | Persistent managed agents | 2026-10 | 15/15 | _none_ | 18 | 2026-11-21 |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 18 | 2026-10-30 |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ | 37 | 2026-10-30 |  |
-| opencode | opencode | First-party coding & desktop agents | 2026-09 | 17/18 | Multi-factor Authentication | 19 | 2026-10-30 |  |
+| opencode | opencode | First-party coding & desktop agents | 2026-09 | 17/18 | Multi-factor Authentication | 21 | 2026-11-21 |  |
 | Salesforce Agentforce (agents built in Agentforce Builder, with subagents, actions, Data Library grounding and channels) | salesforce | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ | 19 | 2026-10-30 |  |
 | Vercel AI SDK | vercel | Chat agent with tools | 2026-09 | 23/23 | _none_ | 30 | 2026-10-30 |  |
 | vLLM | vllm | Self-hosted model inference | 2026-09 | 13/14 | Credential Hardening | 32 | 2026-10-30 |  |
@@ -1160,7 +1160,7 @@ Each first-party cloud architecture as built on each cloud (data/clouds/): the s
 | Multi-agent workflow | 27 rows (0 code), 13 blocks bound | 27 rows (1 code), 13 blocks bound | 27 rows (2 code), 13 blocks bound | 30 rows (3 code), 13 blocks bound |
 | Chat agent with tools | 30 rows (2 code), 12 blocks bound | 24 rows (2 code), 12 blocks bound | 29 rows (3 code), 12 blocks bound | 31 rows (4 code), 12 blocks bound |
 | Managed agent service in your cloud | 22 rows (0 code), 10 blocks bound | 21 rows (1 code), 10 blocks bound | 22 rows (0 code), 10 blocks bound | **not yet** |
-| Remote MCP server you publish | 20 rows (2 code), 6 blocks bound | 18 rows (3 code), 6 blocks bound | 17 rows (4 code), 6 blocks bound | 28 rows (2 code), 6 blocks bound |
+| Remote MCP server you publish | 21 rows (2 code), 6 blocks bound | 18 rows (3 code), 6 blocks bound | 17 rows (4 code), 6 blocks bound | 28 rows (2 code), 6 blocks bound |
 | Self-hosted model inference | 19 rows (2 code), 7 blocks bound | 14 rows (2 code), 7 blocks bound | 15 rows (2 code), 7 blocks bound | 30 rows (2 code), 7 blocks bound |
 | Agentic software factory | 30 rows (2 code), 15 blocks bound | 30 rows (1 code), 15 blocks bound | 30 rows (1 code), 15 blocks bound | 30 rows (4 code), 15 blocks bound |
 | Model training & release pipeline | 15 rows (1 code), 9 blocks bound | 14 rows (1 code), 9 blocks bound | 15 rows (1 code), 9 blocks bound | 26 rows (4 code), 9 blocks bound |
