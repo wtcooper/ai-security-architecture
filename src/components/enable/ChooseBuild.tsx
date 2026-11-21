@@ -17,10 +17,69 @@
 import Link from "next/link";
 
 import { HOSTING_KIND_LABEL, cloudSlug, hostingInEffect, hostingOptionsFor, hostingRows, hostingWords, isManagedTarget, notOfferedFor, selfRunPatternsFor, type CloudProduct, type HostingWords } from "@/components/cloud/model";
-import { archetypeById, hostingAdoptionFor, type Product } from "@/lib/data";
+import { adoptionFor, archetypeById, fillsOn, hostingAdoptionFor, type Product } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
-import type { Archetype, HostingOption } from "@/lib/types";
+import type { Archetype, BuilderKind, HostingOption } from "@/lib/types";
 import { AdoptionPill, ChoiceRow, ProductPills } from "./ProductSettings";
+
+const BUILDER_GROUPS: { kind: BuilderKind; label: string }[] = [
+  { kind: "framework", label: "Open-source frameworks, any model" },
+  { kind: "providerSdk", label: "From a model or cloud provider" },
+  { kind: "codingAgent", label: "A coding agent, embedded in your service" },
+  { kind: "server", label: "Servers" },
+];
+
+/** Downloads in a few characters: 45M, 974K. */
+const downloads = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : `${Math.round(n / 1e3)}K`);
+
+/**
+ * The frameworks a pattern can be built with, as cards grouped by kind, each saying what it is,
+ * its languages and how widely it is used, so a reader can tell an open framework from a
+ * provider's SDK from a coding agent's runtime before picking one.
+ */
+function FrameworkCards({ frameworks, selected, onPick }: { frameworks: Product[]; selected: string | null; onPick: (id: string) => void }) {
+  const tools = frameworks.flatMap((p) => (p.kind === "tool" ? [p.tool] : []));
+  const groups = BUILDER_GROUPS.map((g) => ({ ...g, tools: tools.filter((t) => (t.builder?.kind ?? "framework") === g.kind) })).filter((g) => g.tools.length);
+  const counted = tools.some((t) => t.builder?.usage);
+  return (
+    <div className="space-y-3" role="group" aria-label="What you build it with">
+      {groups.map((g) => (
+        <div key={g.kind} data-builder-group={g.kind}>
+          {groups.length > 1 && <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">{g.label}</p>}
+          <div className="grid gap-2 md:grid-cols-3">
+            {g.tools.map((t) => {
+              const on = t.id === selected;
+              const a = adoptionFor(t.id);
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => onPick(t.id)}
+                  className={`flex h-full flex-col rounded-lg border p-3 text-left transition-colors ${on ? "border-ink bg-paper ring-1 ring-ink" : "border-line bg-paper hover:border-ink-3"}`}
+                  data-framework={t.id}
+                >
+                  <span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+                    <span className="text-[13px] font-semibold leading-snug text-ink">{t.name}</span>
+                    {a.set && <AdoptionPill status={a.status} title={a.note ?? "Recorded in data/org/products.yaml"} />}
+                  </span>
+                  {t.builder && <span className="mt-0.5 block text-[11px] text-ink-3">{t.builder.languages.join(" · ")}</span>}
+                  {t.builder && <span className="mt-1.5 block text-[12.5px] leading-snug text-ink-2" data-framework-what>{t.builder.what}</span>}
+                  {t.builder?.usage && (
+                    <span className="mt-auto block pt-1.5 text-[11px] text-ink-3" title={`${t.builder.usage.package} on ${t.builder.usage.registry}, ${t.builder.usage.asOf}`}>
+                      {downloads(t.builder.usage.downloads)} downloads last month ({t.builder.usage.registry})
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {counted && <p className="text-[11.5px] text-ink-3">Most downloaded first within each group. Pick one to see its settings for this pattern.</p>}
+    </div>
+  );
+}
 
 /** What choosing an option does, in a few words. */
 const consequence = (option: HostingOption, inEffect: boolean, words: HostingWords) =>
@@ -178,7 +237,7 @@ export function ChooseBuild({
   const selfRun = platform && isManagedTarget(archetype.id) ? selfRunPatternsFor(archetype.id, platform.id) : [];
   const titles = new Map(archetype.blocks.map((b) => [b.id, b.title]));
   // The boxes the catalogued frameworks fill, as the reader sees them on the drawing.
-  const filled = [...new Set(frameworks.flatMap((p) => (p.kind === "tool" ? p.tool.fills ?? [] : [])).map((id) => titles.get(id) ?? id))];
+  const filled = [...new Set(frameworks.flatMap((p) => (p.kind === "tool" ? fillsOn(p.tool, archetype.id) : [])).map((id) => titles.get(id) ?? id))];
   const defaults = platform ? [...new Set(platform.implementation.bindings.map((b) => b.builtWith).filter((x): x is string => Boolean(x)))] : [];
   const options = platform ? hostingOptionsFor(platform) : [];
   const words = hostingWords(archetype.id);
@@ -238,7 +297,7 @@ export function ChooseBuild({
 
       {frameworks.length > 0 && (
         <ChoiceRow n="c" label="What you build it with" hint={`fills ${filled.length === 1 ? "the" : "these boxes:"} ${filled.join(", ")}${filled.length === 1 ? " box" : ""}`}>
-          <ProductPills products={frameworks} selected={framework?.id ?? ""} onPick={(id) => onPickFramework(id === framework?.id ? null : id)} label="What you build it with" />
+          <FrameworkCards frameworks={frameworks} selected={framework?.id ?? null} onPick={(id) => onPickFramework(id === framework?.id ? null : id)} />
           {defaults.length > 0 && !framework && (
             <p className="mt-1.5 text-[12px] leading-snug text-ink-3" data-default-framework>
               {short} build{platform!.cloud.selfManaged ? "s" : ""} it with {defaults.join(" and ")}. That is a default, not a requirement: any framework that fills the box runs there.

@@ -87,6 +87,12 @@ architectures with their surface).
      pattern the tool is what a box is **built with**, not where the pattern runs: add
      `fills: [<block id>]` naming the box or boxes of that pattern it is used to build (an agent
      SDK fills the agent harness, an inference server fills the runtime). The build requires it.
+     Add `builder` too: its kind (`framework` for an open, model-agnostic project,
+     `providerSdk` for a model or cloud provider's SDK, `codingAgent` for a coding agent's runtime
+     embedded in a service, `server`), one line on what it is, its languages, last month's
+     downloads from PyPI or npm (`usage`, which orders the choices), and under `also` every other
+     hosted pattern it builds with the boxes it fills there and the page that shows it. An agent
+     framework is one entity offered on every agent pattern it builds, not one entity per pattern.
      Where it runs (AWS, Azure, Google Cloud, on-premises) is a platform under `data/clouds/`
      and is chosen separately on the page, so do not record cloud settings on the tool or the
      tool's own settings in a cloud file

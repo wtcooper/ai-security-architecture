@@ -15,7 +15,7 @@ import { ControlTable } from "../src/components/enable/ControlTable";
 import { controlGroups } from "../src/components/enable/model";
 import { ChooseBuild } from "../src/components/enable/ChooseBuild";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
-import { componentChoiceIn, dataset, productsForArchetype } from "../src/lib/data";
+import { componentChoiceIn, dataset, fillsOn, productsForArchetype } from "../src/lib/data";
 import { checkCommandProblem, HOSTING_COMPARE, type ProductStatusEntry } from "../src/lib/types";
 import { checkOrgControls } from "./lib/enablement";
 import { checkProductStatus } from "./lib/products";
@@ -130,7 +130,7 @@ test("a setting's check only reads: the build refuses a command that changes any
   }
   const html = renderToStaticMarkup(<SettingCheck check={{ command: "aws x get-y --id <id>", expect: "It is on.", url: "https://example.com/ref" }} />);
   assert.match(html, /aws x get-y --id &lt;id&gt;/);
-  assert.match(html, /changes nothing/i, "the block says the command only reads");
+  assert.match(html, /only reads/i, "the block says the command only reads");
   assert.match(html, /not run by this project/i, "and that nobody here has run it");
 });
 
@@ -196,8 +196,12 @@ test("on a hosted pattern, where it runs and what it is built with are two choic
     // Every catalogued tool and every example says which box it fills.
     for (const p of frameworks) {
       if (p.kind !== "tool") continue;
-      assert.ok(p.tool.fills?.length, `${p.tool.id}: says which box it is used to build`);
-      for (const id of p.tool.fills!) assert.ok(a.blocks.some((b) => b.id === id), `${p.tool.id}: fills a box of ${a.id}`);
+      const boxes = fillsOn(p.tool, a.id);
+      assert.ok(boxes.length, `${p.tool.id}: says which box it is used to build on ${a.id}`);
+      for (const id of boxes) assert.ok(a.blocks.some((b) => b.id === id), `${p.tool.id}: fills a box of ${a.id}`);
+      // Offered here with the settings that deliver what this pattern pins, and naming only those.
+      assert.ok(p.settings.length >= 5 || p.tool.architecture === a.id, `${p.tool.id} on ${a.id}: ${p.settings.length} settings`);
+      if (p.tool.architecture !== a.id) for (const st of p.settings) for (const m of st.mitigations) assert.ok(a.mitigations.includes(m), `${p.tool.id} on ${a.id}: ${st.id} names ${m}, not pinned here`);
     }
     for (const e of a.exemplars ?? []) assert.ok(e.fills && a.blocks.some((b) => b.id === e.fills), `${a.id}: example ${e.name} names the box it is an example of`);
     // No platform names a framework inside a component's name.
@@ -215,6 +219,12 @@ test("on a hosted pattern, where it runs and what it is built with are two choic
       <ChooseBuild archetype={a} products={products} platform={null} framework={null} host={null} onPickPlatform={() => {}} onPickHost={() => {}} onPickFramework={() => {}} />,
     );
     for (const label of ["Where it runs", "How it is hosted there", "What you build it with"]) assert.ok(choose.includes(`data-choice="${label}"`), `${a.id}: asks "${label}"`);
+    // Each framework is a card that says what it is, so a reader can choose without looking it up.
+    for (const p of frameworks) {
+      if (p.kind !== "tool") continue;
+      assert.match(choose, new RegExp(`data-framework="${p.tool.id}"`), `${a.id}: a card for ${p.tool.id}`);
+      assert.ok(p.tool.builder && choose.includes(esc(p.tool.builder.what)), `${a.id}: ${p.tool.id} says what it is`);
+    }
     assert.match(choose, /data-hosting-wait/, `${a.id}: hosting waits for a platform`);
     assert.doesNotMatch(choose, /data-settings=/, `${a.id}: no settings in the step of choices`);
     // Nothing chosen: the settings step says so and shows no table.

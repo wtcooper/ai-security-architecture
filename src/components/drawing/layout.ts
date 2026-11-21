@@ -15,7 +15,7 @@
  *
  * Pure and deterministic: tests and audits call it without a browser.
  */
-import { clouds, componentChoiceFor, toolsForArchetype } from "@/lib/data";
+import { clouds, componentChoiceFor, fillsOn, toolsForArchetype } from "@/lib/data";
 import type { Archetype, ArchBlock, ArchZone } from "@/lib/types";
 
 export type Pt = [number, number];
@@ -366,7 +366,7 @@ function compute(a: Archetype): ViewSpec {
       (c.implementations.find((i) => i.architecture === a.id)?.bindings ?? []).filter((x) => x.block === b.id).map((x) => ({ text: x.service, build: x.build })),
     ),
     // A box a catalogued framework fills can carry "built with ..." under whatever it shows.
-    ...(toolsForArchetype(a.id).some((t) => t.fills?.includes(b.id)) && summaryOf(b) ? [{ text: summaryOf(b), build: true }] : []),
+    ...(toolsForArchetype(a.id).some((t) => fillsOn(t, a.id).includes(b.id)) && summaryOf(b) ? [{ text: summaryOf(b), build: true }] : []),
     // The organisation's own choice for the component is drawn with a one-line tag, as "you build this" is.
     ...clouds.flatMap((c) => {
       const ours = componentChoiceFor(c.id, a.id, b.id);

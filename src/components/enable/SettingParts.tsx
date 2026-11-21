@@ -23,7 +23,19 @@ export function ValueChip({ text }: { text: string }) {
 }
 
 /** Recommended value, then the default, then how to apply it: the cell a settings table shows. */
-export function Recommended({ setting, why = true, label = true }: { setting: ProductSetting; why?: boolean; /** Off under a "Set to" column heading. */ label?: boolean }) {
+export function Recommended({
+  setting,
+  why = true,
+  how: withHow = true,
+  label = true,
+}: {
+  setting: ProductSetting;
+  why?: boolean;
+  /** Off where the row opens to the sentence that says how. */
+  how?: boolean;
+  /** Off under a "Set to" column heading. */
+  label?: boolean;
+}) {
   const { value, how } = recommendedOf(setting);
   return (
     <div className="min-w-0 text-[12.5px] leading-snug" data-setting-value>
@@ -36,7 +48,7 @@ export function Recommended({ setting, why = true, label = true }: { setting: Pr
           </span>
         )}
       </p>
-      {value && how && <p className="mt-0.5 text-ink">{how}</p>}
+      {withHow && value && how && <p className="mt-0.5 text-ink">{how}</p>}
       {why && <p className="mt-0.5 text-ink-2">{setting.why}</p>}
     </div>
   );

@@ -1604,6 +1604,40 @@ function checkTooling(
     for (const id of tool.fills ?? []) {
       if (arch && !arch.blocks.some((blk) => blk.id === id)) fail(`${where}: fills "${id}", which is not a block of ${arch.id}`);
     }
+    // What it is, for someone choosing what to build with, and the other patterns it builds.
+    const b = tool.builder;
+    if (arch?.surface === "surfaceCloud" && tool.fills?.length && !tool.platform && !b) fail(`${where}: needs builder: its kind, one line on what it is, and its languages`);
+    const alsoPinned = new Set<string>();
+    if (b) {
+      if (!["framework", "providerSdk", "codingAgent", "server"].includes(b.kind)) fail(`${where}: builder.kind must be framework, providerSdk, codingAgent or server`);
+      if (!b.what?.trim() || b.what.length > 150) fail(`${where}: builder.what is one line of at most 150 characters (${b.what?.length ?? 0})`);
+      if (!b.languages?.length) fail(`${where}: builder.languages names at least one language`);
+      if (b.usage) {
+        const u = b.usage;
+        if (!(u.downloads > 0) || !u.registry?.trim() || !u.package?.trim() || !/^\d{4}-\d{2}$/.test(u.asOf ?? "") || !u.url?.startsWith("https://"))
+          fail(`${where}: builder.usage needs downloads, registry, package, asOf (YYYY-MM) and an https url`);
+      }
+      const seen = new Set<string>();
+      for (const o of b.also ?? []) {
+        const other = archetypeById.get(o.architecture);
+        const at = `${where} builder.also ${o.architecture}`;
+        if (!other) {
+          fail(`${at}: not a reference architecture`);
+          continue;
+        }
+        if (other.surface !== "surfaceCloud") fail(`${at}: only a hosted pattern is built with a framework`);
+        if (o.architecture === tool.architecture || seen.has(o.architecture)) fail(`${at}: listed twice`);
+        seen.add(o.architecture);
+        if (!o.fills?.length) fail(`${at}: needs fills: the box or boxes it builds there`);
+        for (const id of o.fills ?? []) if (!other.blocks.some((blk) => blk.id === id)) fail(`${at}: fills "${id}", which is not a block of ${other.id}`);
+        if (!o.url?.startsWith("https://")) fail(`${at}: needs the https page that shows it builds this`);
+        for (const m of other.mitigations) alsoPinned.add(m);
+        // Offered on a pattern only with the settings that deliver what that pattern pins.
+        const here = new Set(other.mitigations);
+        const rows = (tool.settings ?? []).filter((st) => st.mitigations.some((m) => here.has(m))).length;
+        if (rows < 5) fail(`${at}: only ${rows} settings deliver a control pinned there; at least five are needed to offer it`);
+      }
+    }
 
     // A third-party SaaS architecture is the browser-based interface only. A vendor's desktop and
     // mobile apps show the same synced chats and need no shell of their own there; whatever a
@@ -1661,7 +1695,8 @@ function checkTooling(
     // The settings table: rows to the baseline rubric, each control it names pinned on the
     // tool's drawing. Once a tool has its table, every control it rates Built-in or Partial
     // must be backed by at least one row, so the rating and the table cannot drift apart.
-    checkSettings(where, tool.settings, { mitigationIds: ctx.mitigationIds, pinned, fail });
+    // A framework's setting may deliver a control pinned on any pattern it builds.
+    checkSettings(where, tool.settings, { mitigationIds: ctx.mitigationIds, pinned: alsoPinned.size ? new Set([...pinned, ...alsoPinned]) : pinned, fail });
     if (tool.settings?.length) {
       const delivered = new Set(tool.settings.flatMap((st) => st.mitigations));
       for (const c of tool.controls ?? [])

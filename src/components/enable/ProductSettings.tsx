@@ -15,7 +15,7 @@
  * appears only once the organisation has recorded a status for that product.
  */
 import Link from "next/link";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
 import { SettingCheck } from "./SettingCheck";
@@ -25,7 +25,7 @@ import type { AdoptionStatus, Archetype, ProductSetting } from "@/lib/types";
 import { ADOPTION_META } from "./labels";
 import { controlGroups, controlsDelivered, settingGroups } from "./model";
 import { ToolRecord } from "./ToolRecord";
-import { Recommended, SetVia } from "./SettingParts";
+import { Recommended, recommendedOf, SetVia } from "./SettingParts";
 
 export function AdoptionPill({ status, title }: { status: AdoptionStatus; title?: string }) {
   const m = ADOPTION_META[status];
@@ -77,21 +77,6 @@ export function ProductPills({ products, selected, onPick, label = "Products" }:
 /** How a product is named in a tight space: a platform by its short name, a tool by its own. */
 const shortOf = (product: Product) => (product.kind === "cloud" ? product.cloud.short : product.tool.name);
 
-/** The chip of a control a setting delivers: picking it lights that control on the drawing. */
-function Chip({ n, lit, title, onClick }: { n: number; lit: boolean; title: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-      className={`flex h-[21px] w-[21px] items-center justify-center rounded-full border text-[10.5px] font-bold hover:bg-chip hover:text-white ${lit ? "border-chip bg-chip text-white" : "border-chip bg-chip-soft text-chip"}`}
-    >
-      {n}
-    </button>
-  );
-}
-
 /**
  * The settings of one product, or of two chosen together on a hosted pattern (where it runs, and
  * what it is built with), as a table of recommended values: the setting and its page, how it is
@@ -105,8 +90,11 @@ export function SettingsTable({
   archetype,
   lit,
   onLight,
+  defaultOpen = null,
 }: {
   product?: Product;
+  /** The row open at first, as `<product id>-<setting id>`. */
+  defaultOpen?: string | null;
   /** One product, or the platform and the framework of a hosted pattern. */
   products?: Product[];
   archetype: Archetype;
@@ -124,7 +112,8 @@ export function SettingsTable({
   // A row says whose it is when two products are shown, or when the platform's file carries a framework's own setting.
   const tagged = products.length > 1;
   // The same columns as the controls step: chip, name, then the detail, then status at the right.
-  const grid = recorded ? "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1.6fr)_minmax(0,0.8fr)_96px]" : "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1.6fr)_minmax(0,0.8fr)]";
+  const grid = recorded ? "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1.3fr)_minmax(0,0.8fr)_96px]" : "md:grid-cols-[28px_minmax(0,1.5fr)_minmax(0,1.3fr)_minmax(0,0.8fr)]";
+  const [openKey, setOpenKey] = useState<string | null>(defaultOpen);
   return (
     <>
       <p className="mb-2 text-[12px] leading-snug text-ink-3" data-settings-status-hint>
@@ -136,10 +125,11 @@ export function SettingsTable({
           <>
             No status recorded for these settings yet: record what you have switched on in <span className="ident">data/org/products.yaml</span> and a status column appears.
           </>
-        )}
+        )}{" "}
+        Open a row for how and why, the path and the vendor&apos;s page.
       </p>
       <div className="overflow-hidden rounded-xl border border-line bg-paper" data-settings={products.map((p) => p.id).join(" ")}>
-        <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${grid}`}>
+        <div className={`hidden gap-4 border-b border-line bg-mist/60 py-2 pl-8 pr-4 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${grid}`}>
           <span aria-label="Chip on the drawing" />
           <span>Control · setting</span>
           <span>Set to</span>
@@ -167,92 +157,114 @@ export function SettingsTable({
                 const [first] = controls;
                 const product = owner.get(s)!;
                 const key = `${product.id}-${s.id}`;
+                const expanded = openKey === key;
                 const a = settingAdoptionFor(product.id, s.id);
                 const ourLink = settingLinkFor(product.id, s.id);
-                return (
-                  <li
-                    key={key}
-                    id={`setting-${key}`}
-                    className={`grid scroll-mt-24 grid-cols-[28px_minmax(0,1fr)] items-start gap-x-4 gap-y-1.5 px-4 py-2.5 text-[12.5px] leading-snug ${grid} ${controls.includes(lit ?? "") ? "bg-chip-soft/30" : ""}`}
+                const { value, how } = recommendedOf(s);
+                const source = (tagged || s.builtWith) && (
+                  <span
+                    className="ml-2 inline-block rounded border border-line bg-mist px-1.5 py-px align-[1px] text-[10.5px] font-semibold text-ink-2"
+                    data-setting-source={s.builtWith ? "framework" : product.kind}
+                    title={
+                      s.builtWith
+                        ? `Applies if you build this with ${s.builtWith}, as ${shortOf(product) === "On-premises" ? "this mapping does" : `${shortOf(product)}'s own guides do`}; with another framework, use its own setting for the same control`
+                        : product.kind === "cloud"
+                          ? `A setting of ${product.cloud.name}: where it runs`
+                          : `A setting of ${product.tool.name}`
+                    }
                   >
-                    {/* The control it delivers leads the row, as in the controls step: its chip, then its name. */}
-                    {first ? (
-                      <Chip n={number.get(first)!} lit={lit === first} title={`Control ${number.get(first)}: ${controlName(first)}. Light it on the drawing`} onClick={() => onLight(first)} />
-                    ) : (
-                      <span className="flex h-[21px] w-[21px] items-center justify-center rounded-full border border-line bg-mist text-[10.5px] font-bold text-ink-3" title="Delivers none of the numbered controls">
-                        ·
+                    {s.builtWith ?? shortOf(product)}
+                  </span>
+                );
+                return (
+                  <li key={key} id={`setting-${key}`} className={`scroll-mt-24 ${controls.includes(lit ?? "") ? "bg-chip-soft/30" : ""}`}>
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      onClick={() => {
+                        setOpenKey(expanded ? null : key);
+                        // Opening a setting lights the control it delivers, as opening a control row does.
+                        if (!expanded && first && lit !== first) onLight(first);
+                      }}
+                      className={`grid w-full grid-cols-[28px_minmax(0,1fr)] items-start gap-x-4 gap-y-1 py-2.5 pl-8 pr-4 text-left text-[12.5px] leading-snug transition-colors hover:bg-mist/50 ${expanded ? "bg-mist/50" : ""} ${grid}`}
+                    >
+                      {/* The control it delivers leads the row, as in the controls step: its chip, then its name. */}
+                      <span
+                        className={`flex h-[21px] w-[21px] items-center justify-center rounded-full border text-[10.5px] font-bold ${first ? (lit === first ? "border-chip bg-chip text-white" : "border-chip bg-chip-soft text-chip") : "border-line bg-mist text-ink-3"}`}
+                        title={first ? `Control ${number.get(first)}: ${controlName(first)}` : "Delivers none of the numbered controls"}
+                      >
+                        {first ? number.get(first) : "·"}
                       </span>
-                    )}
-                    <div className="min-w-0">
-                      {controls.length > 0 && (
-                        <p className="text-[11.5px] leading-snug text-ink-3">
-                          {controls.map((id, i) => (
-                            <span key={id} data-delivers={id}>
-                              {i > 0 && (
-                                <>
-                                  {" · "}
-                                  <button type="button" onClick={() => onLight(id)} className="font-bold text-chip hover:underline" title="Light it on the drawing">
-                                    {number.get(id)}
-                                  </button>{" "}
-                                </>
-                              )}
-                              <span className={i === 0 ? "font-semibold text-ink-2" : ""}>{controlName(id)}</span>
-                            </span>
-                          ))}
-                        </p>
-                      )}
-                      <p className="mt-0.5 text-[13px] font-semibold text-ink" data-setting-name>
-                        <a href={s.url} target="_blank" rel="noreferrer" className="hover:text-introduced hover:underline" title="The vendor's page for this setting">
-                          {s.name} <span className="text-introduced">↗</span>
-                        </a>
-                        {(tagged || s.builtWith) && (
-                          <span
-                            className="ml-2 inline-block rounded border border-line bg-mist px-1.5 py-px align-[1px] text-[10.5px] font-semibold text-ink-2"
-                            data-setting-source={s.builtWith ? "framework" : product.kind}
-                            title={
-                              s.builtWith
-                                ? `Applies if you build this with ${s.builtWith}, as ${shortOf(product) === "On-premises" ? "this mapping does" : `${shortOf(product)}'s own guides do`}; with another framework, use its own setting for the same control`
-                                : product.kind === "cloud"
-                                  ? `A setting of ${product.cloud.name}: where it runs`
-                                  : `A setting of ${product.tool.name}`
-                            }
-                          >
-                            {s.builtWith ?? shortOf(product)}
+                      <span className="min-w-0">
+                        {first && (
+                          <span className="block text-[11.5px] leading-snug text-ink-3" data-delivers={first}>
+                            <span className="font-semibold text-ink-2">{controlName(first)}</span>
+                            {controls.length > 1 && <span title={controls.slice(1).map(controlName).join(" · ")}> +{controls.length - 1} more</span>}
                           </span>
                         )}
-                      </p>
-                      <p className="ident mt-0.5 break-words text-[10.5px] leading-snug text-ink-3" data-setting-where>
-                        {s.where}
-                      </p>
-                      {s.requires && <p className="mt-1 text-[11px] text-ink-3">Requires {s.requires}</p>}
-                      {s.check && (
-                        <details className="mt-1.5">
-                          <summary className="cursor-pointer text-[11.5px] font-semibold text-introduced">Check it</summary>
-                          <div className="mt-1.5">
-                            <SettingCheck check={s.check} />
-                          </div>
-                        </details>
+                        <span className="mt-0.5 block text-[13px] font-semibold text-ink" data-setting-name>
+                          {s.name}
+                          {source}
+                        </span>
+                      </span>
+                      <span className="col-start-2 md:col-start-auto">
+                        <Recommended setting={s} why={false} how={false} label={false} />
+                      </span>
+                      <span className="col-start-2 md:col-start-auto">
+                        <SetVia setting={s} />
+                      </span>
+                      {recorded && (
+                        <span className="col-start-2 md:col-start-auto md:text-right" data-setting-ours>
+                          <AdoptionPill status={a.status} title={a.set ? undefined : "No status recorded in data/org/products.yaml"} />
+                        </span>
                       )}
-                    </div>
-                    <div className="col-start-2 md:col-start-auto">
-                      <Recommended setting={s} label={false} />
-                    </div>
-                    <div className="col-start-2 md:col-start-auto">
-                      <SetVia setting={s} />
-                    </div>
-                    {recorded && (
-                      <div className="col-start-2 md:col-start-auto md:text-right" data-setting-ours>
-                        <AdoptionPill
-                          status={a.status}
-                          title={a.set ? [a.value && `Set to: ${a.value}`, a.note].filter(Boolean).join(" · ") || undefined : "No status recorded in data/org/products.yaml"}
-                        />
-                        {a.value && <p className="mt-0.5 text-[11px] text-ink-3">Set to {a.value}</p>}
-                        {a.note && <p className="mt-0.5 text-[11px] text-ink-3">{a.note}</p>}
-                        {ourLink && (
-                          <a href={ourLink} target="_blank" rel="noreferrer" className="mt-0.5 block text-[11px] font-semibold text-introduced hover:underline">
-                            Your runbook ↗
-                          </a>
+                    </button>
+                    {expanded && (
+                      <div className="space-y-2.5 border-t border-line bg-mist/30 py-3 pl-4 pr-4 text-[12.5px] leading-relaxed text-ink-2 md:pl-[76px]" data-setting-open={key}>
+                        <p>
+                          <span className="font-semibold text-ink" data-do>
+                            {how ?? `Set it to ${value}.`}
+                          </span>{" "}
+                          <span data-why>{s.why}</span>
+                        </p>
+                        <p className="text-[12px]">
+                          <span className="font-semibold text-ink">Where: </span>
+                          <span className="ident break-words text-[11px] text-ink-2" data-setting-where>
+                            {s.where}
+                          </span>
+                          {s.requires && <span className="block text-ink-3">Requires {s.requires}</span>}
+                        </p>
+                        {controls.length > 1 && (
+                          <p className="text-[12px]" data-delivers-all>
+                            <span className="font-semibold text-ink">Delivers: </span>
+                            {controls.map((id, i) => (
+                              <span key={id} data-delivers={id}>
+                                {i > 0 && " · "}
+                                <button type="button" onClick={() => onLight(id)} className="font-bold text-chip hover:underline" title="Light it on the drawing">
+                                  {number.get(id)}
+                                </button>{" "}
+                                {controlName(id)}
+                              </span>
+                            ))}
+                          </p>
                         )}
+                        {a.set && (a.value || a.note) && (
+                          <p className="text-[12px]">
+                            <span className="font-semibold text-ink">Yours: </span>
+                            {[a.value && `set to ${a.value}`, a.note].filter(Boolean).join(". ")}
+                          </p>
+                        )}
+                        {s.check && <SettingCheck check={s.check} />}
+                        <span className="flex flex-wrap gap-x-4">
+                          <a href={s.url} target="_blank" rel="noreferrer" className="text-[12px] font-semibold text-introduced hover:underline" data-setting-link>
+                            The vendor&apos;s page ↗
+                          </a>
+                          {ourLink && (
+                            <a href={ourLink} target="_blank" rel="noreferrer" className="text-[12px] font-semibold text-introduced hover:underline">
+                              Your runbook ↗
+                            </a>
+                          )}
+                        </span>
                       </div>
                     )}
                   </li>

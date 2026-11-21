@@ -14,7 +14,8 @@ import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { CloudComparison } from "../src/components/cloud/CloudViews";
 import { cloudOptionsForControl, cloudProductsFor, cloudSlug, optionsFor } from "../src/components/cloud/model";
 import { ControlDetail } from "../src/components/controls/ControlDetail";
-import { ProductSettings } from "../src/components/enable/ProductSettings";
+import { ProductSettings, SettingsTable } from "../src/components/enable/ProductSettings";
+import { recommendedOf } from "../src/components/enable/SettingParts";
 import { coverageWord } from "../src/components/enable/labels";
 import { baselineNotPinned, controlGroups, controlsDelivered, settingGroups } from "../src/components/enable/model";
 import { controlName, dataset, enablement, isBaseline, productsForArchetype, toolsForArchetype } from "../src/lib/data";
@@ -74,18 +75,29 @@ test("the settings step reads like the controls step: same headings, same order,
       assert.deepEqual(named, controlOrder.filter((id) => named.includes(id)), `${where}: bands follow the controls' order`);
       if (bands.includes("extras")) assert.equal(bands.at(-1), "extras", `${where}: unnumbered hardening comes last`);
       for (const g of controlGroups(arch)) if (named.includes(g.id)) assert.ok(html.includes(esc(g.plain)), `${where}: heading ${g.plain}`);
-      // Each row says what to set, to what and why, and names the control it delivers, not just its number.
+      // Each row, closed, says what to set and to what, and names the control it delivers, not just its number.
       for (const st of product.settings) {
         const row = html.slice(html.indexOf(`id="setting-${product.id}-${st.id}"`));
         const cell = row.slice(0, row.indexOf("</li>"));
-        for (const text of [st.name, st.recommended, st.why]) assert.ok(cell.includes(esc(text)), `${where} ${st.id}: shows "${text.slice(0, 30)}"`);
-        for (const id of controlsDelivered(arch, st)) {
-          assert.match(cell, new RegExp(`data-delivers="${id.replace(/[.]/g, "\\.")}"`), `${where} ${st.id}: delivers ${id}`);
-          assert.ok(cell.includes(esc(capName(id))), `${where} ${st.id}: names ${id}, not only its number`);
+        for (const text of [st.name, recommendedOf(st).value ?? st.recommended]) assert.ok(cell.includes(esc(text)), `${where} ${st.id}: shows "${text.slice(0, 30)}"`);
+        const [first] = controlsDelivered(arch, st);
+        if (first) {
+          assert.match(cell, new RegExp(`data-delivers="${first.replace(/[.]/g, "\\.")}"`), `${where} ${st.id}: delivers ${first}`);
+          assert.ok(cell.includes(esc(capName(first))), `${where} ${st.id}: names ${first}, not only its number`);
         }
       }
       // Nothing is recorded in data/org/controls.yaml, so there is no status column; the detail waits for a row to be opened.
-      assert.doesNotMatch(html, />Not enabled<|data-setting-detail/, `${where}: no empty status column, no open detail`);
+      assert.doesNotMatch(html, />Not enabled<|data-setting-open/, `${where}: no empty status column, no open detail`);
+      // An open row holds how and why, the path, every control it delivers and the vendor's page.
+      for (const st of product.settings.slice(0, 3)) {
+        const key = `${product.id}-${st.id}`;
+        const open = renderToStaticMarkup(<SettingsTable product={product} archetype={arch} lit={null} onLight={() => {}} defaultOpen={key} />);
+        const body = open.slice(open.indexOf(`data-setting-open="${key}"`));
+        const cell = body.slice(0, body.indexOf("</li>"));
+        for (const text of [recommendedOf(st).how ?? "", st.why, st.where]) assert.ok(cell.includes(esc(text)), `${where} ${st.id}: open row shows "${text.slice(0, 30)}"`);
+        for (const id of controlsDelivered(arch, st).slice(1)) assert.ok(cell.includes(esc(capName(id))), `${where} ${st.id}: open row names ${id}`);
+        assert.ok(cell.includes(esc(st.url)), `${where} ${st.id}: links the vendor's page`);
+      }
     }
   }
 });

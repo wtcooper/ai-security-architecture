@@ -16,7 +16,7 @@ import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawi
 import { CrossingsRegister } from "@/components/drawing/CrossingsRegister";
 import { CloudSwitch } from "@/components/cloud/CloudSwitch";
 import { cloudProductFor, cloudProductsFor, differenceMarks, hostedAs, hostingInEffect, platformWords, type CloudProduct } from "@/components/cloud/model";
-import { cloudById, componentChoiceFor, incidents, toolById } from "@/lib/data";
+import { cloudById, componentChoiceFor, fillsOn, incidents, toolById } from "@/lib/data";
 import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
@@ -105,7 +105,8 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   // The framework or server chosen in the settings step, named in the box it fills.
   const builtWith = useMemo(() => {
     const chosen = tool ? toolById.get(tool) : undefined;
-    return chosen?.architecture === archetype.id && chosen.fills?.length ? new Map(chosen.fills.map((id) => [id, chosen.name] as const)) : null;
+    const boxes = chosen ? fillsOn(chosen, archetype.id) : [];
+    return chosen && boxes.length ? new Map(boxes.map((id) => [id, chosen.name] as const)) : null;
   }, [tool, archetype.id]);
   const differCount = cloudProduct?.implementation.differences?.length ?? 0;
   const moreCount = cloudProduct?.implementation.alsoNeeded?.length ?? 0;
@@ -135,9 +136,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
     if (next !== "flows") onWalk(null);
     else if (walkIndex === null) onWalk(0);
     if (next !== "enable" && next !== "overview") onHighlight(null);
-    // Chosen from the stuck strip, far down a panel: bring the drawing back, since the tab changes it.
-    const top = drawingRef.current?.getBoundingClientRect().top;
-    if (top !== undefined && top < 0) requestAnimationFrame(() => drawingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    // The page stays where the reader is: a tab changes the panel, never the scroll position.
   };
 
   // A chip picked on the drawing opens its row on Enable, wherever the reader was.

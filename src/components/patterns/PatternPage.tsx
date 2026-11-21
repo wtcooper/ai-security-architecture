@@ -15,7 +15,7 @@ import { ArchetypeView } from "@/components/reference/ArchetypeView";
 import { ArchPicker } from "@/components/reference/ArchPicker";
 import type { Highlight } from "@/components/drawing/types";
 import { cloudFromSlug, cloudProductFor, cloudSlug } from "@/components/cloud/model";
-import { archetypeById, archetypesInOrder, cloudById, productsForArchetype, surfaces, toolById } from "@/lib/data";
+import { archetypeById, archetypesInOrder, cloudById, productsForArchetype, surfaces, toolById, toolsForArchetype } from "@/lib/data";
 import { PATTERN_TABS, ROUTES, patternHref, type PatternTab } from "@/lib/routes";
 import { ENABLE_LAYOUTS, type EnableLayout } from "@/components/enable/EnablePanel";
 
@@ -72,7 +72,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
 
   // A product of another pattern in the address belongs on that pattern's page (a platform's own
   // service, on that platform). The address is left alone meanwhile, or the forward would lose it.
-  const elsewhere = Boolean(tool0 && tool0.architecture !== archetype.id);
+  const elsewhere = Boolean(tool0 && !toolsForArchetype(archetype.id).includes(tool0));
   useEffect(() => {
     if (elsewhere && tool0) router.replace(patternHref(tool0.architecture, tool0.platform ? { cloud: cloudSlug(tool0.platform) } : { tool: tool0.id }));
   }, [elsewhere, tool0, router]);

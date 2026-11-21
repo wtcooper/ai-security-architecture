@@ -107,7 +107,7 @@ export function ControlTable({
   const tagged = products.length > 1;
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-paper" data-control-table={variant}>
-      <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${GRID}`}>
+      <div className={`hidden gap-4 border-b border-line bg-mist/60 py-2 pl-8 pr-4 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${GRID}`}>
         <span aria-label="Chip on the drawing" />
         <span>Control</span>
         <span>Where it goes</span>
@@ -146,7 +146,7 @@ export function ControlTable({
                     type="button"
                     onClick={() => onOpen(expanded ? null : m.id)}
                     aria-expanded={expanded}
-                    className={`grid w-full grid-cols-[28px_minmax(0,1fr)] items-start gap-x-4 gap-y-0.5 px-4 py-2.5 text-left transition-colors hover:bg-mist/50 ${expanded ? "bg-mist/50" : ""} ${GRID}`}
+                    className={`grid w-full grid-cols-[28px_minmax(0,1fr)] items-start gap-x-4 gap-y-0.5 py-2.5 pl-8 pr-4 text-left transition-colors hover:bg-mist/50 ${expanded ? "bg-mist/50" : ""} ${GRID}`}
                   >
                     <span
                       className={`flex h-[21px] w-[21px] items-center justify-center rounded-full border text-[10.5px] font-bold ${expanded ? "border-chip bg-chip text-white" : "border-chip bg-chip-soft text-chip"}`}
@@ -186,7 +186,7 @@ export function ControlTable({
                   </button>
                   {/* The checklist lists every setting under its control, open or not. */}
                   {variant === "checklist" && named.length > 0 && (
-                    <ul className="space-y-0 border-t border-dashed border-line bg-paper pb-1 md:pl-[60px]" data-checklist={m.id}>
+                    <ul className="space-y-0 border-t border-dashed border-line bg-paper pb-1 md:pl-[76px]" data-checklist={m.id}>
                       {named.flatMap(({ product: p, options }) =>
                         options.map((s) => (
                           <li key={`${p.id}-${s.id}`} className="grid grid-cols-1 gap-x-4 gap-y-1 px-4 py-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] md:pl-0" data-option-names>
@@ -205,7 +205,7 @@ export function ControlTable({
                     </ul>
                   )}
                   {expanded && (
-                    <div className="space-y-3 border-t border-line bg-mist/30 px-4 py-3.5 text-[12.5px] leading-relaxed text-ink-2 md:pl-[60px]">
+                    <div className="space-y-3 border-t border-line bg-mist/30 px-4 py-3.5 text-[12.5px] leading-relaxed text-ink-2 md:pl-[76px]">
                       <ul className="space-y-1.5" data-what-to-do>
                         {steps.map((step, i) => (
                           <li key={i}>

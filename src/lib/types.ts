@@ -1043,6 +1043,8 @@ export interface Tool {
    * it runs" (a cloud or the organisation's own data centre): the two are chosen independently.
    */
   fills?: string[];
+  /** On a hosted pattern, what kind of thing it is and the other patterns it builds. */
+  builder?: ToolBuilder;
   /**
    * Set when the product is a service of one platform (a cloud's managed agent service): the
    * platform's id. Choosing that platform then implies this product, so it is not offered as a
@@ -1064,6 +1066,27 @@ export interface Tool {
   settings?: ProductSetting[];
   advisories?: { title: string; url: string; date?: string }[];
   sources: GuidanceLink[];
+}
+
+/**
+ * What a framework or server on a hosted pattern is, in the terms someone choosing one needs:
+ * the kind, one line on what it does, its languages, how widely it is used and the other hosted
+ * patterns it builds. A framework is not tied to one pattern: an agent framework builds a chat
+ * agent, a single agent workflow and a multi-agent one alike, so it is offered on each, with
+ * the settings that deliver the controls that pattern pins.
+ */
+export type BuilderKind = "framework" | "providerSdk" | "codingAgent" | "server";
+
+export interface ToolBuilder {
+  kind: BuilderKind;
+  /** What it is and what it is for, in one plain line (at most 150 characters). */
+  what: string;
+  /** The languages it has a supported library for, e.g. ["Python", "TypeScript"]. */
+  languages: string[];
+  /** How widely it is used: monthly downloads of its main package, to order the choices. */
+  usage?: { downloads: number; registry: string; package: string; asOf: string; url: string };
+  /** The other hosted patterns it builds, the boxes it fills on each, and the page that shows it can. */
+  also?: { architecture: string; fills: string[]; url: string }[];
 }
 
 export interface GuidanceItem {

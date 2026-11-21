@@ -13,7 +13,7 @@ import { useState, type ReactNode } from "react";
 import { CloudComparison, OnCloud } from "@/components/cloud/CloudViews";
 import { bindingFor, cloudProductsFor, type CloudProduct } from "@/components/cloud/model";
 import { summaryOf } from "@/components/drawing/layout";
-import { componentChoiceFor, toolsForArchetype } from "@/lib/data";
+import { componentChoiceFor, fillsOn, toolsForArchetype } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
 import type { Archetype, ComponentChoice } from "@/lib/types";
 
@@ -22,7 +22,7 @@ import type { Archetype, ComponentChoice } from "@/lib/types";
  * that fill it, and, with a platform chosen, the one that platform's own guides use.
  */
 function BuiltWith({ archetype, blockId, cloud }: { archetype: Archetype; blockId: string; cloud: CloudProduct | null }) {
-  const tools = toolsForArchetype(archetype.id).filter((t) => t.fills?.includes(blockId));
+  const tools = toolsForArchetype(archetype.id).filter((t) => fillsOn(t, archetype.id).includes(blockId));
   const usual = cloud ? bindingFor(cloud, blockId)?.builtWith : undefined;
   if (!tools.length && !usual) return null;
   return (

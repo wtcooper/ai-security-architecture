@@ -36,6 +36,14 @@ tools:
     variants:                           # named shells, each with a class from surfaceClasses
       - { name: Claude Code CLI, class: endpointCli, url: ... }
     architecture: archCodingAgentThirdParty   # the ONE architecture it instantiates; its pins are the reference control set
+    fills: [harness]                    # hosted patterns only: the box or boxes it builds
+    builder:                            # hosted patterns only: what it is, for someone choosing
+      kind: framework                   #   framework | providerSdk | codingAgent | server
+      what: "One line, at most 150 characters"
+      languages: [Python, TypeScript]
+      usage: { downloads: 45000000, registry: PyPI, package: langgraph, asOf: "2026-11", url: https://pypistats.org/packages/langgraph }
+      also:                             #   the OTHER hosted patterns it builds; offered on each with the
+        - { architecture: archChatAgent, fills: [agent], url: https://... }   # settings that deliver its pins (five at least)
     status: ga                          # ga | beta | preview | announced
     asOf: "2026-09"
     summary: [...]
@@ -70,6 +78,11 @@ tools:
       - { title: "CVE-2025-59536 ...", url: ..., date: "2025-10" }
     sources: [{ title, url }]
 ```
+
+A framework is catalogued once, on its primary architecture, and offered on every pattern in
+`builder.also` too: there its settings are those that deliver a control pinned on that pattern,
+naming only those, and the build refuses an `also` pattern fewer than five settings serve. Its
+`controls[]` record stays the primary architecture's.
 
 Build rules: the vendor exists; the architecture exists; every setting row is complete, dated,
 links over https and names only controls pinned on its architecture; once a tool has

@@ -36,11 +36,11 @@ export function SettingCheck({ check }: { check: Check }) {
         {check.expect}
       </p>
       <p className="mt-1 text-[11.5px] leading-snug text-ink-3">
-        It changes nothing. Taken from the{" "}
+        From the{" "}
         <a href={check.url} target="_blank" rel="noreferrer" className="font-semibold text-introduced hover:underline">
           vendor&rsquo;s command reference ↗
-        </a>{" "}
-        and not run by this project: replace the placeholders and run it in your own account.
+        </a>
+        , not run by this project: replace the placeholders and run it in your own account.
       </p>
     </div>
   );

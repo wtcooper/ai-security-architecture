@@ -286,9 +286,28 @@ export const toolsInOrder: Tool[] = vendors.flatMap((v) =>
 export const toolsForVendor = (vendorId: string): Tool[] =>
   toolsInOrder.filter((t) => t.vendor === vendorId);
 
-/** Every product that instantiates this architecture — the variants of one category of tool. */
+/**
+ * Every product on this architecture: those that instantiate it, and the frameworks that build
+ * it although they are catalogued on another (an agent framework builds every agent pattern).
+ */
 export const toolsForArchetype = (archetypeId: string): Tool[] =>
-  toolsInOrder.filter((t) => t.architecture === archetypeId);
+  toolsInOrder.filter((t) => t.architecture === archetypeId || t.builder?.also?.some((o) => o.architecture === archetypeId));
+
+/** The boxes a framework builds on one pattern. */
+export const fillsOn = (tool: Tool, archetypeId: string): string[] =>
+  tool.architecture === archetypeId ? tool.fills ?? [] : tool.builder?.also?.find((o) => o.architecture === archetypeId)?.fills ?? [];
+
+const BUILDER_ORDER = { framework: 0, providerSdk: 1, codingAgent: 2, server: 3 } as const;
+
+/** A framework's settings as one pattern sees them: those that deliver a control it pins, naming only those. */
+function settingsOn(tool: Tool, archetypeId: string): ProductSetting[] {
+  if (tool.architecture === archetypeId) return tool.settings ?? [];
+  const pinned = new Set(archetypeById.get(archetypeId)?.mitigations ?? []);
+  return (tool.settings ?? []).flatMap((s) => {
+    const mitigations = s.mitigations.filter((m) => pinned.has(m));
+    return mitigations.length ? [{ ...s, mitigations }] : [];
+  });
+}
 
 // --- Products on the Enable tab: tools and clouds -------------------------------------
 
@@ -322,7 +341,17 @@ export function productsForArchetype(archetypeId: string): Product[] {
     const service = toolsForArchetype(archetypeId).find((t) => t.platform === cloud.id);
     return [{ kind: "cloud" as const, id: cloud.id, name: cloud.name, cloud, implementation, service, settings: [...implementation.settings.map((id) => byId.get(id)!), ...(service?.settings ?? [])] }];
   });
-  const toolProducts: Product[] = toolsForArchetype(archetypeId).filter((tool) => !tool.platform).map((tool) => ({ kind: "tool" as const, id: tool.id, name: tool.name, tool, settings: tool.settings ?? [] }));
+  // Frameworks in the order someone choosing would want them: open frameworks, then the model
+  // providers' SDKs, then coding agents' runtimes, each by how widely it is used.
+  const toolProducts: Product[] = toolsForArchetype(archetypeId)
+    .filter((tool) => !tool.platform)
+    .map((tool, i) => ({ tool, i }))
+    .sort((a, b) => {
+      const ka = a.tool.builder ? BUILDER_ORDER[a.tool.builder.kind] : 9;
+      const kb = b.tool.builder ? BUILDER_ORDER[b.tool.builder.kind] : 9;
+      return ka - kb || (b.tool.builder?.usage?.downloads ?? 0) - (a.tool.builder?.usage?.downloads ?? 0) || a.i - b.i;
+    })
+    .map(({ tool }) => ({ kind: "tool" as const, id: tool.id, name: tool.name, tool, settings: settingsOn(tool, archetypeId) }));
   return [...cloudProducts, ...toolProducts];
 }
 
