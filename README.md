@@ -369,10 +369,10 @@ pattern's file must carry. `npm run drawing:audit` scores every pattern against 
 tests fail if one slips. [`docs/PATTERN-FINDINGS.md`](docs/PATTERN-FINDINGS.md) lists the open
 questions about the patterns themselves that the audit and the review turned up.
 
-**A pattern you host can be read as built on a cloud, or in your own data centre.** Eight of
-the ten "AI you host yourself" patterns (agents, model inference, MCP servers, pipelines) are
-mapped onto AWS, Azure, Google Cloud and an on-premises data centre in `data/clouds/`; the
-ninth, the managed agent service in your cloud, is mapped onto the three clouds only, because a
+**A pattern you host can be read as built on a cloud, or in your own data centre.** Nine of
+the ten "AI you host yourself" patterns (agents, model inference, MCP servers, pipelines, the
+software factory) are mapped onto AWS, Azure, Google Cloud and an on-premises data centre in
+`data/clouds/`; the tenth, the managed agent service in your cloud, is mapped onto the three clouds only, because a
 provider-run service has no on-premises form (the platform's file says so under `notOffered`,
 and the page points to the pattern to build there instead). On that pattern the cloud's own
 agent service comes with the cloud: its product record carries `platform:`, its settings are
