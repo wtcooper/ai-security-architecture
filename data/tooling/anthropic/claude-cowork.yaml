@@ -13,6 +13,15 @@
 # trust.anthropic.com renders client-side and was read in a browser; the Cowork Enterprise Admin Guide
 # (claude.com/resources/tutorials/claude-cowork-enterprise-administrator-guide) redirects to
 # academy.claude.com/tutorials/claude-cowork-enterprise-administrator-guide and is not cited.
+# 2026-11-21: support.claude.com article 14479288 (Claude Cowork architecture overview) now redirects to the Trust
+# Center resource unified-claude-security-best-practices (client-rendered, not readable here). Its 16 citations were
+# re-pointed: desktop and VM claims to claude.com/docs/cowork/guide/network-access, 12622667 and the new EDR article
+# 17828685 (EDR sensor inside the VM, beta; the D3-PA row follows it); cloud claims to 15811196, 15520349, 13455879,
+# 12111783 and the 3P feature matrix; the per-session sandbox and session-token claims, documented nowhere else, to
+# the Trust Center resource, with the row notes saying so; the two vendor-assessment citations were dropped (the
+# Trust Center covers them). All replacement pages answered 200 (17828685 lands on its -on-claude-desktop slug).
+# 2026-11-21 (new pins): toolClaudeCowork AML.M0036 (native) row and memberSpendLimit setting after the pattern pinned
+# spend limits, from support articles 14782391, 13799932 and 12005970 (200).
 vendor: anthropic
 family: Claude Cowork
 tools:
@@ -314,13 +323,11 @@ tools:
         mechanism: >-
           The Anthropic Trust Center (SOC 2 Type 2 and CSA STAR L2 report, ISO 27001 and ISO 42001
           certificates, 2025 annual penetration testing reports, SIG Lite and CAIQ questionnaires, "Claude Cowork
-          Desktop Security Architecture Overview" and "Claude Cowork Security Best Practices") and the Help
-          Center architecture overview feed the organisation's TPRM platform
+          Desktop Security Architecture Overview" and "Claude Cowork Security Best Practices") feed the
+          organisation's TPRM platform
         evidence:
           - title: Anthropic Trust Center (compliance scope table and resources, read 2026-09-25)
             url: https://trust.anthropic.com/
-          - title: Claude Cowork architecture overview (execution modes, isolation, admin controls)
-            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
           - title: What Certifications has Anthropic obtained?
             url: https://support.claude.com/en/articles/10015870-what-certifications-has-anthropic-obtained
           - title: Legal and compliance (Claude Desktop on 3P)
@@ -352,7 +359,7 @@ tools:
                     - Record the architecture overview (a sandbox per cloud session, a mandatory egress proxy, connector tokens
                       never entering the sandbox) and request the desktop security architecture overview it points
                       to on the Trust Center.
-                  url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+                  url: https://trust.anthropic.com/
                 - title: Collect certifications and the 3P data path
                   body:
                     - Pull the certifications and compliance reports from the Trust Center; for Claude Desktop on 3P the legal
@@ -525,8 +532,9 @@ tools:
           - title: Keep host-side MCP servers off where not needed
             body:
               - Set isLocalDevMcpEnabled and isDesktopExtensionEnabled false on managed devices, because
-                plugin-bundled MCP servers and desktop extensions run on the host outside the VM.
-            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+                local MCP servers and desktop extensions run on the host outside the VM.
+            url: >-
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
           - title: Fence the folders Cowork can mount
             body:
               - Set allowedWorkspaceFolders in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude so
@@ -1053,11 +1061,14 @@ tools:
         coverage: external
         mechanism: >-
           Host EDR sees Claude Desktop and the MCP servers and extensions it starts, not the inside of the Cowork
-          VM, and cloud sessions run off the endpoint; OTLP tool_result events (tool_name, tool_parameters, file
-          paths) are the correlation feed
+          VM unless the organisation runs its EDR sensor inside the VM (beta), and cloud sessions run off the
+          endpoint; OTLP tool_result events (tool_name, tool_parameters, file paths) are the correlation feed
         evidence:
-          - title: Claude Cowork architecture overview (EDR cannot inspect the VM or cloud sessions)
-            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+          - title: Run your EDR sensor in Claude Cowork (beta, Team and Enterprise; not in cloud sessions)
+            url: >-
+              https://support.claude.com/en/articles/17828685-run-your-endpoint-detection-and-response-edr-sensor-in-claude-cowork-on-claude-desktop
+          - title: Network access for shell commands (desktop extensions and local MCP servers run outside the VM)
+            url: https://claude.com/docs/cowork/guide/network-access
           - title: Monitor Claude Cowork activity with OpenTelemetry
             url: >-
               https://support.claude.com/en/articles/14477985-monitor-claude-cowork-activity-with-opentelemetry
@@ -1066,11 +1077,15 @@ tools:
               https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
         note: >-
           External (EDR) by the rule: Cowork analyses no process behaviour. Integration points: the Claude Desktop
-          app deployed through MDM, plugin MCP servers and desktop extensions running as host processes the EDR
-          can see, the VM that "is isolated from host-based security tools by design", and the OTLP stream of
-          tool names, parameters and file paths to correlate with EDR telemetry in the SIEM. Cloud sessions are
-          outside every endpoint sensor.
-        verified: "2026-09-25"
+          app deployed through MDM, local MCP servers and desktop extensions running as host processes the EDR
+          can see, the VM, which the sensor already on the computer cannot see inside, and the OTLP stream of
+          tool names, parameters and file paths to correlate with EDR telemetry in the SIEM. A beta on Team and
+          Enterprise lets the organisation's own sensor (CrowdStrike, Evoke Security, Neo, Palo Alto Networks,
+          Pluto Security, SentinelOne or Tanium, signed with an approved vendor's key) run inside the VM, set by
+          MDM or registry policy; it then sees prompts, files and responses there and can send telemetry outside
+          the Cowork network allowlist. Cloud sessions run on Anthropic's servers, where no sensor can be
+          installed.
+        verified: "2026-11-21"
         migration:
           from:
             - capabilityEdr
@@ -1209,6 +1224,35 @@ tools:
                 pin is documented; the model, bundled skills and server-side connectors have no published
                 manifest.
               verified: 2026-09-10
+      - mitigation: AML.M0036
+        coverage: native
+        mechanism: >-
+          Organisation, group (Member limit), individual and pooled monthly spend limits under Organization
+          settings > Usage on Enterprise, and the usage-credit limits on Team and seat-based Enterprise, which
+          Cowork draws on
+        steps:
+          - title: Set group and member limits
+            body:
+              - >-
+                Under Organization settings > Usage > By group/tier, open the group's menu, choose Edit limit
+                and set a Member limit; set individual limits for members who need a different ceiling.
+            url: https://support.claude.com/en/articles/13799932-manage-groups-and-group-spend-limits-on-enterprise-plans
+          - title: Cap the organisation and usage credits
+            body:
+              - >-
+                On Team and seat-based Enterprise, set the organisation-wide monthly limit on usage credits
+                under Organization settings > Usage, and Spend limits by user where the Usage page offers them.
+            url: https://support.claude.com/en/articles/12005970-manage-usage-credits-for-team-and-seat-based-enterprise-plans
+        note: >-
+          Rated on the rule applied to every product on this drawing's spend-limit pin: native where an
+          administrator sets spend or usage limits per person or group that the vendor's service enforces and
+          that cover the agent's work; partial where such limits exist but the vendor says they cover only some
+          of it; none where the only ceiling is a vendor-fixed quota nobody can set. Seats that bring the
+          organisation's own key are metered at its AI gateway instead. Native: the consumption guide lists
+          Cowork among the surfaces that draw on these limits, and at a limit further requests are blocked, so a
+          scheduled or long Cowork task may pause part-way. Outside it: Claude Desktop on 3P, where inference is
+          billed and metered by the configured cloud provider or gateway.
+        verified: "2026-11-21"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # Cowork has two planes: the claude.ai console (Organization settings > Cowork, Capabilities,
     # Connectors, Plugins & skills) and device policy (Claude Desktop's com.anthropic.claudefordesktop /
@@ -1546,6 +1590,18 @@ tools:
         mitigations: []
         url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
         verified: "2026-10-30"
+      - id: memberSpendLimit
+        name: "Member limit"
+        where: "claude.ai Organization settings › Usage › By group/tier › Edit limit"
+        setVia: [adminConsole]
+        area: tools
+        default: "No member limit"
+        recommended: "A monthly per-member limit on every group whose members use the agent"
+        why: "A runaway or scheduled Cowork task stops when its owner's limit is spent rather than drawing on the organisation's whole pool."
+        mitigations: [AML.M0036]
+        requires: "Enterprise (Team: Spend limits by user where offered)"
+        url: https://support.claude.com/en/articles/13799932-manage-groups-and-group-spend-limits-on-enterprise-plans
+        verified: "2026-11-21"
     sources:
       - title: Cowork overview
         url: https://claude.com/docs/cowork/overview
@@ -1573,8 +1629,11 @@ tools:
           https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
       - title: Deploy managed settings (where a policy applies to Cowork sessions)
         url: https://code.claude.com/docs/en/managed-settings
-      - title: Claude Cowork architecture overview (Help Center)
-        url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+      - title: Network access for shell commands (what the VM can reach; what runs outside it)
+        url: https://claude.com/docs/cowork/guide/network-access
+      - title: Run your EDR sensor in Claude Cowork
+        url: >-
+          https://support.claude.com/en/articles/17828685-run-your-endpoint-detection-and-response-edr-sensor-in-claude-cowork-on-claude-desktop
       - title: Use Claude Cowork safely
         url: https://support.claude.com/en/articles/13364135-use-claude-cowork-safely
       - title: MCP, plugins, skills, and hooks (Claude Desktop on 3P deployment guide)
@@ -1642,14 +1701,14 @@ tools:
       - label: Inference & routing
         value: >-
           Anthropic API only. Cloud sessions run on Anthropic infrastructure and are not available when Claude
-          Desktop is configured for Bedrock, Vertex, Foundry or a gateway.
-        url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+          Desktop is configured for Bedrock, Vertex, Foundry or a gateway (Claude Desktop on 3P).
+        url: https://claude.com/docs/third-party/claude-desktop/feature-matrix
       - label: Data leaving the device
         value: >-
-          Prompts, connector data, browser page content and the session's files live in the account; a
-          device's local folders are reachable only while the desktop app is open on it, through the brokered
-          connection.
-        url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+          Sessions and the files Claude copies into them are saved to the Claude account; a device's connected
+          folders are reachable only through the desktop app, and only while it is open.
+        url: >-
+          https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
       - label: Retention & training
         value: >-
           Cloud sessions are saved to the account (remote transcripts 6 years unless deleted) and captured by
@@ -1657,7 +1716,7 @@ tools:
         url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
       - label: Docs index
         value: >-
-          claude.com/docs/cowork plus the Help Center architecture overview and Team/Enterprise admin article
+          claude.com/docs/cowork plus the Help Center articles on Cowork in the cloud and on Team and Enterprise plans
         url: https://claude.com/docs/cowork/overview
     items:
       - title: Enable cloud sessions per role, not per organisation
@@ -1671,12 +1730,15 @@ tools:
               https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
       - title: Set the network-access policy before the first session
         body:
-          - Cloud sandboxes inherit the organisation's network-access setting under Organization settings >
-            Capabilities; the Enterprise default is no access. Device keys such as coworkEgressAllowedHosts do
-            not reach cloud sessions.
+          - Cowork respects the organisation's network egress permissions under Organization settings >
+            Capabilities, and a change applies only when a new session starts; on Enterprise, network egress
+            is off by default.
         links:
-          - title: Claude Cowork architecture overview
-            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+          - title: Use Claude Cowork on Team and Enterprise plans (network egress)
+            url: >-
+              https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+          - title: Create and edit files with Claude (Allow network egress; Enterprise default)
+            url: https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude
     riskNotes:
       - risk: riskPromptInjection
         note: >-
@@ -1759,12 +1821,16 @@ tools:
         steps:
           - title: Record the isolation claim
             body:
-              - The architecture overview states one sandbox per session, destroyed at the end, with no state
-                shared across sessions or organisations; there is no setting to change.
-            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+              - The architecture overview, now the Trust Center's Unified Claude Security Best Practices, states
+                one sandbox per session, destroyed at the end, with no state shared across sessions or
+                organisations; there is no setting to change.
+            url: https://trust.anthropic.com/resources?s=3puokpm2aa1nn24nbcp0l&name=unified-claude-security-best-practices
         note: >-
           Native by the rule: one sandbox per session, reclaimed after it, documented by the vendor, with
-          assurance through assessment rather than a setting. Outside it: the reach-back to a member's device
+          assurance through assessment rather than a setting. The Help Center architecture overview that stated
+          it now redirects to a Trust Center document that renders client-side and was not re-read on
+          2026-11-21; the cloud-session article says only that working files not handed back are not kept after
+          the session ends. Outside it: the reach-back to a member's device
           (local files, the built-in browser and Claude in Chrome run there, only while the desktop app is
           online and only for connected folders), connector calls and web fetch or web search, which run on
           Anthropic's servers.
@@ -1786,7 +1852,7 @@ tools:
                     - Each cloud session runs in its own ephemeral sandbox with no access to the
                       organisation's network by default; local folders are reachable only through the desktop
                       app's brokered connection.
-                  url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+                  url: https://trust.anthropic.com/resources?s=3puokpm2aa1nn24nbcp0l&name=unified-claude-security-best-practices
               verified: 2026-09-17
       - mitigation: cap-agent-egress-control
         coverage: native
@@ -1802,9 +1868,10 @@ tools:
             url: https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude
           - title: Confirm cloud sessions inherit it
             body:
-              - Cloud sessions use the same network-access setting as local Cowork and chat, enforced by the
-                mandatory egress proxy.
-            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+              - Cowork respects the organisation's network egress permissions, and a change applies only when a
+                new session starts.
+            url: >-
+              https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
         note: >-
           Native by the rule: an admin-authored allowlist members cannot change, enforced around the sandbox.
           The setup and agent phases are not separated, every allowlist preset keeps public package managers,
@@ -1827,7 +1894,7 @@ tools:
                 - title: Choose the network-access level
                   body:
                     - Enterprise defaults to no access; widen to an allowlist only for the groups whose sessions need the web.
-                  url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+                  url: https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude
               verified: 2026-09-17
       - mitigation: D3-CTS
         coverage: native
@@ -1838,9 +1905,10 @@ tools:
         steps:
           - title: Record the credential boundary
             body:
-              - The architecture overview states the sandbox holds only session-scoped tokens that expire within
-                hours and that connector tokens never enter it; nothing is configured.
-            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+              - The architecture overview, now the Trust Center's Unified Claude Security Best Practices, states
+                the sandbox holds only session-scoped tokens that expire within hours and that connector tokens
+                never enter it; nothing is configured.
+            url: https://trust.anthropic.com/resources?s=3puokpm2aa1nn24nbcp0l&name=unified-claude-security-best-practices
           - title: Narrow what connector grants reach
             body:
               - At Organization settings > Connectors set up Managed authorization for supported connectors with
@@ -1866,7 +1934,7 @@ tools:
                   body:
                     - The architecture overview states connector tokens never enter sandboxes and calls are
                       made server-side; no per-session credential is exposed to the model.
-                  url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+                  url: https://trust.anthropic.com/resources?s=3puokpm2aa1nn24nbcp0l&name=unified-claude-security-best-practices
               verified: 2026-09-17
       - mitigation: AML.M0029
         coverage: partial
@@ -2197,13 +2265,10 @@ tools:
         mechanism: >-
           The Anthropic Trust Center (SOC 2 Type 2 and CSA STAR L2 report, ISO 27001 and ISO 42001
           certificates, 2025 annual penetration testing reports, SIG Lite and CAIQ questionnaires, Cowork
-          security documents) and the Help Center architecture overview of cloud sessions feed the
-          organisation's TPRM platform
+          security documents) feed the organisation's TPRM platform
         evidence:
           - title: Anthropic Trust Center (compliance scope table and resources, read 2026-09-25)
             url: https://trust.anthropic.com/
-          - title: Claude Cowork architecture overview (cloud session architecture)
-            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
           - title: What Certifications has Anthropic obtained?
             url: https://support.claude.com/en/articles/10015870-what-certifications-has-anthropic-obtained
         note: >-
@@ -2501,8 +2566,8 @@ tools:
       - title: Use Claude Cowork on web, desktop and mobile
         url: >-
           https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
-      - title: Claude Cowork architecture overview
-        url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+      - title: What to expect with Claude Cowork in the cloud
+        url: https://support.claude.com/en/articles/15811196-what-to-expect-with-claude-cowork-in-the-cloud
       - title: Use Claude Cowork on Team and Enterprise plans
         url: >-
           https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans

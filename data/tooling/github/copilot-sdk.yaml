@@ -10,6 +10,9 @@
 # 2026-11-21: sessionLimits re-read on features/session-limits (200): a soft cap checked after model calls return, and
 # session_limits_exhausted.requested "needs a user decision before continuing"; the page does not list the response
 # actions, so the row says a stop rather than naming one.
+# 2026-11-21 (new pins): AML.M0037 (partial) and AML.M0012 (partial) rows and the sessionFs setting after the
+# multi-agent pattern pinned them, from raw.githubusercontent.com github/copilot-sdk nodejs/README.md,
+# nodejs/src/types.ts and docs/setup/multi-tenancy.md (200); availableTools now sits under tools.
 vendor: github
 family: GitHub Copilot SDK
 tools:
@@ -1349,6 +1352,55 @@ tools:
                 - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
               verified: 2026-09-10
+      - mitigation: AML.M0037
+        coverage: partial
+        mechanism: >-
+          tools.availableTools and tools.excludedTools per session (excludedTools always wins), the tools array
+          of each custom sub-agent, mcpServers declared by the application, and managedSettings deny rules
+          re-supplied on every resume
+        steps:
+          - title: List the tools each session may use
+            body:
+              - >-
+                Pass createSession({ tools: { availableTools, excludedTools } }) with an explicit list, and give
+                each custom sub-agent its own tools array.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/types.ts
+          - title: Pin the policy on every resume
+            body:
+              - >-
+                Supply managedSettings with disableBypassPermissionsMode and your deny rules on createSession
+                and again on resumeSession, since the policy is not persisted.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+        note: >-
+          Partial on the rule applied to every framework on this drawing: the framework fixes each agent's
+          tools, servers and permissions in code before the run and refuses or asks on anything outside them,
+          but the credentials those tools carry, and any account a step finds, are bounded only by the identity
+          provider and gateway the pin names. Here the model can call only the tools the session lists, a custom
+          sub-agent only those in its tools array, and host-injected policy composes restrictively with server
+          and device policy; nothing in the SDK bounds the GitHub token or provider key the tools act with.
+        verified: "2026-11-21"
+      - mitigation: AML.M0012
+        coverage: partial
+        mechanism: >-
+          A sessionFs provider the application supplies, which routes session-scoped file I/O (session state,
+          transcripts and durable permission files) through application storage where it can be encrypted;
+          without it the runtime writes session state under ~/.copilot/session-state/
+        steps:
+          - title: Route session state through encrypted storage
+            body:
+              - >-
+                Configure sessionFs on the client and a per-session provider that encrypts with a key from the
+                firm's key service, one namespace per tenant.
+            url: https://github.com/github/copilot-sdk/blob/main/docs/setup/multi-tenancy.md
+        note: >-
+          Partial on the rule applied to every framework on this drawing: native where the framework encrypts
+          what it persists with a key the deployer supplies; partial where it offers a pluggable store or
+          serialiser the deployer's code can encrypt in (an attach point); external where it writes plaintext to
+          a store whose encryption at rest is another product's. The SDK documents no encryption: session state
+          is saved to disk once a session handles its first message, and sessionFs is the attach point. Shell
+          tools do not run through SessionFS, so storage they can reach needs its own protection; Java exposes
+          no sessionFs option. API keys are never persisted.
+        verified: "2026-11-21"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # The SDK has no admin console: its controls are client and session options in the host application's
     # code (Node.js names shown; the other SDKs mirror them). Verified 2026-10-30.
@@ -1366,16 +1418,16 @@ tools:
         verified: "2026-10-30"
       - id: availableTools
         name: availableTools / excludedTools
-        where: createSession({ availableTools, excludedTools })
+        where: 'createSession({ tools: { availableTools, excludedTools } })'
         setVia: [code]
         area: tools
         default: Unset (every tool the runtime offers)
         recommended: An explicit list (custom:*, mcp:<server>, the few built-ins the agent needs), with write and shell tools excluded where the task is read-only
         value: "An explicit list of the tools the agent needs"
         why: The model can only call tools the session lists; excludedTools always wins over availableTools.
-        mitigations: [AML.M0028, cap-agent-tool-registry]
+        mitigations: [AML.M0028, cap-agent-tool-registry, AML.M0037]
         url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/types.ts
-        verified: "2026-10-30"
+        verified: "2026-11-21"
       - id: onPermissionRequest
         name: onPermissionRequest
         where: createSession({ onPermissionRequest })
@@ -1444,7 +1496,7 @@ tools:
         recommended: disableBypassPermissionsMode "disable" plus your deny and ask rules (Shell(), Read(), Edit(), Domain())
         value: "Bypass mode disabled, plus deny and ask rules"
         why: Host-injected policy composes restrictively with server and device policy, so application code cannot be asked to approve what the policy denies.
-        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, AML.M0029]
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, AML.M0029, AML.M0037]
         url: https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md
         verified: "2026-10-30"
       - id: enableManagedSettings
@@ -1584,6 +1636,18 @@ tools:
         mitigations: [AML.M0031, cap-retrieval-grounding-checks, cap-data-access-governance]
         url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
         verified: "2026-10-30"
+      - id: sessionFs
+        name: sessionFs
+        where: new CopilotClient({ sessionFs }) with a per-session provider (state.createSessionFsProvider; Python session_fs)
+        setVia: [code]
+        area: data
+        default: Unset (session state on the runtime host's disk under ~/.copilot/session-state/)
+        recommended: A provider over storage the firm encrypts with its own key, one namespace per tenant or session
+        value: "Encrypted, per-tenant session storage"
+        why: Transcripts, plans and remembered approvals live where the firm's key and access controls apply rather than in plaintext on the runtime host; shell tools still bypass it.
+        mitigations: [AML.M0012, AML.M0031]
+        url: https://github.com/github/copilot-sdk/blob/main/docs/setup/multi-tenancy.md
+        verified: "2026-11-21"
       - id: memory
         name: memory
         where: "createSession({ memory: { enabled } })"

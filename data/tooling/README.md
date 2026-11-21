@@ -216,6 +216,18 @@ pins left without a row are listed with the reason in each file's header. They s
 in the grid and under "Unaddressed" in `docs/AUDIT.md` section 5b; that is the finding, not an
 omission to fill from memory.
 
+New pins, 2026-11-21. The pattern verification pinned new controls, and every product on those
+drawings gained a row read from its docs that day: human approval on the low-code runtime (four
+platforms, partial: the maker sets it, no administrator can require it); spend limits on browser AI
+and third-party coding agents (native where an administrator sets per-person or group limits the
+service enforces; partial for OpenAI, whose limits cover only eligible activity; none for Gemini CLI
+and Gemini in Chrome, whose quotas are fixed by edition); authority expansion and journal
+encryption on the multi-agent workflow (partial, except LangGraph's EncryptedSerializer, native,
+and Codex SDK's plaintext rollout files, external); and per-requester rate limits on the single
+agent workflow (external: the AI gateway's). The same pass moved opencode's rows to its V2 config
+names, rewrote Copilot in Edge for Cowork's browser use, and re-pointed the 20 citations of the
+retired Cowork architecture article.
+
 ## Exclusions
 
 Recorded here when a surface is deliberately left out, with the reason.

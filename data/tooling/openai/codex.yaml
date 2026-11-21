@@ -19,6 +19,10 @@
 # the Use Codex in the cloud / Manage workspace environments permissions, with Codex Cloud (Legacy) kept for Code
 # Review and the GitHub, GitLab and Linear integrations; role permissions now combine additively. migration.original
 # blocks are left as recorded. help.openai.com and chatgpt.com/public/admin/api-reference still 403.
+# 2026-11-21 (new pins): toolCodexSdk AML.M0037 (partial) and AML.M0012 (external) rows after the multi-agent pattern
+# pinned them (sdk/python _approval_mode.py and api-reference.md, 200); toolCodex AML.M0036 (partial) with the
+# usage-limit settings, from learn.chatgpt.com enterprise/chatgpt-work-usage-and-cost and enterprise/usage-limits
+# (.md, 200).
 vendor: openai
 family: Codex
 tools:
@@ -1206,6 +1210,35 @@ tools:
                 - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://learn.chatgpt.com/docs
               verified: 2026-09-10
+      - mitigation: AML.M0036
+        coverage: partial
+        mechanism: >-
+          Monthly per-user usage limits (workspace default, group limits, individual overrides) and the
+          workspace overage limit over the shared credit allocation; plan-dependent spend controls on Business
+        steps:
+          - title: Set monthly per-user limits
+            body:
+              - >-
+                Under user usage limits set a monthly workspace default, group limits and individual overrides;
+                an individual override beats group and workspace defaults.
+            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-usage-and-cost
+          - title: Cap the workspace overage
+            body:
+              - >-
+                Set the workspace overage limit to zero where supported; an unset limit can allow usage beyond
+                the credit balance.
+            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-usage-and-cost
+        note: >-
+          Rated on the rule applied to every product on this drawing's spend-limit pin: native where an
+          administrator sets spend or usage limits per person or group that the vendor's service enforces and
+          that cover the agent's work; partial where such limits exist but the vendor says they cover only some
+          of it; none where the only ceiling is a vendor-fixed quota nobody can set. Seats that bring the
+          organisation's own key are metered at its AI gateway instead. Partial: the limits can pause eligible
+          features once exhausted, but OpenAI says these controls are not a universal limit system, cover only
+          eligible activity under the workspace plan (some Codex activity) and not API Platform billing, and no
+          page says which of local Codex sessions in the CLI, IDE extension and app they cover or that a running
+          task stops at the limit.
+        verified: "2026-11-21"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # Requirements reach a device through macOS MDM (com.openai.codex requirements_toml_base64), the
     # cloud-managed Agent Security policy in the Admin Console, or the system requirements.toml; sign-in
@@ -1567,6 +1600,29 @@ tools:
         mitigations: [cap-agent-kill-switch]
         url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
         verified: "2026-10-30"
+      - id: userUsageLimits
+        name: "User usage limits"
+        where: "Workspace settings › usage and spend controls › User usage limits (workspace default, group limits, individual overrides)"
+        setVia: [adminConsole]
+        area: tools
+        recommended: "A monthly workspace default sized to normal use, with higher group limits for heavy teams"
+        value: "A monthly workspace default"
+        why: "A runaway or hijacked account stops at its allowance for eligible usage instead of consuming the workspace's credits."
+        mitigations: [AML.M0036]
+        requires: "Enterprise or Edu (Business uses credits and spend controls)"
+        url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-usage-and-cost
+        verified: "2026-11-21"
+      - id: workspaceOverageLimit
+        name: "Workspace overage limit"
+        where: "Workspace settings › usage and spend controls › Workspace overage limit"
+        setVia: [adminConsole]
+        area: tools
+        recommended: "A set amount agreed with finance, not unset"
+        value: "A set amount, not unset"
+        why: "Eligible usage past the credit allocation stops at a known ceiling; an unset limit can run past the balance."
+        mitigations: [AML.M0036]
+        url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-usage-and-cost
+        verified: "2026-11-21"
     advisories:
       - title: >-
           CVE-2025-59532 (GHSA-w5fx-fh39-j5rw): sandbox bypass via model-supplied cwd, Codex CLI 0.2.0–0.38.0,
@@ -3860,6 +3916,54 @@ tools:
                     - Point CodexConfig(codex_bin=...) at a vetted binary rather than whatever is on PATH.
                   url: https://learn.chatgpt.com/docs/codex-sdk
               verified: 2026-09-10
+      - mitigation: AML.M0037
+        coverage: partial
+        mechanism: >-
+          The sandbox preset fixed per thread or turn, allowed_sandbox_modes in the host's requirements.toml
+          capping the widest one, approval_mode deny_all so a request to leave the sandbox fails, and the
+          mcp_servers allowlist with enabled_tools per server
+        steps:
+          - title: Cap the sandbox on the host
+            body:
+              - >-
+                List only read-only and workspace-write in allowed_sandbox_modes in the host's
+                requirements.toml.
+            url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+          - title: Refuse escalation
+            body:
+              - >-
+                Start threads with approval_mode=ApprovalMode.deny_all (TypeScript approvalPolicy) so a request
+                for more access fails instead of being approved by the reviewer agent.
+            url: https://raw.githubusercontent.com/openai/codex/main/sdk/python/src/openai_codex/_approval_mode.py
+        note: >-
+          Partial on the rule applied to every framework on this drawing: the framework fixes each agent's
+          tools, servers and permissions in code before the run and refuses or asks on anything outside them,
+          but the credentials those tools carry, and any account a step finds, are bounded only by the identity
+          provider and gateway the pin names. Here a thread cannot widen its own sandbox past the host's allowed
+          modes, and an escalation request either fails (deny_all) or goes to the reviewer agent the Python SDK
+          uses by default (auto_review), which is a model, not a person; MCP servers and plugins configured on
+          the host are inherited by SDK threads.
+        verified: "2026-11-21"
+      - mitigation: AML.M0012
+        coverage: external
+        mechanism: >-
+          Thread rollout files, logs and auth under CODEX_HOME on the runner's disk; the SDK offers no
+          encryption or custom store, so encryption is the volume's (an encrypted disk with a customer-managed
+          key) with CODEX_HOME as the integration point; Python ephemeral threads keep nothing
+        evidence:
+          - title: Codex environment variables (CODEX_HOME)
+            url: https://learn.chatgpt.com/docs/config-file/environment-variables
+          - title: Codex Python SDK API reference (ephemeral threads)
+            url: https://raw.githubusercontent.com/openai/codex/main/sdk/python/docs/api-reference.md
+        note: >-
+          External on the rule applied to every framework on this drawing: native where the framework encrypts
+          what it persists with a key the deployer supplies; partial where it offers a pluggable store or
+          serialiser the deployer's code can encrypt in (an attach point); external where it writes plaintext to
+          a store whose encryption at rest is another product's. Codex writes each thread as a rollout file
+          under CODEX_HOME and documents no store adapter or serialiser, so the deployer places a per-tenant
+          CODEX_HOME on a volume its key service encrypts, or starts Python threads with ephemeral=True so
+          client material is not kept.
+        verified: "2026-11-21"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # The SDK drives the host's Codex runtime, so most rows are options the application passes in code
     # (thread options, the client's env and config overrides) or keys in the host's config.toml and
@@ -4006,7 +4110,7 @@ tools:
         default: Unset (danger-full-access allowed)
         recommended: '["read-only", "workspace-write"]'
         why: Code that asks for full access is refused on that host, so one argument cannot take a thread out of the sandbox.
-        mitigations: [D3-EI, AML.M0028]
+        mitigations: [D3-EI, AML.M0028, AML.M0037]
         url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
         verified: "2026-10-30"
       - id: approvalMode
@@ -4018,7 +4122,7 @@ tools:
         recommended: ApprovalMode.deny_all for unattended runs, or an app-server client that routes escalations to a person
         value: "deny_all, or escalations to a person"
         why: A request to leave the sandbox fails rather than being approved by another model; commands inside the sandbox still run.
-        mitigations: [AML.M0029]
+        mitigations: [AML.M0029, AML.M0037]
         url: https://raw.githubusercontent.com/openai/codex/main/sdk/python/src/openai_codex/_approval_mode.py
         verified: "2026-10-30"
       - id: prefixRules
@@ -4052,7 +4156,7 @@ tools:
         default: Unset (any server)
         recommended: The approved servers, stdio by executable and args, HTTP by url
         why: A server the code or host config adds outside the list is disabled before any thread can call it.
-        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028]
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028, AML.M0037]
         url: https://learn.chatgpt.com/docs/config-file/config-reference
         verified: "2026-10-30"
       - id: mcpEnabledTools

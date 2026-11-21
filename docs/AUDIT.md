@@ -1088,62 +1088,62 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | Settings | Newest check | |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Inspect | aisi | Agent sandbox for RL & evaluation | 2026-11 | 7/12 | Hardware-based Process Isolation, File Analysis, Control Access to AI Models and Data at Rest, System Vulnerability Assessment, Access Policy Administration | 19 | 2026-11-15 |  |
-| Claude Agent SDK | anthropic | Multi-agent workflow | 2026-10 | 21/23 | AI Agent Authority Expansion Controls, Encrypt Sensitive Information | 25 | 2026-10-30 |  |
-| Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 15/16 | Limit AI Workload Resource Consumption | 19 | 2026-10-30 |  |
-| Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 18/19 | Limit AI Workload Resource Consumption | 29 | 2026-10-30 |  |
+| Claude Agent SDK | anthropic | Multi-agent workflow | 2026-10 | 23/23 | _none_ | 25 | 2026-11-21 |  |
+| Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 16/16 | _none_ | 20 | 2026-11-21 |  |
+| Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ | 30 | 2026-11-21 |  |
 | Claude Code on the web (cloud sessions) | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 25 | 2026-11-21 |  |
-| Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 18/19 | Limit AI Workload Resource Consumption | 28 | 2026-10-30 |  |
+| Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ | 29 | 2026-11-21 |  |
 | Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 21 | 2026-10-30 |  |
 | Claude (claude.ai) | anthropic | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 22 | 2026-10-30 |  |
-| Claude Desktop (local MCP servers, desktop extensions and device policy) | anthropic | Third-party coding & desktop agents | 2026-10 | 18/19 | Limit AI Workload Resource Consumption | 21 | 2026-10-30 |  |
+| Claude Desktop (local MCP servers, desktop extensions and device policy) | anthropic | Third-party coding & desktop agents | 2026-10 | 19/19 | _none_ | 22 | 2026-11-21 |  |
 | Claude Duet | anthropic | Persistent managed agents | 2026-10 | 16/16 | _none_ | 8 | 2026-10-30 |  |
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 19 | 2026-10-30 |  |
 | Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-10 | 16/16 | _none_ | 25 | 2026-10-30 |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 22 | 2026-10-30 |  |
 | Amazon Bedrock AgentCore | aws | Managed agent service in your cloud | 2026-09 | 21/21 | _none_ | 39 | 2026-11-18 |  |
-| Amazon Quick Automate (automation groups, UI agents, custom agents, human-in-the-loop tasks, scheduled and API triggers) | aws | UI/low-code managed agent runtime | 2026-10 | 11/12 | Human In-the-Loop for AI Agent Actions | 20 | 2026-10-30 |  |
-| Strands Agents | aws | Single agent workflow | 2026-11 | 19/20 | Limit AI Service Query Volume and Rate | 28 | 2026-11-21 |  |
+| Amazon Quick Automate (automation groups, UI agents, custom agents, human-in-the-loop tasks, scheduled and API triggers) | aws | UI/low-code managed agent runtime | 2026-10 | 12/12 | _none_ | 21 | 2026-11-21 |  |
+| Strands Agents | aws | Single agent workflow | 2026-11 | 20/20 | _none_ | 28 | 2026-11-21 |  |
 | Cline | cline | First-party coding & desktop agents | 2026-09 | 17/18 | Multi-factor Authentication | 28 | 2026-10-30 |  |
-| CrewAI | crewai | Multi-agent workflow | 2026-11 | 21/23 | AI Agent Authority Expansion Controls, Encrypt Sensitive Information | 28 | 2026-11-21 |  |
+| CrewAI | crewai | Multi-agent workflow | 2026-11 | 23/23 | _none_ | 28 | 2026-11-21 |  |
 | Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 26 | 2026-10-30 |  |
-| Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 18/19 | Limit AI Workload Resource Consumption | 32 | 2026-10-30 |  |
+| Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ | 33 | 2026-11-21 |  |
 | Grok Bot | cursor | Persistent managed agents | 2026-10 | 16/16 | _none_ | 26 | 2026-11-21 |  |
 | llama.cpp server (llama-server) | ggml | Local model runtime | 2026-10 | 12/12 | _none_ | 33 | 2026-10-30 |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 16 | 2026-10-30 |  |
-| GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 18/19 | Limit AI Workload Resource Consumption | 29 | 2026-10-30 |  |
+| GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ | 30 | 2026-11-21 |  |
 | GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-10 | 14/14 | _none_ | 31 | 2026-10-30 |  |
-| GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 18/19 | Limit AI Workload Resource Consumption | 31 | 2026-10-30 |  |
-| GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 21/23 | AI Agent Authority Expansion Controls, Encrypt Sensitive Information | 23 | 2026-11-21 |  |
+| GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ | 32 | 2026-11-21 |  |
+| GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 23/23 | _none_ | 24 | 2026-11-21 |  |
 | GitHub MCP server | github | Remote MCP server you publish | 2026-09 | 13/13 | _none_ | 23 | 2026-10-30 |  |
 | Google Agent Development Kit (ADK) | google | Agent-to-agent federation across platforms | 2026-11 | 8/13 | Access Policy Administration, AI Vendor Risk Assessment, Agent Kill Switch and Quarantine, Memory Hardening, Tool and MCP Server Integrity | 12 | 2026-11-15 |  |
 | Gemini Enterprise Agent Platform Agent Runtime (Vertex AI Agent Engine) | google | Managed agent service in your cloud | 2026-09 | 21/21 | _none_ | 32 | 2026-11-18 |  |
-| Gemini in Chrome (with Chrome auto browse) | google | Browser AI agents & extensions | 2026-10 | 15/16 | Limit AI Workload Resource Consumption | 17 | 2026-10-30 |  |
-| Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 18/19 | Limit AI Workload Resource Consumption | 35 | 2026-11-21 |  |
+| Gemini in Chrome (with Chrome auto browse) | google | Browser AI agents & extensions | 2026-10 | 16/16 | _none_ | 17 | 2026-10-30 |  |
+| Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ | 35 | 2026-11-21 |  |
 | Gemini Enterprise app (assistant, search and connected-data actions) | google | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 22 | 2026-10-30 |  |
-| Gemini Enterprise Workflow Builder (chat agents and workflows) | google | UI/low-code managed agent runtime | 2026-10 | 11/12 | Human In-the-Loop for AI Agent Actions | 12 | 2026-10-30 |  |
-| LangChain and LangGraph | langchain | Multi-agent workflow | 2026-11 | 21/23 | AI Agent Authority Expansion Controls, Encrypt Sensitive Information | 28 | 2026-11-21 |  |
+| Gemini Enterprise Workflow Builder (chat agents and workflows) | google | UI/low-code managed agent runtime | 2026-10 | 12/12 | _none_ | 13 | 2026-11-21 |  |
+| LangChain and LangGraph | langchain | Multi-agent workflow | 2026-11 | 23/23 | _none_ | 28 | 2026-11-21 |  |
 | LM Studio | lmstudio | Local model runtime | 2026-09 | 12/12 | _none_ | 13 | 2026-10-30 |  |
 | Meta Muse | meta | Persistent managed agents | 2026-10 | 16/16 | _none_ | 6 | 2026-10-30 |  |
-| Microsoft Agent Framework | microsoft | Multi-agent workflow | 2026-11 | 21/23 | AI Agent Authority Expansion Controls, Encrypt Sensitive Information | 28 | 2026-11-21 |  |
-| Microsoft Copilot in Edge (Microsoft 365 Copilot Chat in the Edge for Business side pane, browsing with Copilot) | microsoft | Browser AI agents & extensions | 2026-10 | 15/16 | Limit AI Workload Resource Consumption | 17 | 2026-11-21 |  |
-| Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/12 | Human In-the-Loop for AI Agent Actions | 32 | 2026-10-30 |  |
+| Microsoft Agent Framework | microsoft | Multi-agent workflow | 2026-11 | 23/23 | _none_ | 28 | 2026-11-21 |  |
+| Microsoft Copilot in Edge (Microsoft 365 Copilot Chat in the Edge for Business side pane, Cowork browser use) | microsoft | Browser AI agents & extensions | 2026-10 | 16/16 | _none_ | 18 | 2026-11-21 |  |
+| Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 12/12 | _none_ | 33 | 2026-11-21 |  |
 | Microsoft Foundry Agent Service (prompt agents, hosted agents, Responses API) | microsoft | Managed agent service in your cloud | 2026-11 | 21/21 | _none_ | 48 | 2026-11-18 |  |
 | Microsoft 365 Copilot (Microsoft Copilot app, Copilot Chat, in-app Copilot, agents and connectors) | microsoft | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 16 | 2026-10-30 |  |
 | MLflow Tracking Server and Model Registry | mlflow | Model training & release pipeline | 2026-09 | 12/13 | AI Telemetry Logging and Monitoring | 29 | 2026-10-30 |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ | 38 | 2026-10-30 |  |
 | Ollama | ollama | Local model runtime | 2026-09 | 12/12 | _none_ | 19 | 2026-10-30 |  |
 | OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-10 | 16/16 | _none_ | 26 | 2026-10-30 |  |
-| OpenAI Agents SDK | openai | Single agent workflow | 2026-09 | 19/20 | Limit AI Service Query Volume and Rate | 24 | 2026-10-30 |  |
+| OpenAI Agents SDK | openai | Single agent workflow | 2026-09 | 20/20 | _none_ | 24 | 2026-10-30 |  |
 | ChatGPT Enterprise (chatgpt.com) | openai | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 26 | 2026-11-21 |  |
-| ChatGPT desktop app and Work Local | openai | Third-party coding & desktop agents | 2026-10 | 18/19 | Limit AI Workload Resource Consumption | 21 | 2026-10-30 |  |
-| Codex | openai | Third-party coding & desktop agents | 2026-09 | 18/19 | Limit AI Workload Resource Consumption | 32 | 2026-10-30 |  |
+| ChatGPT desktop app and Work Local | openai | Third-party coding & desktop agents | 2026-10 | 19/19 | _none_ | 23 | 2026-11-21 |  |
+| Codex | openai | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ | 34 | 2026-11-21 |  |
 | Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 19 | 2026-10-30 |  |
-| Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/23 | AI Agent Authority Expansion Controls, Encrypt Sensitive Information | 28 | 2026-10-30 |  |
+| Codex SDK | openai | Multi-agent workflow | 2026-09 | 23/23 | _none_ | 28 | 2026-10-30 |  |
 | OpenAI Dots | openai | Persistent managed agents | 2026-10 | 16/16 | _none_ | 18 | 2026-11-21 |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 18 | 2026-10-30 |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ | 37 | 2026-10-30 |  |
-| opencode | opencode | First-party coding & desktop agents | 2026-09 | 17/18 | Multi-factor Authentication | 21 | 2026-11-21 |  |
-| Salesforce Agentforce (agents built in Agentforce Builder, with subagents, actions, Data Library grounding and channels) | salesforce | UI/low-code managed agent runtime | 2026-09 | 11/12 | Human In-the-Loop for AI Agent Actions | 19 | 2026-10-30 |  |
+| opencode | opencode | First-party coding & desktop agents | 2026-11 | 17/18 | Multi-factor Authentication | 19 | 2026-11-21 |  |
+| Salesforce Agentforce (agents built in Agentforce Builder, with subagents, actions, Data Library grounding and channels) | salesforce | UI/low-code managed agent runtime | 2026-09 | 12/12 | _none_ | 20 | 2026-11-21 |  |
 | Vercel AI SDK | vercel | Chat agent with tools | 2026-09 | 23/23 | _none_ | 30 | 2026-10-30 |  |
 | vLLM | vllm | Self-hosted model inference | 2026-09 | 13/14 | Credential Hardening | 32 | 2026-10-30 |  |
 

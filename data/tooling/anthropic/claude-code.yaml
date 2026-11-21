@@ -8,6 +8,11 @@
 # 2026-09-15: toolClaudeCodeWeb gained sandboxing, egress, runtime enforcement, credential isolation and MCP rows after the managed-runtime drawing pinned them; fetched cloud-environments, claude-code-on-the-web, server-managed-settings, managed-mcp (all 200).
 # 2026-09-25: re-verified toolClaudeCode, toolClaudeCodeWeb against the MITRE control rules; every code.claude.com, platform.claude.com and support.claude.com page cited answered 200 with no redirect; code.claude.com/docs/en/claude-tag returned 403 (Cloudflare challenge, not cited); trust.anthropic.com renders client-side and was read in a browser; no iam page exists in the docs map.
 # 2026-11-21: code.claude.com/docs/en/cloud-environments (200) now names three network levels, None, Limited (with the Allow package managers checkbox and Allowed domains) and Full; an environment saved as Trusted opens as Limited with Allow package managers checked, and one saved as Custom opens as Limited with its list. The defaultEnvironment and sharedEnvironmentNetworkAccess settings follow it; the controls rows below still say Trusted and Custom and are open.
+# 2026-11-21 (follow-up): the toolClaudeCodeWeb egress, injection and permission rows, the prompt-injection risk note and the
+# Data leaving the device fact now name None, Limited (Allow package managers, Allowed domains) and Full, from
+# cloud-environments and claude-code-on-the-web (both 200); migration.original blocks keep the names they were verified under.
+# 2026-11-21 (new pins): toolClaudeCode AML.M0036 (native) row and memberSpendLimit setting after the pattern pinned
+# spend limits, from support articles 14782391, 13799932 and 12005970 (200).
 vendor: anthropic
 family: Claude Code
 tools:
@@ -1452,6 +1457,37 @@ tools:
                 - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://code.claude.com/docs/en/claude_code_docs_map.md
               verified: 2026-09-10
+      - mitigation: AML.M0036
+        coverage: native
+        mechanism: >-
+          Organisation, group (Member limit), individual and pooled monthly spend limits under Organization
+          settings > Usage on Enterprise; the usage-credit monthly limit and Spend limits by user on Team and
+          seat-based Enterprise; enforced by Anthropic's service for subscription seats
+        steps:
+          - title: Set group and member limits
+            body:
+              - >-
+                Under Organization settings > Usage > By group/tier, open the group's menu, choose Edit limit
+                and set a Member limit; set individual limits for members who need a different ceiling.
+            url: https://support.claude.com/en/articles/13799932-manage-groups-and-group-spend-limits-on-enterprise-plans
+          - title: Cap the organisation and usage credits
+            body:
+              - >-
+                On Team and seat-based Enterprise, set the organisation-wide monthly limit on usage credits
+                under Organization settings > Usage, and Spend limits by user where the Usage page offers them.
+            url: https://support.claude.com/en/articles/12005970-manage-usage-credits-for-team-and-seat-based-enterprise-plans
+        note: >-
+          Rated on the rule applied to every product on this drawing's spend-limit pin: native where an
+          administrator sets spend or usage limits per person or group that the vendor's service enforces and
+          that cover the agent's work; partial where such limits exist but the vendor says they cover only some
+          of it; none where the only ceiling is a vendor-fixed quota nobody can set. Seats that bring the
+          organisation's own key are metered at its AI gateway instead. Native: at a limit further requests are
+          blocked, so a multi-step Claude Code task may pause before it finishes (the request in flight
+          completes), and spend can go slightly over because the check runs before a request. Outside it: seats
+          on an API key, Bedrock, Vertex, Foundry or an LLM gateway, whose meter is the Console workspace, the
+          cloud account or the gateway; per-member limits are not available to every Team organisation. No
+          per-session budget is admin-settable; --max-budget-usd applies only to print mode.
+        verified: "2026-11-21"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # Managed-settings keys reach a device through MDM (managed-settings.json, the macOS plist
     # domain or the Windows policy key) or, on Team and Enterprise, through server-managed
@@ -1786,6 +1822,18 @@ tools:
         mitigations: []
         url: https://code.claude.com/docs/en/settings-reference#disableremotecontrol
         verified: "2026-10-30"
+      - id: memberSpendLimit
+        name: "Member limit"
+        where: "claude.ai Organization settings › Usage › By group/tier › Edit limit"
+        setVia: [adminConsole]
+        area: tools
+        default: "No member limit"
+        recommended: "A monthly per-member limit on every group whose members use the agent"
+        why: "A looping or remote-steered session stops when its owner's limit is spent instead of drawing on the organisation's whole pool."
+        mitigations: [AML.M0036]
+        requires: "Enterprise (Team: Spend limits by user where offered)"
+        url: https://support.claude.com/en/articles/13799932-manage-groups-and-group-spend-limits-on-enterprise-plans
+        verified: "2026-11-21"
     advisories:
       - title: "CVE-2025-59536 — code execution from project files before the trust prompt (fixed 1.0.111)"
         url: >-
@@ -1900,10 +1948,10 @@ tools:
         url: https://code.claude.com/docs/en/self-hosted-environments
       - label: Data leaving the device
         value: >-
-          The repository is cloned into an isolated VM; all outbound traffic passes a security proxy for audit
-          logging; GitHub credentials stay outside the sandbox; with network access "No access" the VM can
-          still reach the Anthropic API, which the docs note may allow data to exit.
-        url: https://code.claude.com/docs/en/security
+          The repository is cloned into an isolated VM; all outbound traffic passes a security proxy; GitHub
+          credentials stay outside the sandbox; with network access set to None the VM can still reach the
+          Anthropic API, which the docs note may allow data to exit.
+        url: https://code.claude.com/docs/en/claude-code-on-the-web
       - label: Retention & training
         value: >-
           Same commercial policy as local Claude Code (no training on Team/Enterprise/API, 30-day retention);
@@ -1931,7 +1979,8 @@ tools:
         note: >-
           Sessions started from Slack read the whole thread as context; the earlier Claude Code in Slack docs
           warn Claude may follow directions from other messages. Network egress in Anthropic-hosted
-          environments defaults to Trusted (package registries and GitHub), which bounds exfiltration.
+          environments defaults to Limited with Allow package managers checked (package registries, GitHub
+          and cloud SDKs), which bounds exfiltration.
       - risk: riskShadowAndUnknownAgents
         note: >-
           Any member with a seat can start cloud sessions once "Cloud sessions" is on; scheduled tasks run
@@ -2088,8 +2137,8 @@ tools:
           - title: Standardise the environment
             body:
               - >-
-                Give sessions an Owner-managed shared environment with Custom network access and make it the
-                organisation default.
+                Give sessions an Owner-managed shared environment with Limited network access and your own
+                Allowed domains, and make it the organisation default.
             url: https://code.claude.com/docs/en/cloud-environments
         note: >-
           Partial: tool rules are admin-locked (Bypass isn't offered, Auto is removable), but the rest of the
@@ -2293,7 +2342,7 @@ tools:
           Partial by the rule: both are attach points for the organisation's own classifier. Nothing in the
           product classifies issue text, review comments, repository files or fetched pages for injection, and
           no hidden-character or HTML-comment filtering is documented; the auto-mode classifier judges
-          actions, not inputs; the Trusted network level is containment. CODEOWNERS on .claude/, CLAUDE.md and
+          actions, not inputs; the Limited network level is containment. CODEOWNERS on .claude/, CLAUDE.md and
           the environment's setup script is the process control.
         verified: "2026-09-25"
         migration:
@@ -2567,15 +2616,17 @@ tools:
       - mitigation: cap-agent-egress-control
         coverage: partial
         mechanism: >-
-          Environment network access level (None, Trusted, Full, Custom with Allowed domains) enforced by the
-          security proxy in Anthropic-hosted environments; default Trusted; Owner-managed shared environments
-          and an organisation default
+          Environment network access level (None; Limited, with the Allow package managers checkbox and
+          Allowed domains; Full) enforced by the security proxy in Anthropic-hosted environments; default
+          Limited with Allow package managers checked; Owner-managed shared environments and an organisation
+          default
         steps:
           - title: Author the allowlist on a shared environment
             body:
               - >-
                 On the Cloud environments admin page, create a shared environment with Network access set to
-                Custom and your Allowed domains; members see it read-only.
+                Limited, Allow package managers cleared and your Allowed domains listed; members see it
+                read-only.
             url: https://code.claude.com/docs/en/cloud-environments
           - title: Make it the organisation default
             body:
@@ -2584,14 +2635,15 @@ tools:
                 so sessions members start without picking one use it.
             url: https://code.claude.com/docs/en/cloud-environments
         note: >-
-          Partial by the rule: an Owner authors a Custom allowlist on shared environments, but it isn't locked
+          Partial by the rule: an Owner authors a Limited allowlist on shared environments, but it isn't locked
           — members can create personal environments at Full and select them, and the docs say there is no
           organisation-level allowlist admins can push. Setup and agent phases share one network policy.
           Bypassing the allowlist at every level, None included: GitHub through its proxy, MCP connectors
-          through Anthropic's servers, network-secret hosts and the Anthropic API. The Trusted defaults
-          include write-capable hosts such as gist.github.com, npm and PyPI. In a self-hosted environment
-          egress is your own boundary.
-        verified: "2026-09-25"
+          through Anthropic's servers, network-secret hosts and the Anthropic API. The default allowlist that
+          Allow package managers adds includes write-capable hosts such as gist.github.com, npm and PyPI. An
+          environment saved under the retired Trusted or Custom levels opens as Limited and reaches the same
+          hosts. In a self-hosted environment egress is your own boundary.
+        verified: "2026-11-21"
         migration:
           from:
             - capabilityEgressControl
