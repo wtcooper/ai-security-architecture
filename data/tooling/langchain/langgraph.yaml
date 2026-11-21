@@ -32,6 +32,8 @@
 # ShellToolMiddleware, EncryptedSerializer and pickle_fallback. JavaScript's recursion limit defaults to 25. The
 # JS tab of the langgraph.json reference lists the same store, checkpointer, http and webhooks keys; JS custom
 # auth is an Auth from @langchain/langgraph-sdk/auth (auth.authenticate, auth.on), served by langgraph-api.
+# 2026-11-21 (new pins): AML.M0037 (partial) and AML.M0012 (native, EncryptedSerializer) rows after the multi-agent
+# pattern pinned them, from docs.langchain.com langsmith/aes-encryption (200).
 vendor: langchain
 family: LangChain
 tools:
@@ -837,6 +839,58 @@ tools:
           "wolfi" and keep_pkg_tools false (the default) slim the image. Checkpoint deserialisation is state, not a
           model or dependency file, and is covered on AML.M0031. No model weights load.
         verified: "2026-11-21"
+      - mitigation: AML.M0037
+        coverage: partial
+        mechanism: >-
+          tools passed to each specialist's create_agent (or createAgent) when the graph is built;
+          wrap_tool_call middleware that refuses a call outside the run's grant; MCPAdapter.list_tools filtered
+          to the approved names
+        steps:
+          - title: Fix each specialist's tools
+            body:
+              - >-
+                Build every specialist with create_agent(model=..., tools=[...]) holding only its own tools, and
+                wrap it as a tool for the supervisor.
+            url: https://docs.langchain.com/oss/python/langchain/multi-agent/subagents
+          - title: Refuse calls outside the grant
+            body:
+              - >-
+                Add a @wrap_tool_call middleware that returns a ToolMessage refusal for any tool or argument not
+                in the run's grant instead of calling the handler.
+            url: https://docs.langchain.com/oss/python/langchain/middleware/custom
+        note: >-
+          Partial on the rule applied to every framework on this drawing: the framework fixes each agent's
+          tools, servers and permissions in code before the run and refuses or asks on anything outside them,
+          but the credentials those tools carry, and any account a step finds, are bounded only by the identity
+          provider and gateway the pin names. Here a supervisor reaches a tool only through the specialist that
+          holds it, and a wrap_tool_call middleware the deployer writes is where a new tool or target is refused
+          (an attach point); agents not built with create_agent have no such hook.
+        verified: "2026-11-21"
+      - mitigation: AML.M0012
+        coverage: native
+        mechanism: >-
+          EncryptedSerializer on the checkpointer (EncryptedSerializer.from_pycryptodome_aes()), and on Agent
+          Server LANGGRAPH_AES_KEY for checkpoint blobs and LANGGRAPH_AES_JSON_KEYS for named fields in thread,
+          assistant, run, cron and store data, with fallback and legacy keys for rotation
+        steps:
+          - title: Encrypt checkpoints with your key
+            body:
+              - >-
+                Set LANGGRAPH_AES_KEY to a 32-byte key from the firm's secret manager (or pass
+                EncryptedSerializer.from_pycryptodome_aes() as the checkpointer serde), and list
+                credential-bearing field names in LANGGRAPH_AES_JSON_KEYS.
+            url: https://docs.langchain.com/langsmith/aes-encryption
+        note: >-
+          Native on the rule applied to every framework on this drawing: native where the framework encrypts
+          what it persists with a key the deployer supplies; partial where it offers a pluggable store or
+          serialiser the deployer's code can encrypt in (an attach point); external where it writes plaintext to
+          a store whose encryption at rest is another product's. Boundaries: Python only; the key is a 16, 24 or
+          32-byte value the deployer holds in its secret manager, not a key service the framework calls; store
+          and thread data are encrypted only for the JSON keys listed, encrypted fields cannot be searched,
+          system fields are never encrypted, and rotation needs Agent Server 0.17.0.dev3 or later with the
+          PostgreSQL checkpointer (lazy, so cold rows keep old ciphertext). The database's own encryption at
+          rest is the platform's.
+        verified: "2026-11-21"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md). The framework
     # runs inside the application, so most rows are parameters, middleware and environment variables in the
     # deployer's code; Agent Server rows are langgraph.json keys and environment variables, and LangSmith rows
@@ -942,7 +996,7 @@ tools:
         recommended: A 32-byte key from the firm's secret manager (AES-256), with credential-bearing field names listed in LANGGRAPH_AES_JSON_KEYS
         value: "AES-256 key from the secret manager"
         why: Checkpoint blobs and named JSON fields in threads, runs, crons and the store are unreadable in the database without the key; encrypted fields cannot be searched.
-        mitigations: [AML.M0031, D3-CH]
+        mitigations: [AML.M0031, D3-CH, AML.M0012]
         url: https://docs.langchain.com/langsmith/aes-encryption
         verified: "2026-11-21"
       - id: checkpointerSerde
@@ -993,7 +1047,7 @@ tools:
         recommended: A policy check on every consequential tool that reads the caller from runtime context or server_info and the call's name and args, and refuses before the tool runs
         value: "Policy check before every consequential tool"
         why: A call the policy forbids never executes, whatever the model asked, MCP tools included; agents not built with create_agent have no such hook.
-        mitigations: [cap-agent-action-policy-enforcement, AML.M0028]
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, AML.M0037]
         url: https://docs.langchain.com/oss/python/langchain/middleware/custom
         verified: "2026-11-21"
       - id: perAgentTools
@@ -1004,7 +1058,7 @@ tools:
         recommended: Each specialist built with only the tools its task needs and given only the task description, plus a wrap_model_call filter that drops tools the caller's grant does not cover
         value: "Only the tools each specialist needs"
         why: A hijacked supervisor reaches a write tool only through the one specialist that holds it, and the model is not offered a tool the caller may not use.
-        mitigations: [AML.M0028, cap-agent-tool-registry]
+        mitigations: [AML.M0028, cap-agent-tool-registry, AML.M0037]
         url: https://docs.langchain.com/oss/python/langchain/multi-agent/subagents
         verified: "2026-11-21"
       - id: mcpToolList
