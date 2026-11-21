@@ -32,6 +32,7 @@ settings:
     area: identity
     default: Compute Engine default service account
     recommended: "A user-managed service account, which Google recommends over the default, granted only the minimal permissions the service needs. One account per service is this mapping's choice, not Google's wording, so each agent or server is scoped and disabled on its own"
+    value: "User-managed, one per service, minimal permissions"
     why: The agent calls the gateway, the model and its stores on short-lived tokens the platform issues to its own identity — no key in its configuration to steal. Agent Identity (SPIFFE-based, Preview on Cloud Run) is the successor.
     mitigations: [D3-AA, D3-CH]
     url: https://docs.cloud.google.com/run/docs/securing/service-identity
@@ -54,6 +55,7 @@ settings:
     area: identity
     default: No policy
     recommended: "On every model and MCP proxy in Google-hosted Apigee, checking the calling workload's Google identity against IAM. It is not available on Apigee hybrid, and it is not among the policies the Apigee Operator for Kubernetes can add to a GKE Gateway: on that path one Apigee proxy handles all traffic, so check callers there with VerifyAPIKey or OAuthV2, as Google's Inference Gateway guide does with API keys"
+    value: "On every model and MCP proxy"
     why: The gateway verifies which workload is calling before any model or tool call passes, and an identity without the IAM grant is refused.
     mitigations: [D3-AA]
     requires: Apigee (not available on Apigee hybrid)
@@ -66,6 +68,7 @@ settings:
     area: identity
     default: Not configured
     recommended: "Downstream OAuth tokens held in the auth manager's vault per user; the agent never stores them. Google's page describes the auth manager only with Agent Runtime. On Cloud Run, Agent Identity comes through Agent Platform features for Cloud Run (Preview, --identity-type=agent-identity), a new principal that does not inherit the service account's roles, so confirm the auth manager works for your Cloud Run agent or keep the tokens in a store you build"
+    value: "Per-user tokens in the auth manager's vault"
     why: Calls to SaaS tools run on the signed-in user's own consented grant, brokered per call, so the agent cannot reuse one user's access for another.
     mitigations: [D3-CTS]
     url: https://docs.cloud.google.com/iam/docs/auth-manager-overview
@@ -78,6 +81,7 @@ settings:
     area: identity
     default: Push requests sent without a token
     recommended: "On, with a dedicated service account per trigger granted Cloud Run Invoker on the agent alone"
+    value: "On, a service account per trigger"
     why: Only messages the subscription signs can start a run, and the token names the principal whose scope the run carries — a forged webhook or stray publisher starts nothing.
     mitigations: [D3-APA]
     url: https://docs.cloud.google.com/pubsub/docs/authenticate-push-subscriptions
@@ -90,6 +94,7 @@ settings:
     area: identity
     default: Maximum token lifetime 1 hour
     recommended: One service account per subagent, granted only its own tools; a token minted per step with the shortest workable lifetime
+    value: "Per-step tokens, shortest workable lifetime"
     why: A specialist calls with its own narrow identity, never the supervisor's, so each step is attributable at the gateway and revocable on its own.
     mitigations: [D3-CTS, D3-AA]
     url: https://docs.cloud.google.com/iam/docs/create-short-lived-credentials-direct
@@ -102,6 +107,7 @@ settings:
     area: identity
     default: Multi-tenancy off; one shared pool of users
     recommended: One tenant per customer organisation, each with only its own SAML or OIDC provider enabled
+    value: "One tenant per customer organisation"
     why: A caller signs in only through the IdP of the organisation it belongs to, so that organisation's groups, joiners, leavers and conditional access decide who gets a token at all.
     mitigations: [D3-APA]
     url: https://docs.cloud.google.com/identity-platform/docs/multi-tenancy
@@ -113,6 +119,7 @@ settings:
     area: identity
     default: No credential check — any caller can invoke a proxy that lacks one
     recommended: "In the request PreFlow of every MCP proxy: ParsePayload first, then VerifyAccessToken, then Quota. Apigee treats the check as optional, so nothing adds it for you"
+    value: "In every MCP proxy's request PreFlow"
     why: A token passes only if it is unexpired, unrevoked and was issued to an app whose API product includes this proxy. Apigee says ParsePayload must come before any authentication or quota policy for per-tool access, so the token check is the second step.
     mitigations: [D3-CTS]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
@@ -135,6 +142,7 @@ settings:
     area: identity
     default: Depends on your handlers
     recommended: The inbound token is never forwarded; each upstream call uses a credential minted or held for that upstream alone, logged as a delegation step
+    value: "Never forwarded; a credential per upstream"
     why: The caller's token stops at this server, so it cannot be replayed against another API — the confused-deputy path the MCP security guidance names.
     mitigations: [D3-CTS]
     url: https://modelcontextprotocol.io/docs/2025-11-25/tutorials/security/security_best_practices
@@ -146,6 +154,7 @@ settings:
     area: identity
     default: Credentials wherever the team put them
     recommended: One secret per upstream, mounted from Secret Manager and pinned to a version; rotation publishes a new version
+    value: "One secret per upstream, pinned to a version"
     why: Each upstream's credential lives in Secret Manager, readable only by the service's identity and rotated without a code change, never in the image or its config.
     mitigations: [D3-CH]
     url: https://docs.cloud.google.com/run/docs/configuring/services/secrets
@@ -157,6 +166,7 @@ settings:
     area: identity
     default: Tokens valid until they expire, and issued without an end user ID
     recommended: One-hour access tokens issued with the end user ID (AppEndUser in the OAuthV2 policy); a RevokeOAuthV2 proxy wired to leaver and incident workflows
+    value: "One-hour tokens with end user ID, revocable"
     why: A revoked user's or app's tokens stop passing the gateway without waiting for expiry. Apigee caches tokens for 180 seconds, so a revoked token can still succeed for up to three minutes.
     mitigations: [D3-CR]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/security/oauth/enable-retrieval-and-revocation-oauth-20-access-tokens-end-user-id-app-id-or-both
@@ -169,6 +179,7 @@ settings:
     area: identity
     default: The project's Agent Platform Custom Code Service Agent
     recommended: A service account per training pipeline, reading only its approved dataset version and writing only its own candidates; never granted the signing key
+    value: "One per training pipeline, no signing key"
     why: Each run is attributable and bounded to what its approved specification names, and the identity that trains can never be the one that promotes.
     mitigations: [D3-AA]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/custom-service-account
@@ -180,6 +191,7 @@ settings:
     setVia: [cloudPolicy, configFile]
     area: identity
     recommended: "On, with one Kubernetes ServiceAccount per workload, granted only the calls that workload needs. For sandbox runs that means one per run: all Pods in a SandboxWarmPool share one ServiceAccount, so keep a separate SandboxTemplate and warm pool per run, or create sandboxes on demand without a pool"
+    value: "On, one ServiceAccount per workload"
     why: A workload gets short-lived tokens for its own principal from the GKE metadata server, and the node's credentials stay out of reach. Agent Sandbox's default network policy blocks the metadata server, so for sandboxes this works only once the sandbox's own policy allows it.
     mitigations: [D3-AA]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
@@ -202,6 +214,7 @@ settings:
     setVia: [identityProvider]
     area: identity
     recommended: Off for everyone; on only for the access groups whose identity may travel to that peer platform
+    value: "Off for everyone; on for named access groups"
     why: A user's identity is asserted to a vendor's platform only when an administrator has turned the federation on for a group they belong to — a relationship someone owns, reviewed like any access grant.
     mitigations: [D3-APA]
     url: https://knowledge.workspace.google.com/admin/apps/set-up-your-own-custom-saml-app
@@ -213,6 +226,7 @@ settings:
     area: identity
     default: Peers registered with a shared client secret
     recommended: A service account per peer relationship; the peer federates Google's issuer and audience instead of holding a secret for us
+    value: "A service account per peer, no shared secret"
     why: Our agent proves who it is to each peer with a short-lived token Google signs, so there is no long-lived secret per registration to leak or rotate.
     mitigations: [D3-AA]
     url: https://docs.cloud.google.com/iam/docs/create-short-lived-credentials-direct
@@ -282,6 +296,7 @@ settings:
     area: data
     default: The protocol has no tenants; nothing is isolated by default
     recommended: Every record access filtered to the caller's tenant and delegation; no data from one tenant served to another
+    value: "Every access filtered to the caller's tenant"
     why: The tenant checked in the handler is the only thing keeping one customer's records from another customer's caller.
     mitigations: [cap-data-access-governance]
     url: https://cheatsheetseries.owasp.org/cheatsheets/Multi_Tenant_Security_Cheat_Sheet.html
@@ -293,6 +308,7 @@ settings:
     setVia: [cloudPolicy, apiCli]
     area: data
     recommended: "On. IAM grants write to the pipeline that produces the objects and read only to the workload that loads them: the serving identity for weights and checkpoints, each training pipeline's service account for its corpus version and its own candidates. Also enforce public access prevention, a separate bucket setting (or the storage.publicAccessPrevention organisation policy) that this page does not describe"
+    value: "On; one writer, read only by the loading workload"
     why: Access control lists are disabled, so IAM on the bucket is the only access path and no per-object ACL can quietly open one checkpoint or dataset.
     mitigations: [AML.M0005]
     url: https://docs.cloud.google.com/storage/docs/uniform-bucket-level-access
@@ -305,6 +321,7 @@ settings:
     area: data
     default: Not run
     recommended: Every new source inspected before curation; findings drive de-identification or exclusion of the examples
+    value: "Every new source inspected before curation"
     why: Personal and client-confidential data is found and removed while it is still a deletion, not something the model has learned.
     mitigations: [AML.M0007]
     url: https://docs.cloud.google.com/sensitive-data-protection/docs/inspecting-storage
@@ -316,6 +333,7 @@ settings:
     area: data
     default: Recorded only for steps that run as pipeline components
     recommended: Every source, dataset version, base checkpoint, run and candidate recorded as artifacts and executions
+    value: "Every source, dataset, run and candidate recorded"
     why: Where each example came from and which data, base and run produced an artifact can be answered long after the run, because it was recorded when it happened.
     mitigations: [AML.M0025, AML.M0023]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/ml-metadata/introduction
@@ -327,6 +345,7 @@ settings:
     area: data
     default: Google-managed encryption
     recommended: CMEK from a Cloud KMS key the security team holds, on every training resource and bucket
+    value: "CMEK held by the security team"
     why: The corpus, checkpoints and candidates are encrypted under keys you control, so disabling the key makes them unreadable everywhere at once.
     mitigations: [AML.M0012]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/cmek
@@ -340,6 +359,7 @@ settings:
     area: tools
     default: No policy
     recommended: On every model proxy, keeping the default FunctionResponseSource so tool results are screened on function-calling turns
+    value: "On every model proxy, default FunctionResponseSource"
     why: Model Armor screens each prompt, and the tool results going back to the model, for prompt injection and jailbreaks at the gateway before the model reads them.
     mitigations: [cap-input-guardrails]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/sanitize-user-prompt-policy
@@ -350,6 +370,7 @@ settings:
     setVia: [cloudPolicy, apiCli]
     area: tools
     recommended: "Prompt injection and jailbreak detection on, and blocking on. The two interfaces name it differently: --vertex-ai-enforcement-type=INSPECT_AND_BLOCK in gcloud, inspectAndBlock true under aiPlatformFloorSetting in REST. The default is INSPECT_ONLY"
+    value: "INSPECT_AND_BLOCK for injection and jailbreak"
     why: Gemini generateContent calls in the project are screened even when a caller skips the gateway; Google's page covers that method only. Screening is skipped when Model Armor is unreachable and file uploads are not screened, which is why the gateway check stays.
     mitigations: [cap-input-guardrails]
     url: https://docs.cloud.google.com/model-armor/model-armor-vertex-integration
@@ -361,6 +382,7 @@ settings:
     area: tools
     default: No limit
     recommended: A token quota per agent app per hour, and a PromptTokenLimit rate per minute
+    value: "Token quota per agent app per hour"
     why: A looping turn hits a token ceiling at the gateway before it runs up cost or volume.
     mitigations: [AML.M0036]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/llm-token-quota-policy
@@ -372,6 +394,7 @@ settings:
     area: tools
     default: Agents call MCP servers directly
     recommended: Every MCP tool the agent calls exposed only through Apigee. Put an ordinary Apigee proxy in front of each MCP server you run; use the MCP Discovery Proxy only for REST APIs whose reviewed OpenAPI specification should become the tools
+    value: "Only through Apigee"
     why: Each tool call crosses one gateway that authenticates, meters and logs it. Only the Discovery Proxy takes tool definitions from the specification your API owners reviewed; behind an ordinary proxy the definitions are whatever your server advertises, so review and pin them in your own release process.
     mitigations: [cap-mcp-tool-integrity, cap-agent-action-policy-enforcement]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
@@ -383,6 +406,7 @@ settings:
     area: tools
     default: Every tool on the proxy callable by any authenticated client
     recommended: One API product per agent, listing only the tools it may call, each with a quota
+    value: "One API product per agent, listed tools only"
     why: tools/list shows the agent only the tools its product grants and tools/call refuses the rest — the decision is per tool, not per server.
     mitigations: [AML.M0028, cap-agent-action-policy-enforcement]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/apigee-mcp/manage-mcp-tool-access
@@ -394,6 +418,7 @@ settings:
     area: tools
     default: Not registered
     recommended: Every MCP server, agent and endpoint an agent can call, registered with an owner
+    value: "Every server, agent and endpoint, with an owner"
     why: The tools an agent may be given are a governed inventory, not whatever someone wired in — and Agent Gateway refuses destinations that are not in it.
     mitigations: [cap-agent-tool-registry]
     url: https://docs.cloud.google.com/agent-registry/overview
@@ -406,6 +431,7 @@ settings:
     area: tools
     default: Tools run without confirmation
     recommended: Confirmation required on every tool that writes to a system of record. ADK lists DatabaseSessionService and VertexAiSessionService as not supported by this feature, so test that confirmation works with the custom Firestore session store before relying on it
+    value: "Required on every write to a system of record"
     why: A person confirms each consequential action in the conversation before it happens. The feature is experimental in ADK TypeScript, Go and Kotlin.
     mitigations: [AML.M0029]
     url: https://adk.dev/tools-custom/confirmation/
@@ -418,6 +444,7 @@ settings:
     area: tools
     default: Tools run without confirmation
     recommended: Actions above the value or irreversibility threshold park for an operator's approval; never the requester's. ADK lists VertexAiSessionService and DatabaseSessionService as not supported, so do not keep the session in Agent Platform Sessions for runs that park, and test a custom store such as Firestore. With resume on, the reply must carry the invocation ID of the run that asked
+    value: "Operator approval above the threshold"
     why: The step waits until an operator in a work queue approves that exact action and payload, so a run nobody watches cannot commit an irreversible change on its own. The feature is experimental in ADK TypeScript, Go and Kotlin.
     mitigations: [AML.M0029]
     url: https://adk.dev/tools-custom/confirmation/
@@ -429,6 +456,7 @@ settings:
     area: tools
     default: Depends on your renderer
     recommended: Render as text or sanitised markdown; strip HTML, block external images, set a Content Security Policy
+    value: "Text or sanitised markdown, with a Content Security Policy"
     why: A model-written image link or script cannot carry the conversation to an attacker the moment it renders.
     mitigations: [cap-output-encoding]
     url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
@@ -440,6 +468,7 @@ settings:
     area: tools
     default: Generated code runs wherever the agent chooses to run it
     recommended: All model-generated code runs in a Code Execution sandbox, ttl no longer than the session
+    value: "All generated code, ttl within the session"
     why: The sandbox has an isolated filesystem and no network access, so code the model writes cannot reach anything or touch the agent's own container.
     mitigations: [D3-EI, cap-agent-egress-control]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview
@@ -451,6 +480,7 @@ settings:
     area: tools
     default: All traffic to the latest revision
     recommended: New revisions deployed with --no-traffic, then given a small share after their evaluation passes
+    value: "--no-traffic, then a small share after evaluation"
     why: A new agent, prompt or model revision that behaves badly reaches a few users and rolls back by moving traffic, not by redeploying.
     mitigations: [cap-staged-rollout-gate]
     url: https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration
@@ -462,6 +492,7 @@ settings:
     area: tools
     default: Not run
     recommended: Task-success and safety evaluation of the agent's traces on every agent, prompt, tool or model change, blocking the release on regression
+    value: "On every change, blocking release on regression"
     why: Each change is scored against the same eval cases before it reaches users, instead of being discovered in production. Google renamed the service; its agent evaluation page still uses the older name.
     mitigations: [cap-staged-rollout-gate]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/optimize/evaluation/agent-evaluation
@@ -473,6 +504,7 @@ settings:
     area: tools
     default: Clients configured against public registries directly
     recommended: Package managers and other tools read from the virtual repository only, and it gives your standard repository a higher priority value than the remote one (the higher number wins)
+    value: "Virtual repository only, standard repo prioritised"
     why: A public package cannot shadow an internal one, which is the dependency confusion attack Google's virtual repository page describes.
     mitigations: [D3-FA]
     url: https://docs.cloud.google.com/artifact-registry/docs/repositories/virtual-overview
@@ -484,6 +516,7 @@ settings:
     area: tools
     default: Disabled for Java, Python and Node.js repositories
     recommended: Enabled on the Python and Node.js repositories behind the virtual repository (virtual repositories themselves are not scanned). Packages are scanned when they are pushed, and only if they have 100 or fewer files. Google's pages do not say that packages cached by a remote repository are scanned, so do not rely on this for the public mirror; check those packages at intake
+    value: "Enabled on the Python and Node.js repositories"
     why: Pushed packages are scanned for vulnerabilities, malicious software and secrets, and their metadata is re-checked as new advisories arrive. Vulnerabilities and malicious software are detected only in publicly monitored packages.
     mitigations: [D3-FA]
     url: https://docs.cloud.google.com/artifact-analysis/docs/enable-automatic-scanning
@@ -496,6 +529,7 @@ settings:
     area: tools
     default: No rate limit
     recommended: Per-client and per-tenant rate, UseEffectiveCount true, alongside the API product's quotas. On a GKE Gateway the policy is a Kubernetes resource placed by an ApimTemplate and ApigeeGatewayPolicy on the one Apigee proxy that handles all traffic, not on a per-model proxy, and Quota is not among the policies the operator can add
+    value: "Per client and per tenant, UseEffectiveCount true"
     why: A client that retries, loops or fans out is throttled at the gateway before it exhausts finite capacity for every other tenant.
     mitigations: [AML.M0004]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/spike-arrest-policy
@@ -507,6 +541,7 @@ settings:
     area: tools
     default: Definitions served as loaded
     recommended: Refuse to serve any definition whose hash differs from the reviewed release; a wording change goes through the release gate
+    value: "Refuse any definition not matching the reviewed hash"
     why: A description edited outside the pipeline never reaches a caller's model, so the server cannot be turned into a tool-poisoning vector.
     mitigations: [cap-mcp-tool-integrity]
     url: https://owasp.org/projects/mcp-top-10
@@ -518,6 +553,7 @@ settings:
     area: tools
     default: Not tested beyond unit tests
     recommended: Every release tested against the OWASP Web Security Testing Guide, with findings blocking the release
+    value: "Every release tested against the OWASP guide"
     why: Behind the protocol this is a published application, and an injectable handler is reachable by every caller that holds a token.
     mitigations: [D3-SYSVA]
     url: https://owasp.org/projects/web-security-testing-guide
@@ -529,6 +565,7 @@ settings:
     area: tools
     default: Images scanned on push once the API is enabled
     recommended: Enabled on every project that holds a serving image, findings routed to the image's owner
+    value: "Enabled on every project with a serving image"
     why: Every image's OS and language packages are matched against vulnerability feeds on push and re-checked as advisories arrive, so an advisory maps to the images it affects.
     mitigations: [D3-AVE]
     url: https://docs.cloud.google.com/artifact-analysis/docs/enable-automatic-scanning
@@ -541,6 +578,7 @@ settings:
     area: tools
     default: No safety checks
     recommended: On for every InferencePool, with a template that screens prompts and responses and blocks on violation
+    value: "On for every InferencePool, blocking on violation"
     why: No provider applies content policy to a self-hosted model, so prompts and completions are classified at the gateway before they reach the model or the caller.
     mitigations: [cap-output-guardrails]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations
@@ -552,6 +590,7 @@ settings:
     area: tools
     default: Weights load as found in the bucket
     recommended: Refuse to load any artifact whose signature or approved digest does not verify
+    value: "Refuse any artifact that does not verify"
     why: Replacing a file and the digest beside it does not make it loadable; only an artifact the promotion gate signed or recorded serves.
     mitigations: [AML.M0014]
     url: https://openssf.org/projects/model-signing/
@@ -574,6 +613,7 @@ settings:
     area: tools
     default: The first version gets the default alias
     recommended: The default alias names the approved version; labels record publisher, format and the scan that cleared it; rollback moves the alias. Only Agent Platform deployments fall back to the default alias. vLLM on GKE does not read it, so your rollout step must resolve the alias to that version's bucket path and point the deployment at it
+    value: "Default alias on the approved version"
     why: The question "what is serving" has one answer in the registry, and the previous approved version stays one alias move away.
     mitigations: [AML.M0023, cap-staged-rollout-gate]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/model-alias
@@ -585,6 +625,7 @@ settings:
     area: tools
     default: All traffic to the one InferencePool
     recommended: A new model version takes a 10% weight after its evaluation passes, then grows; the old pool stays until it is retired
+    value: "10% to a new version after evaluation, then more"
     why: A model version that misbehaves serves a slice, not everyone, and rolls back by moving weight rather than redeploying.
     mitigations: [cap-staged-rollout-gate]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/gke-inference-gateway-rollout-operations
@@ -596,6 +637,7 @@ settings:
     area: tools
     default: "Off"
     recommended: A dedicated confidential GPU node pool for each sensitivity tier that must not share hardware
+    value: "Dedicated confidential GPU pool per tier"
     why: Workload memory is encrypted in use on the host and the accelerator, and one tier's pods never land on another tier's GPUs.
     mitigations: [D3-HBPI]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/gpus-confidential-nodes
@@ -608,6 +650,7 @@ settings:
     area: tools
     default: --api-key optional; dev and runtime-update endpoints off unless enabled
     recommended: Dev mode and runtime adapter loading off; a per-tenant cache_salt on every request, overwriting any the caller sent; only the gateway can reach the server
+    value: "Dev mode and runtime adapters off; per-tenant cache_salt"
     why: --api-key protects only part of vLLM's HTTP surface, so the control endpoints stay switched off and unreachable, and one tenant's prompts cannot be inferred from another's prefix-cache timing.
     mitigations: [D3-ACH]
     url: https://docs.vllm.ai/en/latest/usage/security/
@@ -620,6 +663,7 @@ settings:
     area: tools
     default: Candidates are unsigned
     recommended: Sign only after the evaluation gate passes and a person approves, with a key the training job's identity cannot use
+    value: "Signed after the evaluation gate and human approval"
     why: A signature proves the gate was passed, not merely that a job finished — a run that wrote its own candidate cannot make it loadable.
     mitigations: [AML.M0013]
     url: https://openssf.org/projects/model-signing/
@@ -631,6 +675,7 @@ settings:
     area: tools
     default: Not run
     recommended: Capability and safety evaluation on every candidate with rubric-based and computation-based metrics, blocking promotion on regression; benchmarks in a bucket the training identity cannot write. The service lists no memorisation test and no red-teaming feature, so supply your own tooling for both
+    value: "Every candidate, blocking promotion on regression"
     why: How the candidate behaves is examined before it can be promoted, against an answer key its authors cannot edit. Agent Platform's model evaluation page covers only predictive image and tabular models, so a language model is scored with the Gen AI evaluation service.
     mitigations: [AML.M0008]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/evaluation-overview
@@ -642,6 +687,7 @@ settings:
     area: tools
     default: No labels
     recommended: Every promoted version labelled with its approval state and a link to its model card; promotion refuses a version without both
+    value: "Approval state and model card link on every version"
     why: What the artifact is and what it was trained on travel with it, so a reader of the registry never meets an undocumented model.
     mitigations: [cap-model-documentation]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/model-labels
@@ -653,6 +699,7 @@ settings:
     area: tools
     default: Pods share the node's kernel
     recommended: Every rollout and agent task in a sandbox — gVisor by default, a microVM where a task needs a full guest kernel (microVMs support no GPUs)
+    value: "gVisor by default, microVM where a full kernel is needed"
     why: Code the model writes runs against its own guest kernel or a userspace kernel, never the node's, so an escape still has a wall to cross.
     mitigations: [D3-EI]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/sandbox-pods
@@ -665,6 +712,7 @@ settings:
     area: tools
     default: Not applied. The policy is optional, and Agent Sandbox doesn't restrict the Pods that run sandboxes
     recommended: Applied, with the binding enforcing it in every namespace that runs sandboxes. As published it requires runtimeClassName gvisor and the gVisor node selector and toleration, so it rejects microVM sandboxes; you own the policy, so edit it to admit the microVM runtime where you use one
+    value: "Applied and enforced in every sandbox namespace"
     why: A sandbox that isn't gVisor, mounts a service-account token, runs as root, keeps Linux capabilities or lacks resource limits is rejected at admission. For sandboxes made through claims or warm pools the rejection shows only in the controller logs, so watch them.
     mitigations: [D3-EI]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/how-install-agent-sandbox
@@ -676,6 +724,7 @@ settings:
     area: tools
     default: Pods schedule on any node with room
     recommended: A node pool per trust group as an extra layer under GKE Sandbox, so rollouts that must not communicate do not share a node. Never rely on it as the wall that keeps rollouts apart
+    value: "A node pool per trust group, under GKE Sandbox"
     why: Rollouts from different trust groups do not share a host, its cores or its cache, which narrows co-residency side channels. Google says workload separation should never be used as a primary security boundary and is not a method of isolating untrusted workloads, so the sandbox stays the boundary.
     mitigations: [D3-HBPI]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-separation
@@ -687,6 +736,7 @@ settings:
     area: tools
     default: Runs continue until they finish
     recommended: Automatic, triggered from monitors outside every sandbox; restarting or widening the run is a person's decision. A run whose identity is a Kubernetes ServiceAccount granted roles directly has no IAM service account to disable, so the stop removes the binding; disable the service account only where a run uses one
+    value: "Automatic, from monitors outside every sandbox"
     why: The stop is enforced from outside the rollouts, so an agent that has disabled what it could reach cannot keep its run alive.
     mitigations: [cap-agent-kill-switch]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox
@@ -698,6 +748,7 @@ settings:
     area: tools
     default: Not done
     recommended: Before every new environment or widening, against a cluster built to Google's hardening guidance; findings block the run
+    value: "Before every new environment or widening"
     why: Escape paths are tested rather than assumed, by the same kind of agent the run will train.
     mitigations: [D3-SYSVA]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
@@ -710,6 +761,7 @@ settings:
     area: tools
     default: Not called
     recommended: Every inbound artifact, status message and card description screened; every outbound task payload and returned artifact replaced by the de-identified text Model Armor returns in deidentifyResult.data.text, a substitution your code makes. Streamed artifacts and files are not de-identified, so send them unstreamed as text, mask them with Sensitive Data Protection yourself, or block them
+    value: "Every inbound and outbound payload screened"
     why: A peer's text is classified for injection before the harness reads it, and client data leaving for another organisation is masked at the boundary. Model Armor returns the masked text in a result field and does not rewrite the payload, and its streaming methods and file-based prompts do not support de-identification.
     mitigations: [cap-input-guardrails, cap-sensitive-data-redaction]
     url: https://docs.cloud.google.com/model-armor/sanitize-prompts-responses
@@ -721,6 +773,7 @@ settings:
     area: tools
     default: The protocol leaves authorization to the implementation
     recommended: Each peer may invoke only the skills its registration lists, and our agent may call a peer's skill only for the users that skill is approved for
+    value: "Only the skills each peer's registration lists"
     why: Authorization is enforced at the crossing in both directions, so a peer that can reach our agent still cannot reach a skill nobody granted it.
     mitigations: [cap-agent-action-policy-enforcement]
     url: https://a2a-protocol.org/latest/topics/enterprise-ready/
@@ -732,6 +785,7 @@ settings:
     area: tools
     default: No quota
     recommended: Per peer and per task — tasks per hour, retries and fan-out — sized to the agreement
+    value: "Per peer and per task, sized to the agreement"
     why: A partner's agent that loops, retries or fans out hits a ceiling at our gateway before it runs up our cost.
     mitigations: [AML.M0036]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/quota-policy
@@ -743,6 +797,7 @@ settings:
     area: tools
     default: Cards fetched and trusted as served
     recommended: A peer's card is accepted only with a valid JWS signature from its pinned key and the hash recorded at admission; a change is re-reviewed
+    value: "Valid signature from the pinned key and recorded hash"
     why: A peer cannot silently rewrite its skills or descriptions after we admitted it — the card is a dependency, and a change is a decision.
     mitigations: [cap-mcp-tool-integrity]
     url: https://a2a-protocol.org/latest/specification/
@@ -754,6 +809,7 @@ settings:
     area: sharing
     default: Not assessed
     recommended: Assessment of how the platform handles our users' assertions, its tenant isolation, card signing and audit export, written into the agreement
+    value: "Assessed and written into the agreement"
     why: The questions A2A leaves to implementations — authorization, data handling, tracing — are answered by the vendor before our users' identity travels there.
     mitigations: [cap-ai-vendor-assessment]
     url: https://a2a-protocol.org/latest/topics/enterprise-ready/
@@ -767,6 +823,7 @@ settings:
     area: network
     default: Outbound internet direct from Cloud Run
     recommended: All outbound traffic from the workload sent into the VPC and on through Secure Web Proxy, allowing only a URL list you maintain. Google documents Direct VPC egress, next hop routing and URL lists on separate pages and has no guide that joins them for Cloud Run, so test that the service's traffic reaches the proxy; its documented Cloud Run route is the Agent Gateway deployment (Preview), which uses explicit routing mode and authorization policies that do not support URL lists
+    value: "All traffic through Secure Web Proxy, URL list only"
     why: A gateway security policy blocks every HTTP and HTTPS request until a rule allows it, so the workload reaches only the hosts you list. Matching a full URL path rather than a host needs TLS inspection, and a VPC network can have only one next-hop proxy per region.
     mitigations: [cap-agent-egress-control, D3-OTF]
     url: https://docs.cloud.google.com/secure-web-proxy/docs/policies-and-rules-overview
@@ -778,6 +835,7 @@ settings:
     area: network
     default: No perimeter
     recommended: One enforced perimeter that restricts every supported service the workload uses, reached from the VPC over the restricted VIP with Private Google Access or Private Service Connect for Google APIs. Check each service against Google's supported products list, because support and limits differ by product
+    value: "One enforced perimeter over every supported service"
     why: The protected APIs answer only inside the perimeter, so a stolen token used from an unauthorised network, or a copy to a resource outside the perimeter, is refused.
     mitigations: []
     url: https://docs.cloud.google.com/vpc-service-controls/docs/overview
@@ -812,6 +870,7 @@ settings:
     area: network
     default: All pods can reach each other; Agent Sandbox adds a policy per SandboxTemplate that still allows egress to the public internet
     recommended: Default-deny in every workload namespace, allowing only the named peers. For an agent, that is the gateway and the stores it uses. For serving, that is the gateway and endpoint picker to the vLLM API and serving nodes to each other. For sandboxes, define your own policy in the SandboxTemplate that denies everything except named peers, because a namespace default-deny does not remove the internet egress the default template policy allows
+    value: "Default-deny, named peers only"
     why: A pod reaches only the peers its policies name, so an agent's pods, vLLM's unauthenticated inter-node channels and one sandbox's neighbours are off limits to everything else. Network policies only add allowances, so the sandbox template's default policy must be replaced, not merely surrounded.
     mitigations: [D3-NI]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/network-policy
@@ -824,6 +883,7 @@ settings:
     area: network
     default: Without a perimeter, the Google-managed training environment keeps default internet access
     recommended: Training inside the perimeter, with no internet egress path configured; the job reaches only the mirror and the buckets
+    value: "Inside the perimeter, no internet egress"
     why: Inside a perimeter the training environment's internet access is blocked, so a job holding the corpus and its credentials cannot send them anywhere.
     mitigations: [D3-NI]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
@@ -836,6 +896,7 @@ settings:
     area: network
     default: Pods reach any destination
     recommended: Each workload allowed only the external names it needs, such as the package mirror for a sandbox rollout. FQDN policies cannot allow egress to ClusterIP or headless Services, so allow in-cluster services (for sandboxes, the offline web and the vLLM API) with label-based NetworkPolicy instead
+    value: "Only the external names each workload needs"
     why: A policy that selects a workload's pods denies every endpoint it does not name, so the egress list is enforced on the pod rather than asked of the agent. Allowing a name on shared addresses such as Google APIs allows every other name there, and DNS lookups are not blocked, so add VPC Service Controls behind it.
     mitigations: [cap-agent-egress-control]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
@@ -850,6 +911,7 @@ settings:
     area: audit
     default: Not exported; on Cloud Run, message capture in spans follows the variable you set
     recommended: On, tracing every agent turn, model call and tool call, with message content redacted from spans
+    value: "On, with message content redacted from spans"
     why: Each tool call and its result is traceable per session and agent when something goes wrong, without copying prompts into every span.
     mitigations: [cap-agent-tracing]
     url: https://adk.dev/integrations/cloud-trace/
@@ -861,6 +923,7 @@ settings:
     area: audit
     default: Disabled for most services
     recommended: DATA_READ and DATA_WRITE on for Agent Platform, exported by a log sink to the SIEM
+    value: "DATA_READ and DATA_WRITE on, sunk to the SIEM"
     why: Every model and agent API call is recorded by identity, off the agent's write path, where the security team can query it.
     mitigations: [cap-agent-tracing]
     url: https://docs.cloud.google.com/logging/docs/audit/configure-data-access
@@ -872,6 +935,7 @@ settings:
     area: audit
     default: No message logging
     recommended: Every call logged with the tool or model, client app, end user and tenant; personal data in payloads redacted. MessageLogging is not supported when Apigee is reached through the Extension Processor, so on GKE Inference Gateway turn on the load balancer's HTTP access logging to Cloud Logging instead, with sampleRate 1000000 so every request is logged
+    value: "Every call logged, personal data redacted"
     why: Each invocation is attributable to a tenant and a delegation where an incident can query it, recorded at the gateway rather than volunteered by the backend.
     mitigations: [AML.M0024]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/message-logging-policy
@@ -883,6 +947,7 @@ settings:
     area: audit
     default: Disabled (Admin Activity audit logs are always on; Data Access logs are not written unless enabled)
     recommended: ADMIN_READ and DATA_READ enabled for the training project, routed to the central log bucket
+    value: "ADMIN_READ and DATA_READ, to the central bucket"
     why: Admin Activity already records each training job created or cancelled; Data Access adds who read which job, dataset and model, so the record covers reads as well as changes.
     mitigations: [AML.M0024]
     url: https://docs.cloud.google.com/vertex-ai/docs/general/audit-logging
@@ -905,6 +970,7 @@ settings:
     area: audit
     default: Approved
     recommended: Approved, with revoke as the first step of the peer-incident runbook, followed by removing its Agent Registry entry and cancelling its delegated tasks
+    value: "Approved; revoke first in the peer-incident runbook"
     why: Revoking the peer's app cuts every credential it holds at our gateway in one action, without a deploy.
     mitigations: [cap-agent-kill-switch]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/publish/creating-apps-surface-your-api
@@ -916,6 +982,7 @@ settings:
     area: audit
     default: Enabled
     recommended: Enabled, with disable as the first step of your incident runbook. This covers IAM service accounts only. Where a workload's identity is a Kubernetes ServiceAccount granted roles directly through Workload Identity Federation for GKE there is no account to disable, so the runbook removes its IAM binding or deletes the ServiceAccount
+    value: "Enabled; disable first in the incident runbook"
     why: Once the account is disabled, applications no longer reach Google Cloud resources through it, so the agent loses the gateway, the model and its stores without a deploy, and re-enabling restores it.
     mitigations: [cap-agent-kill-switch]
     url: https://docs.cloud.google.com/iam/docs/service-accounts-disable-enable
@@ -926,6 +993,7 @@ settings:
     setVia: [apiCli, adminConsole, configFile, identityProvider]
     area: identity
     recommended: "On, with Security Group set to gke-security-groups@DOMAIN. Nest each research group in it and bind it, by exact address, to a Role in its run namespace for run objects. In IAM give members only Kubernetes Engine Cluster Viewer; bind no individual users."
+    value: "On, groups bound per run namespace, no individuals"
     why: "Kubernetes RBAC then follows group membership kept in your directory. GKE also allows whatever project-level IAM roles permit, so keep those minimal; removal from a group can take about an hour to apply."
     mitigations: [D3-APA]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/google-groups-rbac
@@ -937,6 +1005,7 @@ settings:
     setVia: [cloudPolicy, apiCli]
     area: identity
     recommended: "A pull subscription per agent. Grant Pub/Sub Subscriber on that subscription only to the agent's Kubernetes ServiceAccount principal, and Pub/Sub Publisher on the topic only to the identities of its trigger sources. Grant neither role at project level."
+    value: "A pull subscription per agent, roles at resource level"
     why: "The agent opens no inbound endpoint, so a run starts only from a message on its topic. The topic's publishers are then the only principals that can start a run, and only the agent can take the message."
     mitigations: [D3-APA]
     url: https://docs.cloud.google.com/pubsub/docs/access-control
@@ -948,6 +1017,7 @@ settings:
     area: identity
     default: "Nodes use the Compute Engine default service account"
     recommended: "A custom node service account holding the Kubernetes Engine Default Node Service Account role (roles/container.defaultNodeServiceAccount) and little else, with the managed constraint enforced. Workloads get their identity from Workload Identity Federation for GKE, never from the node."
+    value: "Custom account, default node role and little else"
     why: "On GKE a second credential sits beside the agent: the node's. The default account can hold more permissions than GKE needs, so a minimal one leaves a compromised agent nothing on the node worth taking."
     mitigations: [D3-CH]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/hardening-your-cluster
@@ -959,6 +1029,7 @@ settings:
     area: network
     default: "Nodes have external IP addresses and Pods reach any destination"
     recommended: "Private nodes and no NAT of your own, so the proxy is the agent's only path to the internet, with a policy that allows only a URL list you maintain. Google has no guide joining these for GKE, so test it. Its documented GKE route, ambient egress to the proxy, is in Preview."
+    value: "Private nodes; proxy with a URL list the only path out"
     why: "A gateway security policy blocks every HTTP and HTTPS request until a rule allows it, and workloads on nodes without external addresses cannot reach the internet unless NAT is enabled, so the agent reaches only the hosts you list."
     mitigations: [cap-agent-egress-control, D3-OTF]
     url: https://docs.cloud.google.com/secure-web-proxy/docs/quickstart
@@ -969,6 +1040,7 @@ settings:
     setVia: [configFile, apiCli]
     area: tools
     recommended: "Each new agent image released through canary phases at small percentages, advanced after its evaluation passes. Use gatewayServiceMesh where calls arrive through a Gateway, which splits by request; serviceNetworking splits by Pod count and suits an agent that pulls its work."
+    value: "Canary phases, advanced after evaluation passes"
     why: "A new agent, prompt or model revision that behaves badly reaches a small share of runs first. With pod overprovisioning left on, the original Deployment is not modified until the stable phase, so a cancelled rollout leaves it serving."
     mitigations: [cap-staged-rollout-gate]
     url: https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary
@@ -980,6 +1052,7 @@ settings:
     area: identity
     default: "No IAP is applied to a Gateway's backend services"
     recommended: "Enabled on the agent's Service, with the IAP-secured Web App User role granted only to the service accounts of the front end and the gateway. Each caller presents an OIDC token whose audience is the IAP OAuth client ID."
+    value: "Enabled; front end and gateway accounts only"
     why: "Cloud Run checked the caller's IAM permission on every request to the agent. Behind a Gateway nothing does until IAP is on, so without it any workload that can route to the load balancer can drive the agent."
     mitigations: [D3-APA]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-gateway-resources
@@ -993,6 +1066,7 @@ settings:
     area: network
     default: "Off; outbound traffic leaves through Google's shared internet egress"
     recommended: "Send all traffic to the VPC, give each workload its own network tag, and write egress firewall rules that allow only its named destinations and deny everything else. Add Cloud NAT only if a destination needs it."
+    value: "All traffic to the VPC; allow named destinations only"
     why: "Without it a service or job can reach the internet directly. Network tags let firewall rules tell one workload from another."
     mitigations: [D3-NI]
     url: https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
@@ -1003,6 +1077,7 @@ settings:
     setVia: [apiCli, adminConsole]
     area: data
     recommended: "Use the second generation environment and never mix trust groups in one instance: a separate service for each sensitivity tier when serving models, and a separate job task for each rollout when running sandboxes."
+    value: "Second generation, trust groups never mixed"
     why: "Each instance sits behind a boundary enforced by a virtual machine monitor, which Google describes as stronger than the boundary between containers inside it."
     mitigations: [D3-HBPI]
     url: https://docs.cloud.google.com/run/docs/securing/security
@@ -1015,6 +1090,7 @@ settings:
     default: "Off"
     requires: "Preview; second generation execution environment"
     recommended: "Enable the launcher and run every model action through sandbox do or sandbox run. Do not pass --allow-egress, secrets in --env or writable --mount; mount shared directories readonly and move files in and out as tar archives."
+    value: "On; every model action through sandbox do or run"
     why: "A sandbox has a read-only root, no host environment variables, secrets or metadata server credentials and no outbound network, unless these flags relax it."
     mitigations: [D3-EI]
     url: https://docs.cloud.google.com/run/docs/code-execution
@@ -1025,6 +1101,7 @@ settings:
     setVia: [adminConsole, apiCli]
     area: identity
     recommended: "Grant Cloud Run Jobs Executor on the rollout job only to the orchestrator's service account and the researchers' group. Keep Cloud Run Admin and Cloud Run Developer for the platform team."
+    value: "Orchestrator and researchers' group only"
     why: "Decides who can start and cancel rollouts, in place of the Kubernetes RoleBinding in the run namespace."
     mitigations: [D3-APA]
     url: https://docs.cloud.google.com/run/docs/reference/iam/roles
@@ -1035,6 +1112,7 @@ settings:
     setVia: [apiCli, adminConsole, code]
     area: tools
     recommended: "Have the orchestrator cancel every running execution of a run on a serious-risk alert and then disable the run's service account. Cancel executions, do not delete them, so their logs stay."
+    value: "Cancel on serious-risk alerts, then disable the account"
     why: "Cancelling stops the tasks, and the sandboxes inside them, while the execution's configuration, logs and monitoring data remain viewable."
     mitigations: [cap-agent-kill-switch]
     url: https://docs.cloud.google.com/run/docs/execute/jobs
@@ -1047,6 +1125,7 @@ settings:
     default: "Off"
     requires: "Workload Identity Federation for GKE on the cluster"
     recommended: "Enable the add-on with rotation. Mount each upstream credential from Secret Manager through a SecretProviderClass, and grant Secret Manager Secret Accessor only to that workload's Kubernetes ServiceAccount. Keep no credential in the image."
+    value: "On, with rotation"
     why: "Upstream credentials stay in Secret Manager under IAM and reach only the Pod that needs them, as the Cloud Run secret reference did."
     mitigations: [D3-CH]
     url: https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component
@@ -1059,6 +1138,7 @@ settings:
     default: "Not attached"
     requires: "A Model Armor template; the Model Armor User and Model Armor Viewer roles on the service account that deploys the proxy; an Extensible policy, so Apigee licence terms apply"
     recommended: "Attach SanitizeUserPrompt to the request flow and SanitizeModelResponse to the response flow of the model proxy, both naming the Model Armor template for this tier, and return an error to the caller when a response is flagged."
+    value: "Attached to the response flow, with the tier's template"
     why: "Model Armor's built-in integration screens only Gemini generateContent calls, so a self-deployed model's prompts and responses are screened at the gateway."
     mitigations: [cap-output-guardrails]
     url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/sanitize-llm-response-policy
@@ -1071,6 +1151,7 @@ settings:
     default: "Off (the endpoint is public)"
     requires: "The projectAllowlist cannot be changed after the endpoint is created"
     recommended: "Create the endpoint with Private Service Connect enabled and a projectAllowlist that names only the gateway's project. Connect from that VPC with a forwarding rule and use port 443, the TLS port."
+    value: "On, allowlisting only the gateway's project"
     why: "Requests stay on private addresses and only listed projects can connect. Dedicated public endpoints do not support VPC Service Controls."
     mitigations: [D3-NI]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/private-service-connect
@@ -1081,6 +1162,7 @@ settings:
     setVia: [apiCli, adminConsole]
     area: tools
     recommended: "Deploy the new model version to the same endpoint with a small share of traffic, raise the share in steps while watching errors and latency, and return the share to the previous deployed model to roll back."
+    value: "Small share to the new version, raised in steps"
     why: "Replaces the weighted HTTPRoute between InferencePools: the endpoint itself moves traffic gradually between model versions."
     mitigations: [cap-staged-rollout-gate]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/deployment
@@ -1091,6 +1173,7 @@ settings:
     setVia: [apiCli, adminConsole]
     area: data
     recommended: "Give each sensitivity tier its own endpoint and deployed model, so tiers never share serving nodes. The inference pages describe no Confidential Computing option; where memory encryption is required, serve that tier on Confidential GKE Nodes."
+    value: "Own endpoint and deployed model per sensitivity tier"
     why: "Compute belongs to the deployed model, not the endpoint, so separate deployments keep tiers on separate machines. This is weaker than the confidential nodes of the GKE mapping."
     mitigations: [D3-HBPI]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/configure-compute
@@ -1102,6 +1185,7 @@ settings:
     area: identity
     default: "A service account managed by Agent Platform that can only read the model artefacts"
     recommended: "Keep the default where the container needs nothing but its artefacts. If it must call other services, attach a dedicated service account that holds only those roles; never reuse a shared one."
+    value: "Default, or a dedicated account with only needed roles"
     why: "The serving container's identity decides what a compromised model server can reach."
     mitigations: [D3-AA, D3-CH]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/custom-service-account
@@ -1113,6 +1197,7 @@ settings:
     area: audit
     default: "Access logging is off; container logging is on for the v1 API"
     recommended: "Enable access logging when deploying the model and keep container logging on. Enable request-response logging to BigQuery only where content may be retained; on dedicated endpoints it covers only predict and rawPredict calls with payloads under 10 MB."
+    value: "Access logging on, container logging kept on"
     why: "Gives a per-request record from the serving side, beside the gateway's own log. Access logging can only be changed by redeploying the model."
     mitigations: [AML.M0024]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/predictions/online-prediction-logging
@@ -1124,6 +1209,7 @@ settings:
     area: audit
     default: "Admin Activity audit logs are always on; Data Access audit logs are off"
     recommended: "Enable Data Access audit logs for the training cluster's project and route the k8s.io entries for the training namespaces to the log bucket, so that who created, changed or read training workloads is recorded."
+    value: "Data Access logs on, training namespaces to the bucket"
     why: "The job no longer runs through the Agent Platform API, so its audit trail moves to GKE's audit logs."
     mitigations: [AML.M0024]
     url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/audit-logging
@@ -1137,6 +1223,7 @@ settings:
     area: network
     default: "None. The Agent Platform API resolves to public addresses."
     recommended: "Create an endpoint with the VPC-SC bundle in the front end's VPC and resolve REGION-aiplatform.googleapis.com to it, so the application invokes the agent over a private address."
+    value: "VPC-SC bundle endpoint in the front end's VPC"
     why: "An agent has no private endpoint of its own. It is invoked through the Agent Platform API, and this gives that call a private route."
     mitigations: [D3-NI]
     url: https://docs.cloud.google.com/vpc/docs/configure-private-service-connect-apis
@@ -1149,6 +1236,7 @@ settings:
     default: "No perimeter. The Agent Platform API is reachable from the internet with IAM."
     requires: "The project must be in the perimeter before the Agent Runtime instance is created."
     recommended: "Restrict aiplatform.googleapis.com. Add ingress rules only for the Agent Runtime service agent to Artifact Registry, and to Cloud Storage for pickle-based deployments. Attach no access level that admits the internet."
+    value: "aiplatform restricted; only the named ingress rules"
     why: "Private Service Connect and Private Google Access leave the public route to the Agent Platform API open. The perimeter is what blocks it."
     mitigations: [D3-NI]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/vpc-service-controls
@@ -1159,6 +1247,7 @@ settings:
     setVia: [apiCli, adminConsole]
     area: network
     recommended: "High-priority allow rules from the attachment subnet to your tool and proxy addresses only, with a low-priority rule that denies all other egress."
+    value: "Allow tool and proxy addresses only; deny the rest"
     why: "Once agent traffic enters your VPC it can reach anything the VPC can route to. Rules on the attachment subnet are what narrow it."
     mitigations: [D3-NI, cap-agent-egress-control]
     url: https://docs.cloud.google.com/architecture/multi-agent-private-networking-patterns
@@ -1169,6 +1258,7 @@ settings:
     setVia: [apiCli, cloudPolicy]
     area: network
     recommended: "Set ingress to Internal on every tool service and keep authentication required. Set run.allowedIngress to internal on the folder so a public tool service cannot be deployed."
+    value: "Internal, authentication required"
     why: "Tool servers should answer only to calls that arrive through your VPC. The constraint applies to new deployments only, so audit existing services."
     mitigations: [D3-NI, D3-ACH]
     url: https://docs.cloud.google.com/run/docs/securing/ingress
@@ -1180,6 +1270,7 @@ settings:
     area: network
     requires: "psc_interface_config on the agent. With a Private Service Connect interface, direct internet egress from the runtime is disabled."
     recommended: "Where an agent needs a public site, point it at Secure Web Proxy and allow only the destinations you approve in the proxy's policy. Give the attachment subnet no other route to the internet."
+    value: "Through Secure Web Proxy, approved destinations only"
     why: "Agent Runtime gives no internet egress of its own once it is attached to your VPC, so the proxy becomes the single place where public destinations are allowed."
     mitigations: [cap-agent-egress-control]
     url: https://docs.cloud.google.com/architecture/multi-agent-private-networking-patterns
@@ -1191,6 +1282,7 @@ settings:
     area: data
     default: "Google-owned and Google-managed keys."
     recommended: "A single-region key in the same region as the instance, held in a project another team administers. Grant use only to the Agent Platform and Agent Runtime service agents. Disable the key version to cut off access."
+    value: "Single-region key, held by another team's project"
     why: "The key must exist before the instance and cannot be swapped afterwards, and it is the lever that makes sessions, memories and sandbox state unreadable."
     mitigations: [AML.M0012]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/cmek
@@ -1202,6 +1294,7 @@ settings:
     area: data
     default: "Not set. Resources can be created without a customer-managed key."
     recommended: "Deny aiplatform.googleapis.com, storage.googleapis.com and artifactregistry.googleapis.com in the first constraint, and allow only your key project in the second. Test that an agent instance without encryption_spec is refused."
+    value: "Deny the three services; only your key project"
     why: "A key chosen at deployment can be left out of the next one. The constraint applies to new resources only, so existing instances keep the key they were created with."
     mitigations: [AML.M0012, D3-ACH]
     url: https://docs.cloud.google.com/kms/docs/cmek-org-policy
@@ -1212,6 +1305,7 @@ settings:
     setVia: [apiCli, adminConsole]
     area: data
     recommended: "Set your Cloud KMS key as the default key of the staging bucket, and create the image repository with CMEK, in the same region as the agent."
+    value: "Your Cloud KMS key on the bucket and repository"
     why: "The instance key does not reach a bucket or repository you create yourself. Staged agent objects and custom sandbox images sit there."
     mitigations: [AML.M0012]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/configure-cmek
@@ -1223,6 +1317,7 @@ settings:
     area: data
     default: "Not set. All locations and all API endpoints are allowed."
     recommended: "Allow only the value groups of your regions for resource locations. In the endpoint constraint, deny the global aiplatform.googleapis.com endpoint and the locational endpoints outside your regions."
+    value: "Your regions only; global endpoint denied"
     why: "Location restriction is not enforced for Agent Platform through the REST API or Gen AI SDKs, and the global endpoint gives no residency or CMEK, so both constraints are needed."
     mitigations: [D3-ACH]
     url: https://docs.cloud.google.com/organization-policy/reference/restrict-locations-supported-services
@@ -1234,6 +1329,7 @@ settings:
     area: tools
     default: "Not set. All models and actions are allowed."
     recommended: "A custom allow list of the approved models with the predict action, in the form publishers/PUBLISHER/models/MODEL_NAME:predict. Every model not listed is then denied."
+    value: "Approved models with predict; all others denied"
     why: "Agent code picks its own model, so the definition review is not a limit. The policy covers Model Garden models only and applies to every principal."
     mitigations: [D3-ACH]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/control-model-access
@@ -1245,6 +1341,7 @@ settings:
     area: tools
     default: "Not set. All grounding sources are allowed and Grounding with Google Search is enabled."
     recommended: "Enforce the disable constraint where web search is not approved. Elsewhere allow only the sources in use, for example VertexAiSearch, or EnterpriseWebSearch where a web tool is needed."
+    value: "Search disabled unless approved; used sources only"
     why: "Grounding runs inside the model call, outside your VPC and perimeter, so it does not follow the agent's network path. This is the switch for it."
     mitigations: [cap-agent-egress-control, D3-ACH]
     url: https://docs.cloud.google.com/organization-policy/reference/org-policy-constraints
@@ -1255,6 +1352,7 @@ settings:
     setVia: [cloudPolicy]
     area: identity
     recommended: "Keep the constraint enforced on the agent and application folders, so no Google Cloud API key bound to a service account can be created. Callers use Application Default Credentials."
+    value: "Enforced on the agent and application folders"
     why: "A standard Google Cloud API key for Agent Platform acts as one bound service account. It is long-lived, and audit logs cannot tell its callers apart."
     mitigations: [D3-CH, D3-ACH]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/api-keys
@@ -1266,6 +1364,7 @@ settings:
     area: audit
     default: "Data Access audit logs are off until you enable them. Once on, they, gateway request logs and the agent's stdout and stderr logs go to the _Default bucket with 30 days of retention."
     recommended: "Route cloudaudit.googleapis.com logs, networkservices.googleapis.com/gateway_requests and the reasoning_engine_stdout and reasoning_engine_stderr logs to one bucket. Set retention, lock it, and grant read access through log views."
+    value: "One central bucket, retention locked"
     why: "The gateway's decisions, the audit trail and the agent's own output are separate logs. They need one store with your retention to be joined and kept."
     mitigations: [cap-agent-tracing]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/optimize/observability/overview
@@ -1276,6 +1375,7 @@ settings:
     setVia: [adminConsole]
     area: sharing
     recommended: "Record each feature's launch stage (Managed Agents API, revisions, ReasoningEngine custom constraints and the gateway's Cloud Trace integration are Preview), which tools lack VPC-SC or CMEK, and that global endpoints give no residency."
+    value: "Launch stages, control gaps and residency recorded"
     why: "The runtime sits in a Google tenant you cannot inspect, and Pre-GA features carry separate terms. Access Transparency lists Agent Runtime as supported, but not Agent Gateway or Grounding with Google Search."
     mitigations: [cap-ai-vendor-assessment]
     url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/security-controls
@@ -1287,6 +1387,7 @@ settings:
     area: data
     default: "No row access policy. Anyone with table access reads every row."
     recommended: "Add row access policies whose grantee list or SESSION_USER() filter names the end users and groups, and have the tool query with the user's delegated credential and not the agent's own identity."
+    value: "Row access policies; queries use the user's credential"
     why: "A filter in the store holds whatever the agent asks for. A query run as the agent's identity returns everything that identity can read."
     mitigations: [cap-data-access-governance]
     url: https://docs.cloud.google.com/bigquery/docs/row-level-security-intro
