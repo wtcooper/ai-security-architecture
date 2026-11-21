@@ -314,7 +314,10 @@ blocks:
       recorded. Its items are the traffic classes it brokers —
       inference for the seats that bring our key, MCP and API tools, skills; the checks it runs
       — the allowlist that admits the vendor by name, the audit tap, the credential broker — are
-      the numbered pins on this block and its edges, and the call-outs beneath.
+      the numbered pins on this block and its edges, and the call-outs beneath. A vendor may also
+      ship a self-hosted gateway of its own, which signs developers in through our identity
+      provider and enforces managed settings and model access by group; it can carry the model
+      traffic in place of a third-party gateway, not the tool servers.
     items:
       - id: modelProxy
         label: Model proxy
@@ -550,7 +553,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 7
-    mitigations: [ cap-agent-action-policy-enforcement, cap-agent-egress-control, cap-sensitive-data-redaction, AML.M0028, AML.M0031, cap-input-guardrails, AML.M0029 ]
+    mitigations: [ cap-agent-action-policy-enforcement, cap-agent-egress-control, cap-sensitive-data-redaction, AML.M0028, AML.M0031, cap-input-guardrails, AML.M0029, AML.M0036 ]
     note: >
       The decisions the two crossings enforce per call — what may be reached, and what may
       leave — authored where the vendor's application cannot override them.
@@ -883,13 +886,15 @@ pins:
   mitigations:
     - mitigation: D3-MFA
       at: vendorService
-      do: "Require a second sign-in factor at your identity provider for everyone who uses the agent, and connect the vendor's login to it."
+      do: "Require a second sign-in factor at your identity provider for everyone who uses the agent, connect the vendor's login to it, and, where the vendor offers it, require an enrolled device before anyone steers a session remotely."
       why: "Single sign-on alone is not a second factor, and both the agent and the phone app that steers it rely on that one sign-in."
       note: >-
         MFA enforced at our IdP behind the federated vendor login — SSO alone is not MFA — so the harness's
         session and the phone's inherit a multi-factor sign-in. Zone-2 configuration, because the phone never
         touches our network and the account binding is the only lever; an unfederated vendor login, or SSO
-        without MFA at the IdP, is the finding.
+        without MFA at the IdP, is the finding. Where the vendor offers it, remote steering is tied
+        further to an enrolled device and a recent sign-in, so a session copied to another browser
+        cannot steer the agent.
     - mitigation: cap-agent-action-policy-enforcement
       at: aiGateway
       do: "Set rules at your AI gateway for which tool calls are allowed, and check every call against them."
@@ -966,11 +971,14 @@ pins:
       note: Non-overridable approval on consequential writes, kept rare enough that each prompt is read.
     - mitigation: cap-agent-tool-registry
       at: aiGateway
-      do: "Keep one approved list of connectors and tool servers, and enforce it at your AI gateway."
-      why: "A list kept in the agent's own settings file can be edited by whoever uses the agent."
+      do: "Keep one approved list of connectors and tool servers, enforce it at your AI gateway, and push the same list into the vendor's managed settings."
+      why: "Tool servers started on the developer's machine never pass the gateway, so the vendor's managed list, which developers cannot edit, is what holds them there."
       note: >-
-        A managed allowlist of connectors and tool servers, enforced from our gateway rather than from the
-        configuration file it governs.
+        One allowlist, enforced in two places: at our gateway for remote servers and connectors, and
+        through the vendor's managed settings for servers the agent starts locally, which never cross
+        it. The managed list must be the only one that applies, matched on the server's address or
+        exact start command rather than the name a user gives it; a list in the user's own settings
+        file is not a control.
     - mitigation: cap-agent-tracing
       at: aiGateway
       do: "Combine three records: your gateway's log, the vendor's audit export and device monitoring."
@@ -1023,6 +1031,15 @@ pins:
         Admission scanning at the mirror: malware and typosquat checks on everything proxied in from a
         public source, before anything inside can pull it. The registered embodiment of artifact
         scanning, on the one edge where it applies.
+    - mitigation: AML.M0036
+      at: harness->aiGateway
+      do: "Set spending and request limits for each developer at your AI gateway, and the vendor's own spend limits for seats that use the vendor's service directly."
+      why: "A scheduled or remote session can loop with nobody watching; the limit stops it before the bill does."
+      note: >-
+        Two meters, because there are two model paths: per-developer budgets and rate limits at our
+        gateway for the seats that bring our key, and the vendor's organisation, group and per-person
+        spend limits for subscription seats, whose traffic never reaches the gateway. Remote, scheduled
+        and background sessions are the case the limits exist for.
 
 walkthrough:
   title: The developer asks for a change
@@ -1226,6 +1243,10 @@ sources:
     url: https://code.claude.com/docs/en/security
   - title: "Claude Code — Remote Control: outbound-relay steering of a local session"
     url: https://code.claude.com/docs/en/remote-control
+  - title: "Claude Code: Run Claude Code through a gateway (Claude apps gateway or your own)"
+    url: https://code.claude.com/docs/en/gateways
+  - title: "Claude Code: Managed MCP configuration (allowlists that users cannot broaden)"
+    url: https://code.claude.com/docs/en/managed-mcp
   - title: "Cursor — cloud agents, automations and remote launch surfaces"
     url: https://cursor.com/docs/cloud-agent
   - title: "GitHub Copilot cloud agent — risks and mitigations"

@@ -836,7 +836,7 @@ pins:
       note: >-
         Cut a peer off in one action: revoke its registration and keys at the authorization server, drop its
         card from the registry so the gateway refuses it, and cancel the tasks we delegated to it (`POST
-        /tasks/{id}:cancel`). Introspection makes the revocation real for tokens already issued; whether the
+        /tasks/{id}:cancel`, or `CancelTask` over JSON-RPC). Introspection makes the revocation real for tokens already issued; whether the
         peer's own process stops is the peer's to honour and confirm.
     - mitigation: AML.M0031
       at: localTools->memory
@@ -944,7 +944,7 @@ walkthrough:
         `assertion` = the user assertion, `scope` = the skill, plus our client authentication. The
         platform validates our issuer and keys, maps `sub` to its tenant, and returns an access token
         bound to its agent and this skill — sender-constrained (DPoP or mTLS) where it supports it.
-        Then `POST /message:send` with `Authorization: Bearer`, `A2A-Version`, `traceparent`, the
+        Then `POST /message:send` (`SendMessage` in the JSON-RPC binding) with `Authorization: Bearer`, `A2A-Version`, `traceparent`, the
         `tenant` the card's interface named, and a `Message` (`role: ROLE_USER`, `parts`, `contextId`,
         `messageId`) whose text the gateway inspected for what it carries out of the organisation.
     - follow: peerVendor->gateway
@@ -953,7 +953,7 @@ walkthrough:
         The peer's agent works — on our user's identity in its tenant, and on its own identity for
         anything it delegates onward, since the token it holds is audience-bound to it and cannot
         travel a hop further. A `Task` comes back with a `taskId`, then status updates and
-        `artifacts` — by `POST /message:stream`, by `GET /tasks/{id}`, or by the push webhook configured
+        `artifacts` — by `POST /message:stream` (`SendStreamingMessage`), by `GET /tasks/{id}` (`GetTask`), or by the push webhook configured
         on the task. Every part is classified before the harness sees it: model-composed content from
         another organisation is instruction until proven otherwise.
     - follow: gateway->harness
@@ -1003,7 +1003,7 @@ scenarios:
       - follow: gateway->harness
         label: message:send (A2A-Version)
         note: >
-          `POST /message:send` arrives with `A2A-Version`, `traceparent` and a `Message`; the gateway
+          `POST /message:send`, or `SendMessage` over JSON-RPC, arrives with `A2A-Version`, `traceparent` and a `Message`; the gateway
           checks the version, the `tenant` against our interface, and dispatches to the skill named in
           `metadata` — not to whatever the text asks for — as a request from a named peer with no human
           behind it: autonomous-caller policy, and nothing in `parts` is an instruction.
@@ -1099,7 +1099,7 @@ scenarios:
       - follow: harness->gateway
         label: "resume: same taskId"
         note: >
-          `POST /message:send` with the same `taskId` and `contextId` — the way an interrupted task is
+          `POST /message:send` (JSON-RPC `SendMessage`) with the same `taskId` and `contextId` — the way an interrupted task is
           continued — on our agent's token as before.
       - follow: gateway->partner
         label: working on user's grant
@@ -1118,7 +1118,7 @@ scenarios:
       - follow: gateway->peerVendor
         label: pushNotificationConfig
         note: >
-          With the task, `POST /tasks/{taskId}/pushNotificationConfigs`: a `TaskPushNotificationConfig`
+          With the task, `POST /tasks/{taskId}/pushNotificationConfigs` (JSON-RPC `CreateTaskPushNotificationConfig`): a `TaskPushNotificationConfig`
           with `url` = our webhook behind the gateway, a task-specific `token` the peer must echo, and
           `authentication` naming the scheme the peer must use to call us — a bearer it obtains from
           our authorization server on its own agent identity, never a static secret.
@@ -1137,7 +1137,7 @@ scenarios:
         label: valid
         note: >
           Valid. A webhook that fails any check is dropped and logged; the loop can always
-          `GET /tasks/{id}` to reconcile.
+          `GET /tasks/{id}` (`GetTask`) to reconcile.
       - follow: gateway->harness
         label: update into loop
         note: >
@@ -1150,7 +1150,7 @@ scenarios:
         label: message:send for other skill
         note: >
           The vendor platform's agent holds a token scoped to skill `lookup` and sends `POST /message:send`
-          whose `metadata` names skill `update` — a syntactically perfect request on a valid token.
+          (`SendMessage`) whose `metadata` names skill `update` — a syntactically perfect request on a valid token.
       - follow: gateway->authServer
         label: "validate: scope short"
         note: >
@@ -1223,7 +1223,7 @@ scenarios:
         label: call after revocation
         note: >
           An agent whose registration was revoked an hour ago — the agreement ended, or its key was
-          reported compromised — calls `POST /message:send` with a token issued before the revocation.
+          reported compromised — calls `POST /message:send` (`SendMessage`) with a token issued before the revocation.
       - follow: gateway->authServer
         label: introspection
         note: >
