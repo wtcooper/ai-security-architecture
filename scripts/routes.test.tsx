@@ -13,7 +13,8 @@ test("every pattern has its own address, and every control, tool and cloud link 
   for (const a of dataset.archetypes) {
     assert.match(a.slug, /^(endpoint|cloud|saas)-[a-z0-9-]+$/, a.id);
     assert.equal(patternHref(a.id), `/patterns/${a.slug}`);
-    assert.equal(patternHref(a.id, { tab: "enable" }), `/patterns/${a.slug}`, "Enable is the default and stays out of the address");
+    assert.equal(patternHref(a.id, { tab: "overview" }), `/patterns/${a.slug}`, "How it works is the default and stays out of the address");
+    assert.equal(patternHref(a.id, { tab: "enable" }), `/patterns/${a.slug}?tab=enable`);
     assert.equal(patternHref(a.id, { tab: "flows" }), `/patterns/${a.slug}?tab=flows`);
     assert.equal(patternHref(a.id, { control: a.mitigations[0] }), `/patterns/${a.slug}#control-${a.mitigations[0]}`);
   }
@@ -28,9 +29,9 @@ test("old pattern addresses forward to the new pattern page, keeping tab, produc
   const tool = toolsForArchetype(arch.id)[0];
   const base = `/patterns/${arch.slug}`;
   // /reference?archetype=… opened on the overview.
-  assert.equal(legacyPatternTarget(q(`archetype=${arch.id}`), "", "overview"), `${base}?tab=overview`);
+  assert.equal(legacyPatternTarget(q(`archetype=${arch.id}`), "", "overview"), base);
   assert.equal(legacyPatternTarget(q(`archetype=${arch.id}&tab=flows`), "", "overview"), `${base}?tab=flows`);
-  assert.equal(legacyPatternTarget(q(`archetype=${arch.id}&tab=enable`), "", "overview"), base);
+  assert.equal(legacyPatternTarget(q(`archetype=${arch.id}&tab=enable`), "", "overview"), `${base}?tab=enable`);
   assert.equal(legacyPatternTarget(q(`archetype=${arch.id}&tab=enable&tool=${tool.id}`), ""), `${base}?tool=${tool.id}`);
   // A product names its own pattern, even with a stale or missing archetype beside it.
   assert.equal(legacyPatternTarget(q(`tool=${tool.id}`), ""), `${base}?tool=${tool.id}`);
@@ -39,7 +40,7 @@ test("old pattern addresses forward to the new pattern page, keeping tab, produc
   const control = arch.mitigations[0];
   assert.equal(legacyPatternTarget(q(`archetype=${arch.id}&tab=enable`), `#capability-${control}`), `${base}#control-${control}`);
   // /enable?archetype=… opened Enable.
-  assert.equal(legacyPatternTarget(q(`archetype=${arch.id}`), "", "enable"), base);
+  assert.equal(legacyPatternTarget(q(`archetype=${arch.id}`), "", "enable"), `${base}?tab=enable`);
   // A cloud is a product of the pattern in the address.
   const built = dataset.clouds[0].implementations[0].architecture;
   const builtSlug = dataset.archetypes.find((a) => a.id === built)!.slug;
@@ -78,7 +79,7 @@ test("the pattern finder understands product, cloud and everyday words", () => {
 
 test("a pattern can be linked as built on a cloud, on any tab, and a cloud has its own page", () => {
   assert.equal(patternHref("archChatAgent", { cloud: "cloudAws" }), "/patterns/cloud-chat-agent?cloud=aws");
-  assert.equal(patternHref("archChatAgent", { tab: "risks", cloud: "cloudGcp" }), "/patterns/cloud-chat-agent?tab=risks&cloud=gcp");
+  assert.equal(patternHref("archChatAgent", { tab: "flows", cloud: "cloudGcp" }), "/patterns/cloud-chat-agent?tab=flows&cloud=gcp");
   assert.equal(patternHref("archChatAgent", { cloud: "cloudAzure", control: "D3-OTF" }), "/patterns/cloud-chat-agent?cloud=azure#control-D3-OTF");
   assert.equal(cloudHref("cloudAzure"), `${ROUTES.clouds}?cloud=azure`);
 });

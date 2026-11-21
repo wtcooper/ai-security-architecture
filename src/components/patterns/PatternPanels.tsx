@@ -42,8 +42,7 @@ export function PatternRisks({
   return (
     <section aria-label="Risks on this pattern">
       <p className="max-w-3xl text-[13px] leading-relaxed text-ink-2">
-        The {risks.length} risks that enter this pattern, each tagged on the drawing where it enters. Open one to light its tag and see
-        which controls here reduce it. The sequence flows beneath show the same risks arriving step by step.
+        Open a risk to tag it on the drawing where it enters. The chips are the controls here that reduce it.
       </p>
       <ul className="mt-3 divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper">
         {risks.map((r) => {

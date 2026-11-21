@@ -70,14 +70,55 @@ function OurChoice({ choice }: { choice?: ComponentChoice }) {
   );
 }
 
-export function ArchetypeDetail({ archetype, cloud = null }: { archetype: Archetype; /** The cloud the pattern is shown as built on. */ cloud?: CloudProduct | null }) {
+export function ArchetypeDetail({
+  archetype,
+  cloud = null,
+  onEnable,
+  risks,
+}: {
+  archetype: Archetype;
+  /** The cloud the pattern is shown as built on. */
+  cloud?: CloudProduct | null;
+  /** Opens the Enable tab, where the pattern is put in place. */
+  onEnable?: () => void;
+  /** The risks that enter the pattern, as a folded section. */
+  risks?: ReactNode;
+}) {
   const cloudProducts = cloudProductsFor(archetype.id);
   const guidance = guidanceByArchetype.get(archetype.id);
+  // The first paragraph says how it works; the rest is there for whoever wants it.
+  const [lead, ...more] = archetype.description;
   return (
     <div className="rounded-xl border border-line bg-paper">
+      {onEnable && (
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line bg-mist/50 px-5 py-3" data-enable-link>
+          <p className="text-[13px] leading-snug text-ink-2">
+            To put this pattern in place: the {archetype.mitigations.length} controls it needs and the settings that deliver them.
+          </p>
+          <button type="button" onClick={onEnable} className="rounded-md bg-ink px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-ink-2">
+            How to enable it →
+          </button>
+        </div>
+      )}
       <Section title="How it works" count={null} defaultOpen>
-        <Prose blocks={archetype.description} size="sm" />
+        <div className="max-w-3xl">
+          <Prose blocks={lead ? [lead] : []} size="sm" />
+          {more.length > 0 && (
+            <details className="mt-2" data-more>
+              <summary className="cursor-pointer text-[12.5px] font-semibold text-ink-2">More detail</summary>
+              <div className="mt-2">
+                <Prose blocks={more} size="sm" />
+              </div>
+            </details>
+          )}
+        </div>
       </Section>
+
+      {risks && archetype.risks.length > 0 && (
+        <Section title="Risks" count={archetype.risks.length}>
+          {risks}
+        </Section>
+      )}
 
       <Section key={`components-${cloud?.id ?? "generic"}`} title="Components" count={archetype.blocks.length} defaultOpen={Boolean(cloud)}>
         <p className="mb-3 text-[12.5px] leading-snug text-ink-3">

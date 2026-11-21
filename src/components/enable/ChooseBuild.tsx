@@ -65,7 +65,7 @@ function HostingCards({
           <div key={o.id} className={frame} data-hosting-option={o.id} data-hosting-kind={o.kind}>
             {body}
             {other && (
-              <Link href={patternHref(other.id, { cloud: cloudSlug(platform.id) })} className="mt-2 block text-[12px] font-semibold text-introduced hover:underline" data-hosting-pattern={other.id}>
+              <Link href={patternHref(other.id, { tab: "enable", cloud: cloudSlug(platform.id) })} className="mt-2 block text-[12px] font-semibold text-introduced hover:underline" data-hosting-pattern={other.id}>
                 Open the pattern for it: {other.title} →
               </Link>
             )}
@@ -194,7 +194,7 @@ export function ChooseBuild({
             {n.instead && (
               <>
                 {" "}
-                <Link href={patternHref(n.instead.id, { cloud: cloudSlug(n.cloud.id) })} className="font-semibold text-introduced hover:underline">
+                <Link href={patternHref(n.instead.id, { tab: "enable", cloud: cloudSlug(n.cloud.id) })} className="font-semibold text-introduced hover:underline">
                   {n.instead.title} →
                 </Link>
               </>
@@ -217,7 +217,7 @@ export function ChooseBuild({
                 {selfRun.map((a, i) => (
                   <span key={a.id}>
                     {i > 0 && " · "}
-                    <Link href={patternHref(a.id, { cloud: cloudSlug(platform.id) })} className="font-semibold text-introduced hover:underline" data-self-run={a.id}>
+                    <Link href={patternHref(a.id, { tab: "enable", cloud: cloudSlug(platform.id) })} className="font-semibold text-introduced hover:underline" data-self-run={a.id}>
                       {a.title}
                     </Link>
                   </span>

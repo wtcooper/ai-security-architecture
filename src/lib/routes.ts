@@ -7,8 +7,9 @@
 import { archetypeById, toolById } from "@/lib/data";
 
 /** The tabs of a pattern page. Enable is the default and is left out of the address. */
-export type PatternTab = "enable" | "overview" | "risks" | "flows" | "incidents";
-export const PATTERN_TABS: PatternTab[] = ["enable", "overview", "risks", "flows", "incidents"];
+/** A pattern page opens on How it works ("overview"); Enable is where it is put in place. Risks are a section of How it works. */
+export type PatternTab = "overview" | "enable" | "flows" | "incidents";
+export const PATTERN_TABS: PatternTab[] = ["overview", "enable", "flows", "incidents"];
 
 export const ROUTES = {
   home: "/",
@@ -33,7 +34,8 @@ export function patternHref(archetypeId: string, opts: { tab?: PatternTab; tool?
   const arch = archetypeById.get(archetypeId);
   if (!arch) return ROUTES.patterns;
   const query = new URLSearchParams();
-  if (opts.tab && opts.tab !== "enable") query.set("tab", opts.tab);
+  // How it works is the default; a product or a control opens Enable by itself, so neither needs the tab named.
+  if (opts.tab && opts.tab !== "overview" && !(opts.tab === "enable" && (opts.tool || opts.control))) query.set("tab", opts.tab);
   if (opts.cloud) query.set("cloud", cloudSlug(opts.cloud));
   if (opts.tool) query.set("tool", opts.tool);
   return `${ROUTES.patterns}/${arch.slug}${query.size ? `?${query}` : ""}${opts.control ? `#control-${opts.control}` : ""}`;

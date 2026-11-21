@@ -6,6 +6,7 @@ import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks
 import { EnablePanel } from "../src/components/enable/EnablePanel";
 import { ControlTable } from "../src/components/enable/ControlTable";
 import { PatternPage } from "../src/components/patterns/PatternPage";
+import { PatternRisks } from "../src/components/patterns/PatternPanels";
 import { PatternFinder } from "../src/components/patterns/PatternFinder";
 import { ArchetypeDetail, ComponentList } from "../src/components/reference/ArchetypeDetail";
 import HomePage from "../src/app/page";
@@ -16,7 +17,7 @@ import { ControlDetail } from "../src/components/controls/ControlDetail";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { coverageWord } from "../src/components/enable/labels";
 import { baselineNotPinned, controlGroups, controlsDelivered, settingGroups } from "../src/components/enable/model";
-import { dataset, enablement, isBaseline, productsForArchetype, toolsForArchetype } from "../src/lib/data";
+import { controlName, dataset, enablement, isBaseline, productsForArchetype, toolsForArchetype } from "../src/lib/data";
 
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
 const page = (archetypeId: string, query = "") =>
@@ -149,24 +150,26 @@ test("the Enable tab opens as folded steps; a lit control opens the controls, ba
   }
 });
 
-test("a control row leads with a plain instruction and why, at every place it is pinned; the definition and the guidance are elsewhere", () => {
+test("a control row is one line of reference; what to do and why are in the open row, at every place it is pinned", () => {
   for (const arch of dataset.archetypes) {
-    const table = renderToStaticMarkup(<ControlTable groups={controlGroups(arch)} archetype={arch} open={arch.mitigations[0]} onOpen={() => {}} />);
+    const open = arch.mitigations[0];
+    const table = renderToStaticMarkup(<ControlTable groups={controlGroups(arch)} archetype={arch} open={open} onOpen={() => {}} />);
     assert.equal([...table.matchAll(/data-instruction/g)].length, arch.mitigations.length, `${arch.id}: a row per control`);
-    assert.equal([...table.matchAll(/data-do/g)].length, arch.pins.mitigations.length, `${arch.id}: an instruction at every place a control is pinned`);
-    for (const pin of arch.pins.mitigations) {
+    for (const id of arch.mitigations) assert.ok(table.includes(esc(controlName(id))), `${arch.id}: ${id} is named`);
+    // The instruction is not in the folded rows: only the open one carries what to do and why.
+    const here = arch.pins.mitigations.filter((p) => p.mitigation === open);
+    assert.equal([...table.matchAll(/data-do/g)].length, here.length, `${arch.id}: instructions only in the open row`);
+    for (const pin of here) {
       assert.ok(table.includes(esc(pin.do)), `${arch.id}: ${pin.mitigation} @ ${pin.at} says what to do`);
       assert.ok(table.includes(esc(pin.why)), `${arch.id}: ${pin.mitigation} @ ${pin.at} says why`);
     }
-    // Each category has a plain heading; the CSF name is the reference beside it.
-    for (const g of controlGroups(arch)) assert.ok(table.includes(esc(g.plain)) && table.includes(esc(g.title)), `${arch.id}: ${g.id} heading`);
-    // The architect's note and the catalogue's definition are in the open row only.
+    // Each category has a plain heading and one sentence on what it is for; the CSF name is the reference beside it.
+    for (const g of controlGroups(arch)) assert.ok(table.includes(esc(g.plain)) && table.includes(esc(g.title)) && table.includes(esc(g.blurb)), `${arch.id}: ${g.id} heading`);
     assert.equal([...table.matchAll(/data-definition/g)].length, 1, `${arch.id}: one definition, in the open row`);
-    assert.equal([...table.matchAll(/data-detail/g)].length, 1, `${arch.id}: the precise note is in the open row`);
     const guidance = dataset.guidance.find((g) => g.archetype === arch.id)!;
     const how = renderToStaticMarkup(<ArchetypeDetail archetype={arch} />);
     assert.match(how, new RegExp(`How to govern this pattern[^<]*(<[^>]+>\\s*)*${guidance.items.length}`), `${arch.id}: guidance is a section of How it works`);
-    assert.doesNotMatch(page(arch.id), /What to do<\/p>|data-guidance-item/, `${arch.id}: Enable carries no guidance prose`);
+    assert.doesNotMatch(page(arch.id, "tab=enable"), /data-guidance-item/, `${arch.id}: Enable carries no guidance prose`);
   }
 });
 
@@ -197,18 +200,22 @@ test("with a tool chosen, each control it covers names that tool's settings", ()
   for (const text of [first.name, first.recommended]) assert.ok(table.includes(esc(text)), `the open row shows "${text.slice(0, 40)}"`);
 });
 
-test("a pattern opens on Enable; a tab link opens that tab and a product link opens its settings", () => {
+test("a pattern opens on How it works, with a link to Enable; a tab link opens that tab and a product link opens its settings", () => {
   const arch = dataset.archetypes.find((a) => toolsForArchetype(a.id).length)!;
   const home = page(arch.id);
-  assert.match(home, /id="controls"/, "Enable is the default tab");
+  assert.match(home, /role="tab"[^>]*aria-selected="true"[^>]*>How it works/, "How it works is the default tab");
+  assert.match(home, /data-enable-link[\s\S]*How to enable it/, "it leads with the way to Enable");
+  assert.doesNotMatch(home, /id="controls"/);
   assert.match(home, /Use this pattern when: /);
   assert.ok(home.includes(arch.useWhen.replace(/'/g, "&#x27;")), "the header says when the pattern applies");
-  assert.match(home, /role="tab"[^>]*aria-selected="true"[^>]*>Enable/);
-  assert.doesNotMatch(page(arch.id, "tab=overview"), /id="controls"/);
-  assert.match(page(arch.id, "tab=risks"), /Risks on this pattern/);
-  assert.doesNotMatch(page(arch.id, "tab=risks"), /Boundary crossings/, "risks and flows are separate tabs");
+  // Four tabs: How it works, Enable, Data flows, Incidents. The risks are a section of How it works.
+  const labels = [...home.matchAll(/role="tab"[^>]*>([A-Za-z ]+)/g)].map((m) => m[1].trim());
+  assert.deepEqual(labels.slice(0, 4), ["How it works", "Enable", "Data flows", "Incidents"]);
+  assert.match(home, new RegExp(`>Risks<span[^>]*>\\s*${arch.risks.length}<`), "the risks are a section of How it works");
+  assert.match(page(arch.id, "tab=enable"), /id="controls"/);
+  // An old link to the Risks tab lands on How it works.
+  assert.match(page(arch.id, "tab=risks"), /role="tab"[^>]*aria-selected="true"[^>]*>How it works/);
   assert.match(page(arch.id, "tab=flows"), /Boundary crossings/);
-  assert.doesNotMatch(page(arch.id, "tab=flows"), /Risks on this pattern/);
   assert.match(page(arch.id, "tab=incidents"), /incident/i);
   // The drawing comes first and the tabs sit beneath it; there is one drawing, with no second view to switch to.
   assert.ok(home.indexOf('id="pattern-drawing"') < home.indexOf('id="pattern-tabs"'), "the tabs are under the drawing");
@@ -239,9 +246,9 @@ test("nothing version 1 showed about a pattern is missing: its summary, how it w
   }
 });
 
-test("the Risks tab lists every risk of the pattern, and the Incidents tab every incident on it", () => {
+test("How it works lists every risk of the pattern, and the Incidents tab every incident on it", () => {
   for (const arch of dataset.archetypes) {
-    const risks = page(arch.id, "tab=risks");
+    const risks = renderToStaticMarkup(<PatternRisks archetype={arch} lit={null} onLight={() => {}} onPickControl={() => {}} />);
     for (const id of arch.risks) assert.match(risks, new RegExp(`id="risk-${id}"`), `${arch.id}: ${id} is listed`);
     assert.equal([...risks.matchAll(/id="risk-/g)].length, arch.risks.length, arch.id);
     const incidents = page(arch.id, "tab=incidents");

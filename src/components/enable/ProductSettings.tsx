@@ -15,7 +15,7 @@
  * appears only once the organisation has recorded a status for that product.
  */
 import Link from "next/link";
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
 import { SettingCheck } from "./SettingCheck";
@@ -23,7 +23,7 @@ import { adoptionFor, archetypeById, controlName, settingAdoptionFor, settingLin
 import { patternHref } from "@/lib/routes";
 import type { AdoptionStatus, Archetype, ProductSetting } from "@/lib/types";
 import { ADOPTION_META, SETTING_VIA_META } from "./labels";
-import { controlsDelivered, settingGroups } from "./model";
+import { controlGroups, controlsDelivered, settingGroups } from "./model";
 import { ToolRecord } from "./ToolRecord";
 
 export function AdoptionPill({ status, title }: { status: AdoptionStatus; title?: string }) {
@@ -73,19 +73,30 @@ export function ProductPills({ products, selected, onPick, label = "Products" }:
   );
 }
 
-/** Where a setting lives, in a few words: the console, file or service its path starts at. */
-const placeOf = (setting: ProductSetting) => {
-  const head = setting.where.split(/\s+[›→]\s+/)[0].split(" — ")[0].trim();
-  return head.length > 56 ? `${head.slice(0, 54).trimEnd()}…` : head;
-};
-
 /** How a product is named in a tight space: a platform by its short name, a tool by its own. */
 const shortOf = (product: Product) => (product.kind === "cloud" ? product.cloud.short : product.tool.name);
 
+/** The chip of a control a setting delivers: picking it lights that control on the drawing. */
+function Chip({ n, lit, title, onClick }: { n: number; lit: boolean; title: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={`flex h-[21px] w-[21px] items-center justify-center rounded-full border text-[10.5px] font-bold hover:bg-chip hover:text-white ${lit ? "border-chip bg-chip text-white" : "border-chip bg-chip-soft text-chip"}`}
+    >
+      {n}
+    </button>
+  );
+}
+
 /**
  * The settings of one product, or of two chosen together on a hosted pattern (where it runs, and
- * what it is built with), under the same headings and in the same order as the controls of step 1.
- * With two, each row says which it belongs to.
+ * what it is built with), as a table of recommended values: the setting and its page, how it is
+ * set, the value to set with the default and the reason, the controls it delivers, and its status
+ * once the organisation records one. The bands are those of the controls step, in the same order,
+ * each opening with the sentence that says what it is for.
  */
 export function SettingsTable({
   product,
@@ -98,11 +109,12 @@ export function SettingsTable({
   /** One product, or the platform and the framework of a hosted pattern. */
   products?: Product[];
   archetype: Archetype;
-  /** The control lit on the drawing, so its name reads as selected here too. */
+  /** The control lit on the drawing, so its chip reads as lit here too. */
   lit: string | null;
   onLight: (controlId: string) => void;
 }) {
   const number = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
+  const blurbs = new Map(controlGroups(archetype).map((g) => [g.id, g.blurb]));
   // A setting belongs to the product that lists it; two products may use the same id.
   const owner = new Map<ProductSetting, Product>(products.flatMap((p) => p.settings.map((st) => [st, p] as const)));
   const groups = settingGroups(archetype, products.flatMap((p) => p.settings));
@@ -110,165 +122,146 @@ export function SettingsTable({
   const recorded = products.some((p) => p.settings.some((st) => settingAdoptionFor(p.id, st.id).set));
   // A row says whose it is when two products are shown, or when the platform's file carries a framework's own setting.
   const tagged = products.length > 1;
-  const grid = recorded ? "md:grid-cols-[28px_minmax(0,2.3fr)_minmax(0,1fr)_104px]" : "md:grid-cols-[28px_minmax(0,2.3fr)_minmax(0,1fr)]";
-  const [open, setOpen] = useState<string | null>(null);
+  const grid = recorded ? "md:grid-cols-[minmax(0,1.35fr)_104px_minmax(0,1.9fr)_76px_100px]" : "md:grid-cols-[minmax(0,1.35fr)_104px_minmax(0,1.9fr)_76px]";
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-paper" data-settings={products.map((p) => p.id).join(" ")}>
-      <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${grid}`}>
-        <span aria-hidden />
-        <span>What to set</span>
-        <span>Control · where it is set</span>
-        {recorded && <span className="md:text-right">Status</span>}
-      </div>
-      {groups.map((group) => (
-        <Fragment key={group.id}>
-          <div className="border-b border-line bg-mist/40 px-4 py-2" data-setting-group={group.id}>
-            <p className="flex flex-wrap items-baseline gap-x-2.5">
-              <span className="display text-[14px] font-bold text-ink">{group.plain}</span>
-              {group.title ? (
-                <span className="text-[11px] text-ink-3" title={`NIST CSF 2.0 · ${group.function}`}>{group.title}</span>
-              ) : (
-                <span className="text-[11px] text-ink-3">Hardening the product recommends that is not one of the numbered controls</span>
-              )}
-            </p>
-          </div>
-          <ul className="divide-y divide-line border-b border-line last:border-b-0">
-            {group.settings.map((s) => {
-              const controls = controlsDelivered(archetype, s);
-              const product = owner.get(s)!;
-              const key = `${product.id}-${s.id}`;
-              const expanded = open === key;
-              const a = settingAdoptionFor(product.id, s.id);
-              const ourLink = settingLinkFor(product.id, s.id);
-              return (
-                <li key={key} id={`setting-${key}`} className="scroll-mt-24">
-                  <button
-                    type="button"
-                    onClick={() => setOpen(expanded ? null : key)}
-                    aria-expanded={expanded}
-                    className={`grid w-full grid-cols-[28px_minmax(0,1fr)] gap-x-4 gap-y-1 px-4 py-3 text-left transition-colors hover:bg-mist/50 ${expanded ? "bg-mist/50" : ""} ${grid}`}
+    <>
+      <p className="mb-2 text-[12px] leading-snug text-ink-3" data-settings-status-hint>
+        {recorded ? (
+          <>
+            Status comes from <span className="ident">data/org/products.yaml</span>.
+          </>
+        ) : (
+          <>
+            No status recorded for these settings yet: record what you have switched on in <span className="ident">data/org/products.yaml</span> and a status column appears.
+          </>
+        )}
+      </p>
+      <div className="overflow-hidden rounded-xl border border-line bg-paper" data-settings={products.map((p) => p.id).join(" ")}>
+        <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${grid}`}>
+          <span>Setting</span>
+          <span>Set via</span>
+          <span>Recommended</span>
+          <span>Delivers</span>
+          {recorded && <span className="md:text-right">Status</span>}
+        </div>
+        {groups.map((group) => (
+          <Fragment key={group.id}>
+            <div className="border-b border-line bg-mist/40 px-4 py-2" data-setting-group={group.id}>
+              <p className="flex flex-wrap items-baseline gap-x-2.5">
+                <span className="display text-[14px] font-bold text-ink">{group.plain}</span>
+                {group.title && (
+                  <span className="text-[11px] text-ink-3" title={`NIST CSF 2.0 · ${group.function}`}>
+                    {group.title}
+                  </span>
+                )}
+              </p>
+              <p className="mt-0.5 max-w-4xl text-[12px] leading-snug text-ink-2">
+                {group.title ? blurbs.get(group.id) : "Hardening the product recommends that is not one of the numbered controls."}
+              </p>
+            </div>
+            <ul className="divide-y divide-line border-b border-line last:border-b-0">
+              {group.settings.map((s) => {
+                const controls = controlsDelivered(archetype, s);
+                const product = owner.get(s)!;
+                const key = `${product.id}-${s.id}`;
+                const a = settingAdoptionFor(product.id, s.id);
+                const ourLink = settingLinkFor(product.id, s.id);
+                return (
+                  <li
+                    key={key}
+                    id={`setting-${key}`}
+                    className={`grid scroll-mt-24 grid-cols-1 gap-x-4 gap-y-2 px-4 py-3 text-[12.5px] leading-snug ${grid} ${controls.includes(lit ?? "") ? "bg-chip-soft/30" : ""}`}
                   >
-                    {/* The first control it delivers, as its chip: the same number that leads that control's row above. */}
-                    <span
-                      className={`flex h-[21px] w-[21px] items-center justify-center rounded-full border text-[10.5px] font-bold ${
-                        controls.length
-                          ? controls.includes(lit ?? "")
-                            ? "border-chip bg-chip text-white"
-                            : "border-chip bg-chip-soft text-chip"
-                          : "border-line bg-mist text-ink-3"
-                      }`}
-                      title={controls.length ? `Delivers control ${number.get(controls[0])}: ${controlName(controls[0])}` : "Delivers none of the numbered controls"}
-                    >
-                      {controls.length ? number.get(controls[0]) : "·"}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[13.5px] font-semibold leading-snug text-ink" data-setting-name>
-                        {s.name}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-ink" data-setting-name>
+                        <a href={s.url} target="_blank" rel="noreferrer" className="hover:text-introduced hover:underline" title="The vendor's page for this setting">
+                          {s.name} <span className="text-introduced">↗</span>
+                        </a>
                         {(tagged || s.builtWith) && (
                           <span
                             className="ml-2 inline-block rounded border border-line bg-mist px-1.5 py-px align-[1px] text-[10.5px] font-semibold text-ink-2"
                             data-setting-source={s.builtWith ? "framework" : product.kind}
                             title={
                               s.builtWith
-                                ? `A ${s.builtWith} setting: it applies if you build this with ${s.builtWith}`
+                                ? `Applies if you build this with ${s.builtWith}, as ${shortOf(product) === "On-premises" ? "this mapping does" : `${shortOf(product)}'s own guides do`}; with another framework, use its own setting for the same control`
                                 : product.kind === "cloud"
                                   ? `A setting of ${product.cloud.name}: where it runs`
-                                  : `A setting of ${product.tool.name}: what you build it with`
+                                  : `A setting of ${product.tool.name}`
                             }
                           >
                             {s.builtWith ?? shortOf(product)}
                           </span>
                         )}
-                      </span>
-                      <span className="mt-0.5 block text-[13px] leading-snug text-ink" data-setting-value>
-                        <span className="text-ink-3">Set to </span>
-                        {s.recommended}
-                      </span>
-                      <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-2">{s.why}</span>
-                    </span>
-                    <span className="col-start-2 text-[12px] leading-snug md:col-start-auto">
-                      {controls.map((id) => (
-                        <span key={id} className="block font-semibold text-ink-2" data-delivers={id}>
-                          <span className="ident mr-1 text-[10.5px] font-bold text-chip">{number.get(id)}</span>
-                          {controlName(id)}
+                      </p>
+                      <p className="ident mt-0.5 break-words text-[10.5px] leading-snug text-ink-3" data-setting-where>
+                        {s.where}
+                      </p>
+                      {s.requires && (
+                        <p className="mt-1">
+                          <span className="inline-block rounded border border-line px-1.5 py-px text-[10.5px] text-ink-3" title="What it requires">
+                            {s.requires}
+                          </span>
+                        </p>
+                      )}
+                      {s.check && (
+                        <details className="mt-1.5">
+                          <summary className="cursor-pointer text-[11.5px] font-semibold text-introduced">Check it</summary>
+                          <div className="mt-1.5">
+                            <SettingCheck check={s.check} />
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap content-start gap-1">
+                      {s.setVia.map((v) => (
+                        <span key={v} title={SETTING_VIA_META[v].blurb} className="rounded border border-line bg-mist px-1.5 py-px text-[10.5px] font-semibold text-ink-2">
+                          {SETTING_VIA_META[v].label}
                         </span>
                       ))}
-                      <span className="block text-ink-3">{placeOf(s)}</span>
-                    </span>
-                    {recorded && (
-                      <span className="col-start-2 md:col-start-auto md:text-right">
-                        <AdoptionPill status={a.status} title={a.set ? [a.value && `Set to: ${a.value}`, a.note].filter(Boolean).join(" · ") || undefined : "No status recorded in data/org/products.yaml"} />
-                        {a.value && <span className="mt-0.5 block text-[11px] text-ink-3">Set to {a.value}</span>}
-                      </span>
-                    )}
-                  </button>
-                  {expanded && (
-                    <div className="space-y-2 border-t border-line bg-mist/30 px-4 py-3.5 text-[12.5px] leading-relaxed text-ink-2 md:pl-[60px]" data-setting-detail>
-                      <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[max-content_minmax(0,1fr)]">
-                        <dt className="text-ink-3">Where</dt>
-                        <dd className="ident break-words text-[11.5px] text-ink">{s.where}</dd>
-                        <dt className="text-ink-3">How it is set</dt>
-                        <dd>{s.setVia.map((v) => SETTING_VIA_META[v].label).join(" · ")}</dd>
-                        {s.default && (
-                          <>
-                            <dt className="text-ink-3">Default</dt>
-                            <dd>{s.default}</dd>
-                          </>
-                        )}
-                        {s.requires && (
-                          <>
-                            <dt className="text-ink-3">Requires</dt>
-                            <dd>{s.requires}</dd>
-                          </>
-                        )}
-                        {s.builtWith && product.kind === "cloud" && (
-                          <>
-                            <dt className="text-ink-3">Applies if</dt>
-                            <dd data-setting-built-with>
-                              You build this with {s.builtWith}, as {shortOf(product) === "On-premises" ? "this mapping does" : `${shortOf(product)}'s own guides do`}. With another framework or server, use its own
-                              setting for the same control.
-                            </dd>
-                          </>
-                        )}
-                        <dt className="text-ink-3">Checked</dt>
-                        <dd>Against the vendor&rsquo;s page on {s.verified}</dd>
-                        {(a.value || a.note || ourLink) && (
-                          <>
-                            <dt className="text-ink-3">Your organisation</dt>
-                            <dd data-setting-ours>
-                              {[a.value && `Set to ${a.value}`, a.note].filter(Boolean).join(" · ")}
-                              {ourLink && (
-                                <>
-                                  {(a.value || a.note) && " · "}
-                                  <a href={ourLink} target="_blank" rel="noreferrer" className="font-semibold text-introduced hover:underline">
-                                    Your module or runbook ↗
-                                  </a>
-                                </>
-                              )}
-                            </dd>
-                          </>
-                        )}
-                      </dl>
-                      {s.check && <SettingCheck check={s.check} />}
-                      <span className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
-                        <a href={s.url} target="_blank" rel="noreferrer" className="text-[12px] font-semibold text-introduced hover:underline">
-                          Vendor documentation ↗
-                        </a>
-                        {controls.map((id) => (
-                          <button key={id} type="button" onClick={() => onLight(id)} className="text-[12px] font-semibold text-introduced hover:underline">
-                            {lit === id ? `Control ${number.get(id)} is lit on the drawing` : `Light control ${number.get(id)} on the drawing`}
-                          </button>
-                        ))}
-                      </span>
                     </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </Fragment>
-      ))}
-    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-ink" data-setting-value>
+                        {s.recommended}
+                      </p>
+                      {s.default && <p className="text-[11.5px] text-ink-3">Default: {s.default}</p>}
+                      <p className="mt-0.5 text-ink-2">{s.why}</p>
+                    </div>
+                    <div className="flex flex-wrap content-start gap-1">
+                      {controls.length ? (
+                        controls.map((id) => (
+                          <span key={id} data-delivers={id}>
+                            <Chip n={number.get(id)!} lit={lit === id} title={`Control ${number.get(id)}: ${controlName(id)}. Light it on the drawing`} onClick={() => onLight(id)} />
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-ink-3" title="Delivers none of the numbered controls">
+                          ·
+                        </span>
+                      )}
+                    </div>
+                    {recorded && (
+                      <div className="md:text-right" data-setting-ours>
+                        <AdoptionPill
+                          status={a.status}
+                          title={a.set ? [a.value && `Set to: ${a.value}`, a.note].filter(Boolean).join(" · ") || undefined : "No status recorded in data/org/products.yaml"}
+                        />
+                        {a.value && <p className="mt-0.5 text-[11px] text-ink-3">Set to {a.value}</p>}
+                        {a.note && <p className="mt-0.5 text-[11px] text-ink-3">{a.note}</p>}
+                        {ourLink && (
+                          <a href={ourLink} target="_blank" rel="noreferrer" className="mt-0.5 block text-[11px] font-semibold text-introduced hover:underline">
+                            Your runbook ↗
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </Fragment>
+        ))}
+      </div>
+    </>
   );
 }
 

@@ -20,7 +20,7 @@ import { useState, type ReactNode } from "react";
 import { controlName, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
 import { hostingInEffect, productShort, type CloudProduct } from "@/components/cloud/model";
-import { BASELINE_HELP, ControlTable } from "./ControlTable";
+import { anyControlStatus, BASELINE_HELP, ControlTable } from "./ControlTable";
 import { baselineNotPinned, controlGroups } from "./model";
 import { ChooseBuild } from "./ChooseBuild";
 import { ProductSettings } from "./ProductSettings";
@@ -163,10 +163,7 @@ export function EnablePanel({
   return (
     <div className="space-y-2.5">
       <p className="mb-3 max-w-3xl text-[13px] leading-relaxed text-ink-2">
-{built
-          ? "Three steps to run this pattern safely: put the controls in place, choose how you will build it, then set the controls in what you chose."
-          : "Two steps to run this pattern safely: put the controls in place, then set them in the product you run."}{" "}
-        Each control is a numbered chip on the drawing: pick a chip to open its row.
+        {built ? "The controls, how you build it, then the settings." : "The controls, then the settings in your product."} Each control is a numbered chip on the drawing.
       </p>
 
       <Step
@@ -181,16 +178,20 @@ export function EnablePanel({
         }
         expanded={isOpen("controls")}
         onToggle={() => toggle("controls")}
-        lead={`What to do, in plain words, one control at a time.${
-          short ? ` Each names the ${short} setting that delivers it.` : ""
-        }`}
+        lead={`What this pattern needs in place, by category.${short ? ` Each names the ${short} settings that deliver it.` : ""} Open a row for what to do and why.`}
       >
-        {shared > 0 && (
-          <p className="mb-3 max-w-3xl text-[12.5px] leading-snug text-ink-3" title={BASELINE_HELP}>
-            Work down the list. {shared} of the {controls.length} are needed by every AI deployment, so you may already have them. Open a row
-            for the settings that deliver it, the detail and the risks it reduces.
-          </p>
-        )}
+        <p className="mb-3 max-w-3xl text-[12px] leading-snug text-ink-3" data-status-hint>
+          {shared > 0 && <span title={BASELINE_HELP}>{shared} of the {controls.length} are needed by every AI deployment, so you may already have them. </span>}
+          {anyControlStatus ? (
+            <>
+              Status comes from your organisation&rsquo;s controls in <span className="ident">data/org/controls.yaml</span>.
+            </>
+          ) : (
+            <>
+              No status recorded yet: list your own controls in <span className="ident">data/org/controls.yaml</span> and each row shows whether it is in place.
+            </>
+          )}
+        </p>
         <ControlTable
           groups={groups}
           archetype={archetype}
@@ -256,9 +257,9 @@ export function EnablePanel({
             ? "No product of this kind is catalogued yet. Build it to the controls above."
             : built
               ? chosen.length
-                ? `The same list as step 1, now as settings of ${chosen.map((p) => p.name).join(" and ")}: what to set and to what, why, and the control each one delivers.`
-                : "The same list as step 1, now as settings of what you chose in step 2: what to set and to what, why, and the control each one delivers."
-              : "The same list, now as settings: what to set and to what, why, and the control each one delivers. Pick your product first."
+                ? `The recommended value for each setting of ${chosen.map((p) => p.name).join(" and ")}, and the controls it delivers.`
+                : "The recommended value for each setting of what you chose in step 2, and the controls it delivers."
+              : "The recommended value for each setting of your product, and the controls it delivers. Pick your product first."
         }
       >
         {products.length > 0 && (

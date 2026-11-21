@@ -36,7 +36,8 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
   // A product named in the address opens the settings step on it, whether a tool or a cloud.
   const linkedToolOnly = linkedProduct;
 
-  const tabFrom = (t: PatternTab | null): PatternTab => (t && PATTERN_TABS.includes(t) ? t : "enable");
+  // How it works is the default; an old link to the Risks tab lands there too, where the risks now are.
+  const tabFrom = (t: PatternTab | null): PatternTab => (t && PATTERN_TABS.includes(t) ? t : "overview");
   const [tab, setTab] = useState<PatternTab>(linkedToolOnly ? "enable" : tabFrom(linkedTab));
   const [cloud, setCloud] = useState<string | null>(linkedCloud);
   // How the pattern is hosted on that cloud (`?host=aks`); null is the option its mapping describes.
@@ -101,7 +102,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     // Not before the anchor has been read, or the address would lose it.
     if (!arrived || elsewhere) return;
     const query = new URLSearchParams();
-    if (tab !== "enable") query.set("tab", tab);
+    if (tab !== "overview") query.set("tab", tab);
     if (cloud) query.set("cloud", cloudSlug(cloud));
     if (cloud && host) query.set("host", host);
     // The open product stays in the address, a cloud included: the address is read back into

@@ -131,8 +131,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
     onTab(next);
     if (next !== "flows") onWalk(null);
     else if (walkIndex === null) onWalk(0);
-    if (next !== "enable" && next !== "risks") onHighlight(null);
-    if (next === "risks" && highlight?.kind === "mitigation") onHighlight(null);
+    if (next !== "enable" && next !== "overview") onHighlight(null);
     // Chosen from the stuck strip, far down a panel: bring the drawing back, since the tab changes it.
     const top = drawingRef.current?.getBoundingClientRect().top;
     if (top !== undefined && top < 0) requestAnimationFrame(() => drawingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -170,10 +169,9 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   };
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: "enable", label: "Enable", count: archetype.mitigations.length },
     { id: "overview", label: "How it works" },
-    { id: "risks", label: "Risks", count: archetype.risks.length },
-    { id: "flows", label: "Flows", count: walks.length },
+    { id: "enable", label: "Enable", count: archetype.mitigations.length },
+    { id: "flows", label: "Data flows", count: walks.length },
     { id: "incidents", label: "Incidents", count: incidents.filter((i) => i.archetype === archetype.id).length },
   ];
 
@@ -233,8 +231,8 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               walk={activeWalk}
               highlight={highlight}
               onHighlight={onHighlight}
-              // One kind of marker at a time: risk tags on Risks, a walk's steps on Flows, control chips everywhere else.
-              pins={tab === "risks" ? "risks" : "controls"}
+              // One kind of marker at a time: a risk's tags while one is open under How it works, a walk's steps on Data flows, control chips otherwise.
+              pins={highlight?.kind === "risk" ? "risks" : "controls"}
               onPickMitigation={pickChip}
               services={services}
               differs={differs}
@@ -243,7 +241,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               className="w-full"
             />
           </div>
-          <DrawingLegend className="mt-3 px-1" risks={tab === "risks"} cloud={cloudProduct?.cloud.short} differs={Boolean(differs?.size)} own={Boolean(cloudProduct?.cloud.selfManaged)} />
+          <DrawingLegend className="mt-3 px-1" risks={highlight?.kind === "risk"} cloud={cloudProduct?.cloud.short} differs={Boolean(differs?.size)} own={Boolean(cloudProduct?.cloud.selfManaged)} />
         </>
       )}
 
@@ -271,18 +269,23 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
       </div>
 
       <div className="mt-5" role="tabpanel" aria-label={tabs.find((t) => t.id === tab)?.label}>
-        {tab === "overview" && <ArchetypeDetail archetype={archetype} cloud={cloudProduct} />}
-
-        {tab === "incidents" && <PatternIncidents archetype={archetype} />}
-
-        {tab === "risks" && (
-          <PatternRisks
+        {tab === "overview" && (
+          <ArchetypeDetail
             archetype={archetype}
-            lit={highlight?.kind === "risk" ? highlight.id : null}
-            onLight={(id) => onHighlight(id ? { kind: "risk", id } : null)}
-            onPickControl={pickChip}
+            cloud={cloudProduct}
+            onEnable={() => go("enable")}
+            risks={
+              <PatternRisks
+                archetype={archetype}
+                lit={highlight?.kind === "risk" ? highlight.id : null}
+                onLight={(id) => onHighlight(id ? { kind: "risk", id } : null)}
+                onPickControl={pickChip}
+              />
+            }
           />
         )}
+
+        {tab === "incidents" && <PatternIncidents archetype={archetype} />}
 
         {tab === "flows" && (
           <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
