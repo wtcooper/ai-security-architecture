@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { EnablePanel, type EnableLayout } from "@/components/enable/EnablePanel";
+import { EnablePanel } from "@/components/enable/EnablePanel";
 import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
 import { CrossingsRegister } from "@/components/drawing/CrossingsRegister";
 import { CloudSwitch } from "@/components/cloud/CloudSwitch";
@@ -81,12 +81,9 @@ interface ArchetypeViewProps {
   /** How it is hosted on that platform, or null for the option the mapping describes. */
   host?: string | null;
   onHost?: (optionId: string | null) => void;
-  /** How Enable is laid out, and the switch between layouts where they are being compared. */
-  layout?: EnableLayout;
-  onLayout?: (layout: EnableLayout) => void;
 }
 
-export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud, host = null, onHost, layout = "current", onLayout }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud, host = null, onHost }: ArchetypeViewProps) {
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const drawingRef = useRef<HTMLDivElement>(null);
   const open = highlight?.kind === "mitigation" ? highlight.id : null;
@@ -342,8 +339,6 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
             host={host}
             onHost={onHost}
             cloud={cloudProduct}
-            layout={layout}
-            layouts={onLayout ? { onLayout } : undefined}
           />
         )}
       </div>

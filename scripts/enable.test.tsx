@@ -405,26 +405,15 @@ test("Reference › Clouds lists every pattern on a cloud and an option for ever
   for (const c of cloudOptionsForControl("D3-OTF")) assert.ok(detail.includes(esc(c.cloud.name)), `the control names ${c.cloud.name}`);
 });
 
-test("Enable's layouts: A puts the first setting and its value in each control row, B lists every setting under its control, C leads with the settings", () => {
-  const arch = dataset.archetypes.find((a) => a.id === "archChatAgent")!;
-  const [product] = cloudProductsFor(arch.id);
-  const render = (layout: "current" | "a" | "b" | "c") =>
-    renderToStaticMarkup(<EnablePanel archetype={arch} open={arch.mitigations[0]} onOpen={() => {}} onShowDrawing={() => {}} tool={product.id} onPickTool={() => {}} cloud={product} layout={layout} />);
-  const current = render("current");
-  assert.match(current, /data-control-table="names"/);
-  assert.ok(current.indexOf('id="controls"') < current.indexOf('id="tools"'), "controls, then settings");
-  const a = render("a");
-  assert.match(a, /data-control-table="inline"/);
-  assert.match(a, /data-recommended-value/, "a recommended value is in the rows");
-  const b = render("b");
-  assert.match(b, /data-control-table="checklist"/);
-  assert.doesNotMatch(b, /id="tools"/, "no separate settings step");
-  const listed = arch.mitigations.reduce((n, id) => n + optionsFor(product, id).length, 0);
-  assert.equal([...b.matchAll(/data-checklist="/g)].length, arch.mitigations.length, "every control has its list");
-  assert.ok([...b.matchAll(/data-setting-value/g)].length >= listed, "every setting under its control shows the value to set");
-  const c = render("c");
-  assert.ok(c.indexOf('id="choose"') < c.indexOf('id="tools"') && c.indexOf('id="tools"') < c.indexOf('id="controls"'), "choose, the settings, then the controls");
-  assert.match(c, />What to set</);
-  // Every setting shown anywhere says what to set it to, apart from the default.
-  for (const html of [current, a, b, c]) assert.doesNotMatch(html, /Default: /, "the default never reads as the value to set");
+test("Enable is laid out the same way on every pattern, the software factory included: controls, choices, then settings", () => {
+  for (const id of ["archChatAgent", "archSoftwareFactory"]) {
+    const arch = dataset.archetypes.find((a) => a.id === id)!;
+    const [product] = cloudProductsFor(arch.id);
+    const html = renderToStaticMarkup(<EnablePanel archetype={arch} open={arch.mitigations[0]} onOpen={() => {}} onShowDrawing={() => {}} tool={product.id} onPickTool={() => {}} cloud={product} />);
+    assert.match(html, /data-control-table="names"/, id);
+    assert.ok(html.indexOf('id="controls"') < html.indexOf('id="choose"') && html.indexOf('id="choose"') < html.indexOf('id="tools"'), `${id}: controls, choices, then settings`);
+    assert.doesNotMatch(html, /data-layout-switch|Compare layouts/, `${id}: no layout switch`);
+    // The default never reads as the value to set.
+    assert.doesNotMatch(html, /Default: /, id);
+  }
 });

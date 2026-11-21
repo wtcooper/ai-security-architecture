@@ -12,10 +12,6 @@
  * the group is for. The open row holds only what it takes to put the control in place: what to
  * do and why, each setting with the value to set, your own controls, and the way to the drawing
  * and the full definition.
- *
- * Three ways to show the settings are offered while one is chosen (`variant`): their names in a
- * column (`names`), the first setting and its value in the row (`inline`), or every setting
- * listed under its control (`checklist`).
  */
 import Link from "next/link";
 import { Fragment } from "react";
@@ -28,14 +24,11 @@ import { NativeOptions } from "@/components/cloud/CloudViews";
 import { optionsFor, productShort } from "@/components/cloud/model";
 import { placementsFor, type ControlGroup } from "./model";
 import { controlHref } from "@/lib/routes";
-import { Recommended, recommendedOf, SetVia, SettingLink, ValueChip } from "./SettingParts";
 
 /** True once the organisation has recorded a status for any control (data/org/controls.yaml). */
 export const anyControlStatus = Object.values(statusFile).some((s) => s.status);
 
 export const BASELINE_HELP = "Needed by every AI deployment, whatever the pattern: set up once and reused.";
-
-export type ControlVariant = "names" | "inline" | "checklist";
 
 /** A product's settings for one control, in a few words: up to two names, then how many more. */
 function SettingNames({ short, options }: { short: string; options: ProductSetting[] }) {
@@ -47,25 +40,6 @@ function SettingNames({ short, options }: { short: string; options: ProductSetti
       <span className="font-semibold text-ink-2">{short}: </span>
       {shown.join(" · ")}
       {more > 0 && <span className="text-ink-3"> +{more}</span>}
-    </span>
-  );
-}
-
-/** The first setting for a control and the value to set it to, with how many more there are. */
-function FirstSetting({ short, options, tagged }: { short: string; options: ProductSetting[]; tagged: boolean }) {
-  if (!options.length) return null;
-  const [first] = options;
-  const { value } = recommendedOf(first);
-  return (
-    <span className="block min-w-0" data-option-names title={options.map((s) => s.name).join(" · ")}>
-      <span className="block truncate font-semibold text-ink">
-        {tagged && <span className="font-normal text-ink-3">{short}: </span>}
-        {first.name}
-      </span>
-      <span className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
-        {value ? <ValueChip text={value} /> : <span className="text-ink-2">see the open row</span>}
-        {options.length > 1 && <span className="text-[11.5px] text-ink-3">+{options.length - 1} more</span>}
-      </span>
     </span>
   );
 }
@@ -85,7 +59,6 @@ export function ControlTable({
   onShowDrawing,
   product = null,
   products = product ? [product] : [],
-  variant = "names",
 }: {
   groups: ControlGroup[];
   archetype: Archetype;
@@ -98,20 +71,17 @@ export function ControlTable({
   onOpen: (id: string | null) => void;
   /** Brings the drawing back into view; offered in an open row. */
   onShowDrawing?: () => void;
-  /** How the chosen product's settings are shown. */
-  variant?: ControlVariant;
 }) {
   const number = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
-  const withSettings = products.length > 0 && variant !== "checklist";
+  const withSettings = products.length > 0;
   const GRID = GRIDS[withSettings ? (anyControlStatus ? "both" : "settings") : anyControlStatus ? "status" : "plain"];
-  const tagged = products.length > 1;
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-paper" data-control-table={variant}>
+    <div className="overflow-hidden rounded-xl border border-line bg-paper" data-control-table="names">
       <div className={`hidden gap-4 border-b border-line bg-mist/60 py-2 pl-8 pr-4 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${GRID}`}>
         <span aria-label="Chip on the drawing" />
         <span>Control</span>
         <span>Where it goes</span>
-        {withSettings && <span>{variant === "inline" ? "Recommended setting" : "Settings"}</span>}
+        {withSettings && <span>Settings</span>}
         {anyControlStatus && <StatusHeading className="md:justify-end" />}
       </div>
       {groups.map((group) => (
@@ -168,13 +138,9 @@ export function ControlTable({
                     <span className="col-start-2 text-[12px] leading-snug text-ink-3 md:col-start-auto">{where.join(" · ")}</span>
                     {withSettings && (
                       <span className="col-start-2 min-w-0 space-y-1 text-[12px] leading-snug text-ink md:col-start-auto">
-                        {named.map(({ product: p, options }) =>
-                          variant === "inline" ? (
-                            <FirstSetting key={p.id} short={productShort(p)} options={options} tagged={tagged} />
-                          ) : (
-                            <SettingNames key={p.id} short={productShort(p)} options={options} />
-                          ),
-                        )}
+                        {named.map(({ product: p, options }) => (
+                          <SettingNames key={p.id} short={productShort(p)} options={options} />
+                        ))}
                         {none && <span className="text-ink-3">No setting: {named.map(({ product: p }) => productShort(p)).join(" or ")} leaves it to you</span>}
                       </span>
                     )}
@@ -184,26 +150,6 @@ export function ControlTable({
                       </span>
                     )}
                   </button>
-                  {/* The checklist lists every setting under its control, open or not. */}
-                  {variant === "checklist" && named.length > 0 && (
-                    <ul className="space-y-0 border-t border-dashed border-line bg-paper pb-1 md:pl-[76px]" data-checklist={m.id}>
-                      {named.flatMap(({ product: p, options }) =>
-                        options.map((s) => (
-                          <li key={`${p.id}-${s.id}`} className="grid grid-cols-1 gap-x-4 gap-y-1 px-4 py-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] md:pl-0" data-option-names>
-                            <div className="min-w-0 text-[12.5px] leading-snug">
-                              <SettingLink setting={s} />
-                              {tagged && <span className="ml-1.5 text-[11px] text-ink-3">{productShort(p)}</span>}
-                              <span className="mt-0.5 block">
-                                <SetVia setting={s} />
-                              </span>
-                            </div>
-                            <Recommended setting={s} why={false} />
-                          </li>
-                        )),
-                      )}
-                      {none && <li className="px-4 py-2 text-[12px] text-ink-3 md:pl-0">No setting: {named.map(({ product: p }) => productShort(p)).join(" or ")} leaves it to you.</li>}
-                    </ul>
-                  )}
                   {expanded && (
                     <div className="space-y-3 border-t border-line bg-mist/30 px-4 py-3.5 text-[12.5px] leading-relaxed text-ink-2 md:pl-[76px]">
                       <ul className="space-y-1.5" data-what-to-do>
@@ -217,7 +163,9 @@ export function ControlTable({
                           </li>
                         ))}
                       </ul>
-                      {variant !== "checklist" && named.map(({ product: p, options }) => <NativeOptions key={p.id} id={p.id} name={p.name} options={options} />)}
+                      {named.map(({ product: p, options }) => (
+                        <NativeOptions key={p.id} id={p.id} name={p.name} options={options} />
+                      ))}
                       <OrgControlList controlId={m.id} />
                       <span className="flex flex-wrap gap-x-4" data-definition>
                         {onShowDrawing && (

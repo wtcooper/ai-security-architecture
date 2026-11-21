@@ -1103,7 +1103,9 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 22 | 2026-10-30 |  |
 | Amazon Bedrock AgentCore | aws | Managed agent service in your cloud | 2026-09 | 21/21 | _none_ | 39 | 2026-11-18 |  |
 | Amazon Quick Automate (automation groups, UI agents, custom agents, human-in-the-loop tasks, scheduled and API triggers) | aws | UI/low-code managed agent runtime | 2026-10 | 11/11 | _none_ | 20 | 2026-10-30 |  |
+| Strands Agents | aws | Single agent workflow | 2026-11 | 19/19 | _none_ | 28 | 2026-11-21 |  |
 | Cline | cline | First-party coding & desktop agents | 2026-09 | 17/18 | Multi-factor Authentication | 28 | 2026-10-30 |  |
+| CrewAI | crewai | Multi-agent workflow | 2026-11 | 21/21 | _none_ | 28 | 2026-11-21 |  |
 | Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 26 | 2026-10-30 |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 32 | 2026-10-30 |  |
 | Grok Bot | cursor | Persistent managed agents | 2026-10 | 14/14 | _none_ | 25 | 2026-10-30 |  |
@@ -1120,8 +1122,10 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 34 | 2026-10-30 |  |
 | Gemini Enterprise app (assistant, search and connected-data actions) | google | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 22 | 2026-10-30 |  |
 | Gemini Enterprise Workflow Builder (chat agents and workflows) | google | UI/low-code managed agent runtime | 2026-10 | 11/11 | _none_ | 12 | 2026-10-30 |  |
+| LangChain and LangGraph | langchain | Multi-agent workflow | 2026-11 | 21/21 | _none_ | 28 | 2026-11-21 |  |
 | LM Studio | lmstudio | Local model runtime | 2026-09 | 12/12 | _none_ | 13 | 2026-10-30 |  |
 | Meta Muse | meta | Persistent managed agents | 2026-10 | 14/14 | _none_ | 6 | 2026-10-30 |  |
+| Microsoft Agent Framework | microsoft | Multi-agent workflow | 2026-11 | 21/21 | _none_ | 28 | 2026-11-21 |  |
 | Microsoft Copilot in Edge (Microsoft 365 Copilot Chat in the Edge for Business side pane, browsing with Copilot) | microsoft | Browser AI agents & extensions | 2026-10 | 15/15 | _none_ | 17 | 2026-10-30 |  |
 | Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ | 32 | 2026-10-30 |  |
 | Microsoft Foundry Agent Service (prompt agents, hosted agents, Responses API) | microsoft | Managed agent service in your cloud | 2026-11 | 21/21 | _none_ | 48 | 2026-11-18 |  |

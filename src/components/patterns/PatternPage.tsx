@@ -17,10 +17,7 @@ import type { Highlight } from "@/components/drawing/types";
 import { cloudFromSlug, cloudProductFor, cloudSlug } from "@/components/cloud/model";
 import { archetypeById, archetypesInOrder, cloudById, productsForArchetype, surfaces, toolById, toolsForArchetype } from "@/lib/data";
 import { PATTERN_TABS, ROUTES, patternHref, type PatternTab } from "@/lib/routes";
-import { ENABLE_LAYOUTS, type EnableLayout } from "@/components/enable/EnablePanel";
 
-/** The pattern Enable's layouts are compared on, until one is chosen for every pattern. */
-const LAYOUT_PATTERN = "archSoftwareFactory";
 import type { Scenario } from "@/lib/types";
 import { SURFACE_SITUATION } from "./labels";
 
@@ -47,10 +44,6 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
   // How the pattern is hosted on that cloud (`?host=aks`); null is the option its mapping describes.
   const linkedHost = linkedCloud ? params.get("host") : null;
   const [host, setHost] = useState<string | null>(linkedHost);
-  // Enable's layouts are compared on one pattern only (`?layout=b`); every other pattern shows the current one.
-  const comparing = archetype.id === LAYOUT_PATTERN;
-  const linkedLayout = params.get("layout");
-  const [layout, setLayout] = useState<EnableLayout>(comparing ? (ENABLE_LAYOUTS.some((l) => l.id === linkedLayout) ? (linkedLayout as EnableLayout) : "a") : "current");
   // Index into the walk list, or null for the resting drawing. The flows tab opens on the
   // complete walk; every other tab shows the whole pattern, nothing faded.
   const [walkIndex, setWalkIndex] = useState<number | null>(tab === "flows" ? 0 : null);
@@ -113,13 +106,12 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     if (tab !== "overview") query.set("tab", tab);
     if (cloud) query.set("cloud", cloudSlug(cloud));
     if (cloud && host) query.set("host", host);
-    if (comparing && layout !== "a") query.set("layout", layout);
     // The open product stays in the address, a cloud included: the address is read back into
     // this page's state, so leaving it out would fold the step the reader just opened.
     if (tab === "enable" && selected) query.set("tool", selected.tool);
     const open = tab === "enable" && highlight?.kind === "mitigation" ? `#control-${highlight.id}` : "";
     window.history.replaceState(null, "", `${window.location.pathname}${query.size ? `?${query}` : ""}${open}`);
-  }, [arrived, elsewhere, tab, selected, highlight, cloud, host, comparing, layout]);
+  }, [arrived, elsewhere, tab, selected, highlight, cloud, host]);
 
   const onWalk = (i: number | null) => {
     setWalkIndex(i);
@@ -189,8 +181,6 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
           }}
           host={host}
           onHost={setHost}
-          layout={layout}
-          onLayout={comparing ? setLayout : undefined}
         />
       </div>
     </>

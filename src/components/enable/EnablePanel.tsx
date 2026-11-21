@@ -17,13 +17,13 @@
  */
 import { useState, type ReactNode } from "react";
 
-import { adoptionFor, controlName, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
+import { controlName, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
 import { hostingInEffect, productShort, type CloudProduct } from "@/components/cloud/model";
 import { anyControlStatus, BASELINE_HELP, ControlTable } from "./ControlTable";
 import { baselineNotPinned, controlGroups } from "./model";
 import { ChooseBuild } from "./ChooseBuild";
-import { ProductPills, ProductSettings } from "./ProductSettings";
+import { ProductSettings } from "./ProductSettings";
 
 const anyStatus = Object.values(status).some((s) => s.status);
 
@@ -35,44 +35,6 @@ function Progress({ controls }: { controls: Mitigation[] }) {
 }
 
 type StepId = "controls" | "choose" | "tools";
-
-/**
- * Ways to lay Enable out, offered side by side on one pattern while one is chosen. "current" is
- * what every other pattern shows. A puts the first setting and its value in each control row; B
- * lists every setting under its control, in one list; C leads with the settings.
- */
-export type EnableLayout = "current" | "a" | "b" | "c";
-export const ENABLE_LAYOUTS: { id: Exclude<EnableLayout, "current">; label: string; what: string }[] = [
-  { id: "a", label: "A · Setting in the row", what: "Each control shows its first setting and the value to set; a separate step lists every setting." },
-  { id: "b", label: "B · One checklist", what: "Each control lists every setting that delivers it, with the value to set. No separate settings step." },
-  { id: "c", label: "C · Settings first", what: "The settings to set come first, grouped as the controls are; the controls follow." },
-];
-
-/** The switch between layouts, shown only on the pattern they are being compared on. */
-function LayoutSwitch({ layout, onLayout }: { layout: EnableLayout; onLayout: (layout: EnableLayout) => void }) {
-  const active = ENABLE_LAYOUTS.find((l) => l.id === layout) ?? ENABLE_LAYOUTS[0];
-  return (
-    <div className="mb-3 rounded-lg border border-dashed border-[#ecd58a] bg-[#fef8dc]/60 px-3 py-2.5" data-layout-switch>
-      <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12.5px]">
-        <span className="font-semibold text-ink">Compare layouts</span>
-        <span className="flex flex-wrap gap-1" role="group" aria-label="Layout">
-          {ENABLE_LAYOUTS.map((l) => (
-            <button
-              key={l.id}
-              type="button"
-              aria-pressed={l.id === active.id}
-              onClick={() => onLayout(l.id)}
-              className={`rounded-md border px-2.5 py-1 font-semibold ${l.id === active.id ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3"}`}
-            >
-              {l.label}
-            </button>
-          ))}
-        </span>
-      </p>
-      <p className="mt-1.5 text-[12px] text-ink-2">{active.what} Other patterns show the current layout, for comparison.</p>
-    </div>
-  );
-}
 
 function Step({
   n,
@@ -137,8 +99,6 @@ export function EnablePanel({
   cloud = null,
   host = null,
   onHost,
-  layout = "current",
-  layouts,
 }: {
   archetype: Archetype;
   /** The control row that is open, and lit on the drawing. */
@@ -156,10 +116,6 @@ export function EnablePanel({
   /** The hosting option chosen on that platform, or null for the one its mapping describes. */
   host?: string | null;
   onHost?: (optionId: string | null) => void;
-  /** How Enable is laid out; "current" everywhere except the pattern the layouts are compared on. */
-  layout?: EnableLayout;
-  /** Offered where layouts are being compared: the reader switches between them. */
-  layouts?: { onLayout: (layout: EnableLayout) => void };
 }) {
   const groups = controlGroups(archetype);
   const controls = groups.flatMap((g) => g.controls);
@@ -186,8 +142,7 @@ export function EnablePanel({
   // is working down a product's settings, not the control list.
   const [litFromTools, setLitFromTools] = useState(false);
   const holds: Record<StepId, boolean> = {
-    // In B the settings are listed under the controls, so a product link opens the controls.
-    controls: (!litFromTools && controls.some((m) => m.id === open)) || (layout === "b" && Boolean(productId && products.some((p) => p.id === productId))),
+    controls: !litFromTools && controls.some((m) => m.id === open),
     // Choosing is the reader's own act: the step opens only by hand.
     choose: false,
     tools: Boolean(productId && products.some((p) => p.id === productId)),
@@ -205,33 +160,13 @@ export function EnablePanel({
   };
   const short = chosen.length ? chosen.map(productShort).join(" and ") : null;
 
-  // The order of the steps, by layout: controls first (the default, and A); B lists every
-  // setting under its control, so there is no separate settings step; C leads with the settings.
-  const settingsFirst = layout === "c";
-  const nChoose = built ? 1 : 0;
-  const nControls = layout === "b" ? nChoose + 1 : settingsFirst ? nChoose + 2 : 1;
-  const nTools = settingsFirst ? nChoose + 1 : nChoose + 2;
-  // In B on a bought pattern the checklist shows the product picked above it, or the one in use.
-  const checklistProducts =
-    layout === "b" && !built ? [picked ?? products.find((p) => adoptionFor(p.id).status === "enabled") ?? products[0]].filter((p): p is NonNullable<typeof p> => Boolean(p)) : chosen;
-  const intro =
-    layout === "b"
-      ? built
-        ? "Choose how you build it, then each control with the settings that deliver it."
-        : "Each control with the settings that deliver it in your product."
-      : settingsFirst
-        ? built
-          ? "Choose how you build it, then the settings to set, then the controls they deliver."
-          : "The settings to set in your product, then the controls they deliver."
-        : built
-          ? "The controls, how you build it, then the settings."
-          : "The controls, then the settings in your product."
+  const intro = built ? "The controls, how you build it, then the settings." : "The controls, then the settings in your product."
 
   const controlsStep = (
       <Step
-        n={nControls}
+        n={1}
         id="controls"
-        title={layout === "b" ? "Controls and their settings" : "Enterprise controls"}
+        title="Enterprise controls"
         aside={
           <>
             {count(`${controls.length} controls`)}
@@ -254,16 +189,6 @@ export function EnablePanel({
             </>
           )}
         </p>
-        {layout === "b" && !built && products.length > 0 && (
-          <div className="mb-3">
-            <ProductPills products={products} selected={checklistProducts[0]?.id ?? ""} onPick={(id) => onPickTool(id)} />
-          </div>
-        )}
-        {layout === "b" && built && !chosen.length && (
-          <p className="mb-3 text-[12.5px] text-ink-3" data-choose-first>
-            Choose where it runs in step 1 and each control lists its settings here.
-          </p>
-        )}
         <ControlTable
           groups={groups}
           archetype={archetype}
@@ -273,8 +198,7 @@ export function EnablePanel({
             onOpen(id);
           }}
           onShowDrawing={onShowDrawing}
-          products={checklistProducts}
-          variant={layout === "a" ? "inline" : layout === "b" ? "checklist" : "names"}
+          products={chosen}
         />
         {alsoNeeded.length > 0 && (
           <p className="mt-2 text-[12px] leading-snug text-ink-3" title={BASELINE_HELP}>
@@ -286,7 +210,7 @@ export function EnablePanel({
   );
   const chooseStep = built && (
         <Step
-          n={1 + (layout === "b" || layout === "c" ? 0 : 1)}
+          n={2}
           id="choose"
           title={"Choose how you\u2019ll build it"}
           aside={count(
@@ -319,9 +243,9 @@ export function EnablePanel({
   );
   const toolsStep = (
       <Step
-        n={nTools}
+        n={built ? 3 : 2}
         id="tools"
-        title={layout === "c" ? "What to set" : built ? "Set it" : "Set it in your product"}
+        title={built ? "Set it" : "Set it in your product"}
         aside={products.length ? count(built ? (chosen.length ? `${chosen.reduce((n, p) => n + p.settings.length, 0)} settings` : "nothing chosen yet") : `${products.length} products`) : undefined}
         expanded={isOpen("tools")}
         onToggle={() => toggle("tools")}
@@ -354,28 +278,12 @@ export function EnablePanel({
 
   return (
     <div className="space-y-2.5">
-      {layouts && <LayoutSwitch layout={layout} onLayout={layouts.onLayout} />}
       <p className="mb-3 max-w-3xl text-[13px] leading-relaxed text-ink-2">
         {intro} Each control is a numbered chip on the drawing.
       </p>
-      {layout === "b" ? (
-        <>
-          {chooseStep}
-          {controlsStep}
-        </>
-      ) : settingsFirst ? (
-        <>
-          {chooseStep}
-          {toolsStep}
-          {controlsStep}
-        </>
-      ) : (
-        <>
-          {controlsStep}
-          {chooseStep}
-          {toolsStep}
-        </>
-      )}
+      {controlsStep}
+      {chooseStep}
+      {toolsStep}
     </div>
   );
 }

@@ -180,6 +180,20 @@ organisation plan, so a control the person sets is rated partial at most and the
 levers (OAuth app approval at the connected services, OAuth-grant discovery, vendor assessment)
 are `external`.
 
+Agent frameworks, 2026-11-21. "What you build it with" on the hosted agent patterns listed only
+the model providers' SDKs, so the frameworks most teams build agents with were onboarded, kept to
+a few: LangChain and LangGraph (Python and JavaScript; LangChain's create_agent and middleware run on
+LangGraph, so they are one entry), CrewAI, and the two frameworks AWS's and Azure's own guides
+build these patterns with, Strands Agents and Microsoft Agent Framework. Each was researched
+against its current docs and checked claim by claim by a second, independent reader (about 95
+per cent of claims right; every correction applied). Pydantic AI and Mastra were researched and
+checked too, then left out to keep the choice short; their entries are in the history of this
+file's folder. Every framework now carries `builder`: its kind, one line on what it is, its
+languages, its downloads, and the other patterns it builds, where it is offered with the
+settings that deliver what that pattern pins. The Claude Agent SDK, Codex SDK and Copilot SDK
+also build the software factory's coding agent. Not yet recorded: CVE-2026-37009 (CrewAI
+NL2SQLTool), found by the checker after the entry was written.
+
 Settings pass, 2026-10-30. Every registry entity gained a `settings:` table — 1,170-odd rows
 across 52 products, each name checked on the vendor's live page that day, each Built-in or
 Partial rating backed by a row (the build enforces it) — and the pass corrected the record text
