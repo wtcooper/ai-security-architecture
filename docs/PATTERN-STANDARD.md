@@ -120,5 +120,6 @@ themselves are in [PATTERN-FINDINGS.md](PATTERN-FINDINGS.md).
 | Self-hosted model inference | 1252×692 | 100% | Secrets & key management is drawn empty (open question). |
 | Model training & release pipeline | 1006×706 | 100% | Training content comes in up the outside of the boundary. Observability & response is drawn empty (open question). |
 | Managed agent service in your cloud | 1304×925 | 99% | The provider's hosted connectors sit beside the runtime, so the web flow drops straight to External and no arrow crosses another. The deploy flow steps round Memory & state and runs close above the session flow. Viewed at rest, with risks lit and with the walkthrough running. Not yet mapped onto a cloud (open question). |
+| Agentic software factory | 1300×1069 | 99% | Added 2026-11-21. The generated app is framed as its own tenant, with App hosting level with the deploy gate, so the release and the users' sign-in arrive straight and Enterprise data sits beside it. The AI gateway stands alone in the rightmost column so the model call drops to External without crossing the factory. One crossing, where the pinned installs pass the clone and push flow. Viewed at rest and with the walkthrough running. Not yet mapped onto a cloud and no product catalogued (open questions). |
 
 A drawing narrower than the page is shown larger than 100%, up to the page width.

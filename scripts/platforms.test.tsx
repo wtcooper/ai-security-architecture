@@ -188,7 +188,11 @@ test("on a hosted pattern, where it runs and what it is built with are two choic
       assert.match(chooseOnly, /data-not-offered="cloudOnPrem"/, `${a.id}: says why it is not offered on-premises`);
       continue;
     }
-    assert.ok(frameworks.length, `${a.id}: has a catalogued framework or server`);
+    // A pattern with no product catalogued yet says so in its deviations, and asks only where it runs and how.
+    if (!frameworks.length) {
+      assert.ok((a.deviations ?? []).some((d) => /catalogued/i.test(`${d.subject} ${d.reason}`)), `${a.id}: has a catalogued framework or server, or says none is catalogued yet`);
+      continue;
+    }
     // Every catalogued tool and every example says which box it fills.
     for (const p of frameworks) {
       if (p.kind !== "tool") continue;

@@ -6,7 +6,7 @@ Patterns for securely enabling AI. Pick the pattern for the AI tool or applicati
 you; it shows the controls your organisation needs in place and the settings of the product you
 chose. Everything else in the app is the evidence behind those two lists.
 
-- **Patterns.** One for each kind of AI tool or application, 19 in all, grouped by where the AI
+- **Patterns.** One for each kind of AI tool or application, 20 in all, grouped by where the AI
   runs: tools on your devices, AI services you subscribe to, AI you host yourself. Each is a
   drawing of the components, data flows and trust boundaries, with every control numbered onto
   it where it goes.
@@ -321,7 +321,7 @@ segmentation and identity entries).
 
 The taxonomy answers *what to worry about* and the mitigations answer *what defensive function to
 deploy*. The architectures answer the question that comes next in every review: **"so what does
-a sound deployment actually look like?"** — one drawing per class of AI application, 19 in all,
+a sound deployment actually look like?"** — one drawing per class of AI application, 20 in all,
 across the three deployment surfaces used by the control matrix.
 
 The catalogue is original work: no published source offers "here are the classes of AI
@@ -333,7 +333,7 @@ separate when their control sets differ, not when their vendors do.
 | Surface | Architectures |
 | --- | --- |
 | **Endpoint** (5) | Third-party coding & desktop agents, first-party coding & desktop agents, personal autonomous agent (the OpenClaw class), local model runtime, browser AI agents & extensions |
-| **AI you host yourself** (9; on a cloud or on-premises) | Single agent workflow, multi-agent workflow, chat agent with tools, remote MCP server you publish, self-hosted model inference, model training & release pipeline, agent sandbox for RL & evaluation, agent-to-agent federation, managed agent service in your cloud |
+| **AI you host yourself** (10; on a cloud or on-premises) | Single agent workflow, multi-agent workflow, chat agent with tools, remote MCP server you publish, self-hosted model inference, model training & release pipeline, agent sandbox for RL & evaluation, agent-to-agent federation, managed agent service in your cloud, agentic software factory |
 | **Third-party SaaS** (5) | Enterprise AI chat with connectors, and four managed agent runtimes: UI/low-code, coding & desktop sessions, API/SDK, and persistent agents |
 
 A managed agent service is sorted by tenancy, not by who runs the agent loop. A service that
@@ -349,7 +349,7 @@ Every pattern has **one drawing**, the trust-boundary view: each zone is a label
 boundary, the security and governance control plane runs beneath, and each component is a
 plain box with a title, one line and a thin accent for its type. Pointing at a box shows what
 it holds, and the **How it works** tab lists every component with everything it holds, so
-nothing is hover-only. The drawing is laid out automatically for all 19 patterns by
+nothing is hover-only. The drawing is laid out automatically for all 20 patterns by
 `src/components/drawing/layout.ts`; no pattern has coordinates in code. Four fields in a
 pattern's file feed it: a `summary` on every block (its one line), a `gloss` on a zone (a few
 words beside the canonical name), a `crossing` on every flow that crosses a boundary (what it
@@ -525,7 +525,7 @@ data/
 │   └── nist-csf.yaml             NIST CSF 2.0 categories + CoSAI control crosswalk
 ├── incidents/                    authored incidents, one YAML each, replayed on their architecture
 ├── reference/
-│   ├── architectures/            ★ 19 flow-style reference architectures, one YAML each
+│   ├── architectures/            ★ 20 flow-style reference architectures, one YAML each
 │   └── guidance/                 controls guidance, one document per architecture
 ├── tooling/                      ★ the AI tooling registry: named products, one entity per
 │   ├── BASELINE.md                 product × architecture, with per-control operator steps,

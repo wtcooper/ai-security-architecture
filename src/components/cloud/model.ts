@@ -164,6 +164,19 @@ const HOSTING_WORDS: Record<string, HostingWords> = {
       workload: "Long jobs, GPUs, checkpoints and interruptions",
     },
   },
+  archSoftwareFactory: {
+    thing: "the factory's coding agent",
+    managedKind: "A managed coding agent",
+    managed: managedMeans("the coding agent"),
+    offers: "offers",
+    rows: {
+      runs: "Who runs the coding agent, and what isolates each build",
+      data: "Where specs, code and build output are processed and kept",
+      identity: "The identity the coding agent runs as",
+      accepts: "Agents, languages and toolchains it accepts",
+      workload: "Build length, parallel builds and idle capacity",
+    },
+  },
   archAgentSandbox: {
     thing: "the sandbox",
     managedKind: "A managed service",
