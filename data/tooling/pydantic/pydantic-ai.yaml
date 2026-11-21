@@ -1,0 +1,1192 @@
+# Pydantic AI: one entity per product × reference architecture. Facts are dated (asOf) and cite the
+# vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Assessed: Pydantic AI V2 (pydantic-ai / pydantic-ai-slim 2.71.0, 2026-11-19) with Pydantic AI Harness
+# (pydantic-ai-harness 0.71.0, the official capability library, on 0.x versioning: tested for production but
+# its APIs may change between minor releases), plus the Logfire and Gateway settings that decide what a trace
+# records or keeps and what a key may spend. V1 (1.107.x) still receives patch releases and is not assessed.
+# Exclusions: realtime voice sessions (pydantic_ai.realtime), as the single agent workflow drawing has no voice
+# front end. The clai chat CLI, Agent.to_web() / clai web chat UI and the CLAI coding agent (pydantic-clai2)
+# are local developer surfaces; the web chat UI's 2026 advisories are listed below. Agent2Agent: V2 moved
+# Agent.to_a2a() out of the library to the separate fasta2a package (docs link github.com/datalayer/fasta2a,
+# PyPI lists github.com/pydantic/fasta2a); not assessed, so archAgentFederation is not in builder.also.
+# Provider-native tools (web search, web fetch, file search, MCP server tool, code execution) run at the model
+# provider and are recorded only where Pydantic AI configures them. Durable execution engines (Temporal, DBOS,
+# Prefect, Restate, AWS Lambda durable functions) are separate products, recorded only where the integration
+# changes what is stored. Pydantic Graph is not assessed; Pydantic Evals is cited on the rollout row only.
+# Fetch log 2026-11-21: ai.pydantic.dev 200-redirects to pydantic.dev/docs/ai/overview/ (the docs moved);
+# read pydantic.dev/docs/ai/llms.txt and llms-full.txt (200) and confirmed the pages cited here with curl
+# (every one 200, no redirect) and WebFetch; pydantic.dev/docs/logfire pages read as index.md (200).
+# pypistats API (200): pydantic-ai 6,953,309 last month; pydantic-ai-slim 37,021,193 (installed by pydantic-ai
+# and the Harness, so it double counts); pydantic-ai-harness 6,025,851. PyPI JSON for versions and dates.
+# github.com answered 403 to curl and the GitHub API is not reachable from this session; the advisory list
+# came from api.osv.dev (which mirrors the GitHub advisory database) and each repository advisory and the
+# security policy were then opened with WebFetch (200). GHSA-3589-pxp7-3gj8 has no repository advisory; its
+# OSV page is cited.
+vendor: pydantic
+family: Pydantic AI
+tools:
+  - id: toolPydanticAi
+    name: Pydantic AI
+    surfaceClasses:
+      - sdkFramework
+    variants:
+      - name: "pydantic-ai (Python; pydantic-ai-slim with only the extras you use)"
+        class: sdkFramework
+        url: https://pydantic.dev/docs/ai/overview/install/
+      - name: "pydantic-ai-harness (Pydantic AI Harness: guardrails, permissions, spend limits, sandboxes, memory; 0.x)"
+        class: sdkFramework
+        url: https://pydantic.dev/docs/ai/harness/
+      - name: Pydantic Logfire (tracing service; Pydantic cloud in US or EU, or self-hosted)
+        class: sdkFramework
+        url: https://pydantic.dev/docs/ai/integrations/logfire/
+      - name: Pydantic AI Gateway (model gateway in Logfire; keys, spending limits, telemetry)
+        class: sdkFramework
+        url: https://pydantic.dev/docs/ai/overview/gateway/
+    architecture: archActionAgent
+    fills: [planner]
+    builder:
+      kind: framework
+      what: "The Pydantic team's open-source Python agent framework: typed agents and tools, tool approval, MCP, durable execution and tracing; any model."
+      languages: ["Python"]
+      usage:
+        downloads: 6953309
+        registry: PyPI
+        package: pydantic-ai
+        asOf: "2026-11"
+        url: https://pypistats.org/packages/pydantic-ai
+      also:
+        - architecture: archChatAgent
+          fills: [agent]
+          url: https://pydantic.dev/docs/ai/integrations/ui/overview/
+        - architecture: archAgentWorkflow
+          fills: [harness, orchestration, subagents]
+          url: https://pydantic.dev/docs/ai/guides/multi-agent-applications/
+    status: ga
+    asOf: "2026-11"
+    summary:
+      - >-
+        An open-source (MIT) Python agent framework from Pydantic, the company behind the Pydantic validation
+        library. The agent loop, the tools and any MCP client run inside the customer's own process: an Agent
+        sends instructions, history and tool definitions to the model named by its model string, validates each
+        tool call's arguments with Pydantic before the function runs, and loops until a validated output_type is
+        produced. Pydantic AI Harness, from the same repository, adds capabilities for permissions, guardrails, a
+        prompt-injection screen for tool results, spend budgets, memory, sub-agents and workspaces (the local
+        machine, a container, or a VM or microVM sandbox from E2B, Modal, BoxLite, Smol and others).
+      - >-
+        Nothing is hosted by the library and it sends no usage telemetry. State is what the application stores:
+        a Conversation (messages, running usage, pending deferred calls) in its own database or a
+        ConversationStore, Harness Memory in a file, SQLite or Postgres store, or a durable engine's history
+        (Temporal, DBOS, Prefect, Restate, AWS Lambda durable functions). What leaves the process is the model
+        requests, tool and MCP calls the agent makes and, once instrumentation is enabled, OpenTelemetry traces
+        to Logfire or any OTel backend, with prompts and tool arguments included unless include_content=False.
+      - >-
+        Most controls are parameters and classes the deployer sets in code: requires_approval and deferred tool
+        results for human approval, args_validator and toolset filters, UsageLimits (request_limit defaults to
+        50) and run timeouts, CancellationToken, and Harness Permissions rules, guardrails and SpendLimits. The
+        switches outside code belong to Pydantic's optional services: Gateway keys with expiry and spending
+        limits, Gateway and Logfire telemetry settings, and Logfire's region, scrubbing and retention.
+    facts:
+      - label: Plans
+        value: >-
+          Free, MIT-licensed packages (pip install pydantic-ai, or pydantic-ai-slim with selected extras;
+          pydantic-ai-harness for the capability library). Pydantic Logfire and the Pydantic AI Gateway are
+          optional commercial services; enterprise support with an SLA is a separate agreement.
+        url: https://pydantic.dev/docs/ai/production/enterprise/
+      - label: Inference & routing
+        value: >-
+          A model string per agent (OpenAI, Anthropic, Gemini, Bedrock, Vertex AI, Azure, Ollama, vLLM or any
+          OpenAI-compatible server), each provider reading its key from its own environment variable or api_key=;
+          a gateway/ prefix routes through the Pydantic AI Gateway on one PYDANTIC_AI_GATEWAY_API_KEY.
+        url: https://pydantic.dev/docs/ai/models/overview/
+      - label: Data leaving the device
+        value: >-
+          The model requests, tool and MCP calls and trace exports you configure; no usage telemetry and no
+          Pydantic-hosted runtime. Traces leave only when instrumentation is on, and then carry prompts,
+          completions and tool arguments unless include_content=False. Gateway requests pass through Logfire
+          Cloud in your organisation's US or EU region, or self-hosted Logfire.
+        url: https://pydantic.dev/docs/ai/production/enterprise/
+      - label: Retention & training
+        value: >-
+          The library keeps nothing: conversations live where the application stores them, durable runs in the
+          engine's history, model data under the provider's terms. Logfire runs in a US or EU region, single-tenant
+          in a GCP region with customer-managed keys, or self-hosted; retention is set in the backend you choose,
+          with custom retention on Logfire Enterprise.
+        url: https://pydantic.dev/docs/ai/production/enterprise/
+      - label: Docs index
+        value: >-
+          pydantic.dev/docs/ai (ai.pydantic.dev redirects there), with llms.txt and llms-full.txt; the Harness at
+          pydantic.dev/docs/ai/harness and Logfire at pydantic.dev/docs/logfire
+        url: https://pydantic.dev/docs/ai/overview/
+      - label: Versions
+        value: >-
+          pydantic-ai 2.71.0 (2026-11-19); V2 stable since 2.0.0 (2026-06-23) and V1 still patched (1.107.10,
+          2026-11-04); pydantic-ai-harness 0.71.0 on 0.x versioning, so pin both.
+        url: https://pypi.org/project/pydantic-ai/
+      - label: Security policy
+        value: >-
+          Report privately through the repository's Security tab ("Report a vulnerability"); the policy covers
+          every Pydantic project and lists no supported versions. Fixes are published as GitHub repository
+          advisories, except the Harness CodeMode fix (GHSA-3589-pxp7-3gj8), which has only a GitHub global
+          advisory.
+        url: https://github.com/pydantic/pydantic-ai/security/policy
+    items:
+      - title: Turn tracing on, then decide what it records
+        body:
+          - >-
+            Instrumentation is off until Agent.instrument_all(), the Instrumentation capability or
+            logfire.instrument_pydantic_ai() turns it on; once on, spans carry prompts, completions and tool
+            arguments. Set InstrumentationSettings(include_content=False) on 2.44.0 or later (earlier releases kept
+            exception text), keep Logfire scrubbing on, and export to the firm's collector with
+            logfire.configure(send_to_logfire=False) or to a Logfire project in the approved region.
+        links:
+          - title: Debugging and Monitoring (Logfire and OpenTelemetry)
+            url: https://pydantic.dev/docs/ai/integrations/logfire/
+          - title: "Logfire: Scrub Sensitive Data"
+            url: https://pydantic.dev/docs/logfire/instrument/python/scrubbing/
+      - title: The endpoint, not the approval, is the authorisation boundary
+        body:
+          - >-
+            A run is rebuilt from the message_history and deferred_tool_results the request supplies, and Pydantic
+            AI does not sign tool calls or approvals, so a client that can submit history can fabricate both.
+            Authenticate the route, scope the toolset to the caller, check conversation access before loading it,
+            and pass any client-sent history through sanitize_messages.
+        links:
+          - title: Messages and Chat History, trust boundary for client-supplied history
+            url: https://pydantic.dev/docs/ai/core-concepts/message-history/
+          - title: UI Event Streams, trust model for client-submitted messages
+            url: https://pydantic.dev/docs/ai/integrations/ui/overview/
+    riskNotes:
+      - risk: riskPromptInjection
+        note: >-
+          The MCP capability adds each server's instructions to the agent's instructions by default, with the same
+          authority as the developer's own; Harness InputGuardrail screens only the user prompt, and tool results
+          reach the model unscreened unless PromptInjectionDefender or a ToolGuardrail result_guard sits on that
+          tool. Provider-native tool results bypass both.
+      - risk: riskRogueActions
+        note: >-
+          Approval is opt-in per tool (requires_approval defaults to False), Harness Permissions defaults to mode
+          'full' (every file write and command runs), and Coder's shell has no allowlist. Approvals submitted by a
+          UI client are trusted as given.
+      - risk: riskAgenticDelegationConfusedDeputy
+        note: >-
+          SubAgents forwards the parent's deps to every delegate, and a delegate does not see a Permissions passed
+          to the parent unless it is in shared_capabilities. An MCPToolset with one fixed auth shared by concurrent
+          runs sends requests on a session another user's run opened.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Telemetry includes prompts, completions and tool arguments by default once enabled; include_content=False
+          leaked exception text until 2.44.0 (GHSA-4x9p-g9wm-8q7f) and retry prompts until 2.27.1. deps and the
+          env= of workflow-side workspace calls are serialised into durable history, and validated_args travel
+          to whoever approves.
+      - risk: riskRunawayAgentToolLoops
+        note: >-
+          request_limit defaults to 50 model turns per run; tool_calls_limit counts only successful invocations,
+          ToolFailed does not spend a tool's retry budget, and Harness CodeMode's nested calls skipped
+          tool_calls_limit before 0.59.0 (GHSA-3589-pxp7-3gj8).
+      - risk: riskInsecureIntegratedComponent
+        note: >-
+          Most 2026 advisories sit in the library's own fetch and serving code: the URL download SSRF
+          (CVE-2026-25580) took three further fixes for IPv6 bypasses, and the UI adapters trusted client-supplied
+          UploadedFile references until 2.0.0b6 / 1.106.0.
+      - risk: riskToolRegistryTampering
+        note: >-
+          MCPToolset caches a server's tools and refreshes them on a list_changed notification, so a server can
+          redefine tools during a session; nothing pins a definition. Tool names are not prefixed by default
+          (planned for v3), so two servers can offer the same name.
+      - risk: riskEconomicDenialOfWallet
+        note: >-
+          cost_limit and SpendLimits rely on genai-prices: an unpriced model has no cost, SpendLimits counts it as
+          free by default (on_unpriced 'zero'), the response that crosses a limit is billed, and concurrent runs
+          can each pass the check.
+      - risk: riskToolSourceProvenance
+        note: >-
+          load_mcp_toolsets() spawns the executables a JSON file names and expands ${VAR} against the whole
+          environment; DockerContainer pulls images by tag unless a digest is pinned; Skills and memory files
+          load unscanned unless an ArtifactScanner is passed.
+    controls:
+      - mitigation: D3-APA
+        coverage: partial
+        mechanism: >-
+          RunContext deps carrying the caller and its grant to every tool, validator and capability; toolsets
+          filtered or built per run against it (FilteredToolset, @agent.toolset); MCP credentials resolved per
+          run; who may start, resume or approve a run is the application's endpoint
+        steps:
+          - title: Bind the grant at ingress
+            body:
+              - >-
+                Pass the authenticated principal and its grant as deps= on agent.run(); tools, args_validator
+                functions and capabilities read it from ctx.deps.
+            url: https://pydantic.dev/docs/ai/core-concepts/dependencies/
+          - title: Offer only what the grant covers
+            body:
+              - >-
+                Wrap each toolset with .filtered(lambda ctx, tool_def: ...) or build it per run with an
+                @agent.toolset function, returning False for tools the grant in ctx.deps does not cover.
+            url: https://pydantic.dev/docs/ai/tools-toolsets/toolsets/
+          - title: Authenticate the route and the conversation
+            body:
+              - >-
+                Run the agent behind your own authenticated endpoint, check the caller may access a conversation
+                before loading it, and pass client-sent history through sanitize_messages.
+            url: https://pydantic.dev/docs/ai/core-concepts/message-history/
+        note: >-
+          Partial on the rule applied to toolOpenaiAgentsSdk (a run context carrying the caller's grant is an
+          attach point). Pydantic AI hands deps to every callback and decides nothing with them; its docs state
+          that possession of the endpoint is the authorisation boundary, because a client that can submit history
+          can fabricate tool calls and approvals, which Pydantic AI does not sign or verify. Who may start, resume
+          or approve a run is the application's endpoint behind its IdP. Under durable execution deps are
+          serialised into the engine's history (Temporal's event history), so the grant is stored there too.
+        verified: "2026-11-21"
+      - mitigation: cap-agent-tool-registry
+        coverage: partial
+        mechanism: >-
+          Tools, toolsets and capabilities declared per agent in code or an agent spec (YAML or JSON) kept under
+          version control; MCP allowed_tools and filtered(); a call to an unknown tool name is answered with a
+          retried tool result listing the tools that exist
+        steps:
+          - title: Declare each agent's catalogue in reviewed files
+            body:
+              - >-
+                Give each Agent explicit tools=, toolsets= and capabilities=, or keep them in an agent spec file
+                loaded with Agent.from_file, so a catalogue change goes through code review.
+            url: https://pydantic.dev/docs/ai/core-concepts/agent-spec/
+          - title: Fix each MCP server's tool list
+            body:
+              - >-
+                Pass allowed_tools=[...] to the MCP capability (or .filtered() on an MCPToolset) so tools a server
+                adds later are not offered.
+            url: https://pydantic.dev/docs/ai/capabilities/mcp/
+          - title: Keep model-authored extensions off
+            body:
+              - >-
+                Leave Harness CapabilityCreation and SubAgents(dynamic_agents=...) out of production agents; both
+                let the model add capabilities or agents during a run.
+            url: https://pydantic.dev/docs/ai/harness/subagents/
+        note: >-
+          Partial on the toolOpenaiAgentsSdk rule (tools declared per agent in code; admission is code review).
+          There is no registry with owner, version or approval state and nothing consults one before a tool is
+          offered. An unknown tool name is not refused outright: the model gets a retried result listing the
+          available tools, each invented name with a retry budget of its own. MCP definitions arrive from the server, and
+          the Harness can let the model write capabilities or create sub-agents if those are switched on.
+        verified: "2026-11-21"
+      - mitigation: cap-staged-rollout-gate
+        coverage: partial
+        mechanism: >-
+          Harness ManagedPrompt keeps an agent's instructions in a Logfire-managed prompt that is versioned,
+          labelled, rolled out to a share of traffic and rolled back from the Logfire UI; Pydantic Evals runs the
+          agent against datasets with evaluators, in CI or on live traffic; the gate between them is the deployer's
+        steps:
+          - title: Version and stage the instructions
+            body:
+              - >-
+                Back instructions with ManagedPrompt('<name>', default=..., label='production') and promote a new
+                version by moving the label, or roll it out to a share of traffic, in Logfire.
+            url: https://pydantic.dev/docs/ai/harness/managed-prompt/
+          - title: Evaluate before moving the label
+            body:
+              - >-
+                Run a Pydantic Evals Dataset against the candidate prompt or model in CI with a pinned model and
+                fail the job on its assertions before the label moves.
+            url: https://pydantic.dev/docs/ai/evals/evals/
+        note: >-
+          Partial, where toolOpenaiAgentsSdk and toolClaudeAgentSdk are external: the project ships an evaluation
+          harness that runs the real agent (Pydantic Evals) and, through ManagedPrompt and Logfire, versioning,
+          progressive rollout and rollback for the instructions. Nothing holds a version until its evidence passes;
+          that gate is the deployer's CI. Model, tool and code changes ship with the application deploy, and
+          ManagedPrompt needs Logfire and the 0.x Harness. Anyone who can edit the prompt in Logfire changes the
+          agent's instructions without a deploy, so restrict that role.
+        verified: "2026-11-21"
+      - mitigation: AML.M0028
+        coverage: native
+        mechanism: >-
+          Function tool arguments validated with Pydantic against the function signature before it runs (a
+          failure is a retried result, never a call); args_validator after schema validation; strict=True for
+          provider-side schema enforcement; per-agent tools and toolsets narrowed with filtered() and MCP
+          allowed_tools
+        steps:
+          - title: Type and constrain every action
+            body:
+              - >-
+                Declare each action with @agent.tool using constrained types, and add an args_validator that
+                raises ToolFailed for values outside business limits.
+            url: https://pydantic.dev/docs/ai/tools-toolsets/tools-advanced/
+          - title: Give each agent only its own actions
+            body:
+              - >-
+                Register tools per Agent and narrow shared toolsets with .filtered(...) against ctx.deps.
+            url: https://pydantic.dev/docs/ai/tools-toolsets/toolsets/
+          - title: Allowlist MCP tools
+            body:
+              - >-
+                Pass allowed_tools=[...] on every MCP capability.
+            url: https://pydantic.dev/docs/ai/capabilities/mcp/
+        note: >-
+          Native on the toolOpenaiAgentsSdk rule for this drawing (typed schemas validated by the framework before
+          execution, plus per-agent tool lists): a malformed or out-of-range call to a function tool is refused
+          outside the model and returned for correction. Outside that boundary: MCP tools take the schema their
+          server serves; external tools are executed by the application; provider-native tools take free-form
+          arguments; strict is honoured only on OpenAI, Anthropic, Google and Bedrock. Every tool runs with the
+          process's authority unless it reads the caller's grant from deps.
+        verified: "2026-11-21"
+      - mitigation: AML.M0029
+        coverage: native
+        mechanism: >-
+          requires_approval=True on a tool or FunctionToolset, ApprovalRequired raised from a tool or its
+          args_validator, and approval_required() on any toolset; the run ends with DeferredToolRequests holding
+          each call's tool_call_id and validated_args, and resumes from the stored Conversation once
+          DeferredToolResults approves (ToolApproved, optionally with override_args) or denies (ToolDenied) it
+        steps:
+          - title: Mark consequential tools
+            body:
+              - >-
+                Set requires_approval=True on each tool that changes records, moves money or sends data out, and
+                wrap write-capable MCP toolsets with .approval_required(...).
+            url: https://pydantic.dev/docs/ai/tools-toolsets/deferred-tools/
+          - title: Park the run and resume on a decision
+            body:
+              - >-
+                Store result.conversation, show the approver validated_args for each pending call, and continue
+                with deferred_tool_results built by requests.build_results(approvals=...), never approve_all=True.
+            url: https://pydantic.dev/docs/ai/tools-toolsets/deferred-tools/
+          - title: Ask in the same process when a person is present
+            body:
+              - >-
+                Add HandleDeferredToolCalls(handler=...) with a handler that waits for the person, or hands a
+                resume token to your approval endpoint.
+            url: https://pydantic.dev/docs/ai/capabilities/handle-deferred-tool-calls/
+        note: >-
+          Native on the rule applied to toolOpenaiAgentsSdk's needs_approval: a built-in primitive holds the exact
+          call, with the arguments it will run with, until the application records a decision, and nothing stays
+          in memory while it waits. The deployer supplies the approver, the UI, authentication and the rule that
+          the requester never approves: answered_by is reported but not checked, and a UI client's approval is
+          trusted as given. Boundaries: approval is opt-in per tool; provider-native tools have none; Harness
+          ToolCallJudge and ApprovalReviewer are second models, not human approval.
+        verified: "2026-11-21"
+      - mitigation: cap-agent-action-policy-enforcement
+        coverage: native
+        mechanism: >-
+          Harness Permissions: declarative PermissionRule('deny' | 'ask' | 'allow') over tool, argument globs and
+          shell commands, evaluated before the permission mode with deny beating ask beating allow, a deny
+          refusing the call even after approval; ToolGuardrail and args_validator for checks written in code
+        steps:
+          - title: Write deny and ask rules
+            body:
+              - >-
+                Add Permissions(mode='auto', rules=[PermissionRule('deny', args={'path': 'secrets/*'}),
+                PermissionRule('ask', tools=[...])]) and a HandleDeferredToolCalls handler for the asks.
+            url: https://pydantic.dev/docs/ai/harness/permissions/
+          - title: Check principal and arguments in a guard
+            body:
+              - >-
+                Add ToolGuardrail(guard=..., tools=[...]) returning block or approve from the caller in ctx.deps
+                and the validated arguments.
+            url: https://pydantic.dev/docs/ai/harness/guardrails/
+          - title: Apply the same policy to delegates
+            body:
+              - >-
+                Pass the Permissions and its handler in SubAgents(shared_capabilities=[...]) so delegated runs are
+                checked too.
+            url: https://pydantic.dev/docs/ai/harness/subagents/
+        note: >-
+          Native on the toolClaudeAgentSdk rule (declarative rules decide every call outside the model; hooks
+          alone would be partial): Permissions rules match any tool by name, metadata or predicate, its string
+          arguments and its shell commands, and a deny holds over any allow or approval. Boundaries: it is the 0.x
+          Harness; argument globs match string values and command rules match words, not behaviour (the docs call
+          them a convenience, not a sandbox); external and provider-native tools are not checked; delegates see it
+          only through shared_capabilities; a denial is recorded as a tool result, not a policy event.
+        verified: "2026-11-21"
+      - mitigation: D3-AA
+        coverage: partial
+        mechanism: >-
+          No agent identity in the framework; each provider authenticates with the key or cloud credential the
+          process holds, per agent through its own model or provider; Pydantic AI Gateway project keys, scoped to
+          a Logfire project with an expiry date, as a revocable per-workload principal
+        steps:
+          - title: Give each agent workload its own Gateway key
+            body:
+              - >-
+                In Logfire Gateway › API Keys create one project key per agent workload and environment, with an
+                expiry date, and give that workload only its key as PYDANTIC_AI_GATEWAY_API_KEY.
+            url: https://pydantic.dev/docs/logfire/manage/ai-gateway/
+          - title: Or give the agent its own provider credential
+            body:
+              - >-
+                Construct the agent's model with a provider carrying its own api_key or cloud credential instead
+                of the process default.
+            url: https://pydantic.dev/docs/ai/models/overview/
+        note: >-
+          Partial on the toolOpenaiAgentsSdk rule (the framework neither mints nor authenticates agent
+          identities). Agent name= labels spans but is not a principal; sub-agents run in the same process with
+          the parent's deps. A Gateway project key is a separate, expiring credential per workload that an admin
+          can cap or block, but issuing, rotating and revoking it is a Logfire admin task, and calls made
+          directly to a provider bypass it.
+        verified: "2026-11-21"
+      - mitigation: cap-data-access-governance
+        coverage: partial
+        mechanism: >-
+          MCP auth, authorization_token and headers as functions of the run context, so each run connects with
+          the requesting user's credential in an MCP session of its own; function tools reading the user's token
+          from deps; FastMCP's OAuth flow with auth='oauth'
+        steps:
+          - title: Connect each run as its user
+            body:
+              - >-
+                Pass MCP(url, authorization_token=lambda ctx: ctx.deps.user_token) (MCPToolset(auth=...)) so every
+                run opens its own session with that user's token.
+            url: https://pydantic.dev/docs/ai/mcp/client/
+          - title: Do not share an HTTP client across users
+            body:
+              - >-
+                Leave http_client unset on a per-user toolset and set TLS with verify= instead, since a shared
+                client shares its cookie jar between runs.
+            url: https://pydantic.dev/docs/ai/mcp/client/
+        note: >-
+          Partial on the toolOpenaiAgentsSdk and toolClaudeAgentSdk rule (a per-call credential attach point):
+          retrieval runs with the requester's entitlements only when the application obtains that token and passes
+          it, and the MCP server must enforce it. Pydantic AI runs no on-behalf-of exchange, prescribes no vector
+          store, and function tools use whatever credential the code gives them. Oversharing in the sources is
+          outside the framework.
+        verified: "2026-11-21"
+      - mitigation: AML.M0031
+        coverage: partial
+        mechanism: >-
+          ConversationStore save and load keyed by conversation_id and scope, with revision conflicts; Harness
+          Memory with a namespace resolved from deps, an ArtifactScanner on writes and loads, and inject_memory;
+          sanitize_messages for client-sent history; StepPersistence snapshots
+        steps:
+          - title: Key every conversation to its owner
+            body:
+              - >-
+                Call store.save(conversation, scope=owner_id) and store.load(conversation_id, scope=owner_id) so a
+                guessed ID from another owner loads as not found.
+            url: https://pydantic.dev/docs/ai/core-concepts/persistence/
+          - title: Scope and scan long-term memory
+            body:
+              - >-
+                Use Memory(store, namespace=lambda ctx: ctx.deps.user_id, scanner=ArtifactScanner()) and
+                inject_memory=False where others can write the store.
+            url: https://pydantic.dev/docs/ai/harness/memory/
+          - title: Sanitise history from outside
+            body:
+              - >-
+                Pass any history a client sent through sanitize_messages before handing it to the agent.
+            url: https://pydantic.dev/docs/ai/core-concepts/message-history/
+        note: >-
+          Partial on the toolOpenaiAgentsSdk rule (state objects the deployer scopes). The ConversationStore scope
+          and Memory namespace are resolved by application code, and Memory's scanner refuses flagged writes and
+          withholds flagged files, but it is pattern matching and the docs say namespaces are not an authorisation
+          system for a shared store. Nothing in the framework encrypts or expires state: the docs leave schema,
+          tenant column and retention to the application's database (the Harness's SQLite conversation store is
+          not encrypted and has no TTL).
+        verified: "2026-11-21"
+      - mitigation: D3-CH
+        coverage: partial
+        mechanism: >-
+          Provider keys from environment variables or api_key= loaded from a secret manager; Gateway keys with an
+          expiry; LocalWorkspace passes only PATH, HOME and locale to commands; Harness Shell secret_env masking
+          and denied_env_patterns; E2B network rules adding a token outside the sandbox
+        steps:
+          - title: Load keys from the secret manager
+            body:
+              - >-
+                Put provider keys (OPENAI_API_KEY, ANTHROPIC_API_KEY and so on) or one expiring Gateway key in the
+                process environment from your secret manager, never in deps, instructions or history.
+            url: https://pydantic.dev/docs/ai/production/
+          - title: Keep host secrets out of commands
+            body:
+              - >-
+                Pass LocalWorkspace(env=...) only the variables commands need, never os.environ, and give Shell
+                denied_env_patterns=LLM_API_KEY_ENV_PATTERNS plus your own.
+            url: https://pydantic.dev/docs/ai/harness/shell/
+          - title: Inject tool tokens outside the sandbox
+            body:
+              - >-
+                On E2BSandbox, pass network={'rules': {...}} so E2B adds the token to requests as they leave and
+                the sandbox only holds a placeholder (E2B public beta).
+            url: https://pydantic.dev/docs/ai/harness/e2b-sandbox/
+        note: >-
+          Partial on the toolOpenaiAgentsSdk rule: the framework takes whatever key or client it is given and
+          brokers nothing per step. secret_env masks exact values only, so a command that encodes a secret
+          reveals it; under durable execution, the env= and file contents of workflow-side workspace calls are
+          stored in the engine's history unless a payload codec encrypts them (the workspace capability's own
+          env= is the place for secrets), and deps cross into activities the same way.
+        verified: "2026-11-21"
+      - mitigation: AML.M0036
+        coverage: native
+        mechanism: >-
+          UsageLimits per run (request_limit 50 by default, tool_calls_limit, input, output and total token
+          limits, cost_limit in USD), timeout= on a run, tool_timeout and request_timeout, max_concurrency;
+          Harness SpendLimits for daily, monthly or per-tenant budgets shared across workers; Gateway spending
+          limits per key, project, member and organisation
+        steps:
+          - title: Bound every run
+            body:
+              - >-
+                Pass usage_limits=UsageLimits(request_limit=..., tool_calls_limit=..., cost_limit=...) and timeout=
+                on every run, and Agent(tool_timeout=...).
+            url: https://pydantic.dev/docs/ai/core-concepts/agent/
+          - title: Budget across runs and tenants
+            body:
+              - >-
+                Add SpendLimits(budgets=[Budget(usd=..., window='day', scope=...)], on_unpriced='raise') with a
+                Redis or Postgres store shared by every worker.
+            url: https://pydantic.dev/docs/ai/harness/spend/
+          - title: Cap each key at the Gateway
+            body:
+              - >-
+                Set Daily and Monthly spending limits on each Gateway API key and an organisation-wide limit in
+                Gateway › Spending.
+            url: https://pydantic.dev/docs/logfire/manage/ai-gateway/spending-policies/
+        note: >-
+          Native on the toolClaudeAgentSdk rule (turn, spend and concurrency limits the framework enforces), where
+          toolOpenaiAgentsSdk is partial for lacking a token or cost budget. Limits: cost is best-effort (None for
+          models genai-prices cannot price) and the response that crosses a token or cost limit is already billed;
+          a def tool's thread runs on past its timeout; MCP tools ignore tool_timeout (MCPToolset read_timeout
+          applies); SpendLimits is a brake that concurrent runs can overshoot.
+        verified: "2026-11-21"
+      - mitigation: cap-agent-egress-control
+        coverage: partial
+        mechanism: >-
+          Sandbox network options: DockerContainer and E2BSandbox allow_internet_access=False, BoxLiteSandbox
+          allowed_hosts, E2B network allow and deny lists; WebFetch allowed_domains for the fetch tool; nothing for
+          function tools and MCP servers running in the application process
+        steps:
+          - title: Cut or allowlist sandbox networking
+            body:
+              - >-
+                Leave BoxLiteSandbox without network, or set allow_internet_access=True with allowed_hosts=[...]
+                for the package mirror and task hosts; set allow_internet_access=False on DockerContainer and E2B.
+            url: https://pydantic.dev/docs/ai/harness/boxlite-sandbox/
+          - title: Allowlist a remote sandbox's egress
+            body:
+              - >-
+                On E2BSandbox pass network= with an egress allow list (allow_out) naming only the mirror and task
+                hosts; run the agent process itself in a subnet whose egress proxy allows only the gateway and
+                approved MCP servers.
+            url: https://pydantic.dev/docs/ai/harness/e2b-sandbox/
+        note: >-
+          Partial on the toolOpenaiAgentsSdk finding: an allowlist exists only for some sandboxes (BoxLite's
+          allowed_hosts, E2B's network options), Docker is on or off, and a Modal sandbox keeps outbound internet
+          access unless the deployer creates the modal.Sandbox with block_network and passes it in as
+          ModalSandboxBackend(sandbox=...). In-process function tools, MCP clients and LocalWorkspace
+          commands leave through the host
+          network, which is the deployer's to restrict; WebFetch domain filters match the hostname only.
+        verified: "2026-11-21"
+      - mitigation: cap-input-guardrails
+        coverage: partial
+        mechanism: >-
+          Harness InputGuardrail on the user prompt (sequential by default), ToolGuardrail result_guard on tool
+          results, and PromptInjectionDefender, which classifies tool results with StackOne's defender (pattern
+          detection, optional local ML) and blocks high-risk results when block_high_risk=True
+        steps:
+          - title: Screen tool results for injection
+            body:
+              - >-
+                Add PromptInjectionDefender(block_high_risk=True) scoped with tool_filter to tools that return
+                email, tickets, documents or web pages.
+            url: https://pydantic.dev/docs/ai/harness/prompt-injection-defender/
+          - title: Classify the prompt before the model
+            body:
+              - >-
+                Add InputGuardrail(guard=your_classifier) and leave parallel=False so a blocked prompt never
+                reaches the model.
+            url: https://pydantic.dev/docs/ai/harness/guardrails/
+          - title: Keep untrusted server text out of instructions
+            body:
+              - >-
+                Set include_instructions=False on the MCP capability for any server the firm does not run.
+            url: https://pydantic.dev/docs/ai/capabilities/mcp/
+        note: >-
+          Partial on the toolOpenaiAgentsSdk rule (attach points), with more shipped: the defender screens tool
+          results with a real detector, but it is report-only by default, pattern-based unless semantic detection
+          is installed, and skips provider-native tools, externally supplied deferred results and media. No
+          classifier ships for the user prompt; the Harness detectors find secrets and PII, not injections.
+        verified: "2026-11-21"
+      - mitigation: cap-agent-tracing
+        coverage: native
+        mechanism: >-
+          OpenTelemetry instrumentation following the GenAI semantic conventions: a span for the run, each model
+          request and each tool call with arguments and results, correlated by run_id and conversation_id, with
+          run metadata on the run span; exported to Logfire or any OTel backend; InstrumentationSettings controls
+          content capture
+        steps:
+          - title: Turn instrumentation on
+            body:
+              - >-
+                Call Agent.instrument_all() (or add the Instrumentation capability) at start-up with a
+                TracerProvider exporting to your collector, or logfire.configure(send_to_logfire=False) with
+                OTEL_EXPORTER_OTLP_ENDPOINT.
+            url: https://pydantic.dev/docs/ai/integrations/logfire/
+          - title: Decide what payload is captured
+            body:
+              - >-
+                Set InstrumentationSettings(include_content=False, include_binary_content=False) unless the store
+                is approved for prompts and tool arguments.
+            url: https://pydantic.dev/docs/ai/integrations/logfire/
+          - title: Tie runs to the case and principal
+            body:
+              - >-
+                Give each agent a name= and pass metadata= with the case and principal IDs so they land on the run
+                span.
+            url: https://pydantic.dev/docs/ai/core-concepts/agent/
+        note: >-
+          Native on the rule applied to toolOpenaiAgentsSdk and toolClaudeAgentSdk: every model request and tool
+          call with arguments and results is a span in one trace per run, a multi-agent trace shows which agent
+          handled which part and when one delegated, and the export goes to the customer's backend. Defaults: off
+          until enabled, and content included once on. Limits: provider-native tool work appears only inside the
+          model response; guardrail blocks are spans but Permissions emits none of its own (a denial is a tool
+          result); append-only retention is the backend's.
+        verified: "2026-11-21"
+      - mitigation: cap-agent-kill-switch
+        coverage: partial
+        mechanism: >-
+          CancellationToken passed to any run method (thread-safe, one token governing several runs, a shared
+          token stopping a parent and its sub-agents), RunContext.cancel() from a tool or hook, run timeout=;
+          Gateway API key spending limit of 0 or key expiry blocking later model requests through the Gateway
+        steps:
+          - title: Cancel the running run
+            body:
+              - >-
+                Create a CancellationToken per run, pass cancellation_token=token, share it with sub-agent runs,
+                and wire token.cancel() to an operator stop control.
+            url: https://pydantic.dev/docs/ai/core-concepts/agent/
+          - title: Block its model calls centrally
+            body:
+              - >-
+                In Logfire Gateway › API Keys set the workload key's spending limit to 0, which blocks its
+                requests.
+            url: https://pydantic.dev/docs/logfire/manage/ai-gateway/spending-policies/
+          - title: Discard what it stored
+            body:
+              - >-
+                Delete the stored Conversation, pending deferred calls and Memory namespace, and kill its sandbox.
+            url: https://pydantic.dev/docs/ai/api/pydantic-ai/conversation-store/
+        note: >-
+          Partial on the toolOpenaiAgentsSdk rule (in-process cancellation only). Cancellation is cooperative:
+          async tools are cancelled, a def tool's worker thread cannot be stopped and its side effects stay, and
+          provider-side generation stops best-effort. Inside a durable workflow a token is rejected except a
+          Temporal signal handler. The Gateway lever stops later model requests that go through the Gateway only
+          (delay not documented); a parked conversation can be resumed by whoever holds it, so quarantine means
+          deleting it.
+        verified: "2026-11-21"
+      - mitigation: cap-retrieval-grounding-checks
+        coverage: notApplicable
+        evidence:
+          - title: Embeddings, where Pydantic AI does not prescribe a vector database (2026-11-21)
+            url: https://pydantic.dev/docs/ai/guides/embeddings/
+          - title: Pydantic AI documentation index, reviewed for applicability (2026-11-21)
+            url: https://pydantic.dev/docs/ai/overview/
+        note: >-
+          Not applicable, on the toolOpenaiAgentsSdk rule: the framework has no retrieval corpus or index of its
+          own. Embedder produces vectors and the docs leave storage to the application; FileSearchTool queries a
+          provider-managed store at the provider. Ingest trust, per-tenant index isolation and grounding checks
+          belong to that store; Harness Memory is covered on AML.M0031.
+        verified: "2026-11-21"
+      - mitigation: cap-mcp-tool-integrity
+        coverage: partial
+        mechanism: >-
+          MCP servers declared in code per agent; allowed_tools and filtered() admit tools by name, and a filter
+          function sees each ToolDefinition (name, description, parameters) before every step;
+          include_instructions controls whether server-written instructions reach the model; cached tool lists
+          refresh on list_changed; no hashing or pinning
+        steps:
+          - title: Admit only named tools
+            body:
+              - >-
+                Set allowed_tools=[...] on every MCP capability.
+            url: https://pydantic.dev/docs/ai/capabilities/mcp/
+          - title: Refuse redefined tools in a filter
+            body:
+              - >-
+                Wrap the MCPToolset with .filtered(fn) where fn hashes the tool definition's name, description
+                and parameters and returns False when they differ from the approved value.
+            url: https://pydantic.dev/docs/ai/tools-toolsets/toolsets/
+          - title: Withhold server instructions
+            body:
+              - >-
+                Set include_instructions=False for servers the firm does not run.
+            url: https://pydantic.dev/docs/ai/mcp/client/
+        note: >-
+          Partial by core rule 1: an allowlist admits tools by name but verifies nothing a server serves, and the
+          docs describe no hashing, pinning or re-approval when a definition changes. The filter function is the
+          attach point for hash pinning. Native MCP (native=True) lists tools at the provider, outside any local
+          filter except allowed_tools; stdio server versions are whatever command the application starts.
+        verified: "2026-11-21"
+      - mitigation: D3-FA
+        coverage: partial
+        mechanism: >-
+          Harness ArtifactScanner on Skills and Memory: each skill's description and body, memory writes and
+          memory loads checked for injection, role override, credential exfiltration, HTML comments and invisible
+          Unicode before they reach the model; packages, images and MCP servers are not scanned
+        steps:
+          - title: Scan skills before they are offered
+            body:
+              - >-
+                Load third-party or agent-written skills with Skills(path, scanner=ArtifactScanner()) so a flagged
+                skill is left out of the catalogue.
+            url: https://pydantic.dev/docs/ai/harness/skills/
+          - title: Point installs at the scanning mirror
+            body:
+              - >-
+                Pin sandbox images by digest, and build them with package managers pointed at the firm's scanning
+                mirror.
+            url: https://pydantic.dev/docs/ai/harness/docker-container/
+        note: >-
+          Partial, where toolOpenaiAgentsSdk is external: the Harness scans the skill and memory files the agent
+          loads, by pattern matching, which misses paraphrased instructions. Packages a sandbox installs, container
+          images, stdio MCP server binaries and model files are not analysed; those stay with the package mirror
+          or artifact repository (external, as on toolOpenaiAgentsSdk).
+        verified: "2026-11-21"
+      - mitigation: D3-EI
+        coverage: partial
+        mechanism: >-
+          Workspace capabilities decide where Harness file and shell tools run: LocalWorkspace (not a sandbox),
+          DockerContainer (shares the host kernel), VM or microVM sandboxes (E2B, Modal, BoxLite, Smol and other
+          providers), Bubblewrapped Workspace (not a security boundary); function tools and MCP clients run in
+          the application process
+        steps:
+          - title: Run untrusted commands in a VM sandbox
+            body:
+              - >-
+                Attach E2BSandbox, ModalSandbox, BoxLiteSandbox or SmolSandbox instead of LocalWorkspace for any
+                agent whose commands follow untrusted input.
+            url: https://pydantic.dev/docs/ai/core-concepts/workspace/
+          - title: Harden a container when you use one
+            body:
+              - >-
+                Pass docker_args such as --cap-drop ALL, --user and --read-only, never mount the Docker socket or
+                secret directories, and pin the image digest.
+            url: https://pydantic.dev/docs/ai/harness/docker-container/
+        note: >-
+          Partial on the core sandbox rule (as on toolOpenaiAgentsSdk and toolClaudeAgentSdk): the Harness offers
+          isolation backends, but nothing is isolated unless the deployer picks one, and LocalWorkspace has the
+          host user's full authority. Inside a sandbox: the Harness file and shell tools. Outside: the agent loop,
+          every function tool, MCP clients and stdio servers, which run with the application's privileges.
+          Shell allowlists and FileSystem path rules are checks, not isolation.
+        verified: "2026-11-21"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md). The framework
+    # runs inside the application, so most rows are parameters set in its code; the Gateway rows are set in
+    # Logfire. Verified 2026-11-21 against pydantic.dev/docs/ai and pydantic.dev/docs/logfire.
+    settings:
+      - id: providerCredentials
+        name: Provider API key environment variables and api_key
+        where: "OPENAI_API_KEY, ANTHROPIC_API_KEY and each provider's own variable, or api_key= on the provider class"
+        setVia: [configFile, code]
+        area: identity
+        default: Read from the process environment
+        recommended: Injected from the firm's secret manager into the process environment, or passed as api_key= from it; never placed in deps, instructions or message history
+        value: "From the secret manager, never in deps"
+        why: The model key never sits in code, prompts or stored conversations, so a leaked history or trace does not carry it.
+        mitigations: [D3-CH]
+        url: https://pydantic.dev/docs/ai/production/
+        verified: "2026-11-21"
+      - id: gatewayApiKeys
+        name: Gateway API keys (project keys, expiry date)
+        where: "Logfire › AI Engineering › Gateway › API Keys; PYDANTIC_AI_GATEWAY_API_KEY in the application"
+        setVia: [adminConsole, configFile]
+        area: identity
+        default: One project key named Quick Start
+        recommended: One project key per agent workload and environment with an expiry date; personal keys only for local development
+        value: "One expiring project key per workload"
+        why: Each workload calls models as its own revocable principal instead of a shared provider key, and an expired key stops working without a redeploy.
+        mitigations: [D3-AA, D3-CH]
+        requires: Pydantic AI Gateway (Logfire)
+        url: https://pydantic.dev/docs/logfire/manage/ai-gateway/
+        verified: "2026-11-21"
+      - id: gatewaySpendingLimits
+        name: Spending Limits (Daily, Weekly, Monthly, Total)
+        where: "Logfire › AI Engineering › Gateway › API Keys › Edit › Spending Limits, and Gateway › Spending for organisation, project and member limits"
+        setVia: [adminConsole]
+        area: identity
+        default: No limit
+        recommended: Daily and monthly limits on every key sized to the workload, plus an organisation-wide monthly limit; set a key to 0 to stop it
+        value: "Daily and monthly cap on every key"
+        why: Requests past the cap are refused before they reach the provider, and a limit of 0 blocks a misbehaving workload's model calls from the console.
+        mitigations: [AML.M0036, cap-agent-kill-switch]
+        requires: Pydantic AI Gateway (Logfire)
+        url: https://pydantic.dev/docs/logfire/manage/ai-gateway/spending-policies/
+        verified: "2026-11-21"
+      - id: runDepsGrant
+        name: deps with filtered() toolsets
+        where: "agent.run(..., deps=...); toolset.filtered(lambda ctx, tool_def: ...) or a per-run @agent.toolset function"
+        setVia: [code]
+        area: identity
+        default: No deps; every registered tool offered
+        recommended: The authenticated caller and its grant as deps, with each toolset filtered or built per run to the tools that grant covers
+        value: "Caller's grant in deps, tools filtered by it"
+        why: The model is never offered a tool the requesting principal may not use, and every tool reads that principal from ctx.deps rather than trusting the conversation.
+        mitigations: [D3-APA, AML.M0028, cap-agent-tool-registry]
+        url: https://pydantic.dev/docs/ai/tools-toolsets/toolsets/
+        verified: "2026-11-21"
+      - id: mcpPerRunAuth
+        name: authorization_token / auth as a function of the run context
+        where: "MCP(url, authorization_token=lambda ctx: ..., headers=...); MCPToolset(auth=lambda ctx: ...)"
+        setVia: [code]
+        area: identity
+        default: One fixed credential for every run
+        recommended: A function returning the requesting user's own token from ctx.deps for every data server, with no http_client shared between users
+        value: "Requesting user's token, one session per run"
+        why: Each run opens its own MCP session with that user's entitlements, so concurrent users never share a session, its cookies or a service credential that reaches everything.
+        mitigations: [cap-data-access-governance, D3-CTS]
+        url: https://pydantic.dev/docs/ai/mcp/client/
+        verified: "2026-11-21"
+      - id: requiresApproval
+        name: requires_approval / approval_required()
+        where: "@agent.tool(requires_approval=True), FunctionToolset(requires_approval=True), toolset.approval_required(...); DeferredToolResults to resume"
+        setVia: [code]
+        area: tools
+        default: "False (tools run unapproved)"
+        recommended: True on every tool that changes records, moves money or sends data out, approval_required() on write-capable MCP toolsets, and each call decided on its own; never build_results(approve_all=True) for these
+        value: "True on every consequential tool"
+        why: The run ends with the exact call and its validated arguments, and the tool runs only after a person approves that call; a denial reaches the model as the result.
+        mitigations: [AML.M0029]
+        url: https://pydantic.dev/docs/ai/tools-toolsets/deferred-tools/
+        verified: "2026-11-21"
+      - id: argsValidator
+        name: args_validator
+        where: "@agent.tool(args_validator=...), Tool(args_validator=...), FunctionToolset"
+        setVia: [code]
+        area: tools
+        default: None
+        recommended: A validator on every consequential tool that enforces business limits and the caller's grant, raising ToolFailed to refuse and ApprovalRequired to escalate
+        value: "On every consequential tool"
+        why: A call outside policy is refused or sent for approval deterministically after schema validation, before anyone is asked to approve a bad call.
+        mitigations: [AML.M0028, cap-agent-action-policy-enforcement]
+        url: https://pydantic.dev/docs/ai/tools-toolsets/tools-advanced/
+        verified: "2026-11-21"
+      - id: mcpAllowedTools
+        name: allowed_tools
+        where: "MCP(url, allowed_tools=[...]) (pydantic_ai.capabilities), or .filtered() on an MCPToolset"
+        setVia: [code]
+        area: tools
+        default: Every tool the server lists
+        recommended: The approved tool names for each server
+        value: "Approved tool names per server"
+        why: Tools a server adds or renames later are never offered to the model.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028]
+        url: https://pydantic.dev/docs/ai/capabilities/mcp/
+        verified: "2026-11-21"
+      - id: mcpIncludeInstructions
+        name: include_instructions
+        where: "MCP(url, include_instructions=False); MCPToolset(include_instructions=...)"
+        setVia: [code]
+        area: tools
+        default: "True on the MCP capability; False on MCPToolset"
+        recommended: False for every server the firm does not operate
+        value: "False for servers you do not run"
+        why: Server-written instructions would otherwise reach the model with the same authority as the instructions you write.
+        mitigations: [cap-mcp-tool-integrity, cap-input-guardrails]
+        url: https://pydantic.dev/docs/ai/capabilities/mcp/
+        verified: "2026-11-21"
+      - id: harnessPermissions
+        name: Permissions (mode and rules)
+        where: "pydantic_ai_harness.permissions Permissions(mode=..., rules=[PermissionRule('deny' | 'ask' | 'allow', tools=..., args=..., command=...)])"
+        setVia: [code]
+        area: tools
+        default: "Mode 'full': file writes and commands run"
+        recommended: Mode 'auto' with deny rules for credential paths and destructive commands and ask rules for consequential tools, answered by a HandleDeferredToolCalls handler
+        value: "Mode 'auto' with deny and ask rules"
+        why: A deny rule refuses a matching call even after approval and beats any allow, so the policy decides outside the model.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0029]
+        requires: pydantic-ai-harness (0.x)
+        url: https://pydantic.dev/docs/ai/harness/permissions/
+        verified: "2026-11-21"
+      - id: toolGuardrail
+        name: ToolGuardrail (guard, result_guard)
+        where: "pydantic_ai_harness ToolGuardrail(guard=..., result_guard=..., tools=[...], hidden=[...])"
+        setVia: [code]
+        area: tools
+        default: None
+        recommended: A guard on consequential tools that blocks or asks for approval from the caller and arguments, and a result_guard of for_tool_result_text(redact_secrets) on tools returning external text
+        value: "Guard on write tools; redact secrets in results"
+        why: A forbidden call is skipped before it runs, and a key or token a tool returns is redacted before the model or the history sees it.
+        mitigations: [cap-agent-action-policy-enforcement, cap-sensitive-data-redaction]
+        requires: pydantic-ai-harness (0.x)
+        url: https://pydantic.dev/docs/ai/harness/guardrails/
+        verified: "2026-11-21"
+      - id: inputGuardrail
+        name: InputGuardrail (parallel)
+        where: "pydantic_ai_harness InputGuardrail(guard=[...], parallel=False)"
+        setVia: [code]
+        area: tools
+        default: "No guard; parallel False when set"
+        recommended: Your injection classifier and the redact_secrets detector on the user prompt, with parallel left False
+        value: "Classifier on the prompt; parallel=False"
+        why: A blocked prompt never reaches the model or a tool; with parallel=True the model call has already started and may stream before the block.
+        mitigations: [cap-input-guardrails, cap-sensitive-data-redaction]
+        requires: pydantic-ai-harness (0.x)
+        url: https://pydantic.dev/docs/ai/harness/guardrails/
+        verified: "2026-11-21"
+      - id: promptInjectionDefender
+        name: PromptInjectionDefender (block_high_risk)
+        where: "pydantic_ai_harness PromptInjectionDefender(block_high_risk=True, semantic_detection=..., tool_filter=...)"
+        setVia: [code]
+        area: tools
+        default: Not added; report-only when added
+        recommended: block_high_risk=True on every tool that returns email, tickets, documents or web content, with semantic_detection where the ML extra can be installed
+        value: "block_high_risk=True on untrusted-text tools"
+        why: A tool result rated high or critical risk is replaced before the model reads it, and each flagged verdict is recorded as a span.
+        mitigations: [cap-input-guardrails]
+        requires: pydantic-ai-harness (0.x)
+        url: https://pydantic.dev/docs/ai/harness/prompt-injection-defender/
+        verified: "2026-11-21"
+      - id: usageLimits
+        name: UsageLimits
+        where: "agent.run(..., usage_limits=UsageLimits(request_limit=..., tool_calls_limit=..., total_tokens_limit=..., cost_limit=...))"
+        setVia: [code]
+        area: tools
+        default: "request_limit 50; no token, tool-call or cost limit"
+        recommended: request_limit, tool_calls_limit and cost_limit sized to the workflow on every run, keeping request_limit beside cost_limit because cost is best-effort; carry usage across turns with conversation=
+        value: "Request, tool-call and cost limits per run"
+        why: A looping or injected run ends with UsageLimitExceeded instead of spending model calls and tool actions without bound.
+        mitigations: [AML.M0036]
+        url: https://pydantic.dev/docs/ai/core-concepts/agent/
+        verified: "2026-11-21"
+      - id: runAndToolTimeouts
+        name: timeout, tool_timeout and request_timeout
+        where: "agent.run(..., timeout=...); Agent(tool_timeout=...) or FunctionToolset(timeout=...); ModelSettings request_timeout; MCPToolset(read_timeout=...)"
+        setVia: [code]
+        area: tools
+        default: "No run or tool deadline and no request_timeout; HTTP clients Pydantic AI creates allow 600 seconds per attempt (20 minutes for Google); MCP read_timeout 300 seconds"
+        recommended: A wall-clock run timeout and a tool timeout on every agent, request_timeout on model settings, and a shorter MCP read_timeout
+        value: "Run, tool and request deadlines on every agent"
+        why: A run raises RunTimedOut at its deadline and sub-agents inherit it; a hung tool or model request cannot hold the run open.
+        mitigations: [AML.M0036]
+        url: https://pydantic.dev/docs/ai/core-concepts/timeouts/
+        verified: "2026-11-21"
+      - id: spendLimits
+        name: SpendLimits (Budget, store, on_unpriced)
+        where: "pydantic_ai_harness SpendLimits(budgets=[Budget(usd=..., window='day', scope=...)], store=RedisSpendStore(...) or PostgresSpendStore(...), on_unpriced='raise')"
+        setVia: [code]
+        area: tools
+        default: Not added; in-memory store and on_unpriced 'zero' when added
+        recommended: A daily per-tenant USD budget in a Redis or Postgres store shared by every worker, with on_unpriced='raise'
+        value: "Per-tenant daily USD budget, shared store"
+        why: The next request is refused once a tenant's day is spent, across workers and restarts, and an unpriced model fails the run instead of counting as free.
+        mitigations: [AML.M0036]
+        requires: pydantic-ai-harness (0.x)
+        url: https://pydantic.dev/docs/ai/harness/spend/
+        verified: "2026-11-21"
+      - id: cancellationToken
+        name: CancellationToken
+        where: "token = CancellationToken(); agent.run(..., cancellation_token=token); token.cancel()"
+        setVia: [code]
+        area: tools
+        default: None
+        recommended: A fresh token per run, shared with its sub-agent runs and wired to an operator stop control
+        value: "One token per run, wired to an operator stop"
+        why: The run and its delegates stop from outside or another thread with RunCancelled and the completed history; sync tools finish in the background.
+        mitigations: [cap-agent-kill-switch]
+        url: https://pydantic.dev/docs/ai/core-concepts/agent/
+        verified: "2026-11-21"
+      - id: instrumentation
+        name: Instrumentation capability / Agent.instrument_all()
+        where: "Agent.instrument_all() or Agent(capabilities=[Instrumentation(...)]); logfire.configure(send_to_logfire=False) with OTEL_EXPORTER_OTLP_ENDPOINT"
+        setVia: [code, configFile]
+        area: audit
+        default: Off; nothing is sent
+        recommended: On for every agent, exported to the firm's collector or to a Logfire project in the approved region
+        value: "On, exported to the firm's collector"
+        why: Every run, model request and tool call becomes a span correlated by run_id and conversation_id; without it nothing is recorded.
+        mitigations: [cap-agent-tracing]
+        url: https://pydantic.dev/docs/ai/integrations/logfire/
+        verified: "2026-11-21"
+      - id: includeContent
+        name: include_content / include_binary_content
+        where: "InstrumentationSettings(include_content=False, include_binary_content=False)"
+        setVia: [code]
+        area: audit
+        default: "True"
+        recommended: False unless the trace store is approved for prompts and tool arguments, on 2.44.0 or later
+        value: "False"
+        why: Spans keep their structure without prompts, completions, tool arguments or file bytes; releases before 2.44.0 still exported exception text.
+        mitigations: [cap-agent-tracing]
+        url: https://pydantic.dev/docs/ai/integrations/logfire/
+        verified: "2026-11-21"
+      - id: logfireScrubbing
+        name: scrubbing (ScrubbingOptions)
+        where: "logfire.configure(scrubbing=ScrubbingOptions(extra_patterns=[...]))"
+        setVia: [code]
+        area: audit
+        default: On, with the default patterns
+        recommended: Left on with the firm's own field-name patterns added; never scrubbing=False
+        value: "On, with the firm's extra patterns"
+        why: Values under keys such as password or token are redacted before export; message text is not pattern-scrubbed, so pair it with include_content=False.
+        mitigations: [cap-agent-tracing, cap-sensitive-data-redaction]
+        requires: Logfire SDK
+        url: https://pydantic.dev/docs/logfire/instrument/python/scrubbing/
+        verified: "2026-11-21"
+      - id: conversationStoreScope
+        name: ConversationStore scope
+        where: "store.save(conversation, scope=...); store.load(conversation_id, scope=...)"
+        setVia: [code]
+        area: data
+        default: No scope
+        recommended: The owning user or tenant ID as scope on every load and save, after checking the caller may access the conversation
+        value: "Owner's user or tenant ID on every call"
+        why: A guessed conversation_id from another owner loads as not found, and a concurrent save raises ConversationConflict instead of overwriting.
+        mitigations: [AML.M0031]
+        url: https://pydantic.dev/docs/ai/core-concepts/persistence/
+        verified: "2026-11-21"
+      - id: harnessMemory
+        name: Memory (namespace, scanner, inject_memory)
+        where: "pydantic_ai_harness Memory(store, namespace=lambda ctx: ctx.deps.user_id, scanner=ArtifactScanner(), inject_memory=...)"
+        setVia: [code]
+        area: data
+        default: "Namespace '' shared; no scanner; inject_memory True"
+        recommended: A per-user namespace from deps, an ArtifactScanner, and inject_memory=False where people other than the agent can write the store
+        value: "Per-user namespace with a scanner"
+        why: One user's notes never load into another's run, and a memory write or file carrying injected instructions is refused or withheld.
+        mitigations: [AML.M0031, D3-FA]
+        requires: pydantic-ai-harness (0.x)
+        url: https://pydantic.dev/docs/ai/harness/memory/
+        verified: "2026-11-21"
+      - id: skillsScanner
+        name: Skills scanner
+        where: "pydantic_ai_harness Skills(path, scanner=ArtifactScanner())"
+        setVia: [code]
+        area: tools
+        default: No scanner
+        recommended: An ArtifactScanner on every skill directory the firm did not write
+        value: "ArtifactScanner on third-party skills"
+        why: A skill whose description or body carries injection, exfiltration commands or hidden text is left out of the catalogue with a span.
+        mitigations: [D3-FA]
+        requires: pydantic-ai-harness (0.x)
+        url: https://pydantic.dev/docs/ai/harness/skills/
+        verified: "2026-11-21"
+      - id: workspaceSandbox
+        name: Workspace capability (LocalWorkspace or a sandbox)
+        where: "capabilities=[E2BSandbox(...) | ModalSandbox(...) | BoxLiteSandbox(...) | SmolSandbox(...)] in place of LocalWorkspace"
+        setVia: [code]
+        area: tools
+        default: None; Harness file and shell tools fail without one
+        recommended: A VM or microVM sandbox for any agent whose commands follow untrusted input; LocalWorkspace only for trusted local work
+        value: "VM or microVM sandbox, not LocalWorkspace"
+        why: LocalWorkspace has the host user's full authority; DockerContainer shares the kernel and Bubblewrapped Workspace is not a security boundary.
+        mitigations: [D3-EI]
+        requires: pydantic-ai-harness (0.x) and the sandbox provider's account
+        url: https://pydantic.dev/docs/ai/core-concepts/workspace/
+        verified: "2026-11-21"
+      - id: sandboxNetwork
+        name: allow_internet_access and allowed_hosts
+        where: "BoxLiteSandbox(allow_internet_access=..., allowed_hosts=[...]); allow_internet_access=False on DockerContainer and E2BSandbox"
+        setVia: [code]
+        area: network
+        default: "BoxLite no network; Docker and E2B True"
+        recommended: No network, or allowed_hosts listing only the package mirror and the hosts the task needs
+        value: "Off, or mirror and task hosts only"
+        why: Commands cannot reach unlisted hosts, internal services or a cloud metadata endpoint to exfiltrate data or fetch instructions.
+        mitigations: [cap-agent-egress-control, D3-EI]
+        requires: pydantic-ai-harness (0.x)
+        url: https://pydantic.dev/docs/ai/harness/boxlite-sandbox/
+        verified: "2026-11-21"
+      - id: shellSecretEnv
+        name: secret_env and denied_env_patterns
+        where: "pydantic_ai_harness Shell(secret_env={...}, denied_env_patterns=[*LLM_API_KEY_ENV_PATTERNS, ...]); LocalWorkspace(env=...)"
+        setVia: [code]
+        area: tools
+        default: "LocalWorkspace passes PATH, HOME and locale only"
+        recommended: Only named variables in env, never os.environ; per-job tokens in secret_env; LLM_API_KEY_ENV_PATTERNS plus the firm's own patterns
+        value: "Named variables only; job tokens in secret_env"
+        why: Commands the model runs do not inherit the process's model keys, and a token printed by accident is masked before the model sees it.
+        mitigations: [D3-CH]
+        requires: pydantic-ai-harness (0.x)
+        url: https://pydantic.dev/docs/ai/harness/shell/
+        verified: "2026-11-21"
+      - id: managedPrompt
+        name: ManagedPrompt (label)
+        where: "pydantic_ai_harness ManagedPrompt('<name>', default=..., label='production')"
+        setVia: [code, adminConsole]
+        area: tools
+        default: Not added; instructions ship with the code
+        recommended: Instructions backed by a Logfire-managed prompt pinned to label='production', a new version promoted only after its Pydantic Evals run passes, and edit rights limited to the release owners
+        value: "label='production', promoted after evals pass"
+        why: Each instruction change is versioned and can be rolled out to a share of traffic and rolled back from Logfire without a redeploy.
+        mitigations: [cap-staged-rollout-gate]
+        requires: pydantic-ai-harness (0.x) and a Logfire project
+        url: https://pydantic.dev/docs/ai/harness/managed-prompt/
+        verified: "2026-11-21"
+      - id: subAgentsShared
+        name: shared_capabilities and forward_usage
+        where: "pydantic_ai_harness SubAgents(shared_capabilities=[permissions, handler, ...], forward_usage=True)"
+        setVia: [code]
+        area: tools
+        default: "shared_capabilities empty; forward_usage True"
+        recommended: The parent's Permissions, guardrails and approval handler in shared_capabilities, and forward_usage left True
+        value: "Parent's policy shared; usage forwarded"
+        why: Delegated runs face the same rules and approvals as the parent, and the parent's usage_limits cover the whole agent tree.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0029, AML.M0036]
+        requires: pydantic-ai-harness (0.x)
+        url: https://pydantic.dev/docs/ai/harness/subagents/
+        verified: "2026-11-21"
+    advisories:
+      - title: "CVE-2026-25580 / GHSA-2jrp-274c-jhv3: SSRF in URL download handling (high; fixed 1.56.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-2jrp-274c-jhv3
+        date: "2026-02"
+      - title: "CVE-2026-25640 / GHSA-wjp5-868j-wqv7: stored XSS via path traversal in the web UI CDN URL (high; fixed 1.51.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-wjp5-868j-wqv7
+        date: "2026-02"
+      - title: "CVE-2026-46678 / GHSA-cqp8-fcvh-x7r3: SSRF cloud-metadata blocklist bypass via IPv6-encoded addresses (moderate; fixed 1.99.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-cqp8-fcvh-x7r3
+        date: "2026-05"
+      - title: "CVE-2026-48782 / GHSA-cg7w-rg45-pc59: SSRF blocklist bypass via further IPv6 transition forms (moderate; fixed 1.102.0, 2.0.0b3)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-cg7w-rg45-pc59
+        date: "2026-05"
+      - title: "CVE-2026-54249 / GHSA-h7p7-w5gc-xj3w: VercelAIAdapter trusted client providerMetadata to build UploadedFile, an S3/GCS confused deputy (moderate; fixed 1.106.0, 2.0.0b6)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-h7p7-w5gc-xj3w
+        date: "2026-06"
+      - title: "CVE-2026-107294 / GHSA-v2xh-2vp8-57h8: unbounded memory use downloading remote content via web_fetch or FileUrl (moderate; fixed 1.107.2, 2.24.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-v2xh-2vp8-57h8
+        date: "2026-08"
+      - title: "CVE-2026-107293 / GHSA-3gh4-cghq-f8v4: retry prompt content not redacted when include_content=False (low; fixed 1.107.4, 2.27.1)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-3gh4-cghq-f8v4
+        date: "2026-08"
+      - title: "CVE-2026-107295 / GHSA-h4xc-3qfq-jf93: web chat UI (Agent.to_web(), clai web) runs agents and tools on requests from a visited website (high; fixed 1.107.4, 2.28.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-h4xc-3qfq-jf93
+        date: "2026-08"
+      - title: "CVE-2026-107292 / GHSA-q2xc-rrxj-58x9: web chat UI does not validate the Host header, open to DNS rebinding (moderate; fixed 1.107.5, 2.30.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-q2xc-rrxj-58x9
+        date: "2026-08"
+      - title: "CVE-2026-107289 / GHSA-vmxc-h2x2-jmf3: SSRF cloud-metadata blocklist bypass via IPv6 zone identifiers (moderate; fixed 1.107.6, 2.44.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-vmxc-h2x2-jmf3
+        date: "2026-09"
+      - title: "CVE-2026-107291 / GHSA-4x9p-g9wm-8q7f: include_content=False did not redact exceptions, error statuses, instructions or the output template (low; fixed 1.107.6, 2.44.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-4x9p-g9wm-8q7f
+        date: "2026-09"
+      - title: "CVE-2026-107290 / GHSA-fpf4-vwcp-v4hp: event loop blocked by quadratic response processing in web_fetch (moderate; fixed 1.107.6, 2.44.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-fpf4-vwcp-v4hp
+        date: "2026-09"
+      - title: "CVE-2026-107287 / GHSA-v36g-jcw9-x7cw: excessive resource use when local web fetching converts nested HTML (moderate; fixed 1.107.7, 2.52.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-v36g-jcw9-x7cw
+        date: "2026-09"
+      - title: "CVE-2026-107286 / GHSA-6fqq-452j-qhrp: concurrency-limited model streams could keep their slots after completion or interruption (high; fixed 2.53.0)"
+        url: https://github.com/pydantic/pydantic-ai/security/advisories/GHSA-6fqq-452j-qhrp
+        date: "2026-10"
+      - title: "CVE-2026-114386 / GHSA-3589-pxp7-3gj8: Pydantic AI Harness CodeMode nested calls bypassed tool_calls_limit (moderate; fixed pydantic-ai-harness 0.59.0)"
+        url: https://osv.dev/vulnerability/GHSA-3589-pxp7-3gj8
+        date: "2026-10"
+    sources:
+      - title: Pydantic AI documentation
+        url: https://pydantic.dev/docs/ai/overview/
+      - title: Pydantic AI for Enterprise
+        url: https://pydantic.dev/docs/ai/production/enterprise/
+      - title: Going to Production
+        url: https://pydantic.dev/docs/ai/production/
+      - title: Deferred Tools (human-in-the-loop approval)
+        url: https://pydantic.dev/docs/ai/tools-toolsets/deferred-tools/
+      - title: Toolsets
+        url: https://pydantic.dev/docs/ai/tools-toolsets/toolsets/
+      - title: MCP Client
+        url: https://pydantic.dev/docs/ai/mcp/client/
+      - title: Timeouts
+        url: https://pydantic.dev/docs/ai/core-concepts/timeouts/
+      - title: Debugging and Monitoring (Logfire and OpenTelemetry)
+        url: https://pydantic.dev/docs/ai/integrations/logfire/
+      - title: Pydantic AI Harness
+        url: https://pydantic.dev/docs/ai/harness/
+      - title: Pydantic AI Gateway
+        url: https://pydantic.dev/docs/ai/overview/gateway/
+      - title: "Logfire: For platform and security engineers"
+        url: https://pydantic.dev/docs/logfire/get-started/for-platform-and-security/
+      - title: pydantic/pydantic-ai security policy
+        url: https://github.com/pydantic/pydantic-ai/security/policy
