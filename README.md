@@ -370,7 +370,7 @@ tests fail if one slips. [`docs/PATTERN-FINDINGS.md`](docs/PATTERN-FINDINGS.md) 
 questions about the patterns themselves that the audit and the review turned up.
 
 **A pattern you host can be read as built on a cloud, or in your own data centre.** Eight of
-the nine "AI you host yourself" patterns (agents, model inference, MCP servers, pipelines) are
+the ten "AI you host yourself" patterns (agents, model inference, MCP servers, pipelines) are
 mapped onto AWS, Azure, Google Cloud and an on-premises data centre in `data/clouds/`; the
 ninth, the managed agent service in your cloud, is mapped onto the three clouds only, because a
 provider-run service has no on-premises form (the platform's file says so under `notOffered`,
@@ -384,7 +384,7 @@ control row on Enable names that platform's own settings for it, and the open ro
 one's place, value and reason; the settings step lists that platform's settings; and How it
 works names what plays each component, with its note, and compares the platforms side by side.
 A control-plane box is a function, not one service, so it lists the settings that deliver its
-controls. The tests check, for all 35 pattern-and-platform pairs, that every named component
+controls. The tests check, for all 39 pattern-and-platform pairs, that every named component
 and every pinned control is covered.
 
 **Where it runs is not what it is built with.** A platform says where each box runs and which

@@ -13,9 +13,6 @@ id: cloudGcp
 name: Google Cloud
 short: Google Cloud
 
-notOffered:
-  - architecture: archSoftwareFactory
-    why: "The mapping is being researched and checked."
 settings:
   # --- Identity & access ---------------------------------------------------------------
   - id: iapCloudRun
@@ -1396,6 +1393,299 @@ settings:
     url: https://docs.cloud.google.com/bigquery/docs/row-level-security-intro
     verified: "2026-11-18"
   # <<< managed agent service rows
+  # >>> software factory rows (the settings that build and guard the factory and the apps it makes)
+  - id: agentRepoCustomRole
+    name: "Custom role granted on a Secure Source Manager repository"
+    where: "IAM › Roles › custom role copied from Repository Writer without securesourcemanager.pullRequests.merge; Secure Source Manager › (app's repository) › IAM, for that app's agent service account"
+    setVia: [cloudPolicy, apiCli]
+    area: identity
+    default: "Repository Writer includes merge"
+    recommended: "Grant the agent's per-app service account Instance Accessor on the instance and the custom role on its own repository only. Grant it no Cloud Run, Cloud Build, Cloud Deploy or Service Account User role anywhere."
+    value: "Push and open pull requests on one repository; no merge"
+    why: "The agent can put code on a branch and ask for review, but cannot merge, release or deploy, so whatever it is talked into stays on a branch."
+    mitigations: [AML.M0028]
+    url: https://docs.cloud.google.com/iam/docs/roles-permissions/securesourcemanager
+    verified: "2026-11-21"
+  - id: ssmBranchRule
+    name: "Branch protection rule (Require a pull request before merging, Require status checks)"
+    where: "Secure Source Manager › (repository) › Settings › Branch rule, branch filter set to the default branch"
+    setVia: [adminConsole, apiCli]
+    area: tools
+    recommended: "Require a pull request with one approval from a Repository Pull Request Approver (never the agent), linear history and Block merge on stale reviews. Required status checks must be triggers-file triggers, so a webhook-started pipeline is enforced by Binary Authorization instead."
+    value: "Pull request, 1 approval, pipeline checks"
+    why: "Nothing reaches the default branch without passing checks and a review by someone other than the agent, and a commit pushed after approval cancels that approval."
+    mitigations: [AML.M0028]
+    url: https://docs.cloud.google.com/secure-source-manager/docs/branch-protection-overview
+    verified: "2026-11-21"
+  - id: ssmSecretScanning
+    name: "Secret scanning"
+    where: "Secure Source Manager › (repository) › Settings › Secret scanning toggle, with an optional Sensitive Data Protection inspection template"
+    setVia: [adminConsole, apiCli]
+    area: data
+    recommended: "On for every app repository from creation, with an inspection template for your own key formats. Users with appropriate permissions can force-push past it and Google does not name the permission, so test that the agent's custom role cannot."
+    value: "On for every repository"
+    why: "A commit holding a private key, cloud credential, OAuth client secret or similar is rejected at push, or its pull request blocked, before anyone else reads it."
+    mitigations: [D3-CH]
+    url: https://docs.cloud.google.com/secure-source-manager/docs/enable-data-loss-prevention
+    verified: "2026-11-21"
+  - id: buildTriggerInlineConfig
+    name: "Webhook trigger with an inline build configuration"
+    where: "Cloud Build › Triggers › webhook trigger › Configuration: Inline, Service account, private pool; Secure Source Manager › (repository) › Settings › Webhooks › Trigger on Push"
+    setVia: [cloudPolicy, apiCli]
+    area: tools
+    default: "SSM triggers file; build config read from the pushed branch"
+    recommended: "Start builds from an SSM push webhook into a Cloud Build webhook trigger whose inline config clones the branch, set the trigger's service account, and run in a private pool with egressOption NO_PUBLIC_EGRESS. Do not use the repository's triggers file."
+    value: "Inline config in the trigger, not in the repository"
+    why: "The pipeline's steps then live in a trigger the platform team owns, so a commit cannot change what the pipeline checks or which identity it runs as."
+    mitigations: [AML.M0028, D3-NI]
+    url: https://docs.cloud.google.com/build/docs/triggers
+    verified: "2026-11-21"
+  - id: buildSandboxFlags
+    name: "Cloud Run sandboxes (sandbox do; --allow-egress only for installs)"
+    where: "Cloud Run › (app's agent job) › --sandbox-launcher; the harness runs every agent command with sandbox do, adding --allow-egress only to dependency installs"
+    setVia: [apiCli, code]
+    area: tools
+    default: "Off"
+    requires: "Preview; second generation execution environment"
+    recommended: "Run every shell command, build and test in a sandbox deleted afterwards, moving the workspace in and out as tar archives. Give only install steps --allow-egress, which then reach what the job's VPC path allows, and pass no secrets with --env."
+    value: "Every command sandboxed; egress only on installs"
+    why: "Generated code and its packages run first in a sandbox with no host secrets, no metadata server credentials and, outside installs, no network."
+    mitigations: [D3-EI, cap-agent-egress-control]
+    url: https://docs.cloud.google.com/run/docs/code-execution
+    verified: "2026-11-21"
+  - id: admittedPackageRepo
+    name: "Virtual repository whose only upstream is a standard repository of admitted packages"
+    where: "Artifact Registry › standard Python and npm repositories only your intake job writes; the virtual repository the sandbox reads; remote repositories readable by the intake job alone"
+    setVia: [cloudPolicy, apiCli]
+    area: tools
+    default: "Clients read remote repositories directly"
+    recommended: "Your intake job checks each requested version's publish date, name similarity and the OpenSSF malicious packages list, then copies it into the standard repository. Agent identities get Artifact Registry Reader on the virtual repository only."
+    value: "Sandbox installs admitted versions only"
+    why: "Remote repositories cache whatever the upstream serves, with no age hold or look-alike check, so an invented package is refused only if admission happens first."
+    mitigations: [D3-FA]
+    url: https://docs.cloud.google.com/artifact-registry/docs/repositories/virtual-overview
+    verified: "2026-11-21"
+  - id: odsBuildGate
+    name: "On-Demand Scanning in Cloud Build (block on severity)"
+    where: "Cloud Build › inline build config › steps that scan the built image with On-Demand Scanning and stop before the push to Artifact Registry"
+    setVia: [code, apiCli]
+    area: tools
+    default: "Not run"
+    recommended: "Scan every image before it is pushed and fail the build on HIGH or CRITICAL. Add your own code, dependency and settings scanners as further steps: Secure Source Manager's dependency scanning is in Preview and does not block merges."
+    value: "Fail the build on HIGH or CRITICAL"
+    why: "Nobody reads this code, so a known vulnerable package in the image stops the release in the pipeline, before it reaches the deploy gate."
+    mitigations: [D3-SYSVA]
+    url: https://docs.cloud.google.com/artifact-analysis/docs/ods-cloudbuild
+    verified: "2026-11-21"
+  - id: binAuthzAttestor
+    name: "Binary Authorization policy requiring attestations (Cloud Run)"
+    where: "Binary Authorization › policy in each app project, with an attestor whose Cloud KMS key only the pipeline's service account can sign with; Organization Policy › run.allowedBinaryAuthorizationPolicies on the apps folder"
+    setVia: [cloudPolicy, apiCli]
+    area: tools
+    default: "Not enforced"
+    recommended: "Require the pipeline's attestation, signed only after every scan and test passes, and require Binary Authorization on Cloud Run with the organisation policy. Anyone who can update a service can use breakglass, so deny the breakglass annotation with a custom constraint."
+    value: "Attested images only"
+    why: "A revision whose image the pipeline did not build and pass cannot be deployed, so the gate only ever receives what the checks have seen."
+    mitigations: [D3-SYSVA]
+    url: https://docs.cloud.google.com/binary-authorization/docs/run/overview
+    verified: "2026-11-21"
+  - id: releaseBillOfMaterials
+    name: "SBOM generation (Artifact Analysis) with release annotations (Cloud Deploy)"
+    where: "Artifact Analysis › generate an SBOM for each pushed image; Cloud Deploy › release › annotations set by the pipeline"
+    setVia: [apiCli, code]
+    area: audit
+    default: "No SBOM; no release annotations"
+    recommended: "Generate and keep an SPDX SBOM for every release image, and annotate each Cloud Deploy release with the spec version, commit, agent harness version and model ID the build used."
+    value: "SBOM per image; agent and model on every release"
+    why: "When a package turns out to be harmful, the SBOMs show every app that contains it, and the annotations show which agent and model wrote each release."
+    mitigations: [AML.M0023]
+    url: https://docs.cloud.google.com/artifact-analysis/docs/sbom-overview
+    verified: "2026-11-21"
+  - id: deployRequireApproval
+    name: "Require approval (requireApproval), Cloud Deploy Approver granted per target"
+    where: "Cloud Deploy › (app's production target) › requireApproval: true; delivery pipeline IAM › roles/clouddeploy.approver with a condition on clouddeploy.googleapis.com/rolloutTarget"
+    setVia: [configFile, cloudPolicy]
+    area: sharing
+    default: "No approval required"
+    recommended: "Set requireApproval on the production target and grant Cloud Deploy Approver on that app's pipeline only to its named owner, conditioned on that target. Never grant it to the requester or to the pipeline."
+    value: "Required; the app's named owner only"
+    why: "The owner approves one rollout of one release after seeing its manifest diff, and a rejected rollout cannot be approved later unless it is promoted again."
+    mitigations: [AML.M0029]
+    url: https://docs.cloud.google.com/deploy/docs/promote-release
+    verified: "2026-11-21"
+  - id: deployCanaryCloudRun
+    name: "Canary deployment strategy (Cloud Deploy, Cloud Run target)"
+    where: "Cloud Deploy › delivery pipeline › stage › strategy.canary.runtimeConfig.cloudRun.automaticTrafficControl: true, canaryDeployment.percentages; gcloud deploy targets rollback"
+    setVia: [configFile, apiCli]
+    area: tools
+    recommended: "A canary of 10 then 50 percent with a verify job in each phase. The way back is a rollback of the target, which redeploys the last release with a successful rollout."
+    value: "Canary at 10 and 50 percent; rollback to last good"
+    why: "A release that misbehaves with real data reaches few users first, and one rollback restores the last good release without a new build."
+    mitigations: [cap-staged-rollout-gate]
+    url: https://docs.cloud.google.com/deploy/docs/deployment-strategies/canary/cloud-run
+    verified: "2026-11-21"
+  - id: deployExecutionServiceAccount
+    name: "Execution service account (executionConfigs serviceAccount)"
+    where: "Cloud Deploy › (app's targets) › executionConfigs › serviceAccount and workerPool"
+    setVia: [configFile]
+    area: identity
+    default: "Compute Engine default service account"
+    recommended: "A deploy service account per app with Cloud Deploy Runner in the Cloud Deploy project, access to its storage bucket, Cloud Run Developer on that app's project and Service Account User on its runtime account. Neither the agent nor the requester can act as it."
+    value: "One deploy account per app, its project only"
+    why: "Only the deploy gate can change what runs in an app's project, and its credential reaches that one project, never the factory or another app."
+    mitigations: [D3-CH]
+    url: https://docs.cloud.google.com/deploy/docs/execution-environment
+    verified: "2026-11-21"
+  - id: projectPerApp
+    name: "Project per app under a folder (resource hierarchy)"
+    where: "Resource Manager › apps folder › one project per generated app, created by the factory with its own VPC network, service accounts, secrets and store"
+    setVia: [cloudPolicy, apiCli]
+    area: network
+    recommended: "One project per app in an apps folder, with its own VPC and no Shared VPC attachment or peering to the factory or other apps. Factory identities hold no role in it except that app's deploy account."
+    value: "One project and VPC per app; no peering"
+    why: "Permissions, APIs and billing are managed per project and folders give isolation boundaries, so one app's fault or compromise stays inside its own project."
+    mitigations: [D3-NI]
+    url: https://docs.cloud.google.com/resource-manager/docs/cloud-platform-resource-hierarchy
+    verified: "2026-11-21"
+  - id: appsFolderPolicies
+    name: "Organization policies on the apps folder (run.managed.requireInvokerIam, iam.managed.allowedPolicyMembers, storage.publicAccessPrevention, a Cloud Run custom constraint)"
+    where: "Organization Policy › apps and previews folders"
+    setVia: [cloudPolicy]
+    area: sharing
+    default: "run.managed.requireInvokerIam not enforced"
+    recommended: "Enforce requireInvokerIam, allow only your domain's members so allUsers cannot be granted, enforce public access prevention on buckets, and add a custom constraint that denies a Cloud Run service without IAP, tested in dry run first."
+    value: "No public service, member or bucket; IAP required"
+    why: "A setting the agent or an owner chose cannot open an app or its storage to the internet, because the change that tries it is refused."
+    mitigations: [D3-ACH, D3-APA]
+    url: https://docs.cloud.google.com/run/docs/securing/managing-access
+    verified: "2026-11-21"
+  - id: iapReauthSecondFactor
+    name: "IAP reauthentication (reauthSettings)"
+    where: "IAP › IapSettings on the apps and previews folders › reauthSettings: method, maxAge, policyType"
+    setVia: [apiCli]
+    area: identity
+    recommended: "ENROLLED_SECOND_FACTORS or SECURE_KEY, a maxAge such as 3600s, and MINIMUM so no app can weaken it. It works in browsers only and not for Workforce Identity Federation or external identities; require MFA in your identity provider for those."
+    value: "Second factor at least hourly; MINIMUM"
+    why: "Google's 2-step verification requirement covers the console but not apps behind IAP, and not yet federated SSO accounts; this makes a stolen password useless for app users too."
+    mitigations: [D3-MFA]
+    url: https://docs.cloud.google.com/iap/docs/configuring-reauth
+    verified: "2026-11-21"
+  - id: previewProjectTags
+    name: "Tagged revisions with no traffic (--no-traffic --tag), in a preview project"
+    where: "Cloud Run › (app's preview service, in its own preview project) › deploy with --no-traffic --tag per branch; IAP access granted to the requester and owner"
+    setVia: [apiCli, cloudPolicy]
+    area: network
+    recommended: "Deploy each branch as a tagged revision of a preview service in a separate project, with IAP access for the requester and owner only, test data, no connector grants and no route to enterprise networks. Remove a tag when its branch closes."
+    value: "Separate preview project; requester and owner only"
+    why: "A tag on the production service would sit behind that service's access list and network, so a preview project keeps untested code away from real users and data."
+    mitigations: [D3-NI, D3-APA]
+    url: https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration
+    verified: "2026-11-21"
+  - id: appSecretManager
+    name: "Secret Manager secrets for Cloud Run, readable only by the app's runtime account"
+    where: "Secret Manager in the app's own project › (secret) › Permissions; Cloud Run › (app service) › Variables & secrets, pinned to a version"
+    setVia: [cloudPolicy, apiCli]
+    area: data
+    recommended: "Keep every secret an app needs in its own project's Secret Manager, grant Secret Manager Secret Accessor only to that app's runtime service account, and reference it pinned to a version. The agent, pipeline and requester get no access."
+    value: "App's project, runtime account only, pinned"
+    why: "The agent never sees a real secret, so it cannot paste one into code, and a leaked repository holds nothing that opens production."
+    mitigations: [D3-CH]
+    url: https://docs.cloud.google.com/run/docs/configuring/services/secrets
+    verified: "2026-11-21"
+  - id: apigeeGoogleAccessToken
+    name: "Google authentication for API proxies (Authentication with GoogleAccessToken)"
+    where: "Apigee › model proxy › TargetEndpoint › Authentication › GoogleAccessToken, deployed with a proxy service account that alone holds Agent Platform access"
+    setVia: [configFile, apiCli]
+    area: identity
+    recommended: "Deploy the model proxy with its own service account and let it call Agent Platform with the access token Apigee mints for it. Give the agent's service accounts no Agent Platform role, only invoke access on the proxy."
+    value: "Proxy's account calls the model; the agent holds none"
+    why: "No model credential exists for the agent to leak: its model calls work only through the gateway, which meters and screens them."
+    mitigations: [D3-CH]
+    url: https://docs.cloud.google.com/apigee/docs/api-platform/security/google-auth/overview
+    verified: "2026-11-21"
+  - id: apigeeDeploymentInvoke
+    name: "IAM-based API access control (VerifyIAM, invoke access per API deployment)"
+    where: "Apigee › connector proxies › VerifyIAM in the request flow; environments › deployments › setIamPolicy granting invoke to each app's runtime service account"
+    setVia: [apiCli, configFile]
+    area: data
+    recommended: "Grant each app's runtime account invoke on only the connector deployments approved for it, and re-grant after each redeploy. The app passes the user's identity from IAP's signed header, never their token, and connectors return only what that user may see."
+    value: "Invoke on approved connectors only, per app"
+    why: "One app's credential opens only that app's connectors, and what they return is limited to the signed-in user, not to everything the app could read."
+    mitigations: [D3-CTS, cap-data-access-governance]
+    url: https://docs.cloud.google.com/apigee/docs/api-platform/security/iam/iam-overview
+    verified: "2026-11-21"
+  - id: modelArmorDocumentScreening
+    name: "Document screening (Model Armor sanitizeUserPrompt with byteItem)"
+    where: "Your intake service › Model Armor sanitizeUserPrompt on each request, and on each upload as byteItem with its byteDataType (PLAINTEXT_UTF8, PDF, WORD_DOCUMENT, EXCEL_DOCUMENT, POWERPOINT_DOCUMENT, TXT, CSV, or IMAGE for JPEG, PNG and BMP)"
+    setVia: [code]
+    area: tools
+    default: "Not called"
+    recommended: "Screen every request and upload with a template whose prompt injection and jailbreak and malicious URL filters block. Refuse uploads Model Armor cannot scan: files over 4 MB are skipped, and other formats are not supported."
+    value: "Every request and file screened; unscannable refused"
+    why: "A file anyone wrote can carry instructions for the agent; screening it before it becomes the spec stops known attacks, and refusing what cannot be scanned closes the gap."
+    mitigations: [cap-input-guardrails]
+    url: https://docs.cloud.google.com/model-armor/sanitize-prompts-responses
+    verified: "2026-11-21"
+  - id: factoryLogSink
+    name: "Aggregated sink (folder) with Data Access audit logs"
+    where: "Cloud Logging › factory and apps folders › aggregated sink to a locked log bucket in a logging project; IAM & Admin › Audit Logs › Data Access for Secure Source Manager and the other factory services that write them"
+    setVia: [cloudPolicy, apiCli]
+    area: audit
+    default: "Data Access logs off for most services; logs per project"
+    recommended: "One sink from both folders to a locked bucket, with those Data Access logs on, and the app ID as a label or annotation on every project, job, release and rollout so one query joins request, build, checks, approval and release."
+    value: "Both folders to one locked bucket, keyed by app ID"
+    why: "When an app misbehaves you can show who asked for it, what the agent pushed, what the checks found, who approved and which release ran."
+    mitigations: [cap-agent-tracing]
+    url: https://docs.cloud.google.com/logging/docs/export/aggregated_sinks
+    verified: "2026-11-21"
+  - id: cloudRunDisableService
+    name: "Disable an existing service (manual scaling, 0 instances)"
+    where: "Cloud Run › (app service) › Scaling › Manual scaling, 0 instances (gcloud run services update --scaling=0); IAM & Admin › Service accounts › Disable"
+    setVia: [adminConsole, apiCli]
+    area: audit
+    default: "Serving"
+    recommended: "A runbook the platform team runs without the owner: scale the service to zero, remove its traffic tags (revisions served only through tags keep serving), disable the app's service account and add a deploy policy that blocks rollouts."
+    value: "Scale to 0, drop tags, disable the account"
+    why: "Requests to a disabled service fail at once, and a disabled service account stops its calls to Google APIs and connectors, all without waiting for a release."
+    mitigations: [cap-agent-kill-switch]
+    url: https://docs.cloud.google.com/run/docs/managing/services
+    verified: "2026-11-21"
+  - id: appHubRegistry
+    name: "App Hub application with attributes (owners, environment, criticality)"
+    where: "App Hub › apps folder boundary › one application per generated app; Resource Manager › a tag on the app's project for its end date"
+    setVia: [apiCli, cloudPolicy]
+    area: audit
+    recommended: "Register each app with its owner in business_owners, the requester in developer_owners and the platform team in operator_owners. Tag the project with an end date, and have a scheduled job shut it down after that date unless the owner renews."
+    value: "Every app registered with owner and end date"
+    why: "The registry says whom to call, and the end date retires apps nobody renews. A shut-down project can be restored for 30 days."
+    mitigations: [D3-AI]
+    url: https://docs.cloud.google.com/app-hub/docs/overview
+    verified: "2026-11-21"
+  - id: aiProtectionDiscovery
+    name: "AI Protection AI inventory (Security Command Center)"
+    where: "Security Command Center › AI Security dashboard and Assets › AI resources, organisation-level activation; Cloud Asset Inventory searches for Cloud Run services outside the apps folder"
+    setVia: [adminConsole, cloudPolicy]
+    area: audit
+    requires: "Premium tier for AI Discovery and Gemini model detection"
+    recommended: "Activate AI Protection for the organisation and review its inventory, including Model-as-a-Service assets that call models, for anything outside the factory's folders, such as apps published from Google AI Studio. Bring each in or shut it down."
+    value: "Organisation-wide; reviewed against the registry"
+    why: "An app made in a vendor's tool or a personal project has no owner, no checks and no end date; the inventory finds projects calling models that the factory did not create."
+    mitigations: [cap-shadow-ai-discovery]
+    url: https://docs.cloud.google.com/security-command-center/docs/ai-protection-overview
+    verified: "2026-11-21"
+  - id: cloudSqlCmek
+    name: "Customer-managed encryption keys (CMEK) for Cloud SQL"
+    where: "Cloud SQL › (app's instance, in the app's project) › customer-managed encryption key from a key ring in your key project; private IP from the app's VPC"
+    setVia: [cloudPolicy, apiCli]
+    area: data
+    default: "Google default encryption"
+    recommended: "One instance per app, encrypted with a per-app key in your key project and reachable on private IP only, deleted or archived with the app. Backups are encrypted with the instance's key."
+    value: "Per-app instance and key; private IP only"
+    why: "No other app can reach the store, and the key that protects it, backups included, is yours to disable when the app is retired."
+    mitigations: [D3-NI]
+    url: https://docs.cloud.google.com/sql/docs/postgres/cmek
+    verified: "2026-11-21"
+  # <<< software factory rows
 
 implementations:
   - architecture: archChatAgent
@@ -4002,3 +4292,234 @@ implementations:
         url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/private-service-connect-interface
     settings: [iapCloudRun, disableSaKeyCreation, agentRegistry, agentEvaluation, sessionsTtl, agentSearchAccessControl, vpcServiceControls, pscGoogleApisEndpoint, vpcScAgentPerimeterRules, attachmentSubnetFirewall, toolServiceInternalIngress, swpAgentRuntimeEgress, cloudKmsAgentKey, restrictNonCmekServices, agentArtifactsCmek, resourceLocationsEndpointUsage, allowedModelsConstraint, groundingSourcesConstraint, saApiKeyBindings, agentLogSink, agentPlatformVendorReview, bigQueryRowLevelSecurity]
   # <<< managed agent service mapping
+  # >>> software factory mapping (checked against the vendor's pages by two people)
+  - architecture: archSoftwareFactory
+    asOf: "2026-11"
+    verified: "2026-11-21"
+    reference:
+      - title: "Deploy an enterprise developer platform on Google Cloud"
+        url: https://docs.cloud.google.com/architecture/blueprints/enterprise-application-blueprint
+      - title: "Single-agent AI system using ADK and Cloud Run"
+        url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      - title: "Choose your agentic AI architecture components"
+        url: https://docs.cloud.google.com/architecture/choose-agentic-ai-architecture-components
+    summary:
+      - "On Google Cloud the factory runs in its own projects: an ADK chat front end on Cloud Run behind Identity-Aware Proxy, the coding agent as a Cloud Run job per app whose commands run in Cloud Run sandboxes (Preview), Apigee in front of Gemini on Agent Platform, Artifact Registry as the mirror, Secure Source Manager, Cloud Build with Binary Authorization, and Cloud Deploy for the owner's approval and canary. Each app gets its own project, Cloud Run service with IAP, Cloud SQL store and secrets."
+    bindings:
+      - { block: intake, service: "ADK agent on Cloud Run behind IAP", build: true, builtWith: "Agent Development Kit (ADK)", note: "Your chat front end: IAP admits the factory's user groups, Model Armor screens each request and upload, and the confirmed spec is stored with the app's record.", url: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run }
+      - { block: previews, service: "Cloud Run revisions in a preview project", note: "Each branch deploys with --no-traffic and a tag to a preview service whose IAP access lists only the requester and owner, on test data with no connector grants.", url: https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration }
+      - { block: deployGate, service: "Cloud Deploy pipeline to Cloud Run", note: "Takes releases the pipeline creates, holds the production rollout for the owner's approval, runs a canary and rolls back to the last release that succeeded.", url: https://docs.cloud.google.com/deploy/docs/promote-release }
+      - { block: harness, service: "Agent as a Cloud Run job", build: true, builtWith: "Agent Development Kit (ADK)", note: "One execution per build under that app's agent service account. Google's Antigravity CLI runs headless with Agent Platform credentials there, or bring your own built with ADK.", url: https://docs.cloud.google.com/run/docs/ai-agents }
+      - { block: nativeTools, service: "Cloud Run sandboxes (Preview)", note: "Every shell command, build and test runs through the sandbox command: no host variables, secrets or metadata server, and no egress unless the harness allows it.", url: https://docs.cloud.google.com/run/docs/code-execution }
+      - { block: gateway, service: "Apigee model and tool proxies", note: "Apigee calls Gemini as its own service account, so the agent holds no model key; skills ship in the agent image. Agent Gateway on Cloud Run is a gated Preview for allowlisted projects.", url: https://docs.cloud.google.com/apigee/docs/api-platform/security/google-auth/overview }
+      - { block: registry, service: "Artifact Registry remote repositories", note: "The sandbox reads a virtual repository of admitted packages; remote repositories proxy PyPI and npm for your intake job only.", url: https://docs.cloud.google.com/artifact-registry/docs/repositories/virtual-overview }
+      - { block: sourceControl, service: "Secure Source Manager (private instance)", note: "One repository per app from the template. The agent pushes branches with a custom role that lacks merge; branch rules and secret scanning guard the default branch.", url: https://docs.cloud.google.com/secure-source-manager/docs/overview }
+      - { block: pipeline, service: "Cloud Build private pool", note: "An SSM push webhook starts a trigger whose inline config builds, tests, scans, deploys the preview and signs the attestation. It is the only identity that creates releases.", url: https://docs.cloud.google.com/build/docs/triggers }
+      - { block: appTenant, service: "One project per app", note: "The factory creates it with its own VPC, service accounts, secrets and store. Organisation policies on the folder set the baseline every app inherits.", url: https://docs.cloud.google.com/resource-manager/docs/cloud-platform-resource-hierarchy }
+      - { block: appHosting, service: "Cloud Run service with IAP enabled", note: "IAP signs users in on every ingress path. The app runs as its own service account, reads pinned secrets and sends all outbound traffic into its own VPC.", url: https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run }
+      - { block: appData, service: "Cloud SQL for PostgreSQL, per app", note: "An instance in the app's project, private IP only, encrypted with a per-app key from your key project, and deleted or archived with the project.", url: https://docs.cloud.google.com/sql/docs/postgres/cmek }
+      - { block: orgData, service: "Systems of record via Apigee proxies", build: true, note: "Each app's service account may invoke only the connector deployments approved for it; the backends filter by the signed-in user's entitlements.", url: https://docs.cloud.google.com/apigee/docs/api-platform/security/iam/iam-overview }
+      - { block: provider, service: "Gemini and partner models", note: "Reached only by the gateway's service account. The vertexai.allowedModels constraint limits which models any project in the factory may call.", url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/control-model-access }
+      - { block: sources, service: "PyPI, npm and other public upstreams", note: "Remote repositories need internet-reachable upstreams; inside a VPC Service Controls perimeter they reach them only after you allow it for that location.", url: https://docs.cloud.google.com/artifact-registry/docs/repositories/remote-overview }
+    sources:
+      intake: https://docs.cloud.google.com/architecture/single-agent-ai-system-adk-cloud-run
+      previews: https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration
+      deployGate: https://docs.cloud.google.com/deploy/docs/promote-release
+      harness: https://docs.cloud.google.com/run/docs/ai-agents
+      nativeTools: https://docs.cloud.google.com/run/docs/code-execution
+      gateway: https://docs.cloud.google.com/apigee/docs/api-platform/security/google-auth/overview
+      registry: https://docs.cloud.google.com/artifact-registry/docs/repositories/virtual-overview
+      sourceControl: https://docs.cloud.google.com/secure-source-manager/docs/overview
+      pipeline: https://docs.cloud.google.com/build/docs/triggers
+      appTenant: https://docs.cloud.google.com/resource-manager/docs/cloud-platform-resource-hierarchy
+      appHosting: https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run
+      appData: https://docs.cloud.google.com/sql/docs/postgres/cmek
+      orgData: https://docs.cloud.google.com/apigee/docs/api-platform/security/iam/iam-overview
+      provider: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/control-model-access
+      sources: https://docs.cloud.google.com/artifact-registry/docs/repositories/remote-overview
+    differences:
+      - at: sourceControl->pipeline
+        text: "Secure Source Manager starts Cloud Build from a triggers file on the default branch, but the build config that file names is read from the branch being built, which the agent writes. Send an SSM push webhook to a Cloud Build webhook trigger with an inline config instead, so the pipeline's definition lives in the trigger and not in the repository."
+        url: https://docs.cloud.google.com/secure-source-manager/docs/create-triggers-file
+      - at: sources->registry
+        text: "Artifact Registry remote repositories cache whatever the upstream serves: there is no hold on newly published versions and no look-alike name check. Package scanning, off by default, checks Maven, Python and npm packages pushed to standard repositories for vulnerabilities and OpenSSF-listed malicious packages, so the age and name checks are an intake job you build."
+        url: https://docs.cloud.google.com/artifact-registry/docs/release-notes
+      - at: harness
+        text: "Cloud Run can deny the agent deploy rights, but only by your choice: a job given no service account runs as the Compute Engine default, which can hold broad roles in organisations created before May 2024. One job and service account per app is what scopes the agent's push to that app's repository."
+        url: https://docs.cloud.google.com/run/docs/securing/service-identity
+      - at: nativeTools
+        text: "Cloud Run sandboxes are in Preview, and --allow-egress is all or nothing: it opens every host and VPC endpoint the job can reach. The limit to the mirror, gateway and repository is the job's own path, Direct VPC egress through Secure Web Proxy and a VPC Service Controls perimeter, not a setting on the sandbox."
+        url: https://docs.cloud.google.com/run/docs/code-execution
+      - at: appHosting
+        text: "A new Cloud Run service requires IAM invocation, but IAP is off until you enable it, and anyone with Cloud Run Admin can make a service public by disabling the invoker check unless run.managed.requireInvokerIam is enforced, which it is not by default. Apps published from Google AI Studio get a public URL that anyone can open."
+        url: https://docs.cloud.google.com/run/docs/securing/managing-access
+      - at: appUsers->appHosting
+        text: "Google's 2-step verification requirement covers the Google Cloud console for non-federated accounts, but not yet federated SSO accounts, and not apps behind IAP. IAP reauthentication can demand an enrolled second factor, but not for Workforce Identity Federation or external identities, whose MFA must come from your identity provider."
+        url: https://docs.cloud.google.com/docs/authentication/mfa-requirement
+      - at: previews
+        text: "A Cloud Run tag gives a revision its own URL, but IAP access is set per service, so a preview tag on the production service would be open to the app's real users. Previews therefore go to a separate preview project, as Google's own guidance tests tagged revisions in a staging project first."
+        url: https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration
+      - at: appTenant
+        text: "Separate projects share no network or database by default, but Cloud Run sends outbound traffic to the internet through a shared pool until you route it into a VPC. Isolation holds only while no app joins a Shared VPC, and a perimeter allows free communication inside it, so one VPC Service Controls perimeter around many apps does not separate them; per-app IAM does."
+        url: https://docs.cloud.google.com/run/docs/configuring/networking-best-practices
+    alsoNeeded:
+      - service: "Cloud Identity or Google Workspace groups with 2-step verification"
+        role: identity
+        why: "Groups decide who may use the factory and which owner approves each app; enforce 2-step verification yourself, as Google's console requirement does not yet cover federated accounts."
+        url: https://docs.cloud.google.com/docs/authentication/mfa-requirement
+      - service: "VPC Service Controls"
+        role: network
+        why: "Perimeters around the factory and app projects; Cloud Run, Cloud Build, Cloud Deploy, Secure Source Manager, Artifact Registry and Secret Manager are GA."
+        url: https://docs.cloud.google.com/vpc-service-controls/docs/supported-products
+      - service: "Secure Web Proxy"
+        role: network
+        why: "The agent job's only path out, allowing the mirror, gateway and repository by URL list."
+        url: https://docs.cloud.google.com/secure-web-proxy/docs/policies-and-rules-overview
+      - service: "Secure Source Manager private instance (Private Service Connect)"
+        role: ingress
+        why: "Keeps the repositories off the internet so the build job and pipeline reach them on private addresses."
+        url: https://docs.cloud.google.com/secure-source-manager/docs/create-private-service-connect-instance
+      - service: "Cloud KMS"
+        role: keys
+        why: "Per-app CMEK keys and the Binary Authorization attestor's signing key, held in a separate key project."
+        url: https://docs.cloud.google.com/binary-authorization/docs/cloud-build
+      - service: "Secret Manager"
+        role: secrets
+        why: "Each app's run-time secrets in its own project; nothing in repositories or in the agent's reach."
+        url: https://docs.cloud.google.com/secret-manager/docs/overview
+      - service: "App Hub"
+        role: registry
+        why: "The register of generated apps with their owners, environment and criticality."
+        url: https://docs.cloud.google.com/app-hub/docs/overview
+      - service: "Cloud Logging aggregated sinks"
+        role: logging
+        why: "One locked record across the factory and every app project."
+        url: https://docs.cloud.google.com/logging/docs/export/aggregated_sinks
+    quickstart:
+      - title: "Deploy an app to Cloud Run using Cloud Deploy"
+        url: https://docs.cloud.google.com/deploy/docs/deploy-app-run
+      - title: "Cloud Run sandboxes (code execution)"
+        url: https://docs.cloud.google.com/run/docs/code-execution
+      - title: "Configure IAP for Cloud Run"
+        url: https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run
+    hosting:
+      - id: cloudRunJobs
+        kind: runtime
+        name: "Cloud Run jobs with Cloud Run sandboxes"
+        url: https://docs.cloud.google.com/run/docs/code-execution
+        asOf: "2026-11"
+        mapped: true
+        compare:
+          runs: "Your harness runs as a Cloud Run job, one execution per build, and runs the agent's commands in Cloud Run sandboxes, isolated from the host and each other."
+          patching: "Google manages the infrastructure and supplies the sandbox binary; you rebuild the agent's container image and the toolchains in it."
+          data: "Specs, code and build output sit in the job's instance and sandbox overlays, deleted afterwards unless exported, and in your repository and buckets."
+          network: "Sandboxes have no egress unless --allow-egress, which opens all the job can reach; Direct VPC egress and Secure Web Proxy narrow that path."
+          identity: "The job runs as its service account; sandboxed commands get no metadata server credentials, so only the harness pushes or calls the gateway."
+          accepts: "Any agent and toolchain in your image; Google's launch post names an ADK CloudRunSandboxCodeExecutor; sandboxes can install with apt, pip or npm."
+          workload: "Each build is a job execution whose task may run up to 168 hours; sandboxes share the instance's CPU and memory, and nothing runs between builds."
+          portability: "The container image is portable, but the sandbox command exists only on Cloud Run, so the code that launches sandboxes is rewritten elsewhere."
+          effort: "You operate the harness image, one job per app and the egress path; there is no cluster, and sandboxes are in Preview."
+          fits: "Google presents jobs for run-to-completion agent work and sandboxes for running untrusted or generated code inside an existing Cloud Run resource."
+        sources:
+          - https://docs.cloud.google.com/run/docs/code-execution
+          - https://docs.cloud.google.com/run/docs/configuring/jobs/sandboxes
+          - https://docs.cloud.google.com/run/docs/ai-agents
+          - https://docs.cloud.google.com/run/docs/configuring/task-timeout
+          - https://docs.cloud.google.com/run/docs/securing/service-identity
+          - https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc
+          - https://cloud.google.com/blog/topics/developers-practitioners/google-cloud-run-sandboxes-are-in-public-preview
+      - id: gkeAgentSandbox
+        kind: cluster
+        name: "Agent Sandbox on GKE"
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-sandbox
+        asOf: "2026-11"
+        compare:
+          runs: "The Agent Sandbox controller you install gives each build a dedicated Pod from a SandboxTemplate; GKE Sandbox isolates it with gVisor or a microVM."
+          patching: "Google upgrades the control plane and can auto-upgrade nodes; you upgrade the Agent Sandbox controller and rebuild the sandbox images."
+          data: "Code and build output stay in the Pod and the volumes or buckets you attach on your nodes; Pod snapshots keep state only if you take them."
+          network: "Each SandboxTemplate carries a NetworkPolicy you write; FQDN network policies limit names outside the cluster, with GKE Dataplane V2."
+          identity: "Each sandbox Pod runs as a Kubernetes ServiceAccount mapped to IAM by Workload Identity Federation for GKE; Pods in one warm pool share it."
+          accepts: "Any container image and a full Kubernetes PodSpec, including sidecars and GPUs; a Python SDK requests and drives sandboxes."
+          workload: "Warm pools hand out ready Pods, typically in under a second; a sandbox can be suspended and resumed; parallel builds are bounded by your nodes."
+          portability: "Agent Sandbox is an open source Kubernetes SIG Apps project, so templates move to other clusters; GKE Sandbox and Pod snapshots are GKE features."
+          effort: "You operate the cluster, node pools, controller, router, warm pools, network policies and upgrades."
+          fits: "Google advises it when each agent needs a dedicated Pod, a full PodSpec, GPUs or TPUs, or Autopilot, and Agent Substrate for most other agent work."
+        sources:
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-sandbox
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-workloads
+          - https://docs.cloud.google.com/kubernetes-engine/ai-ml/about-agent-substrate
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/sandbox-pods
+          - https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/node-auto-upgrades
+          - https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+        summary: "On GKE the coding agent runs in Agent Sandbox: the controller you install gives each build a dedicated Pod from a per-app SandboxTemplate, isolated by GKE Sandbox with gVisor or a microVM, under a Kubernetes ServiceAccount mapped by Workload Identity Federation for GKE to the app's agent service account. The template's network policy and FQDN network policies limit egress to the mirror, gateway and repository. The pipeline, deploy gate and app projects stay as mapped."
+        bindings:
+          - { block: harness, service: "Your coding agent on GKE, one sandbox per build", build: true, note: "The harness claims a sandbox per build from that app's template and drives it with the Agent Sandbox Python SDK, under the app's own Kubernetes ServiceAccount.", url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox }
+          - { block: nativeTools, service: "Agent Sandbox Pods with GKE Sandbox (gVisor)", note: "Each build's commands run in a kernel-isolated Pod deleted after the build; the template's NetworkPolicy and FQDN policies set where it may connect.", url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-sandbox }
+        dropSettings: [buildSandboxFlags, swpEgress]
+        addSettings: [gkeSandbox, agentSandboxPolicy, workloadIdentityGke, gkeNetworkPolicy, fqdnNetworkPolicy, gkeNodeServiceAccount]
+        differences:
+          - at: harness
+            text: "Agent Sandbox is open source software you install and upgrade yourself. Google advises Agent Substrate on GKE for most agent workloads and Agent Sandbox where each agent needs a dedicated Pod or a full PodSpec, which suits one build per Pod."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-sandbox
+          - at: nativeTools->sourceControl
+            text: "Pods from one warm pool share a Kubernetes ServiceAccount, so a pool cannot serve builds for different apps if each agent identity is to reach only its own repository. Keep a template and pool per app, or create sandboxes on demand."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox
+          - at: nativeTools->registry
+            text: "FQDN network policies use the networking.gke.io/v1alpha1 API, need GKE Dataplane V2 and cannot allow ClusterIP or headless Services, so in-cluster peers such as a gateway Service need label-based NetworkPolicy beside them."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+        alsoNeeded:
+          - service: "GKE Dataplane V2"
+            role: network
+            why: "Enforces the sandbox templates' network policies and the FQDN policies."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/fqdn-network-policies
+          - service: "Workload Identity Federation for GKE"
+            role: identity
+            why: "Maps each app's Kubernetes ServiceAccount to its agent identity, with no keys on nodes."
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity
+        quickstart:
+          - title: "Isolate AI code execution with Agent Sandbox"
+            url: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/agent-sandbox
+      - id: managedAgentsApi
+        kind: managed
+        name: "Managed Agents API on Agent Platform (Antigravity harness, Preview)"
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents
+        asOf: "2026-11"
+        compare:
+          runs: "Google runs the Antigravity harness and a managed, isolated Linux sandbox for each environment; your agent is a resource you create through the Agents API."
+          patching: "Google maintains the harness, sandbox and pre-installed tools; the only base_agent value accepted is antigravity-preview-05-2026."
+          data: "Specs and code sit in the sandbox's persistent file system, kept 7 days after the last interaction, and in Cloud Storage buckets you mount."
+          network: "The sandbox has no network until you set a domain allowlist in the environment configuration; a * entry allows every domain."
+          identity: "The sandbox holds no ambient credentials: mounts get downscoped tokens, and MCP headers you configure are sent only to their endpoints."
+          accepts: "Bash and file tools, Python 3.11 and Node.js 20 with git and gcloud, skills from Skill Registry, and MCP servers over Streamable HTTP."
+          workload: "Interactions can run in the background and stream; agents sharing an env_id share one sandbox; only the global location is supported."
+          portability: "Agents are defined through Google's Agents and Interactions APIs, so the harness and its configuration do not move to another platform."
+          effort: "You manage agent configurations, allowlists, mounts and credentials; there is no infrastructure, but the API is a Pre-GA preview."
+          fits: "Google presents it for config-driven autonomous agents that plan, run code and edit files; its terms bar production use and confidential data."
+        sources:
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents/create-manage
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents/sandbox-environment
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents/interact-with-agents
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents/evaluate
+          - https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/skill-registry
+          - https://docs.cloud.google.com/gemini/docs/codeassist/sunset
+          - https://docs.cloud.google.com/gemini/enterprise/docs/ai-developer-tools-overview
+          - https://jules.google/docs/changelog
+          - https://antigravity.google/docs/remote-agents
+        offers:
+          - name: "Agents API"
+            what: "Control plane to create, update, list and delete agents and set their sandbox, Cloud Storage mounts, network allowlist, MCP servers and skills (Preview)."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents/create-manage
+          - name: "Interactions API"
+            what: "Data plane to send an agent work, stream it or run it in the background, and reuse or override an environment by env_id (Preview)."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents/interact-with-agents
+          - name: "Managed sandbox environment"
+            what: "Isolated Linux sandbox with bash and file tools, persistent files for 7 days and no network until an allowlist is set (Preview)."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents/sandbox-environment
+          - name: "Evaluate agents"
+            what: "Evaluate agents built with the Managed Agents API using the GenAI Evaluation Service (Preview)."
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents/evaluate
+    settings: [iapCloudRun, cloudRunServiceIdentity, swpEgress, arPackageScanning, cloudRunDirectVpcFirewall, agentRepoCustomRole, ssmBranchRule, ssmSecretScanning, buildTriggerInlineConfig, buildSandboxFlags, admittedPackageRepo, odsBuildGate, binAuthzAttestor, releaseBillOfMaterials, deployRequireApproval, deployCanaryCloudRun, deployExecutionServiceAccount, projectPerApp, appsFolderPolicies, iapReauthSecondFactor, previewProjectTags, appSecretManager, apigeeGoogleAccessToken, apigeeDeploymentInvoke, modelArmorDocumentScreening, factoryLogSink, cloudRunDisableService, appHubRegistry, aiProtectionDiscovery, cloudSqlCmek]
+  # <<< software factory mapping

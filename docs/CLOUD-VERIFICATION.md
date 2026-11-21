@@ -573,6 +573,39 @@ access" and "…should use customer-managed keys to encrypt data at rest", check
 resource names a builder types (the `Microsoft.Search/searchServices` resource type, the
 `searchService` private endpoint sub-resource, the Search roles and the REST API).
 
+
+## The agentic software factory
+
+On 21 November 2026 the agentic software factory gained its mappings onto all four platforms,
+each with its hosting options for the factory's coding agent and a short recommended value on
+every setting. One researcher per platform wrote the mapping and a second, shown no sources,
+checked it.
+
+| Platform | Coding agent (mapped) | Pipeline and gate | App hosting | Claims | Confirmed | Tightened | Wrong |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| AWS | AgentCore Runtime | GitHub, CodePipeline with an approval only the owner answers | One Control Tower account per app, ECS behind Cognito sign-in | 109 | 98 | 11 | 0 |
+| Azure | Container Apps Sandboxes | GitHub Actions, a production environment the owner's team approves | One subscription per app, Container Apps behind Entra sign-in | 107 | 93 | 13 | 1 |
+| Google Cloud | A Cloud Run job per build | Secure Source Manager, Cloud Build, Cloud Deploy approval | One project per app, Cloud Run behind IAP | 102 | 91 | 11 | 0 |
+| On-premises | agent-sandbox on gVisor or Kata | GitLab CI, Argo CD manual sync by the owner's group | One namespace per app behind Keycloak | 85 | 74 | 11 | 0 |
+| **Total** | | | | **403** | **356** | **46** | **1** |
+
+What the checks changed, in the terms a builder would feel:
+
+- **Azure.** CodeQL cannot run inside a GitHub ruleset workflow (the one wrong claim), so it runs
+  by default setup and merges wait on its results. Sandbox egress needs full traffic inspection,
+  or non-web traffic leaves despite a default deny.
+- **AWS.** The guardrail policy must exempt the role ECS uses to shift canary traffic, or every
+  canary fails. A Cognito sign-in in front of a preview admits anyone the pool signs in, so the
+  pool federates only to an app assigned to the requester and the owner.
+- **Google Cloud.** Anyone who can deploy can break glass past Binary Authorization unless an
+  organisation policy denies the annotation. Secure Source Manager can gate merges only on
+  triggers-file triggers.
+- **On-premises.** The template step that creates the agent's GitLab token defaults to Maintainer,
+  which can merge; the setting asks for Developer. A sandbox claim cannot mount secrets.
+
+Box names on the drawing were shortened where they would have pushed it past 1080 pixels; each
+box's note keeps the full description.
+
 ## Keeping it current
 
 A mapping is only as good as its last check. `verified` on each mapping and each setting says

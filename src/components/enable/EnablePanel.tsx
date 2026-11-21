@@ -186,7 +186,8 @@ export function EnablePanel({
   // is working down a product's settings, not the control list.
   const [litFromTools, setLitFromTools] = useState(false);
   const holds: Record<StepId, boolean> = {
-    controls: !litFromTools && controls.some((m) => m.id === open),
+    // In B the settings are listed under the controls, so a product link opens the controls.
+    controls: (!litFromTools && controls.some((m) => m.id === open)) || (layout === "b" && Boolean(productId && products.some((p) => p.id === productId))),
     // Choosing is the reader's own act: the step opens only by hand.
     choose: false,
     tools: Boolean(productId && products.some((p) => p.id === productId)),

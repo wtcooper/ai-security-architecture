@@ -672,12 +672,12 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-19 flow-style reference architectures. Everything below is a gap between the taxonomy and the drawings.
+20 flow-style reference architectures. Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
 | Endpoint | 5 — Browser AI agents & extensions, First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
-| Cloud & hosted | 9 — Single agent workflow, Agent-to-agent federation across platforms, Agent sandbox for RL & evaluation, Multi-agent workflow, Chat agent with tools, Managed agent service in your cloud, Remote MCP server you publish, Self-hosted model inference, Model training & release pipeline |
+| Cloud & hosted | 10 — Single agent workflow, Agent-to-agent federation across platforms, Agent sandbox for RL & evaluation, Multi-agent workflow, Chat agent with tools, Managed agent service in your cloud, Remote MCP server you publish, Self-hosted model inference, Agentic software factory, Model training & release pipeline |
 | Third-party SaaS | 5 — Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents |
 
 ### 4a. Risks no architecture pins — 5 of 36
@@ -851,6 +851,26 @@ Highlights below are Google's original mapping, not ours.
 | Self-hosted model inference | Secrets & key management | governance | (none) |
 | Self-hosted model inference | Observability & response | governance | (none) |
 | Self-hosted model inference | Model registry | service | `componentModelStorage` |
+| Agentic software factory | Intake & spec | service | `componentAgentUserQuery` |
+| Agentic software factory | Preview environments | service | (none) |
+| Agentic software factory | Deploy gate | service | (none) |
+| Agentic software factory | Agent harness | service | `componentReasoningCore` |
+| Agentic software factory | Native tools | service | `componentTools` |
+| Agentic software factory | AI gateway | service | (none) |
+| Agentic software factory | Private pkg registry | external | `componentDataSources` |
+| Agentic software factory | Source control | service | `componentDataSources` |
+| Agentic software factory | Build & test pipeline | service | (none) |
+| Agentic software factory | Generated app | boundary | (none) |
+| Agentic software factory | App hosting | service | `componentApplication` |
+| Agentic software factory | App data | external | `componentDataStorage` |
+| Agentic software factory | Enterprise data | external | `componentDataSources` |
+| Agentic software factory | Model provider | provider | `componentModelServing` |
+| Agentic software factory | Public package sources | external | (none) |
+| Agentic software factory | Identity services | governance | (none) |
+| Agentic software factory | Secrets & key management | governance | (none) |
+| Agentic software factory | Policy & authorization | governance | (none) |
+| Agentic software factory | Supply-chain assurance | governance | (none) |
+| Agentic software factory | Observability & response | governance | (none) |
 | Model training & release pipeline | Base model & deps | external | `componentModelStorage` |
 | Model training & release pipeline | Training content origins | external | `componentDataSources` |
 | Model training & release pipeline | Private pkg registry | external | `componentDataSources` |
@@ -1029,12 +1049,12 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-19 of 19 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a mitigation pinned on its architecture.
+20 of 20 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a mitigation pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
 | Endpoint | Browser AI agents & extensions, First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | — |
-| Cloud & hosted | Single agent workflow, Agent-to-agent federation across platforms, Agent sandbox for RL & evaluation, Multi-agent workflow, Chat agent with tools, Managed agent service in your cloud, Remote MCP server you publish, Self-hosted model inference, Model training & release pipeline | — |
+| Cloud & hosted | Single agent workflow, Agent-to-agent federation across platforms, Agent sandbox for RL & evaluation, Multi-agent workflow, Chat agent with tools, Managed agent service in your cloud, Remote MCP server you publish, Self-hosted model inference, Agentic software factory, Model training & release pipeline | — |
 | Third-party SaaS | Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents | — |
 
 ### 5a. Documents
@@ -1049,6 +1069,7 @@ Highlights below are Google's original mapping, not ours.
 | Managed agent service in your cloud | hybrid | draft | 7 | _none_ |
 | Remote MCP server you publish | build | draft | 6 | _none_ |
 | Self-hosted model inference | build | draft | 6 | Credential Hardening |
+| Agentic software factory | build | draft | 5 | _none_ |
 | Model training & release pipeline | build | draft | 7 | Execution Isolation, AI Telemetry Logging |
 | Browser AI agents & extensions | use | draft | 7 | _none_ |
 | First-party coding & desktop agents | hybrid | draft | 6 | Multi-factor Authentication |
@@ -1137,6 +1158,7 @@ Each first-party cloud architecture as built on each cloud (data/clouds/): the s
 | Managed agent service in your cloud | 22 rows (0 code), 10 blocks bound | 21 rows (1 code), 10 blocks bound | 22 rows (0 code), 10 blocks bound | **not yet** |
 | Remote MCP server you publish | 20 rows (2 code), 6 blocks bound | 18 rows (3 code), 6 blocks bound | 17 rows (4 code), 6 blocks bound | 28 rows (2 code), 6 blocks bound |
 | Self-hosted model inference | 19 rows (2 code), 7 blocks bound | 14 rows (2 code), 7 blocks bound | 15 rows (2 code), 7 blocks bound | 30 rows (2 code), 7 blocks bound |
+| Agentic software factory | 30 rows (2 code), 15 blocks bound | 30 rows (1 code), 15 blocks bound | 30 rows (1 code), 15 blocks bound | 30 rows (4 code), 15 blocks bound |
 | Model training & release pipeline | 15 rows (1 code), 9 blocks bound | 14 rows (1 code), 9 blocks bound | 15 rows (1 code), 9 blocks bound | 26 rows (4 code), 9 blocks bound |
 
 ## 6. MITRE mitigation provenance and CoSAI gaps
