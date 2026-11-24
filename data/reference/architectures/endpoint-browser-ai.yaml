@@ -15,8 +15,9 @@ summary:
 overview: >-
   Built in or added as a self-updating extension with access to every site, the agent acts with the
   user's cookies, and no site can tell its clicks from the user's. Unlike a coding agent scoped to a
-  folder, its only limit is the sites the profile is signed in to, so the key controls are a managed
-  profile with few sign-ins and no saved passwords, per-site permissions and inspected traffic.
+  folder, its only limit is the sites the profile is signed in to, so the key controls are few
+  signed-in sessions within the agent's reach and no saved passwords, per-site permissions and
+  inspected traffic.
 
 description:
   - >
@@ -46,9 +47,10 @@ description:
     feature. Site-level permissions (act, read only, no access) enforced from the vendor's
     admin console and the browser's policy tier decide where the agent may act before any page
     is read; confirmation before consequential actions is what remains for the pages the
-    allowlist admits. On the network, the managed browser sends every session through our edge
-    and trusts the enterprise root, so the secure service edge can inspect what leaves for the
-    vendor and classify what comes back from the web, wherever it can parse the payload. The
+    allowlist admits. On the network, the managed browser sends every session through our inspection
+    point and trusts the enterprise root, so a secure web gateway can inspect what leaves for the
+    vendor and classify what comes back from the web, wherever it can parse the payload; where the
+    organisation does not decrypt browser traffic, the browser's own data controls do that job. The
     coding agents' drawings leave their vendor sessions uninspected by choice; here inspection
     is the baseline.
   - >
@@ -111,10 +113,11 @@ zones:
       our edge.
   - id: zoneCloud
     owner: cloud
-    gloss: "our service edge"
+    gloss: "our web inspection point"
     note: >
-      Infrastructure we operate: the secure service edge every browser session leaves through,
-      which is where the organisation inspects, allowlists and records.
+      Infrastructure we operate: the inspection point every browser session leaves through (a secure
+      web gateway or secure service edge), which is where the organisation inspects, allowlists and
+      records.
   - id: zoneVendor
     owner: vendor
     gloss: "vendor & SaaS"
@@ -284,21 +287,26 @@ blocks:
           Browser memories: pages visited, summarised and retrievable. A page the attacker
           served once, kept as context for every later task.
 
-  - id: aiGateway
+  - id: webInspection
     kind: service
-    title: AI gateway
-    summary: "secure service edge: inspects, allowlists and records every session"
+    title: Web inspection point
+    summary: "inspects and records agent traffic: a web gateway or the browser's controls"
     zone: zoneCloud
     col: 2
     row: 1
     note: >
-      The organisation's secure service edge, which every session from the managed profile
-      leaves through: the agent's inference calls to the vendor, and the browsing it causes.
-      Because the browser trusts the enterprise root, this tier can inspect what leaves for the
-      vendor and classify what comes back from the web, wherever it can parse the payload. Its
+      Where what the agent reads and sends is inspected and recorded, for every session from the
+      managed profile: the agent's inference calls to the vendor, and the browsing it causes. It is
+      a secure web gateway, not an AI gateway: it brokers no model or MCP traffic. Common forms are
+      a secure web gateway or secure service edge with TLS inspection (a commercial service, or an
+      open-source proxy with a data-loss scanner attached), an enterprise browser or browser management with built-in data controls where the
+      organisation does not decrypt browser traffic, and endpoint data-loss controls on the device.
+      Where the browser trusts the enterprise root and traffic is decrypted, this tier can inspect
+      what leaves for the vendor and classify what comes back from the web, wherever it can parse
+      the payload. Its
       item is the traffic class it carries; the checks it runs
       (inspection, allowlisting, the record) are the numbered pins on this block and its
-      edges. It brokers no model or MCP traffic here: the vendor's agent calls its own model.
+      edges. The vendor's agent calls its own model; this point only sees that call go by.
     items:
       - id: swg
         label: Secure web gateway
@@ -443,15 +451,15 @@ blocks:
   - id: govSupplyChain
     kind: governance
     title: Supply-chain assurance
-    summary: "admitted browsers & extensions, pinned; vendor assessment"
+    summary: "admitted browsers & extensions, updates reviewed; vendor assessment"
     icon: db
     zone: zoneGovernance
     col: 3
     row: 4
     mitigations: [ cap-agent-tool-registry, cap-ai-vendor-assessment ]
     note: >
-      Which browsers and extensions may install at all, pinned to which versions, and the
-      vendor assessment behind the allowlist entry.
+      Which browsers and extensions may install at all, how each update is decided, and the vendor
+      assessment behind the allowlist entry.
 
   - id: govObservability
     kind: governance
@@ -498,10 +506,10 @@ edges:
       Conversation and browser memories written as the agent works and read back as context on
       the next task: the persistence that lets one hostile page outlive the session it was read in.
   - from: harness
-    to: aiGateway
+    to: webInspection
     crossing:
       kind: brokered
-      via: "AI gateway: decrypts and redacts what leaves for inference; an unparseable payload is blocked"
+      via: "Inspection point: what leaves for inference is inspected and redacted where it can be read; what cannot be read is blocked by policy"
     path: primary
     bidir: true
     label: inference & session
@@ -510,10 +518,10 @@ edges:
       signed-in vendor account, through the browser's network stack and therefore through our
       edge; the completion that returns selects the next click and is not authenticated content.
   - from: browser
-    to: aiGateway
+    to: webInspection
     crossing:
       kind: brokered
-      via: "AI gateway: every request the agent causes leaves through the edge, on record"
+      via: "Inspection point: every request the agent causes passes it, on record"
     path: primary
     bidir: true
     route: hv
@@ -522,11 +530,11 @@ edges:
       Every request the agent causes, with the profile's cookies attached, leaves through the
       edge; every page comes back through it. The one hop on this drawing where the
       organisation sees the agent's browsing.
-  - from: aiGateway
+  - from: webInspection
     to: vendorService
     crossing:
       kind: brokered
-      via: "AI gateway: assessed and allowlisted vendor, inference payload inspected"
+      via: "Inspection point: assessed and allowlisted vendor, inference payload inspected where it can be read"
     path: external
     bidir: true
     label: to the approved vendor
@@ -543,11 +551,11 @@ edges:
     bidir: true
     label: inference / completion
     note: The vendor's service calls the model provider; everything behind that interface is theirs.
-  - from: aiGateway
+  - from: webInspection
     to: openWeb
     crossing:
       kind: brokered
-      via: "AI gateway: browsing allowlist, TLS inspection where policy allows"
+      via: "Inspection point: browsing allowlist, TLS inspection where policy allows"
     route: vh
     path: external
     outbound: true
@@ -556,11 +564,11 @@ edges:
       Browsing out; page text back in. The primary injection path (any page the agent reads can
       steer what it does on every origin the profile reaches) and the exfiltration path, when
       the agent is steered into typing what it read into a form the attacker owns.
-  - from: aiGateway
+  - from: webInspection
     to: downstream
     crossing:
       kind: brokered
-      via: "AI gateway: recorded at the edge only; the application sees the user's own session"
+      via: "Inspection point: recorded here only; the application sees the user's own session"
     route: vh
     path: external
     outbound: true
@@ -584,29 +592,29 @@ edges:
 pins:
   risks:
     - risk: riskPromptInjection
-      at: aiGateway->openWeb
+      at: webInspection->openWeb
       note: >
         Page text is instruction once extracted, visible or hidden, and the author is whoever
         owns the page the agent happened to read.
     - risk: riskSensitiveDataDisclosure
-      at: aiGateway->openWeb
+      at: webInspection->openWeb
       note: >
         The exfiltration path: an agent steered by one page types what it read on another
         (mail, records, a one-time code) into a form on a page the attacker owns, on a request
         that looks like browsing.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: aiGateway->downstream
+      at: webInspection->downstream
       note: >
         Instructions from one origin act on another with the user's cookies attached. The
         application receives a request it cannot distinguish from the user's, because no grant
         was ever issued to an agent.
     - risk: riskRogueActions
-      at: aiGateway->downstream
+      at: webInspection->downstream
       note: >
         A purchase, a send or a permission change is one click, and the set of actions the
         confirmation gate covers is narrower than users assume.
     - risk: riskExcessiveDataHandlingDuringInference
-      at: aiGateway->vendorService
+      at: webInspection->vendorService
       note: >
         Whole pages, screenshots and every tab the agent opened on the way go to the vendor and
         into its retention, usually more than the user pictured sharing, and synced to the
@@ -647,11 +655,12 @@ pins:
     - mitigation: AML.M0029
       at: user->harness
       do: "Tell people to keep confirmation switched on for payments, sending, publishing and entering passwords, and make it policy."
-      why: "The person can turn approvals off and no admin setting prevents it, so training and policy are what you have."
+      why: "On products where the person can turn approvals off and no admin setting prevents it, training and policy are what you have; where an admin setting exists, lock it."
       note: >-
-        Confirmation before consequential clicks: payments, sends, publishing, credential entry. The
-        approval mode is the user's choice and no admin setting removes "skip all approvals", so the
-        covered set is policy and training, not enforcement.
+        Confirmation before consequential clicks: payments, sends, publishing, credential entry. On
+        products where the approval mode is the user's choice and no admin setting removes "skip all
+        approvals", the covered set is policy and training, not enforcement; where the product has
+        an admin-locked confirmation setting, lock it.
     - mitigation: AML.M0028
       at: toolPlane
       do: "Use browser policy to stop the agent acting on sites it may only read (for example Chrome's GeminiActOnWebBlockedForURLs or Edge's CopilotBrowserUseBlockList), and where the product has no read-only setting, keep those sites off its allowlist."
@@ -661,12 +670,15 @@ pins:
         only read, which it may not touch, set in the vendor console over the user's own grants.
     - mitigation: D3-CTS
       at: profile
-      do: "Give the agent its own managed browser profile, signed in to only the few sites it needs, with no saved passwords."
+      do: "Limit the sessions the agent can act with to the few sites it needs, with no saved passwords in its reach, for example in a separate managed browser profile for agent work."
       why: "The agent can then reach only those sites, instead of everything the person's normal browser is signed in to."
       note: >-
-        A dedicated managed profile with a narrow set of signed-in origins and no saved passwords: the
-        control that converts an unbounded blast radius into a bounded one, and the one the vendors' own
-        safety guidance asks for.
+        A narrow set of signed-in origins and no saved passwords within the agent's reach: the
+        control that converts an unbounded blast radius into a bounded one, and the one the vendors'
+        own safety guidance asks for. A separate managed profile for agent work, a separate browser
+        or a remote isolated browser session for agent tasks, or per-site read and act limits in the
+        person's own profile where the product supports them. Prefer a dedicated profile or browser,
+        because the profile's cookie jar is the agent's credential and a separate one bounds it.
     - mitigation: cap-input-guardrails
       at: harness
       do: "Confirm in your vendor review that the vendor screens web pages for hidden instructions, and add your own screening server if the product lets you plug one in."
@@ -694,11 +706,15 @@ pins:
         submission to another raises an alert.
     - mitigation: cap-agent-tool-registry
       at: openWeb->browser
-      do: "Use browser policy to allow only reviewed AI extensions and AI browsers to install, by their identifier and pinned to the version you reviewed."
+      do: "Use browser policy to allow only reviewed AI extensions and AI browsers to install, by their identifier, and make each update a decision: pin the version where you can, otherwise review each new version as it arrives."
       why: "Installing an extension is trusting its publisher, and an update should be a decision, not a surprise."
       note: >-
-        The browser policy allowlist of extensions and agentic browsers permitted to install (by identifier,
-        blocked by requested permission, pinned to reviewed versions), enforced at the host, not at the store.
+        The browser policy allowlist of extensions and agentic browsers permitted to install (by
+        identifier, blocked by requested permission), enforced at the host, not at the store.
+        Browser policy admits by identifier and does not by itself hold a store extension at one
+        version, so each update is made a decision another way: the reviewed version held where the
+        browser and store allow it, otherwise each new version reviewed as it arrives, with
+        extension monitoring that flags permission or code changes.
         Admission of an extension is a supply-chain decision, and an update is a decision rather than an
         event.
     - mitigation: cap-shadow-ai-discovery
@@ -709,27 +725,28 @@ pins:
         Inventory the extensions and assistant panels that never enrolled, from the device and from the edge:
         this pattern spreads one click at a time.
     - mitigation: cap-agent-tracing
-      at: aiGateway
+      at: webInspection
       do: "Combine your network edge's session record with the vendor's audit export."
       why: "Only the two together show what was read, what left and what was clicked."
       note: >-
         The edge's session record fused with the vendor's audit export: only the combination shows what was
         read, what left, and what was clicked.
     - mitigation: cap-sensitive-data-redaction
-      at: harness->aiGateway
-      do: "Inspect and redact page content at your secure web gateway before it is sent to the model, and block anything the gateway cannot read."
+      at: harness->webInspection
+      do: "Inspect and redact page content before it is sent to the model, for example at your secure web gateway, and block anything your inspection cannot read."
       why: "The agent reads pages people are signed in to, so what it sends out can include their data."
       note: >-
-        Classify and redact what page content may leave for inference, on the hop where the browser's trust in
-        our root lets the secure web gateway decrypt and parse the agent's payload, because the pages are
-        authenticated ones. A payload the gateway cannot parse is blocked, not passed.
+        Classify and redact what page content may leave for inference, on the hop where the
+        browser's trust in our root lets a secure web gateway decrypt and parse the agent's payload
+        (or in the browser's own data controls, where traffic is not decrypted), because the pages
+        are authenticated ones. A payload the inspection cannot parse is blocked, not passed.
     - mitigation: cap-agent-egress-control
-      at: aiGateway->openWeb
-      do: "Limit where the agent may browse to an approved list, at your secure web gateway and in the agent's managed browser profile."
+      at: webInspection->openWeb
+      do: "Limit where the agent may browse to an approved list, at your inspection point and in the agent's managed browser profile."
       why: "The profile is what lets the limit apply to the agent's browsing without restricting the person's own."
       note: >-
-        An allowlist on where the agent may browse, enforced at the secure service edge (with TLS inspection
-        where policy allows) and by managed browser policy on the agent's profile, which is what lets the
+        An allowlist on where the agent may browse, enforced at the inspection point (with TLS
+        inspection where policy allows) and by managed browser policy on the agent's profile, which is what lets the
         rule apply to the agent's browsing and not the user's.
     - mitigation: D3-MFA
       at: vendorService
@@ -790,39 +807,39 @@ walkthrough:
     - follow: toolPlane->browser
       label: open the tab, read the page
       note: The browser tools open the signed-in application and read what is rendered.
-    - follow: browser->aiGateway
+    - follow: browser->webInspection
       label: authenticated request
       note: The request leaves with the profile's cookies attached, through the edge.
-    - follow: aiGateway->downstream
+    - follow: webInspection->downstream
       label: on the signed-in session
       note: The application answers the user's own session; it has no idea an agent is driving.
-    - follow: downstream->aiGateway
+    - follow: downstream->webInspection
       label: page / record back
       note: "Records, mail, a calendar: authored by many hands, none of them the user."
-    - follow: aiGateway->browser
+    - follow: webInspection->browser
       label: page rendered
       note: Back through the edge, where returned content can be classified, and rendered.
     - follow: browser->toolPlane
       label: page extracted into context
       note: Page extraction hands the page to the loop as context, hidden text included, past the vendor's classifiers.
-    - follow: harness->aiGateway
+    - follow: harness->webInspection
       label: context leaves for inference
       note: >
         The goal and the extracted pages leave for the vendor on the signed-in account, and
         through our edge, which is where classification of what leaves is real.
-    - follow: aiGateway->vendorService
+    - follow: webInspection->vendorService
       label: inspected, to the approved vendor
-      note: Admitted by the allowlist, inspected because the browser trusts our root.
+      note: Admitted by the allowlist, and inspected where our inspection point can read it.
     - follow: vendorService->provider
       label: vendor's model call
       note: The vendor's service calls the model provider; everything past that interface is theirs.
     - follow: provider->vendorService
       label: completion
       note: The completion comes back to the vendor's service.
-    - follow: vendorService->aiGateway
+    - follow: vendorService->webInspection
       label: plan
       note: "And back across the edge: unauthenticated content, about to become the plan."
-    - follow: aiGateway->harness
+    - follow: webInspection->harness
       label: plan into loop
       note: The loop treats the completion as its next action.
     - follow: harness->user
@@ -836,16 +853,16 @@ walkthrough:
     - follow: toolPlane->browser
       label: the consequential click
       note: The click, on an origin the site permissions allow the agent to act on.
-    - follow: browser->aiGateway
+    - follow: browser->webInspection
       label: request with cookies attached
       note: Out through the edge with the user's session.
-    - follow: aiGateway->downstream
+    - follow: webInspection->downstream
       label: action lands as the user
       note: The application applies it as the user's own action, and records it as such.
-    - follow: downstream->aiGateway
+    - follow: downstream->webInspection
       label: confirmation
       note: The confirmation page returns.
-    - follow: aiGateway->browser
+    - follow: webInspection->browser
       label: rendered
       note: And renders in the tab.
     - follow: browser->toolPlane
@@ -864,33 +881,33 @@ scenarios:
       - follow: toolPlane->browser
         label: navigate to results
         note: The agent navigates; the browser fetches whatever the task surfaces.
-      - follow: browser->aiGateway
+      - follow: browser->webInspection
         label: fetch
         note: Out through the edge, as ordinary browsing.
-      - follow: aiGateway->openWeb
+      - follow: webInspection->openWeb
         label: browsing
         note: To a page the attacker owns, or one they were able to write on.
-      - follow: openWeb->aiGateway
+      - follow: openWeb->webInspection
         label: page with hidden instruction
         note: >
           A page comes back carrying text addressed to the agent (off-screen, white on white,
           or in a comment), which the edge can classify and rarely does.
-      - follow: aiGateway->browser
+      - follow: webInspection->browser
         label: rendered, hidden text included
         note: Rendered in the tab, hidden text and all.
       - follow: browser->toolPlane
         label: extracted into context
         note: Page extraction is the last point the hidden text could be stripped; past it, the text is context.
-      - follow: harness->aiGateway
+      - follow: harness->webInspection
         label: poisoned context leaves
         note: The poisoned context goes to the vendor for inference, indistinguishable from the user's goal.
-      - follow: aiGateway->vendorService
+      - follow: webInspection->vendorService
         label: inference
         note: The vendor's classifiers are the last defence on this hop, and they are the vendor's.
-      - follow: vendorService->aiGateway
+      - follow: vendorService->webInspection
         label: attacker's plan as completion
         note: The completion carries the attacker's instruction as the next step.
-      - follow: aiGateway->harness
+      - follow: webInspection->harness
         label: next click
         note: The loop treats it as the next click.
       - follow: toolPlane->browser
@@ -898,16 +915,16 @@ scenarios:
         note: >
           The next click lands on a signed-in origin (the mail tab, the internal application)
           if the site permissions let the agent act there.
-      - follow: browser->aiGateway
+      - follow: browser->webInspection
         label: request with the user's cookies
         note: With the user's cookies attached.
-      - follow: aiGateway->downstream
+      - follow: webInspection->downstream
         label: acts on the signed-in app
         note: The application receives a request it cannot distinguish from the user's.
-      - follow: downstream->aiGateway
+      - follow: downstream->webInspection
         label: records read
         note: What the attacker wanted read (mail, a record, a one-time code) comes back.
-      - follow: aiGateway->browser
+      - follow: webInspection->browser
         label: rendered
         note: Rendered in the tab.
       - follow: browser->toolPlane
@@ -916,10 +933,10 @@ scenarios:
       - follow: toolPlane->browser
         label: typed into the attacker's form
         note: The agent types it into a form on the page it was steered from.
-      - follow: browser->aiGateway
+      - follow: browser->webInspection
         label: exfil request
         note: A request that looks like browsing.
-      - follow: aiGateway->openWeb
+      - follow: webInspection->openWeb
         label: content leaves to the attacker's page
         note: >
           The content leaves to the attacker's page: the edge's classification of what leaves
@@ -933,33 +950,33 @@ scenarios:
       - follow: toolPlane->browser
         label: open the mail tab
         note: The agent opens the mail tab in the profile.
-      - follow: browser->aiGateway
+      - follow: browser->webInspection
         label: authenticated request
         note: Out with the standing session.
-      - follow: aiGateway->downstream
+      - follow: webInspection->downstream
         label: inbox on the standing session
         note: The browser fetches the inbox on the standing session.
-      - follow: downstream->aiGateway
+      - follow: downstream->webInspection
         label: mail, incl. strangers' messages
         note: Mail content returns, including messages written by strangers, which are now model input.
-      - follow: aiGateway->browser
+      - follow: webInspection->browser
         label: rendered
         note: Rendered in the tab.
       - follow: browser->toolPlane
         label: inbox extracted into context
         note: The whole inbox view is extracted into context.
-      - follow: harness->aiGateway
+      - follow: harness->webInspection
         label: the inbox leaves for inference
         note: The inbox leaves for inference, which is more than the user pictured sharing.
-      - follow: aiGateway->vendorService
+      - follow: webInspection->vendorService
         label: DLP-inspected, to the vendor
         note: >
           Classified at the edge on the way out: the one place a mail transcript can be redacted
           before it becomes the vendor's to retain.
-      - follow: vendorService->aiGateway
+      - follow: vendorService->webInspection
         label: summary
         note: The summary comes back.
-      - follow: aiGateway->harness
+      - follow: webInspection->harness
         label: into the loop
         note: Into the loop.
       - follow: harness->user
@@ -976,14 +993,14 @@ scenarios:
       - follow: browser->toolPlane
         label: every open page, read by new code
         note: The updated code reads every tab the profile has open, on the permissions it already held.
-      - follow: browser->aiGateway
+      - follow: browser->webInspection
         label: requests on every session's cookies
         note: Whatever it now does, it does with the profile's cookies attached.
-      - follow: aiGateway->downstream
+      - follow: webInspection->downstream
         label: on every signed-in origin
         note: >
-          On every signed-in origin the profile holds, which is why the profile's scope, and
-          the policy allowlist that pins the version, are the controls this walk pins.
+          On every signed-in origin the profile holds, which is why the profile's scope, and the
+          policy allowlist that makes each update a decision, are the controls this walk pins.
 
   - title: A memory carries the injection forward
     steps:
@@ -995,23 +1012,23 @@ scenarios:
       - follow: memory->toolPlane
         label: read back on the next task
         note: The next task, unrelated, loads the memory as context.
-      - follow: harness->aiGateway
+      - follow: harness->webInspection
         label: into inference, on a clean goal
         note: >
           The injection re-enters inference under a goal the user never associated with the
           page: memory scoping and treating memories as untrusted on read are what bound it.
 
 deviations:
-  - subject: The AI gateway is the secure service edge, and carries no model proxy
+  - subject: The inspection point is a secure web gateway, not an AI gateway
     reason: >
       Every product in this class calls its own vendor's model on the signed-in account, so the
-      organisation's tier brokers no inference and no MCP traffic; the aiGatewayTraffic pack is
-      not used and the block lists the one traffic class it carries: the secure web gateway the
-      managed browser's sessions leave through. It is drawn as the AI gateway because it is the
-      customer-operated tier every session crosses, and because it is the registered embodiment
-      of egress control; what it does here is admission, inspection and the record, which are
-      the pins on it and on its two edges. A
-      reader comparing this to the coding agents should see the same block doing a narrower job.
+      organisation's tier brokers no inference and no MCP traffic: it is the secure web gateway
+      (or the browser's own data controls) the managed browser's sessions leave through, and is
+      named for what it is. It is the customer-operated tier every session crosses; what it does
+      here is admission, inspection and the record, which are the pins on it and on its edges.
+      Egress control and redaction are also embodied by the Browser block, where managed browser
+      policy applies them to the agent's profile. A reader comparing this to the coding agents
+      should see a different tier, not the same gateway doing a narrower job.
   - subject: The vendor's path is inspected here, unlike the coding agents' vendor sessions
     reason: >
       The sibling coding drawings admit the vendor session by allowlist and leave it
@@ -1039,8 +1056,8 @@ deviations:
   - subject: The extension supply path is drawn direct from the store to the host
     reason: >
       Physically the update traverses the secure service edge like every other request; drawing
-      it that way would suggest the edge admits it, and nothing there does. The admission
-      decision (which extensions may install, at which versions) is browser policy enforced at
+      it that way would suggest the edge admits it, and nothing there does. The admission decision
+      (which extensions may install, and how updates are decided) is browser policy enforced at
       the extension host, and the edge from the store to the host is where that decision and the
       provenance risk are pinned.
 

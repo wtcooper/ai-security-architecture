@@ -382,14 +382,15 @@ blocks:
   - id: sourceControl
     kind: service
     title: Source control
-    summary: "one repository per app: the agent's branch, checks, history"
+    summary: "the app's code: the agent's branch, checks, history"
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 3
     row: 1
     note: >
-      Our own source control, with one repository per generated app, created by the factory from
-      the template. The agent pushes a branch and opens a pull request; branch protection means
+      Our own source control, with the app's code in a repository per generated app or in a folder
+      of a shared repository with its own owners and path rules, created by the factory from the
+      template. The agent pushes a branch and opens a pull request; branch protection means
       only the pipeline merges, and the pipeline's own definition is not the agent's to change.
     items:
       - id: repos
@@ -430,15 +431,17 @@ blocks:
   - id: appTenant
     kind: boundary
     title: Generated app
-    summary: "its own account, data and owner"
+    summary: "its own tenancy, data and owner"
     zone: zoneCloud
     col: 1
     row: 2
     rowSpan: 2
     note: >
       One app the factory has made, drawn once for the many it will make. Each is a tenant of its
-      own: a separate cloud account or project with its own network, its own workload identity,
-      its own store and its own owner, so that one app's fault or compromise stays inside its
+      own: its own isolation boundary (a cloud account, subscription or project per app, a namespace
+      per app in a shared cluster with network policy and its own workload identity, or a per-app
+      space on an internal platform with tenant isolation) with its own network, its own workload
+      identity, its own store and its own owner, so that one app's fault or compromise stays inside its
       frame. Nothing from the factory runs inside it except the release.
 
   - id: appHosting
@@ -817,11 +820,12 @@ pins:
         release needs a new approval.
     - mitigation: cap-staged-rollout-gate
       at: deployGate
-      do: "Release each version to a few users first, and keep a one-step way back to the last version that worked."
+      do: "Release each version in stages, for example to a few users first, and keep a one-step way back to the last version that worked."
       why: "A release that misbehaves with real data can then be undone in minutes, for few people."
       note: >-
-        Progressive release with automated rollback on error rates and failed health checks, and
-        the last known good version kept ready. The same gate holds a release whose checks or
+        Progressive release (a few users first, a blue/green switch with an immediate switch back,
+        or a feature flag the owner turns on) with automated rollback on error rates and failed
+        health checks, and the last known good version kept ready. The same gate holds a release whose checks or
         approval have expired.
     - mitigation: D3-EI
       at: nativeTools
@@ -875,11 +879,14 @@ pins:
         gateway as itself and never sees the provider's key.
     - mitigation: D3-CTS
       at: appHosting->orgData
-      do: "Give each app its own identity, accepted only by the connectors approved for it, and never pass a user's sign-in on to them."
+      do: "Give each app its own identity, accepted only by the connectors approved for it; where a connector must act for the signed-in user, exchange the user's sign-in for a token limited to that connector rather than passing it on."
       why: "One app's credential then opens that app's connectors, not every system the platform can reach."
       note: >-
-        Each app's workload identity is accepted only by its approved connectors. The signed-in
-        user's token is exchanged for a narrower one and never forwarded.
+        Each app's workload identity is accepted only by its approved connectors. Where the
+        connector must know the user (the data-access pin needs it to), the app's identity carries
+        the user's identity asserted to the connector, which checks entitlement, or the user's token
+        is exchanged (on-behalf-of, RFC 8693) for one scoped to that connector; it is never
+        forwarded. Connectors whose data every app user may see can take the app's identity alone.
     - mitigation: D3-APA
       at: appUsers->appHosting
       do: "Put your identity provider in front of every generated app by default, and let in only the people its owner names."
@@ -901,11 +908,11 @@ pins:
         the deploy gate carries its own pin.
     - mitigation: D3-NI
       at: appTenant
-      do: "Run each generated app in its own cloud account and network, with no route to other apps or to the factory."
+      do: "Isolate each generated app from other apps and from the factory, for example in its own cloud account: no network route between them and no identity that reaches across."
       why: "One faulty or hostile app then cannot reach another app's data or the tools that built it."
       note: >-
-        One tenant per app: separate account or project, separate network, separate store and
-        identity. The only paths in are sign-in and the release; the only paths out are its
+        One tenant per app: its own isolation boundary (an account, a cluster namespace or an
+        equivalent), separate network, separate store and identity. The only paths in are sign-in and the release; the only paths out are its
         approved connectors.
     - mitigation: D3-NI
       at: previews

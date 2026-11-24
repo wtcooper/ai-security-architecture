@@ -152,16 +152,20 @@ blocks:
   - id: sandbox
     kind: boundary
     title: Sandbox
-    summary: "microVM: own kernel, files and network"
+    summary: "own files, network and process boundary, with settings the agent cannot edit"
     zone: zoneEndpoint
     col: 1
     row: 1
     rowSpan: 3
     note: >
-      A microVM-class boundary around the loop, its state and its local tools: the core
-      recommendation for this pattern, and the control that bounds every other failure on
-      this page. Its own kernel, filesystem and network, and no approval prompts inside,
-      because the boundary replaces them.
+      A boundary around the loop, its state and its local tools: the core recommendation for this
+      pattern, and the control that bounds every other failure on this page. Its own filesystem,
+      network and process boundary, with settings the agent cannot edit, and no approval prompts
+      inside, because the boundary replaces them. A microVM (Docker Sandboxes, for example), a full
+      virtual machine on the device, a hardened container with a user-space kernel where a VM is
+      impractical, or a dedicated machine can provide it; use a VM-class boundary where the agent
+      holds the owner's sessions or keys, because a hypervisor boundary does not share the host's
+      kernel.
       Three openings are deliberate and each is a control decision. The workspace is mounted
       directly at the same path and propagates both ways, so a read-only clone is the safer
       default. A shared host-side skills store is mounted read-only into every sandbox, so a skill poisoned on the host reaches all of them; it is a contamination channel
@@ -316,14 +320,16 @@ blocks:
   - id: workspace
     kind: external
     title: Owner workspace
-    summary: "listed host folders, mounted read-only with a private clone"
+    summary: "listed host folders; the agent's changes come back for the owner to review"
     cosaiComponent: componentDataSources
     zone: zoneEndpoint
     col: 1
     row: 4
     note: >
-      The host folders shared into the sandbox: mounted read-only with a private clone in the
-      enterprise posture, so an agent edit is a reviewable diff rather than a host write.
+      The host folders shared into the sandbox, with the agent's changes coming back for the owner
+      to review. In this drawing they are mounted read-only with a private clone, so an agent edit
+      is a reviewable diff rather than a host write; a read-write mount of one narrow folder under
+      version control or snapshots, or a synced copy the owner merges back, meet the same need.
     items:
       - id: sharedPaths
         label: Shared folders
@@ -333,13 +339,16 @@ blocks:
   - id: relay
     kind: service
     title: Messaging relay
-    summary: "outbound-only connector; holds the platform credentials"
+    summary: "outside the sandbox: holds platform credentials, screens what passes"
     zone: zoneCloud
     col: 2
     row: 1
     note: >
-      The outbound-only connector between the endpoint and the messaging platform, so platform
-      credentials never sit on the device and no inbound port is ever opened.
+      The hop between the chat platforms and the agent, outside the sandbox: it holds the platform
+      credentials and screens what passes, so the credentials never sit on the device and no inbound
+      port is opened. Drawn as a relay we run outside the device, outbound-only; the platform's own
+      bot connection in an outbound-only mode, with its token injected outside the sandbox, or the
+      AI gateway brokering the chat platform's API as one more tool, play the same role.
     items:
       - id: outbound
         label: Outbound connector
@@ -531,7 +540,7 @@ blocks:
   - id: platform
     kind: external
     title: Messaging platform
-    summary: "the corporate messaging tenant; authenticates the senders"
+    summary: "the chat service the agent is reached through; it authenticates senders"
     cosaiComponent: componentDataSources
     zone: zoneVendor
     col: 5
@@ -539,8 +548,10 @@ blocks:
     cell: { col: 5, row: 1 }
     rowSpan: 2
     note: >
-      The messaging vendor's cloud, holding the corporate tenant under an agreement we signed.
-      It authenticates senders to its own satisfaction, which is the only sender assurance
+      The chat service the agent is reached through: here the messaging vendor's cloud holding the
+      corporate tenant under an agreement we signed, where senders are directory users. On consumer
+      messaging a sender is a phone number or a handle. Either way it authenticates senders to its
+      own satisfaction, which is the only sender assurance
       this architecture inherits.
     items:
       - id: tenant
@@ -622,7 +633,7 @@ edges:
     to: relay
     crossing:
       kind: brokered
-      via: "Messaging relay: outbound-only; inbound messages screened, replies classified"
+      via: "Messaging relay: no inbound port on the device; inbound messages screened, replies classified"
     path: primary
     outbound: true
     label: outbound only
@@ -659,7 +670,7 @@ edges:
     bidir: true
     label: workspace mount
     note: >
-      The shared folders, mounted read-only with a private clone so an agent edit returns as a
+      The shared folders, here mounted read-only with a private clone so an agent edit returns as a
       reviewable diff rather than a host write.
   - from: harness
     to: gateway
@@ -824,11 +835,13 @@ pins:
         gateway never sees it.
     - mitigation: D3-APA
       at: bridges
-      do: "Use one rule for who may message the agent, tied to your staff directory and applied to every chat channel."
+      do: "Use one rule for who may message the agent, applied to every chat channel: tied to your staff directory on corporate platforms, and to a short list of verified accounts on any other."
       why: "Who is allowed to talk to the agent is the whole of the door on this pattern."
       note: >-
-        One pairing policy for every channel: directory-bound, re-checked, and administered centrally rather
-        than reimplemented per platform; each adapter enforces it on every inbound message. Identity is the
+        One pairing policy for every channel: directory-bound on corporate platforms, a short list
+        of verified accounts on consumer messaging (or a policy that allows only corporate channels
+        for agents on managed devices), re-checked, and administered centrally rather than
+        reimplemented per platform; each adapter enforces it on every inbound message. Identity is the
         whole of the admission on this surface.
     - mitigation: cap-agent-action-policy-enforcement
       at: gateway
@@ -840,13 +853,16 @@ pins:
         ingress and bound to a read-only or draft class on every brokered leg.
     - mitigation: D3-MAN
       at: harness
-      do: "Make the agent's local control connection accept only an authenticated client, with a token checked on every message, turn off automatic approval of new devices from the same machine, and set the bind explicitly inside the sandbox."
+      do: "Make the agent's local control connection accept only an authenticated client, with a token checked on every message and origin checks on the bind, set the bind explicitly inside the sandbox, and approve no new device or client without the owner."
       why: "Otherwise a web page open in the owner's browser can drive the agent."
       note: >-
         The daemon's control socket accepts only messages from an authenticated client (a per-client token
         checked on every WebSocket message, replays refused, origin checked at the handshake), so a page in the
-        owner's browser can neither drive the loop nor read the token. Loopback binding and the outbound-only
-        relay are configuration around it, not the authentication.
+        owner's browser can neither drive the loop nor read the token. Loopback binding and the
+        outbound-only relay are configuration around it, not the authentication. No new device or
+        client is approved without the owner, including one pairing from the same machine: OpenClaw,
+        for example, silently approves first-time pairing from trusted local connections by default,
+        which its autoApproveLocal setting turns off.
     - mitigation: AML.M0031
       at: toolPlane->memory
       do: "Let the agent write only to its own memory files, make its startup rules read-only to it, record where each memory came from and keep snapshots."

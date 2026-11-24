@@ -12,11 +12,11 @@ summary:
     coverage must be verified for the selected mode.
 
 overview: >-
-  The provider runs the loop and tools in a sandbox that reaches the web and package sources only
-  under an allowlist you write, and your code and tools only through a GitHub App, an outbound
-  tunnel to your AI gateway, and custom tools your application runs. Unlike a managed agent
-  service in your own cloud account, it runs in the vendor's cloud under its keys and contract,
-  and your gateway does not see its model calls.
+  The provider runs the loop and tools in a sandbox that reaches the web and packages only under
+  your allowlist, and your systems only through a scoped install on your code host, your AI gateway
+  (by an outbound tunnel you run, where offered) and custom tools your app runs. Unlike a managed
+  agent service in your cloud account, it runs under the vendor's keys and contract, and your
+  gateway does not see its model calls.
 
 description:
   - >
@@ -50,10 +50,10 @@ description:
 
   - >
     The critical boundary is the way back in. To be useful the agent needs our code bases and
-    data, and it reaches them through exactly two controlled crossings: a GitHub App installed
-    on named repositories of our GitHub Enterprise Cloud, admitted only from the vendor's
-    published IPs, for code; and an outbound-only tunnel we run to our AI gateway, for tool
-    calls to our tool servers and the data behind them. Source control is never behind the
+    data, and it reaches them through exactly two controlled crossings: a scoped installation on
+    named repositories of our code host (a GitHub App, on GitHub), admitted only from the vendor's
+    published IPs, for code; and our AI gateway, reached through an outbound-only tunnel we run
+    where the vendor offers one, for tool calls to our tool servers and the data behind them. Source control is never behind the
     gateway, and nothing else of the vendor's crosses into our systems.
 distinguishedBy:
   - >
@@ -98,15 +98,15 @@ zones:
     gloss: "our cloud: front end, gateway, data"
     note: >
       What we still own on somebody else's platform: the definition that decides what the agent
-      may do, our GitHub Enterprise reached by the vendor's GitHub App, the front end our users
-      call, the tunnel their runtime reaches us through, the gateway that admits it into our
-      systems, and the systems themselves.
+      may do, our code host reached by the vendor's scoped installation, the front end our users
+      call, the tunnel their runtime reaches us through where we run one, the gateway that admits it
+      into our systems, and the systems themselves.
   - id: zoneVendor
     owner: vendor
     gloss: "where the agent runs"
     note: >
       The provider's environment, and where the agent actually runs. A request reaches it
-      through our own front end first, and it reaches back into us through the tunnel. Its
+      through our own front end first, and it reaches back into us through our gateway. Its
       connectors to the SaaS we approved sit here too, under agreement. What they operate
       inside it is assured, not drawn.
   - id: zoneExternal
@@ -243,12 +243,12 @@ blocks:
         icon: plug
         note: >
           The harness's own MCP client: the party that connects out. Two directions: back
-          into us through the tunnel to our gateway, and to the provider's hosted connectors
+          into us to our gateway (down the tunnel, where we run one), and to the provider's hosted connectors
           for the SaaS we approved, called from the vendor's side with the credential drawn
           from the vault. That second path is how the agent reaches SaaS data; the public web,
           repositories and packages it reaches from the sandbox under the environment's
           allowlist. The alternative for any connector is to register it on our gateway
-          instead and declare the gateway's tunnel hostname as the server: same connector, now
+          instead and declare the gateway's endpoint (its tunnel hostname, where there is one) as the server: same connector, now
           scoped and recorded at our tier; the choice per connector is which of the two it is.
 
   - id: nativeTools
@@ -329,16 +329,16 @@ blocks:
   - id: sourceControl
     kind: service
     title: Source control
-    summary: "our GitHub Enterprise: instructions in, branch and draft PR out"
+    summary: "our code host: instructions in, branch and draft change out, merge gate"
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 1
     row: 1
     cell: { col: 2, row: 0 }
     note: >
-      Our GitHub Enterprise: the code bases the agent reads and changes. Code, instruction files and
+      Our code host (GitHub, GitLab or another, as the product supports): the code bases the agent reads and changes. Code, instruction files and
       threads enter the session as instruction; a branch and a draft pull request come back out for a
-      person to review. It sits in our band, and the vendor reaches it only through a GitHub App on named repositories, admitted from its published IPs by our enterprise IP allow list.
+      person to review. It sits in our band, and the vendor reaches it only through a scoped installation on named repositories (a GitHub App, on GitHub), admitted from its published IPs by the host's IP allow list.
     items:
       - id: repos
         label: Repositories & instruction files
@@ -358,44 +358,19 @@ blocks:
         note: >
           The draft the session opens, the review a person gives, the workflows the pull request would
           fire, and the single branch the session may write.
-  - id: tunnel
-    kind: service
-    title: Tunnel connector
-    summary: "vendor software we run: dials out, fronts the gateway's MCP endpoint"
-    cosaiComponent: componentAgentUserQuery
-    zone: zoneCloud
-    col: 2
-    row: 3
-    cell: { col: 2, row: 2 }
-    note: >
-      Vendor-supplied software we run inside our own network so their runtime can reach an MCP
-      endpoint that is not publicly exposed. Outbound-only: it dials the vendor and carries
-      their requests in, so no inbound rule is opened and the endpoint stays on a private
-      address. Two things it does not do, on both vendors' own architecture notes: it does not
-      make the data path local (requests and responses still traverse their cloud) and it
-      does not authenticate to the upstream, which we still do ourselves. The tunnel token and
-      the TLS private key on this host are the load-bearing secrets. Each hostname routes to
-      one upstream, and the upstream here is the gateway's aggregate MCP endpoint: one
-      hostname fronts every server the gateway admits, and the vault holds the gateway's own
-      credential for it.
-    items:
-      - id: tunnelClient
-        label: Outbound connector
-        icon: plug
-        note: Dials out to the vendor's edge; opens nothing inbound.
-
   - id: aiGateway
     kind: service
     title: AI gateway
-    summary: "admits tunnel and custom-tool calls on our grants; no inference"
+    summary: "admits the runtime's and custom-tool calls on our grants; no inference"
     zone: zoneCloud
     col: 1
     row: 3
     cell: { col: 1, row: 2 }
     note: >
       The customer-operated crossing where a vendor-hosted agent is admitted into our systems,
-      from the tunnel and from our own custom-tool handlers. The tunnel hands here rather than
-      to the servers themselves, because the tunnel is transport and this is policy: the one
+      from the runtime's reach-back (down the tunnel, where we run one) and from our own custom-tool
+      handlers. The reach-back lands here rather than on the servers themselves, because a tunnel is
+      transport and this is policy: the one
       component on those paths where the reach is scoped, credentialed and recorded on our
       terms rather than theirs.
     items:
@@ -584,14 +559,14 @@ edges:
     to: sourceControl
     crossing:
       kind: direct
-      via: "Nothing between: the vendor's git proxy reaches our GitHub tenant; App scope, IP allow list and branch protection apply at the host"
+      via: "Nothing between: the vendor reaches our code host (through its git proxy, on products that have one); the installation's repository scope, the IP allow list and branch protection apply at the host"
     path: external
     bidir: true
-    label: GitHub App · IP allowlist
+    label: scoped app install · IP allowlist
     note: >
-      Both directions of our GitHub Enterprise Cloud tenant, on a GitHub App installed on named
-      repositories and admitted by the enterprise IP allow list only from the vendor's published
-      IPs; the vendor's git proxy holds the credential outside the sandbox. Inward: the code,
+      Both directions of our code host, on a scoped installation on named repositories (a GitHub
+      App, on GitHub) admitted by the host's IP allow list only from the vendor's published IPs; on
+      products that have one, the vendor's git proxy holds the credential outside the sandbox. Inward: the code,
       instruction files and threads. Outward: the push to
       the session's own branch and the draft pull request, the only writes the installation
       allows. It never rides the tunnel or the AI gateway.
@@ -637,13 +612,13 @@ edges:
     note: >
       Our handlers dispatch the custom tools the runtime requests through our gateway,
       carrying the session's bound user context, so the same grants, approvals and record
-      apply as on the tunnel path. An authenticated session event is still an untrusted
+      apply as on the reach-back path. An authenticated session event is still an untrusted
       proposed action.
   - from: agentDef
     to: managedRuntime
     crossing:
       kind: brokered
-      via: "Our release gate: definition registered and reviewed, evaluated, promoted by canary"
+      via: "Our release gate: definition registered and reviewed, evaluated, released in stages"
     path: external
     label: deploy
     note: >
@@ -651,27 +626,27 @@ edges:
       declares is the behaviour contract, and reviewing it is the last point at which we
       decide anything about the agent itself.
   - from: managedRuntime
-    to: tunnel
+    to: aiGateway
     crossing:
       kind: brokered
-      via: "Tunnel connector: outbound-only, on a token and TLS key we rotate; hands to our AI gateway"
+      via: "Into our AI gateway: an outbound tunnel we run, on a token and TLS key we rotate, or an internet-facing gateway endpoint behind OAuth"
     path: external
     bidir: true
-    label: outbound-only tunnel
+    label: tool calls · outbound tunnel
     note: >
-      Their runtime reaching back into us through software they publish and we run. Note the
-      direction: our side dials out, so nothing is opened inbound and the endpoint stays
-      private. The public-endpoint form (their cloud calling an internet-facing URL of ours,
-      admitted by IP allowlist) is recorded as a deviation rather than drawn as a second path.
-  - from: tunnel
-    to: aiGateway
-    path: primary
-    bidir: true
-    label: tool call / result
-    note: >
-      The crossing this architecture exists to govern. The tunnel hands to our gateway rather
-      than reaching past it into the tool surface, so the grants are ours to scope and ours to
-      revoke.
+      The crossing this architecture exists to govern: their runtime reaching back into us,
+      always into our gateway's aggregate MCP endpoint rather than past it into the tool
+      surface, so the grants are ours to scope and ours to revoke. How it is carried is a note,
+      not a second drawing. Where the vendor offers one, it is an outbound tunnel: software
+      they publish and we run inside our network dials the vendor and carries their requests
+      in, so no inbound rule is opened and the endpoint stays on a private address. It does not
+      make the data path local (requests and responses still traverse their cloud) and it does
+      not authenticate to the upstream, which our gateway still does; the tunnel token and TLS
+      private key on the tunnel host are the load-bearing secrets, and each tunnel hostname
+      routes to the one aggregate endpoint. Otherwise their cloud calls an internet-facing URL
+      of ours behind OAuth, admitted by allowlisting their published IP ranges, or arrives over
+      private connectivity where the vendor offers it. Prefer the tunnel where the vendor
+      offers one, because nothing is opened inbound.
   - from: aiGateway
     to: internalTools
     path: primary
@@ -696,7 +671,7 @@ edges:
       data; the public web, repositories and packages arrive from the sandbox under the
       environment's allowlist. Nothing we run is on the path; the control is per-tool
       enablement in the definition, and the alternative per connector is to register it at
-      our gateway and reach it through the tunnel.
+      our gateway and reach it on the reach-back path.
   - from: nativeTools
     to: sources
     crossing:
@@ -757,7 +732,7 @@ pins:
         (whichever the product uses) and the repository host cannot tell an injected instruction from an
         intended one. What bounds it is the token's scope: one repository, one branch, no merge.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: tunnel->aiGateway
+      at: managedRuntime->aiGateway
       note: >
         Their infrastructure exercising our authority. The grant is the only thing bounding it,
         and the grant is issued at our gateway, which is the entire argument for drawing one.
@@ -852,20 +827,25 @@ pins:
         Change-gating on the data path, per the recorded deviation.
     - mitigation: cap-staged-rollout-gate
       at: agentDef->managedRuntime
-      do: "Release definitions as fixed versions: test them against attacks, send a small share of traffic first, and keep rollback to a single switch."
+      do: "Release definitions as fixed versions: test them against attacks, release in stages (route a share of sessions to the new version from your front end where the platform cannot split traffic), and keep rollback to a single switch."
       why: "A change to the definition changes what the agent does for everyone at once."
       note: >-
-        Immutable versions, adversarial evaluation before an alias moves, a canary first, and rollback that is
-        a pointer flip: the software-delivery half of this page's distinction, applied to the definition.
+        Immutable versions, adversarial evaluation before an alias moves, a staged release (a share
+        of sessions routed to the new version from our front end, one internal team first, or a
+        blue/green switch of the version our front end calls), and rollback that is a pointer flip: the software-delivery half of this page's distinction, applied to the definition.
     - mitigation: D3-CTS
       at: managedRuntime
-      do: "Keep credentials in the vendor's vault so the sandbox only ever holds a placeholder, and attach a separate vault per user."
-      why: "By default one vault is shared by every session it is attached to."
+      do: "Keep credentials out of the sandbox, and give each user their own credentials rather than one set every session shares, for example a separate vendor vault per user."
+      why: "Where one credential vault is attached to many sessions, every one of them uses the same access."
       note: >-
-        The vault: the runtime substitutes each credential at egress, only toward its named server or host, so
-        the sandbox holds a placeholder and the model never sees a value. It is a shared credential for every
-        session the vault is attached to unless we attach per-user vaults, so tenant-scoped delegation is our
-        arrangement, not the runtime's default.
+        Credentials stay out of the sandbox and belong to one user each. Where the vendor has a
+        credential vault (Claude Managed Agents, for example), the runtime substitutes each
+        credential at egress, only toward its named server or host, so the sandbox holds a
+        placeholder and the model never sees a value; it is a shared credential for every session
+        the vault is attached to unless we attach per-user vaults, so tenant-scoped delegation is
+        our arrangement, not the runtime's default. The other ways are custom tools our application
+        runs, so the credential never leaves our side (this drawing's custom-tool path), and
+        per-user grants issued by our gateway on the reach-back path.
     - mitigation: cap-agent-action-policy-enforcement
       at: managedRuntime
       do: "Write per-tool rules in the definition: deny by default, always ask on tools that matter, and use any minimum guardrails the platform lets you lock."
@@ -929,13 +909,14 @@ pins:
         connector" true. Nothing verifies what a declared server serves, and every one of these is
         configuration the next definition can undo, which is why the definition is reviewed like code.
     - mitigation: D3-CH
-      at: tunnel
-      do: "Issue the tunnel host's token and key with narrow scope, rotate them, and be able to revoke them without rebuilding the host."
+      at: managedRuntime->aiGateway
+      do: "Issue the tunnel host's token and key, where you run one, with narrow scope, rotate them, and be able to revoke them without rebuilding the host."
       why: "They are the secrets this path depends on."
       note: >-
-        The tunnel token and TLS private key on this host are the load-bearing secrets on the path: issued
-        scoped, rotated like a service credential, and revocable without redeploying the host. The tunnel
-        carries traffic on them but never authenticates to our server; that is the gateway's job.
+        The tunnel token and TLS private key on the tunnel host are the load-bearing secrets on the path:
+        issued scoped, rotated like a service credential, and revocable without redeploying the host. The
+        tunnel carries traffic on them but never authenticates to our server; that is the gateway's job.
+        Without a tunnel, the secret is the OAuth client our public gateway endpoint admits.
     - mitigation: AML.M0028
       at: aiGateway->internalTools
       do: "Decide at your own gateway which servers and tools the agent may reach, and on whose access."
@@ -954,8 +935,8 @@ pins:
       do: "Screen tool and connector results at your gateway before they go back to the agent, including records from your own systems."
       why: "Many people wrote those records, and connectors the vendor calls directly never pass through your gateway."
       note: >-
-        Tool and connector content returned through this gateway, on the tunnel path and to our custom-tool
-        handlers, is classified here before it goes back to a loop we cannot see, enterprise-data returns
+        Tool and connector content returned through this gateway, on the reach-back path and to our
+        custom-tool handlers, is classified here before it goes back to a loop we cannot see, enterprise-data returns
         included, because many hands wrote those records too. Vendor-direct connector content never crosses it.
     - mitigation: cap-agent-tracing
       at: govObservability
@@ -993,15 +974,13 @@ walkthrough:
     - follow: entry->managedRuntime
       label: invoke with user context
       note: Our code invokes their runtime, carrying the delegated user context.
-    - follow: managedRuntime->tunnel
-      label: through the tunnel
-      note: >
-        Their runtime reaches back through software they publish and we run: outbound-only,
-        so nothing is opened inbound. The data path is not local, and the tunnel does not
-        authenticate for us.
-    - follow: tunnel->aiGateway
+    - follow: managedRuntime->aiGateway
       label: to our gateway
-      note: Handed to our gateway rather than reaching past it into the tool surface.
+      note: >
+        Their runtime calls back into our gateway (through software they publish and we run,
+        where the product has a tunnel, so nothing is opened inbound) rather than reaching past
+        it into the tool surface. The data path is not local, and a tunnel does not
+        authenticate for us.
     - follow: aiGateway->internalTools
       label: per-user grant
       note: Admitted to a named server on a short-lived, per-user grant.
@@ -1014,12 +993,9 @@ walkthrough:
     - follow: internalTools->aiGateway
       label: recorded
       note: Through the crossing, where the call is recorded against the per-user grant.
-    - follow: aiGateway->tunnel
-      label: into the tunnel
-      note: Back into the connector, bound for their cloud.
-    - follow: tunnel->managedRuntime
+    - follow: aiGateway->managedRuntime
       label: tool results
-      note: The tool results land in their runtime, which finishes the turn.
+      note: The tool results go back the way the call came and land in their runtime, which finishes the turn.
     - follow: managedRuntime->entry
       label: completion
       note: The completion returns to our front end.
@@ -1031,27 +1007,25 @@ scenarios:
   - title: The agent works on our code base
     steps:
       - follow: managedRuntime->sourceControl
-        label: clone via the GitHub App
+        label: clone via the scoped install
         note: Admitted only from the vendor's published IPs, on an installation scoped to named repositories.
       - follow: sourceControl->managedRuntime
         label: code & instruction files
         note: Instruction files and threads arrive as instruction, unscreened by anything of ours; the repository host's access policy decides who could write them.
       - follow: managedRuntime->sourceControl
         label: push branch, open draft PR
-        note: The only writes the App installation allows; a person reviews and merges.
+        note: The only writes the installation allows; a person reviews and merges.
   - title: A credential outlives its owner
     steps:
       - follow: agentDef->managedRuntime
         label: deploy with vault reference
         note: An agent is deployed on a platform whose identity is a vault reference, not a principal.
-      - follow: managedRuntime->tunnel
+      - follow: managedRuntime->aiGateway
         label: stale credential presented
         note: >
           Sessions keep presenting that credential after the person has gone, because nothing in
-          the platform ties it to their lifecycle. The tunnel carries it without looking.
-      - follow: tunnel->aiGateway
-        label: reaches our gateway
-        note: The first hop we govern.
+          the platform ties it to their lifecycle. A tunnel carries it without looking; our
+          gateway is the first hop we govern.
       - follow: aiGateway->internalTools
         label: noticed & cut
         note: Our gateway is where that can be noticed and cut, since it is the only hop we watch.
@@ -1067,16 +1041,12 @@ scenarios:
         note: >
           What the service returns (a record someone else wrote) enters the loop as
           instruction, unclassified, because nothing of ours is on this path.
-      - follow: managedRuntime->tunnel
+      - follow: managedRuntime->aiGateway
         label: steered tool request
         note: >
-          A steered loop now asks for our tools. The tunnel carries the request in without
-          judging it: transport, not policy.
-      - follow: tunnel->aiGateway
-        label: first tier we control
-        note: >
-          The first tier we control, and the reason its per-call policy cannot assume a
-          well-behaved caller.
+          A steered loop now asks for our tools. A tunnel carries the request in without
+          judging it (transport, not policy) to the first tier we control, and the reason its
+          per-call policy cannot assume a well-behaved caller.
       - follow: aiGateway->internalTools
         label: scope, approval, record
         note: Scope, approval and the record are what stand between the steered plan and our data.
@@ -1103,7 +1073,7 @@ scenarios:
         label: scoped, approved, recorded
         note: >
           The user's grant, any approval bound to the exact action, and the record apply as
-          they do on the tunnel path.
+          they do on the reach-back path.
       - follow: internalTools->orgData
         label: read/write on our side
         note: The tool runs against our systems, on our credentials.
@@ -1125,12 +1095,11 @@ scenarios:
         note: >
           A timer or webhook held by our front end starts the session. Nobody signed in: it is
           bound to the person the schedule belongs to, on the grant stored when they set it up.
-      - follow: managedRuntime->tunnel
-        label: through the tunnel
-        note: The runtime reaches back for our data exactly as it would in an attended session.
-      - follow: tunnel->aiGateway
+      - follow: managedRuntime->aiGateway
         label: to our gateway
-        note: Handed to our gateway, which is where an unattended call is still decided.
+        note: >
+          The runtime reaches back for our data exactly as it would in an attended session, to
+          our gateway, which is where an unattended call is still decided.
       - follow: aiGateway->internalTools
         label: stored grant, same catalogue
         note: >
@@ -1142,12 +1111,9 @@ scenarios:
       - follow: internalTools->aiGateway
         label: recorded
         note: Recorded against the person the schedule belongs to, and classified on the way back.
-      - follow: aiGateway->tunnel
-        label: into the tunnel
-        note: Back into the connector.
-      - follow: tunnel->managedRuntime
+      - follow: aiGateway->managedRuntime
         label: tool results
-        note: The runtime finishes the run.
+        note: Back to the runtime, which finishes the run.
       - follow: managedRuntime->entry
         label: outcome, held for later
         note: >
@@ -1179,12 +1145,9 @@ scenarios:
       - follow: entry->managedRuntime
         label: approval posted, session resumes
         note: Only then is the approval posted and the saved session resumed.
-      - follow: managedRuntime->tunnel
-        label: through the tunnel
-        note: The held call leaves.
-      - follow: tunnel->aiGateway
+      - follow: managedRuntime->aiGateway
         label: to our gateway
-        note: Our gateway sees the call and the approval bound to it.
+        note: The held call leaves, and our gateway sees the call and the approval bound to it.
       - follow: aiGateway->internalTools
         label: admitted with approval
         note: Admitted now, carrying the approval it lacked before.
@@ -1236,21 +1199,25 @@ deviations:
       traffic class rather than the registered aiGatewayTraffic pack, following the low-code
       builder's precedent: the honest signal that a gateway is not on the model path is its
       own contents.
-  - subject: The tunnel absorbs secrets consumption
+  - subject: Secrets consumption is pinned on the crossing into the gateway
     reason: >
       Credential hardening (D3-CH) is embodied by the AI gateway, but the load-bearing secrets
-      on this path are the tunnel token and TLS key on the tunnel host: the pin sits where the
-      credentials live, the issuance and rotation story in the governance call-out. The same
-      absorption, for the same reason, as the enterprise chat drawing.
-  - subject: The public-endpoint return path is recorded, not drawn
+      on this path are the tunnel token and TLS key on the tunnel host, where one runs: the pin
+      sits on the crossing those credentials carry, the issuance and rotation story in the
+      governance call-out. The same placement, for the same reason, as the enterprise chat
+      drawing.
+  - subject: The tunnel is a note on the arrow, not a box
     reason: >
-      Both first-party vendors also reach a customer MCP endpoint the ordinary way: their
-      cloud calling an internet-facing URL of ours, admitted by allowlisting their IP ranges.
-      That is the same crossing with weaker admission: audience-bound tokens, per-user OAuth
-      and rate limiting on a public listener instead of an outbound-only connector. It is the
-      form to draw where a vendor's tunnel is unavailable (one vendor's tunnel is a research
-      preview with no continuity commitment), and it is recorded here rather than drawn as a
-      second edge into the same gateway.
+      The flow is their runtime calling our tool servers through our gateway, and it happens
+      whatever carries it, so that arrow is drawn and the carriage is its crossing note. Both
+      first-party vendors also reach a customer MCP endpoint the ordinary way: their cloud
+      calling an internet-facing URL of ours, admitted by allowlisting their IP ranges. That is
+      the same crossing with weaker admission: audience-bound tokens, per-user OAuth and rate
+      limiting on a public listener instead of an outbound-only connector. It is the form that
+      applies where a vendor's tunnel is unavailable (one vendor's tunnel is a research preview
+      with no continuity commitment), and it lands on the same arrow rather than a second edge
+      into the same gateway. The tunnel is recommended where offered, because nothing is opened
+      inbound.
   - subject: The self-hosted sandbox variant is recorded, not drawn
     reason: >
       One exemplar lets tool execution move onto a worker we run (code, filesystem and egress

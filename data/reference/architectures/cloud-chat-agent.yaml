@@ -13,8 +13,8 @@ summary:
 
 overview: >-
   Your code runs the loop: read-only tools run on their own, any action that changes something waits
-  for the user's yes in the thread, and tools act as that user on a grant that ends with the
-  session. Unlike an enterprise AI chat you buy, the whole workload is yours, so every control can
+  for the user's yes in the thread, and tools act within that user's permissions on access that ends
+  with the session. Unlike an enterprise AI chat you buy, the whole workload is yours, so every control can
   be enforced, and the approval is only as strong as the proposal text the user reads.
 
 description:
@@ -375,13 +375,13 @@ blocks:
   - id: govSecrets
     kind: governance
     title: Secrets & key management
-    summary: "short-lived, user-scoped credentials minted per call"
+    summary: "short-lived, user-scoped credentials per call"
     icon: key
     zone: zoneGovernance
     col: 1
     row: 5
     mitigations: [ D3-CH, D3-CTS ]
-    note: Short-lived, user-scoped credentials minted per call, so the agent tier holds no standing keys for brokered calls.
+    note: Short-lived, user-scoped credentials per call, however they are issued, so the agent tier holds no standing keys for brokered calls.
 
   - id: govPolicy
     kind: governance
@@ -639,16 +639,22 @@ pins:
     - mitigation: AML.M0029
       at: internalTools->orgData
       do: "Show the person exactly what the assistant proposes and require their approval in the conversation before any write that matters."
-      why: "This is the pattern's main control. Scheduled runs have nobody to ask, so their writes are refused."
+      why: "This is the pattern's main control. Scheduled runs have nobody to ask, so their writes wait for the person to return, unless the person approved that exact write when setting up the job."
       note: >-
         In-thread approval before consequential writes, with the proposal specific enough to be worth
         reading: the architecture's primary control. Scheduled runs have no thread, so their writes
-        stop at the action policy.
+        stop at the action policy and wait for the person (the drawing's scenario suspends them),
+        unless the person approved that exact write when setting up the job, such as posting this
+        report to this channel. Refusing unattended writes outright is the stricter choice.
     - mitigation: D3-APA
       at: user->entry
-      do: "Give the assistant access that belongs to the signed-in user and lasts only for that session."
+      do: "Make sure every tool call is limited to what the signed-in user may do, on access that lasts only for that session."
       why: "The service itself should hold no standing power over people's data."
-      note: A delegated grant scoped to the session and the user, not a standing power the service holds.
+      note: >-
+        Access scoped to the session and the user, not a standing power the service holds: a delegated user
+        token (on-behalf-of or token exchange) that expires with the session, a service identity whose every
+        call is authorised against the user's entitlements where the data is stored, or delegated tokens where
+        the API accepts them and entitlement checks elsewhere.
     - mitigation: AML.M0028
       at: gateway->internalTools
       do: "Limit every tool call to what the person in the conversation is allowed to touch, checked on each call."
@@ -663,9 +669,13 @@ pins:
         the user grants it carries.
     - mitigation: D3-CH
       at: agent->gateway
-      do: "Issue credentials for each call, limited to the user, from your gateway."
-      why: "The assistant then holds no lasting keys to leak."
-      note: Brokered, per-call, user-scoped credentials; the loop holds no standing keys for brokered calls.
+      do: "Make sure the assistant holds no lasting keys: every call carries a short-lived credential limited to the user, for example one your gateway issues."
+      why: "A leaked credential is then worth one call for one user, not standing access to everyone's data."
+      note: >-
+        Short-lived, user-scoped credentials per call; the loop holds no standing keys for brokered calls.
+        Minted or injected per call by the AI gateway (as drawn), a token exchange (RFC 8693) at the
+        authorization server per tool audience, the platform's workload identity, or short-lived secrets from
+        a secrets manager.
     - mitigation: AML.M0031
       at: memory
       do: "Keep memory separate for each conversation, with no reads across sessions."
@@ -725,12 +735,14 @@ pins:
       note: A stop that ends live sessions and revokes the agent's identity without a deploy.
     - mitigation: cap-agent-action-policy-enforcement
       at: gateway
-      do: "Have your AI gateway refuse any action that changes data unless it carries an approval for that exact action in that session."
+      do: "Refuse any action that changes data unless it carries an approval for that exact action in that session, checked outside the assistant, for example at your AI gateway."
       why: "This is what makes the in-conversation approval binding; scheduled runs are held to the same rule."
       note: >-
         Mutating actions are refused unless the call carries an approval bound to this action, its arguments
-        and this session, a scheduled run's included; read-only actions pass on the user's grant. This is the
-        decision the in-thread approval exists to feed.
+        and this session, a scheduled run's included; read-only actions pass on the user's grant. This
+        is the decision the in-thread approval exists to feed. It is checked by the AI gateway as
+        the call crosses (as drawn), by the tool service verifying a signed approval token bound to
+        the action and its arguments, or both.
     - mitigation: AML.M0036
       at: gateway
       do: "Set limits at your AI gateway on tool calls and model usage within a single turn."
@@ -740,11 +752,13 @@ pins:
         which the session ceiling at the entry never sees.
     - mitigation: D3-CTS
       at: gateway->internalTools
-      do: "At your gateway, swap the user's token for a narrower one on every call, and never pass the user's own token on."
+      do: "Swap the user's token for a narrower one for that tool on every call, and never pass the user's own token on."
       why: "A tool should receive only the access that one call needs."
       note: >-
-        User grant, agent workload identity and session scope intersect on every call; the gateway exchanges
-        the user's token for a narrowed one and never forwards it.
+        User grant, agent workload identity and session scope intersect on every call; the user's
+        token is exchanged for a narrowed one and never forwarded: at the gateway (as drawn), by a
+        token exchange at the authorization server, or as a resource-indicated token per tool
+        audience (RFC 8707).
     - mitigation: cap-mcp-tool-integrity
       at: agent->gateway
       do: "Check each tool's description against the fingerprint you approved before the model is offered it, and again whenever the tool list is refreshed or a change notice arrives."

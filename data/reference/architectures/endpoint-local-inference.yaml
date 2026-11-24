@@ -17,7 +17,7 @@ overview: >-
   can call it, and it pulls weights from public hubs in formats that can run code on load. Unlike
   the same software in a datacentre, nobody inventories or scans it, so the controls are binding it
   to this machine only, scanning weights before loading, and blocking its cloud features at the
-  proxy.
+  network or on the device.
 
 description:
   - >
@@ -151,13 +151,13 @@ blocks:
   - id: api
     kind: service
     title: Inference API
-    summary: "authenticated wrapper: caller identity, quotas, bind & origin"
+    summary: "own tokens or an auth wrapper: caller identity, quotas, bind & origin"
     zone: zoneEndpoint
     col: 2
     row: 1
     cosaiComponent: componentModelServing
     note: >
-      In the target state this is an authenticated policy wrapper: the raw runtime endpoint,
+      In the target state every caller authenticates here: through the runtime's own API tokens where it has them, or through a small authenticating wrapper in front of a runtime that has none. The raw runtime endpoint,
       unauthenticated by default in the flagship runtimes (LM Studio and llama.cpp now offer API tokens; Ollama still points at reverse proxies), and
       reverse proxies rather than shipping auth, sits behind it on a socket or port only the
       wrapper's service account can reach, and caller identity, per-caller ceilings and origin
@@ -211,14 +211,15 @@ blocks:
   - id: weights
     kind: external
     title: Storage
-    summary: "quarantine and approved model files; only promoted ones load"
+    summary: "approved model files, unscanned ones held apart; only promoted ones load"
     zone: zoneEndpoint
     col: 4
     row: 1
     cosaiComponent: componentModelStorage
     note: >
-      Quarantine and approved storage in one tier: artifacts land here on fetch, are scanned
-      and verified at rest, and only promoted files are loadable. Format determines whether
+      Approved model files, with any not yet scanned held apart: in this drawing artifacts land here
+      in quarantine on fetch, are scanned and verified at rest, and only promoted files are
+      loadable; where a central mirror scans first, only approved files arrive. Format determines whether
       loading is deserialization or execution: a more useful question than who published
       them. Public base weights are not secret; the confidentiality case is the
       organisation's own fine-tunes and adapters stored beside them.
@@ -319,15 +320,15 @@ edges:
     to: weights
     crossing:
       kind: brokered
-      via: "Egress proxy & model mirror: public hubs reached only by the quarantine fetch"
+      via: "Egress control & model mirror: public hubs reached only by the approved fetch"
     path: external
     label: weight fetch
     note: >
       The artifact is pulled to quarantine without being opened, by the management tooling in
       the target state, by the runtime's own downloader in the common install, where fetch and
-      load collapse into one step and the whole promotion story disappears. The proxy is what
-      makes the first the only way in: devices reach the internal mirror, and the public hubs
-      answer only the quarantine fetch. Transport is
+      load collapse into one step and the whole promotion story disappears. The egress control is
+      what makes the first the only way in: devices reach the internal mirror, and the public hubs
+      answer only the approved fetch. Transport is
       authenticated and the publisher may be verifiable; neither says anything about what the
       artifact does when the loader opens it.
 pins:
@@ -391,17 +392,17 @@ pins:
   mitigations:
     - mitigation: D3-FA
       at: hub->weights
-      do: "Download model files to a holding area and scan their format and contents there before anything is allowed to load them."
+      do: "Make sure every model file is scanned for format and contents before anything can load it, for example in a holding area on the device or at a central mirror."
       why: "Some model files run code the moment they are opened, so a scan after loading is too late."
       note: >-
-        Format and content inspection at quarantine, before promotion: a scan that runs after the runtime
+        Format and content inspection before promotion, at a central model mirror that scans before it offers a model to devices (a repository manager proxying the hub, with a model scanner), in a holding area on the device, or both: a scan that runs after the runtime
         opens the file has documented an incident, not prevented one.
     - mitigation: D3-AA
       at: api
       do: "Make every application present its own token to the model's local port: turn on the runtime's own API tokens where it has them, and put a small wrapper in front of a runtime that has none."
       why: "Anything on the machine can call an open local port, including a web page in the browser."
       note: >-
-        Caller identity at the wrapper rather than locality as authorization: each local application presents
+        Caller identity at the runtime's own tokens or the wrapper rather than locality as authorization: each local application presents
         its own token, because a browser tab is local too. The raw runtime is reachable only by the wrapper's
         service account, and the wrapper's bind (loopback only) and Host and Origin validation are set by
         device management rather than hoped from defaults. Absorbed by the API wrapper per the recorded
@@ -420,12 +421,14 @@ pins:
       note: Bound what any single caller can consume, because the callers share one unmetered port.
     - mitigation: AML.M0005
       at: weights
-      do: "Lock down the folder that holds approved models: only the approval step writes to it and only the model's own service account reads it."
+      do: "Lock down the folder that holds approved models: only the approval step writes to it, and ordinary programs running as the user cannot replace or copy files in it."
       why: "Otherwise any program running as the user can swap a model or copy your organisation's fine-tunes."
       note: >-
-        Restrictive permissions on the model store: only the promotion step writes approved files and only the
-        runtime's service account reads them, so no other process running as the user can swap a model or copy
-        the organisation's adapters.
+        Restrictive permissions on the model store: only the promotion step writes approved files,
+        and no other process running as the user can swap a model or copy the organisation's
+        adapters. Common ways: a separate service account for the runtime, as some Linux installs
+        set up; an admin-owned path that is read-only to the user, set by device management; or a
+        store the runtime reads through its own authenticated API.
     - mitigation: cap-ai-threat-modeling
       at: govSupplyChain
       do: "Decide and write down whether local models may run at all, on which software, from which sources and on which machines, and review it when something changes."
@@ -470,18 +473,20 @@ pins:
         refused rather than served.
     - mitigation: D3-OTF
       at: hub->weights
-      do: "At your existing web proxy, block managed machines from public model sites and allow only your internal mirror; let only the holding-area download reach the public sites."
+      do: "Block managed machines from public model sites and allow only your internal mirror, for example at your existing web proxy; let only the approved download reach the public sites."
       why: "Otherwise the model software downloads and opens a file in one step and the scan never happens."
       note: >-
-        Model sources held to the internal mirror at the organisation's existing proxy: managed devices do not
-        reach the public hubs, and only the quarantine fetch does. Without it a runtime's own pull fetches and
+        Model sources held to the internal mirror, at the network or on the device: a web proxy or
+        secure service edge the device is forced through, DNS filtering, or per-application rules in
+        the endpoint firewall pushed by device management. Managed devices do not reach the public
+        hubs, and only the approved fetch does. Without it a runtime's own pull fetches and
         loads in one step and the scan never happens.
     - mitigation: D3-OTF
       at: runtime
-      do: "At the same proxy, block the model software's own outbound calls: its vendor's cloud models and web search, and any model site except your mirror."
-      why: "The software has switches for these, but a user can change them; the proxy holds when they do."
+      do: "Block the model software's own outbound calls (its vendor's cloud models and web search, and any model site except your mirror) at a layer the user cannot switch off."
+      why: "The software has switches for these, but a user can change them; that layer holds when they do."
       note: >-
-        The serving application's own outbound calls refused at the same proxy: its vendor's cloud models and
+        The serving application's own outbound calls refused at a layer the user cannot switch off (the same network control, per-application firewall rules, or the runtime's own settings locked by device management where it has them): its vendor's cloud models and
         web search, and any registry but the mirror, so a caller of the local port cannot have it push a model
         out or pull one in. The tool's own switches come first; this holds when one is changed. Not a rule
         about the model, which makes no calls, nor about the harness, whose egress is its own pattern's.
