@@ -59,7 +59,6 @@ test("on-premises, every box names its role and offers its options; the packs ar
   assert.ok(onprem.packs!.some((p) => p.scope === "platform" && p.kind === "open"), "one is an open-source stack");
   assert.ok(onprem.packs!.some((p) => p.scope === "platform" && p.kind === "commercial"), "and one a commercial platform");
   assert.ok(onprem.packs!.some((p) => p.scope === "addon"), "with add-ons");
-  for (const c of dataset.clouds.filter((x) => !x.selfManaged)) assert.ok(!c.packs?.length, `${c.short}: a provider's cloud names its own services`);
   for (const impl of onprem.implementations) {
     const a = dataset.archetypes.find((x) => x.id === impl.architecture)!;
     for (const b of impl.bindings) {
@@ -122,12 +121,56 @@ test("Enable offers Your stack on an on-premises hosted pattern: pack cards, Mix
     assert.doesNotMatch(html, /data-in-effect/, `${a.id}: nothing in effect until a pack is chosen`);
     assert.doesNotMatch(html, /recommended|best choice|our pick/i, `${a.id}: no ranking`);
   }
-  // A cloud provider's platform has no packs, so the choice is not offered there.
+  // A provider's cloud offers the choice too: its own services are one pack among others.
   const aws = cloudProductsFor(chat.id).find((p) => p.id === "cloudAws")!;
   const html = renderToStaticMarkup(
-    <ChooseBuild archetype={chat} products={productsForArchetype(chat.id)} platform={aws} framework={null} host={null} onPickPlatform={() => {}} onPickHost={() => {}} onPickFramework={() => {}} />,
+    <ChooseBuild archetype={chat} products={productsForArchetype(chat.id)} platform={aws} framework={null} host={null} stack={NO_STACK} onStack={() => {}} onPickPlatform={() => {}} onPickHost={() => {}} onPickFramework={() => {}} />,
   );
-  assert.doesNotMatch(html, /data-choice="Your stack"/);
+  assert.match(html, /data-choice="Your stack"/);
+  assert.match(html, /every box names the AWS service drawn/, "on a provider's cloud the box keeps the service drawn");
+  assert.doesNotMatch(html, /names its role/, "a provider's cloud names its own services, not roles");
+});
+
+/** On a provider's cloud: the pack whose option on every box with options is the service drawn. */
+const nativePack = (c: (typeof dataset.clouds)[number]) =>
+  (c.packs ?? []).find((p) => p.scope === "platform" && c.implementations.every((i) => i.bindings.every((b) => !b.options || b.options.some((o) => o.name === b.service && o.packs?.includes(p.id)))));
+
+test("on a provider's cloud each box keeps the service drawn; the cloud's own pack is the mapping as drawn, and every row stays with it", () => {
+  for (const c of dataset.clouds.filter((x) => !x.selfManaged)) {
+    assert.ok(c.packs?.some((p) => p.scope === "platform" && p.kind === "open"), `${c.short}: an open-source stack on its Kubernetes`);
+    assert.ok(c.packs?.some((p) => p.scope === "addon"), `${c.short}: with add-ons`);
+    const own = nativePack(c);
+    assert.ok(own, `${c.short}: one platform pack is the provider's own services, the service drawn on every box`);
+    assert.equal(own!.kind, "commercial");
+    for (const impl of c.implementations) {
+      const a = dataset.archetypes.find((x) => x.id === impl.architecture)!;
+      const p = cloudProductsFor(a.id).find((x) => x.id === c.id)!;
+      for (const b of impl.bindings) {
+        if (!b.options) continue;
+        for (const pk of c.packs!) assert.ok(b.options.filter((o) => o.packs?.includes(pk.id)).length <= 1, `${c.short} ${a.id} ${b.block}: one ${pk.id} product`);
+        // With the cloud's own pack chosen the box reads as drawn.
+        assert.equal(productsInEffect(b, { pack: own!.id, addons: [] })[0]?.name, b.service, `${c.short} ${a.id} ${b.block}: the service drawn`);
+      }
+      assert.equal(stackedAs(a, p, { pack: own!.id, addons: [] }).hidden.length, 0, `${c.short} ${a.id}: the provider's own pack keeps every row`);
+    }
+    // Every product a row belongs to is an option on the platform.
+    for (const s of c.settings.filter((x) => x.product)) assert.ok(c.implementations.some((i) => i.bindings.some((b) => b.options?.some((o) => namesProduct(o.name, s.product!)))), `${c.short} ${s.id}: ${s.product} is an option`);
+    assert.ok(c.settings.some((s) => s.product) && c.settings.some((s) => !s.product), `${c.short}: rows of one replaceable service are tagged; platform-wide rows are not`);
+  }
+});
+
+test("on Google Cloud another gateway hides Apigee's rows, and the drawing names it", () => {
+  const p = cloudProductsFor(chat.id).find((x) => x.id === "cloudGcp")!;
+  const own = nativePack(p.cloud)!;
+  const kong = p.cloud.packs!.find((x) => x.scope === "addon" && p.implementation.bindings.find((b) => b.block === "gateway")!.options!.some((o) => o.packs?.includes(x.id) && /Kong/.test(o.name)))!;
+  const { hidden } = stackedAs(chat, p, { pack: own.id, addons: [kong.id] });
+  assert.ok(hidden.length && hidden.every((s) => s.product === "Apigee"), "only Apigee's rows go");
+  assert.ok(p.settings.filter((s) => s.product === "Apigee").every((s) => hidden.includes(s)), "every Apigee row goes");
+  const html = page(chat.id, `tab=enable&cloud=${cloudSlug(p.id)}&stack=${own.id}&addons=${kong.id}`);
+  assert.ok(boxText(html, "gateway").includes("Kong"), "the gateway box names Kong");
+  assert.ok(boxText(html, "provider").includes("Gemini"), "the model provider stays the cloud's own");
+  assert.match(html, /data-cloud-caption[^>]*>[^<]*Each box names the product/, "the caption says the stack's products are drawn");
+  assert.doesNotMatch(page(chat.id, `cloud=${cloudSlug(p.id)}`), /Each box names its role/, "with nothing chosen the boxes name Google Cloud's services");
 });
 
 test("choosing a pack puts its products in the boxes, marks them in the options table, and narrows the settings", () => {

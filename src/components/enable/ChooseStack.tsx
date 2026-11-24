@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Enable › Choose how you'll build it › Your stack: on a platform where the organisation chooses
- * the products itself (its own data centre), which products fill the boxes. A platform pack is a
+ * Enable › Choose how you'll build it › Your stack: which products fill the boxes, in the
+ * organisation's own data centre (where each box names its role) or on a provider's cloud (where each
+ * box keeps the cloud's own service and a pack can put another product there). A platform pack is a
  * set of products its vendor or project documents as working together, and fills most boxes; an
  * add-on replaces the platform pack's product on the boxes it covers; "Mix your own" chooses box
  * by box. The packs are cards in the style of the hosting cards, compared row by row behind a
@@ -143,7 +144,7 @@ function RoleOptions({ archetype, platform, stack }: { archetype: Archetype; pla
       <table className="w-full min-w-[720px] border-collapse text-left text-[12.5px] leading-snug">
         <thead>
           <tr className="border-b border-line-strong text-[11px] uppercase tracking-[0.06em] text-ink-3">
-            <th className="w-[26%] py-2 pl-3 pr-4 font-semibold">Box · its role</th>
+            <th className="w-[26%] py-2 pl-3 pr-4 font-semibold">{platform.cloud.selfManaged ? "Box · its role" : `Box · the ${platform.cloud.short} service drawn`}</th>
             <th className="py-2 pr-3 font-semibold">{chosen ? "Options, the one in effect marked" : "Options, none ranked"}</th>
           </tr>
         </thead>
@@ -180,7 +181,8 @@ function RoleOptions({ archetype, platform, stack }: { archetype: Archetype; pla
                   </ul>
                   {chosen && !inEffect.length && (
                     <p className="mt-1 text-[11.5px] text-ink-3" data-bring-your-own>
-                      {chosenName ? `${chosenName} does not fill this box` : "Your stack does not fill this box"}: bring your own, from these or others.
+                      {chosenName ? `${chosenName} does not fill this box` : "Your stack does not fill this box"}
+                      {platform.cloud.selfManaged ? ": bring your own, from these or others." : `: the ${platform.cloud.short} service drawn stays, or bring your own, from these or others.`}
                     </p>
                   )}
                 </td>
@@ -198,6 +200,8 @@ export function ChooseStack({ archetype, platform, stack, onStack }: { archetype
   const total = platform.implementation.bindings.filter((b) => b.options?.length).length;
   const fills = (id: string) => boxesFilledBy(platform, id);
   const title = new Map(archetype.blocks.map((b) => [b.id, b.title]));
+  // On-premises a box names its role; on a provider's cloud it names the cloud's own service.
+  const drawn = platform.cloud.selfManaged ? "every box names its role" : `every box names the ${platform.cloud.short} service drawn`;
   const pick = (id: string) => onStack({ pack: stack.pack === id ? null : id, addons: stack.addons });
   // An add-on replaces the product on the boxes it covers, so two that cover the same box do not stack: the later one is kept.
   const overlap = (a: string, b: string) => fills(a).some((x) => !isControlBox(archetype, x) && fills(b).includes(x));
@@ -225,7 +229,7 @@ export function ChooseStack({ archetype, platform, stack, onStack }: { archetype
           <span className="mt-1.5 block text-[12.5px] leading-snug text-ink-2">Choose a product for each box from its options below, knowing which go together in a pack.</span>
           <span className="mt-1.5 block text-[11.5px] leading-snug text-ink-2">
             <span className="font-semibold text-ink">You bring: </span>
-            the integration between them. Every box names its role, and every row in the settings stays listed, each tagged with the product it belongs to.
+            the integration between them. {drawn[0].toUpperCase() + drawn.slice(1)}, and every row in the settings stays listed, each tagged with the product it belongs to.
           </span>
         </button>
       </div>
@@ -252,7 +256,7 @@ export function ChooseStack({ archetype, platform, stack, onStack }: { archetype
         </>
       )}
       <p className="mt-2 max-w-3xl text-[12px] leading-snug text-ink-3" data-stack-hint>
-        Not ranked. A pack is a set of products its makers document as working together. Choose one to see its products on the drawing and only their settings in the next step; with none chosen, or your own mix, every box names its role and every setting is listed.
+        Not ranked. A pack is a set of products its makers document as working together. Choose one to see its products on the drawing and only their settings in the next step; with none chosen, or your own mix, {drawn} and every setting is listed.
       </p>
       <PackComparison packs={[...packs, ...addons]} />
       <RoleOptions archetype={archetype} platform={platform} stack={stack} />

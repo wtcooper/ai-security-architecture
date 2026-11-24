@@ -211,7 +211,16 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           <p className="text-[12.5px] leading-snug text-ink-3" data-cloud-caption>
             {cloudProduct ? (
               <>
-                {hasPacks && !stackChosen(stack) ? (
+                {hasPacks && !cloudProduct.cloud.selfManaged ? (
+                  // On a provider's cloud the box keeps the cloud's own service; a stack puts another product there.
+                  stackChosen(stack) ? (
+                    <>
+                      Each box names the product {packName ? `${packName} puts there` : "your stack puts there"}, or the {platformWords(cloudProduct.cloud).service} drawn where it leaves the box to you{hosting ? `, hosted on ${hosting.name}` : ""}.
+                    </>
+                  ) : (
+                    <>Each box names the {platformWords(cloudProduct.cloud).service} that plays it{hosting ? `, hosted on ${hosting.name}` : ""}; hover a box for the other products that can play it, or choose a stack on Enable.</>
+                  )
+                ) : hasPacks && !stackChosen(stack) ? (
                   <>Each box names its role{hosting ? `, hosted on ${hosting.name}` : ""}; hover a box for the {platformWords(cloudProduct.cloud).service} that can play it, or choose a stack on Enable.</>
                 ) : hasPacks ? (
                   <>

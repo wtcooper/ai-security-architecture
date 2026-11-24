@@ -211,8 +211,10 @@ export async function loadClouds(
         // A comma inside an unquoted service splits it into a stray key: quote the value.
         if (extra.length) ctx.fail(`${at} ${b.block}: unknown field "${extra.join('", "')}" — quote a service or note that contains a comma`);
         if (b.builtWith !== undefined && (typeof b.builtWith !== "string" || !b.builtWith.trim() || b.builtWith.length > 40)) ctx.fail(`${at} ${b.block}: builtWith names a framework or server in 1 to 40 characters`);
-        // Where the organisation chooses the products, what a box is built with is one of its options.
-        if (packIds.size && b.builtWith !== undefined) ctx.fail(`${at} ${b.block}: a platform with packs lists what a box is built with as an option, not builtWith`);
+        // In its own data centre the organisation chooses every product, so what a box is built with is
+        // one of its options. On a provider's cloud, builtWith stays where that cloud's own guide builds
+        // the box with the framework.
+        if (cloud.selfManaged && packIds.size && b.builtWith !== undefined) ctx.fail(`${at} ${b.block}: a platform with packs lists what a box is built with as an option, not builtWith`);
         const control = arch.blocks.find((x) => x.id === b.block)?.kind === "governance";
         checkOptions(`${at} ${b.block}`, b, packIds, control, ctx.fail);
         for (const o of b.options ?? []) {
@@ -290,7 +292,7 @@ export async function loadClouds(
             seenBlocks.add(b.block);
             if (!b.service?.trim()) ctx.fail(`${oat} ${b.block}: needs a service`);
             if (b.url && !/^https:\/\//.test(b.url)) ctx.fail(`${oat} ${b.block}: url must be https`);
-            if (packIds.size && b.builtWith !== undefined) ctx.fail(`${oat} ${b.block}: a platform with packs lists what a box is built with as an option, not builtWith`);
+            if (cloud.selfManaged && packIds.size && b.builtWith !== undefined) ctx.fail(`${oat} ${b.block}: a platform with packs lists what a box is built with as an option, not builtWith`);
           }
           for (const id of o.dropSettings ?? []) if (!(impl.settings ?? []).includes(id)) ctx.fail(`${oat}: drops ${id}, which the mapping does not list`);
           for (const id of o.addSettings ?? []) {

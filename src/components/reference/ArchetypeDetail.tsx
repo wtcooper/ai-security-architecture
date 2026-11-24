@@ -237,8 +237,9 @@ export function ComponentList({ archetype, cloud = null, stack = NO_STACK }: { a
                   {summaryOf(b) && <span className="text-ink-3"> · {summaryOf(b)}</span>}
                 {cloud && bindingFor(cloud, b.id) && (
                   <div className="mt-0.5 text-ink" data-component-service>
-                    <span className="font-semibold">{bindingFor(cloud, b.id)!.options ? (cloud.cloud.selfManaged ? "Role on-premises: " : `Role on ${cloud.cloud.short}: `) : cloud.cloud.selfManaged ? "On-premises: " : `On ${cloud.cloud.short}: `}</span>
-                    {bindingFor(cloud, b.id)!.url && !bindingFor(cloud, b.id)!.options ? (
+                    {/* On-premises a box with options names its role; on a provider's cloud it keeps the service drawn. */}
+                    <span className="font-semibold">{bindingFor(cloud, b.id)!.options && cloud.cloud.selfManaged ? "Role on-premises: " : cloud.cloud.selfManaged ? "On-premises: " : `On ${cloud.cloud.short}: `}</span>
+                    {bindingFor(cloud, b.id)!.url && !(bindingFor(cloud, b.id)!.options && cloud.cloud.selfManaged) ? (
                       <a href={bindingFor(cloud, b.id)!.url} target="_blank" rel="noreferrer" className="hover:text-introduced hover:underline">
                         {bindingFor(cloud, b.id)!.service}
                       </a>
@@ -246,7 +247,7 @@ export function ComponentList({ archetype, cloud = null, stack = NO_STACK }: { a
                       bindingFor(cloud, b.id)!.service
                     )}
                     {bindingFor(cloud, b.id)!.build && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-3">You build this</span>}
-                    {bindingFor(cloud, b.id)!.url && !bindingFor(cloud, b.id)!.options && <span className="ml-1 text-[11px] text-introduced">↗</span>}
+                    {bindingFor(cloud, b.id)!.url && !(bindingFor(cloud, b.id)!.options && cloud.cloud.selfManaged) && <span className="ml-1 text-[11px] text-introduced">↗</span>}
                     {bindingFor(cloud, b.id)!.note && <span className="block text-[12px] text-ink-3">{bindingFor(cloud, b.id)!.note}</span>}
                     <Watch notes={bindingFor(cloud, b.id)!.watch} />
                     {bindingFor(cloud, b.id)!.options && <ComponentOptions archetype={archetype} cloud={cloud} binding={bindingFor(cloud, b.id)!} stack={stack} />}
