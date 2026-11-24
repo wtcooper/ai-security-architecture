@@ -1,0 +1,195 @@
+pattern: archLowCodeAgentBuilder
+reviewed: "2026-11-24"
+summary: >-
+  Makers across the business assemble agents on a vendor platform from instructions, knowledge
+  folders, connectors and triggers, and publish them to colleagues or outside channels. Each
+  agent may run on its maker's connection, a service identity or the caller's own sign-in, and
+  reads records the public, customers or colleagues wrote. Disclosed attacks turned a public lead
+  form into zero-click CRM exfiltration on one platform, and another vendor's guidance names maker
+  credentials, agents without sign-in and orphaned agents as misconfigurations it sees.
+concentrates: >-
+  Where an agent published to many people runs on its maker's credentials, reads records anyone
+  can write (form fields, inbound mail, a shared folder) and can render a link, post or send
+  without confirmation; and in agents whose makers have gone but whose grants remain.
+scope: >-
+  Business makers build and publish agents to teams, with knowledge folders, vendor connectors
+  (some on maker credentials), web search and our tools through our gateway. Some agents run on
+  events such as inbound mail or new leads; some are published to channels outside the tenant.
+lists: [owasp-llm-2026, owasp-agentic, owasp-mcp]
+assets:
+  - "CRM, mail, files and other SaaS the agents' connectors reach"
+  - "Records behind our own tool servers, reached through our gateway"
+  - "Knowledge folders and files makers attach as grounding"
+  - "Connection credentials: maker, service identity and per-user grants"
+  - "The agent population: owners, versions, publication channels and settings"
+actors:
+  - who: "Outside writer"
+    access: "Submits a web form, mails a monitored inbox, or plants text in a page or shared folder an agent reads"
+    wants: "Records out, or the agent acting in someone's name"
+  - who: "Colleague using an agent"
+    access: "Runs a published agent that may hold its maker's access to systems they cannot open"
+    wants: "Answers, and sometimes records beyond their role"
+  - who: "Anyone with the link"
+    access: "Reaches an agent published to a public channel with sign-in turned off"
+    wants: "Whatever the agent's grounding and connectors return"
+  - who: "Maker, without malice"
+    access: "Attaches connectors on their own credentials, uploads knowledge, publishes from the builder, moves on"
+    wants: "A useful agent, quickly"
+  - who: "Vendor and its model provider"
+    access: "Run the authoring, the runtime, the connectors and the model calls under their own terms"
+    wants: "To operate the product; trusted, but outside our control"
+threats:
+  - id: T1
+    title: "A public form, inbound mail or shared document instructs the agent"
+    rating: critical
+    evidence: disclosed
+    story: >-
+      Anyone can write a lead, a ticket, an email or a document in a folder an agent reads. When a
+      colleague later asks about it, the agent follows the hidden text and sends records out
+      through a rendered image or link. SalesBleed used a lead form and a DNS lookup; ForcedLeak an
+      expired domain still on the allowlist.
+    at: [platform->vendorTools, orgData, platform->openWeb, platform]
+    risks: [riskPromptInjection, riskRetrievalVectorStorePoisoning, riskSensitiveDataDisclosure]
+    atlas: [AML.T0051.001, AML.T0093, AML.T0099, AML.T0077]
+    owasp: [LLM01:2026, LLM05:2026, LLM10:2026, ASI01, MCP06:2025]
+    controls: [cap-input-guardrails, AML.M0028, cap-data-access-governance, cap-ai-vendor-assessment, cap-agent-tracing]
+    incidents: [salesbleed-agentforce]
+    refs:
+      - title: "Noma Security: ForcedLeak in Salesforce Agentforce"
+        url: https://noma.security/blog/forcedleak-agent-risks-exposed-in-salesforce-agentforce/
+  - id: T2
+    title: "A published agent gives every caller its maker's access"
+    rating: high
+    evidence: disclosed
+    story: >-
+      A maker attaches a connector on their own credentials and publishes to a team; every caller
+      then holds the maker's access to that system, and no access review shows it. One platform
+      vendor lists maker credentials among the agent risks it sees, since such agents act for the
+      creator rather than the user.
+    at: [platform, consumer->platform, platform->vendorTools, platform->aiGateway]
+    risks: [riskAgenticDelegationConfusedDeputy]
+    atlas: [AML.T0085.001, AML.T0053]
+    owasp: [LLM03:2026, ASI03, MCP02:2025]
+    controls: [D3-APA, D3-AA, cap-agent-tool-registry, cap-data-access-governance, AML.M0028]
+    refs:
+      - title: "Microsoft Security: Copilot Studio agent security, top 10 risks"
+        url: https://www.microsoft.com/en-us/security/blog/2026/02/12/copilot-studio-agent-security-top-10-risks-detect-prevent/
+  - id: T3
+    title: "An agent published with sign-in off answers anyone with the link"
+    rating: high
+    evidence: disclosed
+    story: >-
+      Publish to a public channel with authentication off and the audience is the internet. The
+      agent then reaches our gateway on its own stored credential with no invoker behind it, so a
+      read scoped to the caller is bypassed rather than enforced. One platform vendor warns that
+      anyone with the link can use such an agent.
+    at: [consumer->platform, platform->aiGateway, aiGateway->internalTools]
+    risks: [riskSensitiveDataDisclosure, riskAgenticDelegationConfusedDeputy]
+    atlas: [AML.T0132, AML.T0085.001]
+    owasp: [LLM02:2026, ASI03, MCP07:2025]
+    controls: [D3-APA, cap-staged-rollout-gate, cap-agent-tool-registry, cap-data-access-governance, cap-agent-kill-switch]
+    refs:
+      - title: "Microsoft Security: Copilot Studio agent security, top 10 risks"
+        url: https://www.microsoft.com/en-us/security/blog/2026/02/12/copilot-studio-agent-security-top-10-risks-detect-prevent/
+  - id: T4
+    title: "Agents write, post and send without confirmation or attribution"
+    rating: high
+    evidence: disclosed
+    story: >-
+      Confirmation is set per action by the maker and often left off, and an event-triggered agent
+      has nobody to ask. SalesBleed showed an agent posting into Slack with no confirmation and no
+      sign of who started it, a ready phishing channel; researchers also had an inbox-triggered
+      agent mail CRM data out.
+    at: [platform->vendorTools, internalTools->orgData, platform]
+    risks: [riskRogueActions]
+    atlas: [AML.T0053, AML.T0086, AML.T0073]
+    owasp: [ASI02, ASI09]
+    controls: [AML.M0029, D3-AA, AML.M0028, cap-staged-rollout-gate]
+    incidents: [salesbleed-agentforce]
+    refs:
+      - title: "MITRE ATLAS: Data Exfiltration via Agent Tools in Copilot Studio"
+        url: https://atlas.mitre.org/studies/AML.CS0037
+  - id: T5
+    title: "Orphaned and unregistered agents keep their makers' grants"
+    rating: high
+    evidence: disclosed
+    story: >-
+      An agent is a form away, so the population grows in the platform rather than in a register,
+      and agents outlive their makers, still holding connector grants to SaaS that never touches
+      our network. One platform vendor lists orphaned and dormant agents, connections and
+      forgotten MCP tools among the risks it sees.
+    at: [platform, platform->vendorTools, govSupplyChain]
+    risks: [riskShadowAndUnknownAgents, riskStaleAgentIdentityBinding]
+    atlas: []
+    owasp: [ASI10, MCP09:2025]
+    controls: [cap-agent-tool-registry, cap-agent-kill-switch, D3-CH, D3-AA]
+    refs:
+      - title: "Microsoft Security: Copilot Studio agent security, top 10 risks"
+        url: https://www.microsoft.com/en-us/security/blog/2026/02/12/copilot-studio-agent-security-top-10-risks-detect-prevent/
+  - id: T6
+    title: "Uploaded knowledge and pasted secrets are answered to every user of the agent"
+    rating: medium
+    evidence: disclosed
+    story: >-
+      Files a maker uploads as knowledge are answered to everyone who can use the agent, whatever
+      the source file's permissions, and keys or tokens pasted into instructions or actions can be
+      read by anyone who can view the agent. One platform vendor names hardcoded credentials as
+      one of the risks it finds.
+    at: [builder->platform, platform]
+    risks: [riskSensitiveDataDisclosure]
+    atlas: [AML.T0085.003, AML.T0083]
+    owasp: [LLM08:2026, LLM09:2026, MCP01:2025, MCP10:2025]
+    controls: [cap-staged-rollout-gate, cap-data-access-governance, D3-CH, cap-agent-tool-registry]
+    refs:
+      - title: "Microsoft Security: Copilot Studio agent security, top 10 risks"
+        url: https://www.microsoft.com/en-us/security/blog/2026/02/12/copilot-studio-agent-security-top-10-risks-detect-prevent/
+  - id: T7
+    title: "Grounding goes to a model provider we do not broker"
+    rating: medium
+    evidence: observed
+    story: >-
+      Each turn sends the agent's grounding and records to the vendor's model provider, on the
+      vendor's key and terms, on a path our gateway never sees. In 2026 an AI vendor said chat
+      transcripts were exposed in its inference provider's breach because the provider kept data
+      despite a zero-retention commitment.
+    at: [platform->provider]
+    risks: [riskExcessiveDataHandlingDuringInference]
+    atlas: [AML.T0085.002]
+    owasp: [LLM02:2026]
+    controls: [cap-ai-vendor-assessment, cap-data-access-governance]
+    refs:
+      - title: "Notion: security incident involving a third-party AI vendor"
+        url: https://notion.com/help/security-incident-involving-a-third-party-ai-vendor
+coverage:
+  - id: "LLM04:2026"
+    why: "The platform, its connectors and its model are the vendor's and are assessed rather than drawn; custom connectors are reviewed at publication."
+  - id: "LLM06:2026"
+    why: "The vendor meters and caps consumption by plan; a runaway event-triggered agent is a billing matter outside this drawing's controls."
+  - id: "LLM07:2026"
+    why: "A wrong answer from grounding is an output-quality matter here; where an answer commits the organisation, gate it as a write."
+  - id: "ASI04"
+    why: "Connectors, MCP tools and models come from the vendor's catalogue or approved custom connectors, assessed with the vendor."
+  - id: "ASI05"
+    why: "Agents built here run no code of ours; where a platform runs model-written code, its sandbox is the vendor's and is assessed."
+  - id: "ASI06"
+    why: "The agents drawn keep no memory between runs; grounding planted to persist is treated as injection in the first threat."
+  - id: "ASI07"
+    why: "Subagents and hand-offs run inside the vendor's runtime and are not drawn; their permissions are reviewed with the calling agent."
+  - id: "ASI08"
+    why: "No chain of agents is drawn for an error to spread through; each agent's own writes are gated."
+  - id: "MCP03:2025"
+    why: "Tool descriptions come from the vendor's connectors and our gateway's catalogue; a maker's custom connector is reviewed before publication."
+  - id: "MCP04:2025"
+    why: "Platform software and connector code are the vendor's, assessed rather than drawn; our tool servers have their own pattern."
+  - id: "MCP05:2025"
+    why: "Nothing drawn executes model output as commands; command handling in our tool servers belongs to their pattern."
+  - id: "MCP08:2025"
+    why: "A design-review question: platforms differ in whether step-level traces are captured tenant-wide or left to each maker."
+questions:
+  - "Which published agents run on their maker's credentials, and who approved each one as an exception?"
+  - "Is sign-in required on every channel an agent can be published to, and does our gateway refuse reads with no invoker?"
+  - "Which agents read records the public can write (form leads, inbound mail, shared folders), and is screening on in every environment?"
+  - "Do writes, posts and outbound mail require confirmation, and does each post show who triggered it?"
+  - "When a maker leaves, who takes over their agents and connector grants, and how fast are orphaned agents unpublished?"
+  - "Is there a staged path from builder to production with a named approver, or do makers publish straight from the builder?"
+  - "Does the platform render remote images and links in agent output, and which hosts will it fetch?"
