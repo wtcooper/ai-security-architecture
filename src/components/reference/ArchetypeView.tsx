@@ -15,8 +15,9 @@ import { EnablePanel } from "@/components/enable/EnablePanel";
 import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
 import { CrossingsRegister } from "@/components/drawing/CrossingsRegister";
 import { CloudSwitch } from "@/components/cloud/CloudSwitch";
-import { boxProduct, cloudProductFor, cloudProductsFor, hostedAs, hostingInEffect, packsFor, platformWords, stackChosen, stackedAs, NO_STACK, type CloudProduct, type Stack } from "@/components/cloud/model";
+import { boxProduct, cloudProductFor, cloudProductsFor, drawnOn, hostedAs, hostingInEffect, packsFor, platformWords, stackChosen, stackedAs, NO_STACK, type CloudProduct, type Stack } from "@/components/cloud/model";
 import { cloudById, componentChoiceFor, fillsOn, incidents, toolById } from "@/lib/data";
+import { walkOn } from "@/lib/shape";
 import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
@@ -109,6 +110,12 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   const cloudProduct = stacked?.product ?? null;
   const hasPacks = Boolean(hostedProduct && packsFor(hostedProduct).platform.length + packsFor(hostedProduct).addons.length);
   const services = hostedProduct ? servicesFor(archetype, hostedProduct, hosting && !hosting.mapped ? hosting.id : null, stack) : null;
+  // The drawing as this platform's documentation shows it: the pattern with the mapping's changes
+  // of shape, and the hosting option's after them, applied before layout. The walk on it follows.
+  const drawn = hostedProduct ? drawnOn(archetype, hostedProduct, hosting && !hosting.mapped ? hosting.id : null) : archetype;
+  const drawnWalk = activeWalk ? walkOn(drawn, activeWalk) : null;
+  const shapeCount = cloudProduct?.implementation.shape?.length ?? 0;
+  const placedFor = drawn.drawn && Object.keys(drawn.drawn.boxes).length ? (hosting && !hosting.mapped ? hosting.name : cloudProduct?.cloud.short) : undefined;
   // The stack in a few words: the platform pack, then any add-ons.
   const packName =
     [stack.pack, ...stack.addons]
@@ -201,7 +208,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
         >
           {showDrawing ? "Hide the drawing" : "Show the drawing"}
           <span className="ml-2 font-normal text-ink-3">
-            {archetype.blocks.length} blocks · pinch to zoom
+            {drawn.blocks.length} blocks · pinch to zoom
           </span>
         </button>
       )}
@@ -220,11 +227,12 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
                 ) : (
                   <>Each box names the {platformWords(cloudProduct.cloud).service} that plays it{hosting ? `, hosted on ${hosting.name}` : ""}.</>
                 )}
-                {(differCount > 0 || moreCount > 0) && (
+                {(shapeCount > 0 || differCount > 0 || moreCount > 0) && (
                   <>
                     {" "}
                     <button type="button" onClick={showOnCloud} className="font-semibold text-introduced hover:underline" data-cloud-differs-link>
                       {[
+                        shapeCount > 0 && `${shapeCount} ${shapeCount === 1 ? "change of shape is" : "changes of shape are"} drawn`,
                         differCount > 0 && `${differCount} ${differCount === 1 ? "place differs" : "places differ"} from this drawing`,
                         moreCount > 0 &&
                           (cloudProduct.cloud.selfManaged
@@ -232,7 +240,8 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
                             : `${moreCount} more ${moreCount === 1 ? "service is" : "services are"} needed`),
                       ]
                         .filter(Boolean)
-                        .join(" and ")}{" "}
+                        .join(", ")
+                        .replace(/, (?=[^,]*$)/, " and ")}{" "}
                       →
                     </button>
                   </>
@@ -250,8 +259,8 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
         <>
           <div ref={drawingRef} id="pattern-drawing" className="-mx-6 scroll-mt-20 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
             <PatternDrawing
-              archetype={archetype}
-              walk={activeWalk}
+              archetype={drawn}
+              walk={drawnWalk}
               highlight={highlight}
               onHighlight={onHighlight}
               // One kind of marker at a time: a risk's tags while one is open under How it works, a walk's steps on Data flows, control chips otherwise.
@@ -263,7 +272,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               className="w-full"
             />
           </div>
-          <DrawingLegend className="mt-3 px-1" risks={highlight?.kind === "risk"} cloud={cloudProduct?.cloud.short} own={Boolean(cloudProduct?.cloud.selfManaged)} roles={hasPacks} />
+          <DrawingLegend className="mt-3 px-1" risks={highlight?.kind === "risk"} cloud={cloudProduct?.cloud.short} own={Boolean(cloudProduct?.cloud.selfManaged)} roles={hasPacks} placedFor={placedFor} />
         </>
       )}
 
@@ -330,7 +339,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
                     <span className="font-semibold text-ink">{activeWalk.title}</span>
                     <span className="ml-auto text-[11px] text-ink-3">{activeWalk.steps.length} steps</span>
                   </div>
-                  <FlowSequence archetype={archetype} walk={activeWalk} className="px-4 pb-4 pt-2" />
+                  <FlowSequence archetype={drawn} walk={drawnWalk ?? activeWalk} className="px-4 pb-4 pt-2" />
                 </>
               ) : (
                 <p className="px-5 py-10 text-center text-[13px] text-ink-3">
@@ -345,7 +354,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           <section className="mt-8" aria-labelledby="crossings-title">
             <h3 id="crossings-title" className="display text-[16px] font-bold text-ink">Boundary crossings</h3>
             <div className="mt-2">
-              <CrossingsRegister archetype={archetype} onPickMitigation={pickChip} />
+              <CrossingsRegister archetype={drawn} onPickMitigation={pickChip} />
             </div>
           </section>
         )}

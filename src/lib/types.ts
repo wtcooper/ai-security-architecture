@@ -517,6 +517,16 @@ export interface ScenarioStep {
    */
   label?: string;
   note?: string;
+  /*
+   * The three below are set only on a walk as drawn for one platform (lib/shape.ts), never in a
+   * pattern's file.
+   */
+  /** The step's number in the pattern's own walk, which every leg of a step split by an inserted box shares. */
+  n?: number;
+  /** A later leg of a step split by an inserted box: lit with the step, numbered only on its first leg. */
+  continues?: boolean;
+  /** The step's arrow is not drawn on this platform: why. The step is listed with this note and not drawn. */
+  skipped?: string;
 }
 
 /**
@@ -614,6 +624,102 @@ export interface Archetype {
   mitigations: string[];
   deviations?: ArchetypeDeviation[];
   sources: { title: string; url: string }[];
+  /** Set only on a copy of the pattern drawn for one platform (lib/shape.ts), never in a pattern's file. */
+  drawn?: DrawnShape;
+}
+
+/**
+ * ------------------------------------------------------------------ Per-platform shapes
+ *
+ * A hosted pattern has one drawing, shared by every platform it is mapped onto: choosing a
+ * platform changes the words in the boxes, not the shape. Where a platform's own documentation
+ * shows a different shape (an extra hop, a component that runs outside your network, an arrow
+ * that does not exist there, a flow that starts from another box), its mapping records the change
+ * and the platform's drawing is the pattern with the changes applied to a copy, before layout. A
+ * hosting option's changes apply on top of its mapping's. Everything else a platform does
+ * differently stays prose (`differences`).
+ */
+
+/** A box on an existing arrow: the arrow becomes from->id->to. */
+export interface ShapeInsert {
+  /** camelCase, new on the pattern. */
+  id: string;
+  title: string;
+  /** The box's one-liner, as on any box. */
+  summary?: string;
+  /** The arrow it sits on, "from->to" as the pattern authors it. */
+  on: string;
+  /** Its zone; the zone of `from` where absent. */
+  zone?: string;
+  /** How it is drawn: a component you run (the default), the provider's, or outside data or service. */
+  kind?: "service" | "provider" | "external";
+  /**
+   * The labels of the two legs, from->id then id->to. The first leg keeps the arrow's label and the
+   * second has none, unless given.
+   */
+  labels?: string[];
+  /** The box it is drawn inside, and its cell there, where the derived place is not the right one. */
+  parent?: string;
+  col?: number;
+  row?: number;
+}
+
+/** A box drawn in another zone: the provider's, say, for a component that runs outside your network. */
+export interface ShapeMove {
+  block: string;
+  zone: string;
+  /** Its cell there, where the derived place is not the right one. */
+  col?: number;
+  row?: number;
+  /**
+   * For a box drawn inside another that now stands outside it: the label of the call arrow from
+   * the box that held it, since being held no longer shows that it is called.
+   */
+  call?: string;
+}
+
+interface ShapeChangeBase {
+  /** One or two plain sentences: why it is drawn so here. Shown under How it works and in the drawing's hover help. */
+  why: string;
+  /** The vendor's or project's page that says so. */
+  url: string;
+  /**
+   * Where the pins of an arrow this change takes away are drawn instead: a block id or an arrow
+   * as "from->to" on this platform's drawing. An inserted box leaves them on its first leg and a
+   * rerouted arrow takes them along unless this says otherwise; a dropped arrow that carries pins
+   * must say.
+   */
+  pins?: string;
+}
+
+export type ShapeChange = ShapeChangeBase &
+  (
+    | { insert: ShapeInsert }
+    | { move: ShapeMove }
+    /** An arrow, "from->to", that does not exist on this platform. */
+    | { drop: string }
+    /** A flow that starts (or ends) at another box: the arrow `from` is drawn as `to`, which shares one end with it. */
+    | { reroute: { from: string; to: string } }
+    | { rename: { at: string; label: string } }
+  );
+
+export const SHAPE_KINDS = ["insert", "move", "drop", "reroute", "rename"] as const;
+export type ShapeKind = (typeof SHAPE_KINDS)[number];
+
+/** What a copy of a pattern drawn for one platform carries about how it was changed. */
+export interface DrawnShape {
+  /** The pattern, platform and hosting option: unique per drawing, and its layout's cache key. */
+  key: string;
+  /** Where it is drawn, as a sentence names it: "on AWS", "on-premises, hosted on Knative Serving". */
+  on: string;
+  /** Block id -> why it is drawn so here: a box inserted, or moved to another zone. */
+  boxes: Record<string, string>;
+  /** Arrow key -> why: an arrow an insert, a reroute, a move or a rename drew. */
+  arrows: Record<string, string>;
+  /** Each of the pattern's own arrows -> the arrows it is drawn as here, in order; empty where it is not drawn. */
+  follows: Record<string, string[]>;
+  /** The pattern's own arrows not drawn here -> why. */
+  missing: Record<string, string>;
 }
 
 /**
@@ -1002,6 +1108,8 @@ export interface CloudImplementation {
    * components and settings above describe it. Absent where only one way has been mapped.
    */
   hosting?: HostingOption[];
+  /** Where this platform's drawing has another shape than the pattern's, in the order they apply. */
+  shape?: ShapeChange[];
 }
 
 /**
@@ -1062,6 +1170,8 @@ export interface HostingOption {
   differences?: CloudDifference[];
   alsoNeeded?: CloudSupportingService[];
   quickstart?: GuidanceLink[];
+  /** A variant's own changes of shape, applied after the mapping's. */
+  shape?: ShapeChange[];
 }
 
 /** A cloud platform: its security-relevant settings, and how each first-party architecture is built on it. */

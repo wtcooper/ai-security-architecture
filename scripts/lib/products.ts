@@ -17,10 +17,12 @@ import {
   type CloudPlatform,
   type ProductSetting,
   type ProductStatusEntry,
+  type ShapeChange,
   type TechPack,
   type Tool,
   type WatchNote,
 } from "../../src/lib/types";
+import { applyShape } from "../../src/lib/shape";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const HTTPS = /^https:\/\//;
@@ -250,6 +252,17 @@ export async function loadClouds(
         if (n.url && !/^https:\/\//.test(n.url)) ctx.fail(`${at}: also-needed ${n.service}: url must be https`);
       }
       for (const q of impl.quickstart ?? []) if (!q.title?.trim() || !/^https:\/\//.test(q.url ?? "")) ctx.fail(`${at}: a quickstart needs a title and an https address`);
+      // Where the platform's drawing has another shape: every change applies cleanly to the
+      // pattern, in order, and a hosting variant's apply cleanly on top of the mapping's.
+      const shaped = (where: string, field: unknown, before: ShapeChange[] = []) => {
+        if (field === undefined) return;
+        if (!Array.isArray(field) || !field.length) {
+          ctx.fail(`${where}: shape is a list of changes`);
+          return;
+        }
+        for (const p of applyShape(arch, [...before, ...(field as ShapeChange[])], { key: where, on: where }).problems) ctx.fail(`${where}: ${p}`);
+      };
+      shaped(at, impl.shape);
       // Hosting options: the same rows for each, one of them the mapping itself.
       const options = impl.hosting ?? [];
       if (options.length) {
@@ -270,6 +283,9 @@ export async function loadClouds(
           const unknownRows = Object.keys(o.compare ?? {}).filter((k) => !HOSTING_COMPARE.some(([key]) => key === k));
           if (unknownRows.length) ctx.fail(`${oat}: unknown compare row ${unknownRows.join(", ")}`);
           for (const u of o.sources ?? []) if (!/^https:\/\//.test(u)) ctx.fail(`${oat}: a source must be an https address`);
+          // Only a variant of this pattern changes its shape; the mapped option's changes are the mapping's.
+          if (o.shape !== undefined && (o.mapped || o.kind === "managed")) ctx.fail(`${oat}: ${o.mapped ? "the mapped option is the mapping itself; put its shape there" : "a managed option is not drawn on this pattern, so it changes no shape here"}`);
+          else shaped(oat, o.shape, impl.shape ?? []);
           if (o.kind === "managed") {
             // The vendor runs it there. A managed agent is drawn as another pattern, which the option names.
             if (o.pattern && !archById.has(o.pattern)) ctx.fail(`${oat}: unknown pattern ${o.pattern}`);

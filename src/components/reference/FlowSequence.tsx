@@ -11,6 +11,10 @@
  * directions, and neither appears until a reader selects a walk.
  *
  * Laid out in HTML rather than SVG so step notes wrap and stay selectable.
+ *
+ * On a platform whose drawing has another shape (lib/shape.ts) the walk arrives as drawn there:
+ * a step split by an inserted box is one numbered message and its unnumbered continuation, and a
+ * step whose arrow is not drawn there is listed with its note but has no arrow.
  */
 import type { Archetype, Scenario } from "@/lib/types";
 
@@ -42,9 +46,12 @@ export function FlowSequence({
   walk: Scenario;
   className?: string;
 }) {
+  // The messages drawn: every step but one whose arrow this platform does not draw.
+  const drawn = walk.steps.filter((st) => !st.skipped);
+  const numberOf = (st: (typeof walk.steps)[number]) => st.n ?? walk.steps.indexOf(st) + 1;
   // Lifelines in first-appearance order — the order the story visits them.
   const lifelines: string[] = [];
-  for (const st of walk.steps) {
+  for (const st of drawn) {
     for (const part of st.follow.split("->")) if (!lifelines.includes(part)) lifelines.push(part);
   }
   // Block titles repeat across bands on purpose — "Tool services" is the same component
@@ -65,7 +72,7 @@ export function FlowSequence({
 
   const n = Math.max(lifelines.length, 1);
   const width = PAD_X * 2 + n * COL;
-  const height = HEAD_H + walk.steps.length * ROW_H + 18;
+  const height = HEAD_H + drawn.length * ROW_H + 18;
   const xOf = (i: number) => PAD_X + (i + 0.5) * COL;
 
   return (
@@ -147,7 +154,7 @@ export function FlowSequence({
           })}
 
           {/* Messages: a solid arrow for a call, a dashed one for the return leg of a round trip */}
-          {walk.steps.map((st, step) => {
+          {drawn.map((st, step) => {
             const [from, to] = st.follow.split("->");
             const edge = edgeOf(from, to);
             // A reply is the leg back of a round trip inside this walk: an earlier step went the
@@ -160,7 +167,7 @@ export function FlowSequence({
             const openReq = new Map<string, number>();
             let reply = false;
             for (let i = 0; i <= step; i++) {
-              const f = walk.steps[i].follow;
+              const f = drawn[i].follow;
               const back = f.split("->").reverse().join("->");
               const answers = (openReq.get(back) ?? 0) > 0;
               if (answers) openReq.set(back, openReq.get(back)! - 1);
@@ -186,7 +193,7 @@ export function FlowSequence({
               st.label ?? ((edge?.bidir || edge?.outbound) && halves.length === 2 ? halves[authored ? 0 : 1] : edge?.label);
             return (
               <g key={`${st.follow}-${step}`}>
-                <title>{`${step + 1}. ${titleOf(from)} → ${titleOf(to)}${st.note ? ` — ${st.note}` : ""}`}</title>
+                <title>{`${numberOf(st)}. ${titleOf(from)} → ${titleOf(to)}${st.note ? ` — ${st.note}` : ""}`}</title>
                 <line
                   x1={start}
                   x2={end}
@@ -208,16 +215,23 @@ export function FlowSequence({
                     {label}
                   </text>
                 )}
-                <circle cx={x1} cy={y} r={8.5} fill="var(--ink)" />
-                <text
-                  x={x1}
-                  y={y + 3.3}
-                  textAnchor="middle"
-                  fill="#fff"
-                  style={{ font: "700 9.5px var(--font-mono-id), monospace" }}
-                >
-                  {step + 1}
-                </text>
+                {st.continues ? (
+                  // The same step carried on through a box this platform adds: no number of its own.
+                  <circle cx={x1} cy={y} r={3} fill="var(--ink)" />
+                ) : (
+                  <>
+                    <circle cx={x1} cy={y} r={8.5} fill="var(--ink)" />
+                    <text
+                      x={x1}
+                      y={y + 3.3}
+                      textAnchor="middle"
+                      fill="#fff"
+                      style={{ font: "700 9.5px var(--font-mono-id), monospace" }}
+                    >
+                      {numberOf(st)}
+                    </text>
+                  </>
+                )}
               </g>
             );
           })}
@@ -227,19 +241,22 @@ export function FlowSequence({
         Numbers sit on the lifeline a message leaves from. A lighter arrow carries external content or actions; a dashed one is the return leg of a round trip.
       </p>
 
-      {/* The prose of the walk — what each step actually is. */}
+      {/* The prose of the walk — what each step actually is. A step split by an inserted box reads as one hop through it. */}
       <ol className="mt-2.5 space-y-1.5 px-1">
         {walk.steps.map((st, step) => {
+          if (st.continues) return null;
           const [from, to] = st.follow.split("->");
-          const note = st.note ?? edgeOf(from, to)?.note;
+          const through: string[] = [];
+          for (let i = step + 1; walk.steps[i]?.continues; i++) through.push(walk.steps[i].follow.split("->")[1]);
+          const note = st.skipped ?? st.note ?? edgeOf(from, to)?.note;
           return (
-            <li key={`${st.follow}-note-${step}`} className="flex gap-2 text-[11.5px] leading-snug text-ink-2">
+            <li key={`${st.follow}-note-${step}`} className={`flex gap-2 text-[11.5px] leading-snug ${st.skipped ? "text-ink-3" : "text-ink-2"}`} data-step-skipped={st.skipped ? true : undefined}>
               <span className="ident mt-[1px] inline-flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-full border border-chip text-[9px] font-bold text-chip">
-                {step + 1}
+                {numberOf(st)}
               </span>
               <span>
-                <span className="font-semibold text-ink">
-                  {titleOf(from)} → {titleOf(to)}
+                <span className={`font-semibold ${st.skipped ? "text-ink-3 line-through decoration-ink-3/50" : "text-ink"}`}>
+                  {[from, to, ...through].map(titleOf).join(" → ")}
                 </span>
                 {note ? ` — ${note.replace(/\s+/g, " ").trim()}` : ""}
               </span>

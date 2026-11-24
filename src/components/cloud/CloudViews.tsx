@@ -9,7 +9,7 @@ import { Prose } from "@/components/Prose";
 import { SettingCard } from "@/components/enable/SettingParts";
 import type { Archetype, ProductSetting } from "@/lib/types";
 import { CLOUD_ROLES } from "@/lib/types";
-import { bindingFor, controlPlaneOptions, differencesFor, platformWords, ROLE_LABEL, type CloudProduct } from "./model";
+import { bindingFor, controlPlaneOptions, differencesFor, platformWords, ROLE_LABEL, shapeLinesFor, type CloudProduct } from "./model";
 
 /** Under an open control: each of the product's own settings that delivers it, with the value to set. */
 export function NativeOptions({ id, name, options }: { id: string; name: string; options: ProductSetting[] }) {
@@ -103,6 +103,8 @@ export function OnCloud({ archetype, product }: { archetype: Archetype; product:
   const words = platformWords(cloud);
   const own = words.own;
   const differences = differencesFor(archetype, product);
+  // What the drawing itself shows differently here, then what it cannot show.
+  const shape = shapeLinesFor(archetype, product);
   const needed = impl.alsoNeeded ?? [];
   const link = "font-semibold text-introduced hover:underline";
   return (
@@ -111,9 +113,26 @@ export function OnCloud({ archetype, product }: { archetype: Archetype; product:
 
       <div>
         <p className="eyebrow" data-differs-heading>How it differs {words.on}</p>
-        {differences.length ? (
+        {shape.length || differences.length ? (
           <>
-            <ul className="mt-2 space-y-2.5">
+            {shape.length > 0 && (
+              <>
+                <p className="mt-1 text-[12px] text-ink-3">Drawn on the drawing for this platform:</p>
+                <ul className="mt-1.5 space-y-2.5">
+                  {shape.map((c, i) => (
+                    <li key={i} data-shape-change={c.key} data-shape-kind={c.kind} className="text-[13px] leading-snug text-ink-2">
+                      <span className="font-semibold text-ink">{c.where}: </span>
+                      {c.why}{" "}
+                      <a href={c.url} target="_blank" rel="noreferrer" className={link}>
+                        Source ↗
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {shape.length > 0 && differences.length > 0 && <p className="mt-4 text-[12px] text-ink-3">Not shown on the drawing:</p>}
+            <ul className={`${shape.length ? "mt-1.5" : "mt-2"} space-y-2.5`}>
               {differences.map((d, i) => (
                 <li key={i} data-difference={d.key} className="text-[13px] leading-snug text-ink-2">
                   <span className="font-semibold text-ink">{d.where}: </span>
