@@ -1,0 +1,187 @@
+pattern: archSelfHostedInference
+reviewed: "2026-11-24"
+summary: >-
+  An open-weights model served on the organisation's own accelerators to many internal teams.
+  Bringing the model inside removes the provider and its controls: content policy, abuse
+  monitoring, spare capacity and patching are now the organisation's to run. At stake are every
+  tenant's prompts and answers and the keys the serving tier holds. The worst failure seen so far
+  was not the model: in 2026 a hijacked gateway release stole credentials from the tier every
+  caller trusts. Weights that run code on load, a cache shared across tenants and a serving API
+  reachable around the gateway follow.
+concentrates: >-
+  In the gateway and the serving software: third-party code, updated from public registries, that
+  sees every tenant's prompts and holds every key. It is worst where a floating release tag, a
+  serving port reachable around the gateway and a cache shared across tenants meet.
+scope: >-
+  One open-weights model on the organisation's own accelerators, serving internal apps and agents
+  of several teams through an internal AI gateway. Weights come from a public hub and from the
+  organisation's own pipeline; low-sensitivity callers share one deployment. No public endpoint.
+lists: [owasp-llm-2026]
+assets:
+  - "Every tenant's prompts and completions, in the batch, the cache and the gateway log"
+  - "Provider, storage and cloud credentials held by the gateway and the serving tier"
+  - "Model weights, above all fine-tunes trained on internal data"
+  - "The integrity of what serves: the approved artifact, unmodified"
+  - "Shared accelerator capacity that every calling team depends on"
+actors:
+  - who: Supply-chain attacker
+    access: "Publishes a hub model, or hijacks the release of the gateway or serving engine the organisation installs"
+    wants: "Code execution on the serving tier and the keys it holds"
+  - who: A calling tenant, or whatever has taken one over
+    access: "A valid team identity and quota at the gateway, sharing a deployment with other teams"
+    wants: "Other tenants' context, or the model itself"
+  - who: A workload or insider on the cluster network
+    access: "A network path to the inference API, its control endpoints, the inter-node plane or storage"
+    wants: "Unfiltered completions, a swapped model or code execution"
+  - who: Internet scanner
+    access: "Finds a serving port or dashboard exposed by mistake"
+    wants: "Free compute, credentials and data"
+  - who: Misconfiguration (no attacker)
+    access: "A serving setting: cache sharing on, authentication off, a load path that skips verification"
+    wants: "Nothing; it opens the path the others use"
+threats:
+  - id: T1
+    title: "A hijacked gateway or serving release steals every key and prompt"
+    rating: critical
+    evidence: observed
+    story: >-
+      The gateway sees every tenant's prompts and holds every key. In October 2026 a hijacked release
+      pipeline shipped LiteLLM 1.107.0 with a startup hook that took cloud and provider credentials and
+      polled for more code; anything pulling a floating tag in that two-hour window installed it.
+    at: [gateway, runtime]
+    risks: [riskInsecureIntegratedComponent]
+    atlas: [AML.T0010.001, AML.T0010.004, AML.T0055]
+    owasp: [LLM04:2026]
+    controls: [AML.M0014, cap-staged-rollout-gate, AML.M0023, D3-FA, D3-NI]
+    incidents: [litellm-release-hijack]
+    refs:
+      - title: "CISA Known Exploited Vulnerabilities catalogue (LiteLLM gateway flaws listed in 2026)"
+        url: https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
+  - id: T2
+    title: "Downloaded weights run code on load, or skip the gate"
+    rating: high
+    evidence: observed
+    story: >-
+      Pickle-based weight files run code when the loader opens them, on a host with storage and
+      registry credentials, and malicious models have passed a hub's own scanner. A file written to
+      storage directly, or swapped after its scan, loads anyway unless its digest is checked at load.
+    at: [sources->storage, storage->runtime]
+    risks: [riskMaliciousLoaderDeserialization, riskModelSourceTampering, riskModelDeploymentTampering]
+    atlas: [AML.T0010.003, AML.T0011.000, AML.T0112.001, AML.T0076]
+    owasp: [LLM04:2026, LLM05:2026]
+    controls: [D3-FA, AML.M0014, AML.M0005, AML.M0023]
+    refs:
+      - title: "ReversingLabs: malicious models on Hugging Face evade its pickle scanner (nullifAI), February 2025"
+        url: https://www.reversinglabs.com/blog/rl-identifies-malware-ml-model-hosted-on-hugging-face
+      - title: "Unit 42: model namespace reuse lets re-registered names serve attacker models, September 2025"
+        url: https://unit42.paloaltonetworks.com/model-namespace-reuse/
+  - id: T3
+    title: "One tenant reads another's context through the shared cache"
+    rating: high
+    evidence: research
+    story: >-
+      Continuous batching mixes teams' requests on shared accelerators, and prefix caching keeps their
+      context to reuse. Time to first token then shows whether a guessed prefix was already cached by
+      someone else, so a tenant within quota can infer what other teams sent, system prompts included.
+    at: [api->runtime, runtime]
+    risks: [riskSensitiveDataDisclosure, riskAcceleratorAndSystemSideChannels]
+    atlas: [AML.T0024, AML.T0085.002]
+    owasp: [LLM02:2026, LLM08:2026]
+    controls: [D3-ACH, D3-HBPI, D3-AA]
+    refs:
+      - title: "Selective KV-cache sharing to mitigate timing side channels in LLM inference (arXiv:2508.08438)"
+        url: https://arxiv.org/abs/2508.08438
+  - id: T4
+    title: "Callers reach the serving API or its control endpoints around the gateway"
+    rating: high
+    evidence: observed
+    story: >-
+      Common serving engines ship with authentication off or partial, and weight-update and adapter
+      endpoints can sit outside it. Whatever reaches the API gets unfiltered answers, or swaps the model
+      under every tenant. In November 2026 Rapid7 found 7,627 hosts answering AI or notebook APIs with no
+      sign-in.
+    at: [api, gateway->api]
+    risks: [riskSensitiveDataDisclosure, riskModelDeploymentTampering, riskAdapterPEFTInjection]
+    atlas: [AML.T0132, AML.T0006.002, AML.T0040]
+    owasp: [LLM02:2026, LLM05:2026]
+    controls: [D3-ACH, D3-NI, D3-AA]
+    refs:
+      - title: "Rapid7: Open by Default. Already Occupied. (exposed self-hosted AI servers), 18 November 2026"
+        url: https://rapid7.com/blog/post/tr-self-hosted-ai-renting-compute-exposed-servers
+      - title: "vLLM security guide: API-key limits and endpoints outside it"
+        url: https://docs.vllm.ai/en/stable/usage/security/
+  - id: T5
+    title: "The serving plane's unauthenticated channels give code execution"
+    rating: high
+    evidence: observed
+    story: >-
+      Distributed serving assumes a trusted network: nodes talk without sign-in, and vLLM's Mooncake
+      channel unpickled whatever reached it (CVSS 10). Ray's job API, unauthenticated by the same
+      design, was used in 2025 to hijack exposed GPU clusters and read credentials from their environment.
+    at: [runtime]
+    risks: [riskInsecureIntegratedComponent]
+    atlas: [AML.T0122, AML.T0006.002, AML.T0055]
+    owasp: [LLM04:2026]
+    controls: [D3-NI, D3-AVE, D3-CH]
+    refs:
+      - title: "vLLM advisory GHSA-hj4w-hm2g-p6w5 (CVE-2025-32444): remote code execution via the Mooncake integration"
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-hj4w-hm2g-p6w5
+      - title: "Oligo: ShadowRay 2.0 hijacks exposed Ray clusters, 18 November 2025"
+        url: https://oligo.security/blog/shadowray-2-0-attackers-turn-ai-against-itself-in-global-campaign-that-hijacks-ai-into-self-propagating-botnet
+  - id: T6
+    title: "Raw completions reach every caller with no provider policy"
+    rating: medium
+    evidence: research
+    story: >-
+      No provider screens requests or answers any more, and open weights can arrive with their safety
+      training weakened: ten crafted examples were enough to undo it in one study. Without the gateway's
+      own checks and a safety test per version, harmful or unsafe output passes straight to callers.
+    at: [gateway, api->gateway]
+    risks: [riskInsecureModelOutput]
+    atlas: [AML.T0054, AML.T0051.000]
+    owasp: [LLM01:2026, LLM10:2026]
+    controls: [cap-output-guardrails, cap-staged-rollout-gate, AML.M0024]
+    refs:
+      - title: "Fine-tuning aligned language models compromises safety (arXiv:2310.03693)"
+        url: https://arxiv.org/abs/2310.03693
+  - id: T7
+    title: "Weights are copied from storage or distilled through the API"
+    rating: medium
+    evidence: observed
+    story: >-
+      A fine-tune on internal data is expensive to make and trivial to copy from a store with broad
+      read access. Sustained queries can also replicate it: distillation at scale has been reported
+      against model providers, though not yet against an internal endpoint.
+    at: [storage, consumers->gateway]
+    risks: [riskModelExfiltration, riskModelReverseEngineering]
+    atlas: [AML.T0048.004, AML.T0005.001, AML.T0035]
+    owasp: [LLM06:2026, LLM02:2026]
+    controls: [AML.M0005, D3-CH, AML.M0004, AML.M0024]
+    refs:
+      - title: "Anthropic: detecting and preventing distillation attacks, February 2026"
+        url: https://www.anthropic.com/news/detecting-and-preventing-distillation-attacks
+  - id: T8
+    title: "One caller or a looping agent exhausts shared capacity"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      Accelerator capacity is finite and no provider absorbs a spike. A team's runaway agent or a burst
+      of long contexts fills the batch and every other tenant waits. No incident is reported here; the
+      rating rests on the shared deployment in scope.
+    at: [consumers->gateway, gateway->api]
+    risks: [riskDenialOfMLService]
+    atlas: [AML.T0029, AML.T0034.001]
+    owasp: [LLM06:2026]
+    controls: [AML.M0004, D3-AA, AML.M0024]
+coverage:
+  - { id: "LLM03:2026", why: "No tools or actions on this drawing; the agents that call the model carry their own agency threats in their own patterns." }
+  - { id: "LLM07:2026", why: "Accuracy of answers is a quality question for each consuming application, not a property of the serving tier." }
+  - { id: "LLM09:2026", why: "No retrieval index or vector store is drawn; embedding models served here are consumed by applications that own their indexes." }
+questions:
+  - "Which gateway and serving versions run now, from which digests, and how long does a new release wait before production?"
+  - "Can anything on the cluster network reach the inference API, its control endpoints or the inter-node plane without the gateway?"
+  - "Is prefix caching shared across tenants, and which tenants have their own instance?"
+  - "Does the loader check each artifact's signature or approved digest at load, and is any pickle-based format admitted?"
+  - "Which credentials sit on the gateway host, and which destinations can it connect out to?"
+  - "Who reads the request and completion log, and who else may?"
+  - "What happens to other teams when one exceeds its quota?"

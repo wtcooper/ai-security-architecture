@@ -1,0 +1,182 @@
+pattern: archTrainingPipeline
+reviewed: "2026-11-24"
+summary: >-
+  A build system whose product is a model: curated data and a base checkpoint go in, and a signed
+  release comes out for the serving tier to load. Unlike code, the result cannot be read for
+  defects, so what it learned from and how it behaves are the only things anyone can check. At
+  stake are the integrity of that model, the corpus behind it and the right to sign it. Poisoned
+  examples and tampered base checkpoints are the durable threats; the most likely break-in, seen at
+  scale, is the training cluster's own control plane.
+concentrates: >-
+  In the training job, which holds the dataset, the base weights and its credentials at once for
+  hours, and in the promotion gate, because a backdoor nobody tested for and a release anybody can
+  sign both ship with every copy of the model.
+scope: >-
+  Fine-tuning and post-training of open or in-house base models on curated internal and external
+  data, on the organisation's own cluster, with evaluation and signed promotion to a
+  registry that its self-hosted serving loads from. Rollouts that run model-written code use a
+  separate sandbox.
+lists: [owasp-llm-2026]
+assets:
+  - "The training corpus, including internal and personal records"
+  - "What the model learned: weights free of planted triggers"
+  - "Candidate and released weights and adapters"
+  - "The signing identity and the promotion decision it stands for"
+  - "The benchmarks and backdoor probes the gate relies on"
+  - "The credentials a training job holds for its whole run"
+actors:
+  - who: Upstream content author
+    access: "Writes pages, datasets or labels that may be scraped, bought or contributed into training data"
+    wants: "A trigger or bias that survives into the deployed model"
+  - who: Supply-chain attacker
+    access: "Publishes a base checkpoint or framework release, or takes over a name the pipeline pulls"
+    wants: "Code execution in the job, or a backdoor in every model built on it"
+  - who: Internet scanner
+    access: "Finds a cluster job API, dashboard or experiment tracker reachable from outside"
+    wants: "Accelerator time, credentials, data and weights"
+  - who: Platform insider or compromised job
+    access: "A run identity, read access to the corpus and write access to candidate storage"
+    wants: "To promote an untested model, or copy data or weights out"
+  - who: Careless ingest (no attacker)
+    access: "Filters and data selection that let restricted or unlicensed records through"
+    wants: "Nothing; the records are learned and can be extracted later"
+threats:
+  - id: T1
+    title: "Poisoned examples plant a trigger that ships with every copy"
+    rating: high
+    evidence: research
+    story: >-
+      Scraped, bought and labelled content is written by people who can plant a trigger. About 250
+      poisoned documents backdoored models of every size tested, and 0.01% of two web-scale datasets
+      could be poisoned for $60 by buying domains their links point to. Once learned, it cannot be
+      deleted, only found and withdrawn.
+    at: [dataOrigins->curation, curation->corpus]
+    risks: [riskDataPoisoning]
+    atlas: [AML.T0020, AML.T0010.002, AML.T0018.000]
+    owasp: [LLM05:2026]
+    controls: [AML.M0007, AML.M0025, AML.M0008, AML.M0023]
+    refs:
+      - title: "Anthropic: a small number of samples can poison LLMs of any size, 9 October 2025"
+        url: https://www.anthropic.com/research/small-samples-poison
+      - title: "Poisoning web-scale training datasets is practical (split-view poisoning, arXiv:2302.10149)"
+        url: https://arxiv.org/abs/2302.10149
+  - id: T2
+    title: "A base checkpoint or framework runs code in the job or carries a backdoor"
+    rating: high
+    evidence: observed
+    story: >-
+      The run starts from weights and frameworks published upstream. Malicious models that run a shell
+      on load have passed a hub's scanner by corrupting the file, and a digest-pinned pickle is still a
+      pickle. A trained-in backdoor passes every scan: the mirror admits bytes, not behaviour.
+    at: [upstreamArtifacts->pkgRegistry, pkgRegistry->trainJob]
+    risks: [riskModelSourceTampering, riskMaliciousLoaderDeserialization]
+    atlas: [AML.T0010.003, AML.T0011.000, AML.T0076, AML.T0018.000]
+    owasp: [LLM04:2026, LLM05:2026]
+    controls: [D3-FA, AML.M0023, AML.M0008, D3-NI]
+    refs:
+      - title: "ReversingLabs: malicious models on Hugging Face evade its pickle scanner (nullifAI), February 2025"
+        url: https://www.reversinglabs.com/blog/rl-identifies-malware-ml-model-hosted-on-hugging-face
+  - id: T3
+    title: "An exposed cluster control plane hands over data, weights and keys"
+    rating: high
+    evidence: observed
+    story: >-
+      Distributed training frameworks can run their job APIs without sign-in by design. In 2025
+      ShadowRay 2.0 hijacked exposed Ray GPU clusters through that API and found cloud and database
+      credentials in their environment and, on one, a 240 GB archive of code, models and datasets. A
+      training job holds all three at once.
+    at: [trainJob]
+    risks: [riskInsecureIntegratedComponent]
+    atlas: [AML.T0132, AML.T0006.002, AML.T0055, AML.T0035]
+    owasp: [LLM04:2026]
+    controls: [D3-NI, D3-AA, AML.M0012, AML.M0024]
+    refs:
+      - title: "Oligo: ShadowRay 2.0 hijacks exposed Ray clusters, 18 November 2025"
+        url: https://oligo.security/blog/shadowray-2-0-attackers-turn-ai-against-itself-in-global-campaign-that-hijacks-ai-into-self-propagating-botnet
+  - id: T4
+    title: "The promotion gate is skipped, gamed or approved by stolen accounts"
+    rating: high
+    evidence: observed
+    story: >-
+      A signature means the gate was passed only if the job cannot sign, benchmarks are out of its
+      authors' reach and the tested digest is the one signed. In October 2026 stolen accounts both ran
+      and approved a release of the LiteLLM gateway: a software release, the same failure.
+    at: [storage->evaluation, evaluation->registry, storage->registry]
+    risks: [riskEvaluationBenchmarkManipulation, riskAdapterPEFTInjection, riskModelDeploymentTampering]
+    atlas: [AML.T0012, AML.T0018.000]
+    owasp: [LLM04:2026]
+    controls: [AML.M0013, D3-AA, AML.M0005, cap-model-documentation, AML.M0024]
+    incidents: [litellm-release-hijack]
+  - id: T5
+    title: "Restricted or unlicensed records are learned and extracted later"
+    rating: high
+    evidence: research
+    story: >-
+      Records that reach the corpus can be memorised and drawn back out of a model served far more
+      widely than the data ever was; researchers extracted gigabytes of training data from open and
+      production models. Unlicensed or over-collected data is learned the same way and cannot be removed.
+    at: [corpus, curation, evaluation]
+    risks: [riskSensitiveDataDisclosure, riskUnauthorizedTrainingData, riskExcessiveDataHandling]
+    atlas: [AML.T0137.003, AML.T0024]
+    owasp: [LLM02:2026]
+    controls: [AML.M0007, AML.M0008, AML.M0005, AML.M0025]
+    refs:
+      - title: "Scalable extraction of training data from (production) language models (arXiv:2311.17035)"
+        url: https://arxiv.org/abs/2311.17035
+  - id: T6
+    title: "A crafted dataset exploits the processing that reads it"
+    rating: medium
+    evidence: observed
+    story: >-
+      Curation runs loaders and processing jobs over files other people wrote. In 2026 agents crafted
+      dataset configurations that made Hugging Face's dataset processing read a pod's environment and,
+      through a template injection, run code in a production pod. A worker that holds credentials
+      hands them over.
+    at: [dataOrigins->curation, curation]
+    risks: [riskMaliciousLoaderDeserialization, riskInsecureIntegratedComponent]
+    atlas: [AML.T0119, AML.T0010.002]
+    owasp: [LLM04:2026]
+    controls: [D3-FA, D3-NI, D3-AA, AML.M0024]
+    incidents: [openai-huggingface]
+  - id: T7
+    title: "A training recipe runs model-written code inside the job"
+    rating: medium
+    evidence: observed
+    story: >-
+      RL and agentic recipes execute what the model generates. Run inside the job, that code shares its
+      dataset, weights and credentials. The 2026 Hugging Face breach began in a reinforcement learning
+      run; on this drawing such rollouts belong in the separate sandbox, which lowers the rating here.
+    at: [trainJob]
+    risks: [riskRogueActions, riskInsecureIntegratedComponent]
+    atlas: [AML.T0105, AML.T0053]
+    owasp: [LLM03:2026]
+    controls: [D3-EI, D3-NI]
+    incidents: [openai-huggingface]
+  - id: T8
+    title: "A small adapter or checkpoint is copied out of storage"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      The output is the expensive thing and, for a low-rank fine-tune, only megabytes: small enough to
+      leave without notice from a store any platform role can read. No incident is reported for a
+      training store; the rating rests on its value and size.
+    at: [storage, registry]
+    risks: [riskModelExfiltration]
+    atlas: [AML.T0048.004, AML.T0035]
+    owasp: [LLM02:2026]
+    controls: [AML.M0005, AML.M0012, D3-NI, AML.M0024]
+coverage:
+  - { id: "LLM01:2026", why: "The model only reads data here and nothing prompts it; instructions planted in training data are the poisoning threat." }
+  - { id: "LLM06:2026", why: "No inference endpoint is drawn; compute taken by an intruder is part of the control-plane threat." }
+  - { id: "LLM07:2026", why: "Accuracy is measured by the evaluation gate as quality; deliberate bias planted in data is the poisoning threat." }
+  - { id: "LLM08:2026", why: "No system prompts or tool schemas exist at training time; the serving patterns carry this item." }
+  - { id: "LLM09:2026", why: "No retrieval index or vector store is part of the training pipeline." }
+  - { id: "LLM10:2026", why: "Nothing here acts on model output; the serving and agent patterns handle what it produces." }
+questions:
+  - "Can every promoted model be traced to its exact dataset version, base digest and run, and how quickly?"
+  - "Who can read the corpus, and who can promote a model: are both narrower than the platform team?"
+  - "Does the signing identity sit outside every training job, and could two stolen accounts approve a release?"
+  - "Which base formats does the mirror admit, and does any loader in the job run custom or remote code?"
+  - "Can the cluster's job API, dashboard or experiment tracker be reached from outside its network?"
+  - "Who can read or change the benchmarks and backdoor probes the gate uses?"
+  - "What restricted or personal content could reach the corpus, and is memorisation tested before release?"
