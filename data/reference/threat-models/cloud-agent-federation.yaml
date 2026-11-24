@@ -1,0 +1,165 @@
+pattern: archAgentFederation
+reviewed: "2026-11-24"
+summary: >-
+  Your agent and other organisations' agents hand each other tasks over an agent-to-agent
+  protocol, in both directions. The protocol leaves identity, per-skill authorization and trust
+  in what comes back to you, so every hop is an identity question: which agent is speaking, for
+  whom, with what scope, and how far that authority travels. What a peer returns was written by
+  a model you do not run, and what you send leaves your organisation. An agreement or a
+  federation tells you who the peer is, not that its output is safe.
+concentrates: >-
+  Where a peer's artifact lands in your agent's context as instruction while your agent can
+  still act or send data for a user, and the token exchange is the only place that stops a
+  peer's authority travelling on into your own systems.
+scope: >-
+  Your agent delegating to, and taking tasks from, one vendor platform's agent that federates
+  with your identity provider and one partner's agent that does not, through your own gateway
+  and authorization server; inbound tasks reach your tool services.
+lists: [owasp-llm-2026, owasp-agentic]
+assets:
+  - "Your users' identities and the assertions issued for them to peers"
+  - "Agent registrations, their private keys and the tokens minted per task"
+  - "Data your agent puts in outbound tasks"
+  - "Internal systems and records an inbound task can reach"
+  - "What your agent does with what a peer returns"
+  - "One audit of a task across both organisations"
+actors:
+  - who: "Peer agent or its operator"
+    access: "Holds a registration and tokens with you, publishes a card, returns artifacts your model reads"
+    wants: "Usually its job; if compromised or steered, your data or actions"
+  - who: "Content author upstream of a peer"
+    access: "Wrote what the peer's own model read before it answered you"
+    wants: "To reach your agent through a peer it trusts"
+  - who: "Impersonating agent"
+    access: "Publishes a card that looks like an admitted peer's, or changes the card at the same address"
+    wants: "Tasks, tokens and data meant for the real peer"
+  - who: "Thief of keys or tokens"
+    access: "Takes a registration key or token from a peer platform, a log or a breached store"
+    wants: "To act as an admitted agent from anywhere"
+  - who: "Your own user"
+    access: "Starts tasks that travel to other organisations under their identity"
+    wants: "Their task done, sometimes with data they should not share"
+  - who: "Your agent itself"
+    access: "Composes outbound tasks and acts on returned artifacts"
+    wants: "None; a failure source"
+threats:
+  - id: T1
+    title: "A peer's artifact steers your agent into acting or telling"
+    rating: high
+    evidence: research
+    story: >-
+      Artifacts and status messages are written by a model you do not run and land in your
+      agent's context as instruction, in a stateful session. In research, a malicious
+      remote agent used follow-up questions to make a client agent reveal its instructions and
+      tools and, in a second demonstration, buy shares nobody asked for.
+    at: [gateway->partner, gateway->peerVendor, harness, localTools->memory]
+    risks: [riskPromptInjection, riskRogueActions]
+    atlas: [AML.T0051.001, AML.T0053, AML.T0143]
+    owasp: [LLM01:2026, LLM10:2026, ASI01, ASI06, ASI07]
+    controls: [cap-input-guardrails, cap-agent-action-policy-enforcement, AML.M0031, cap-agent-tracing]
+    refs:
+      - { title: "Unit 42, Agent Session Smuggling Attack in A2A Systems, 31 October 2025", url: "https://unit42.paloaltonetworks.com/agent-session-smuggling-in-agent2agent-systems/" }
+  - id: T2
+    title: "A peer's authority travels on into your own systems"
+    rating: high
+    evidence: disclosed
+    story: >-
+      A peer's token forwarded to your tool servers, or a user's assertion exchanged for more
+      than the skill needs, lets another organisation's agent act in yours as more than it is;
+      the protocol's tenant field checks nothing. A shared secret and email-only account
+      linking let an outsider act as any user and drive an agent.
+    at: [gateway->authServer, gateway->internalTools, idp->authServer]
+    risks: [riskAgenticDelegationConfusedDeputy, riskCrossTenantCredentialPropagation]
+    atlas: [AML.T0091.000, AML.T0012]
+    owasp: [LLM03:2026, ASI03]
+    controls: [D3-CTS, D3-APA, cap-agent-action-policy-enforcement, D3-AA]
+    refs:
+      - { title: "AppOmni, BodySnatcher: ServiceNow AI agents (CVE-2025-12420)", url: "https://appomni.com/ao-labs/bodysnatcher-agentic-ai-security-vulnerability-in-servicenow/" }
+  - id: T3
+    title: "A breached peer platform acts with the grants you gave it"
+    rating: high
+    evidence: observed
+    story: >-
+      A federated vendor holds assertions and tokens for your users; a partner holds its
+      registration with you. A breach there acts as an admitted peer. A third-party AI tool's
+      compromised OAuth app led to an employee account takeover at a company using it; an agent
+      network's database exposed about 1.5 million agent tokens.
+    at: [gateway->peerVendor, gateway->partner, idp->authServer]
+    risks: [riskCrossTenantCredentialPropagation, riskAgenticDelegationConfusedDeputy]
+    atlas: [AML.T0012, AML.T0091.000]
+    owasp: [LLM04:2026, ASI03, ASI04, ASI10]
+    controls: [cap-ai-vendor-assessment, cap-agent-kill-switch, D3-APA, D3-CTS, D3-AA]
+    refs:
+      - { title: "Vercel, April 2026 security incident bulletin", url: "https://vercel.com/kb/bulletin/vercel-april-2026-security-incident" }
+      - { title: "Wiz, exposed Moltbook database", url: "https://www.wiz.io/blog/exposed-moltbook-database-reveals-millions-of-api-keys" }
+  - id: T4
+    title: "Outbound tasks carry more than the peer needs"
+    rating: high
+    evidence: research
+    story: >-
+      Whatever the model puts in a task message leaves the organisation; to the partner it goes
+      with no user identity to say whose data it is. A peer asking follow-up questions can draw
+      out conversation history, instructions and tool schemas, as research showed; the person
+      may not know which organisation a task went to.
+    at: [gateway->peerVendor, gateway->partner, user->entry]
+    risks: [riskSensitiveDataDisclosure]
+    atlas: [AML.T0086, AML.T0085.002, AML.T0085.003]
+    owasp: [LLM02:2026, LLM08:2026, ASI02]
+    controls: [cap-sensitive-data-redaction, cap-agent-action-policy-enforcement, D3-APA]
+    refs:
+      - { title: "Unit 42, Agent Session Smuggling Attack in A2A Systems, 31 October 2025", url: "https://unit42.paloaltonetworks.com/agent-session-smuggling-in-agent2agent-systems/" }
+  - id: T5
+    title: "A changed or look-alike agent card redirects tasks and tokens"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      A card can change after admission (a moved token address, reworded skills), or live
+      discovery finds a stranger's, and the gateway reads it as a true account of the peer. A moved token address is how a redirect would collect tokens. No public case for
+      agent cards; tool configurations have been swapped after approval.
+    at: [gateway->peerVendor, gateway->partner, gateway]
+    risks: [riskToolRegistryTampering, riskShadowAndUnknownAgents]
+    atlas: [AML.T0073, AML.T0110.000, AML.T0109]
+    owasp: [ASI04, ASI07]
+    controls: [cap-mcp-tool-integrity, cap-agent-tool-registry, cap-ai-vendor-assessment]
+    incidents: [mcp-supply-chain]
+  - id: T6
+    title: "A task goes down a chain nobody can trace or stop"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      A peer that delegates onward does so on its own identity, so your token stops there, and
+      so does your sight. Which agents touched the task, and whether a revoked peer's tasks are
+      still running, depend on the trace context it carries and the audit the agreement makes it
+      keep. No public case; rated on the mechanism.
+    at: [gateway->peerVendor, gateway->partner, govObservability]
+    risks: [riskAgentDelegationChainOpacity]
+    atlas: []
+    owasp: [ASI07, ASI08]
+    controls: [cap-agent-tracing, cap-agent-kill-switch, D3-CTS, cap-ai-vendor-assessment]
+  - id: T7
+    title: "Endless streams and oversized artifacts run up your bill"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      A peer's streams and results land in your context and on your inference bill. The
+      protocol has no quotas and a contract does not bound them, so a looping or hostile peer
+      inflates what every task costs, and its retries and sub-tasks multiply it. Rated on the
+      mechanism.
+    at: [gateway->partner, gateway->peerVendor, gateway->provider]
+    risks: [riskEconomicDenialOfWallet]
+    atlas: [AML.T0034.001, AML.T0034.002]
+    owasp: [LLM06:2026, ASI08]
+    controls: [AML.M0036]
+coverage:
+  - { id: "LLM05:2026", why: "No training data or index of yours is fed by peers; a peer's artifact written to memory is treated as injection." }
+  - { id: "LLM07:2026", why: "A plausible but wrong artifact is untrusted content like any other; the action policy bounds what it can cause." }
+  - { id: "LLM09:2026", why: "No vector store or embeddings are drawn on this pattern." }
+  - { id: "ASI05", why: "Peers return artifacts, not code your agent runs; nothing on the drawing executes what a peer sends." }
+  - { id: "ASI09", why: "The person sees which organisation a task will go to before it is sent; a peer reaches them only through your agent." }
+questions:
+  - "Does every outbound token name one peer and one skill, and can a peer's inbound token ever reach your tool servers?"
+  - "Which peers may be told about which of your users, and where is that decided and reviewed?"
+  - "Is each peer's card pinned by fingerprint and checked on every task, and what happens when it changes?"
+  - "What screens a peer's artifacts before your agent reads or remembers them, and what may your agent do on one?"
+  - "What is redacted from outbound tasks, and does the person see which organisation a task goes to?"
+  - "Can you cut a peer off in one action, including tasks already running, and join both organisations' records on one task?"
