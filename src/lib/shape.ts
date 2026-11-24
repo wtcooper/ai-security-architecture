@@ -515,6 +515,22 @@ export function walkOn(archetype: Archetype, walk: Scenario): Scenario {
   return out;
 }
 
+/**
+ * Places on the pattern (block ids and "from->to" arrows, either way round) as drawn on a
+ * platform's copy: an arrow split by an inserted box is each of its legs, a rerouted arrow is
+ * the arrow it became, and an arrow not drawn there is left out. Boxes keep their ids.
+ */
+export function placesOn(archetype: Archetype, places: string[]): string[] {
+  const d = archetype.drawn;
+  if (!d) return places;
+  return places.flatMap((p) => {
+    if (!p.includes("->")) return [p];
+    const forward = Object.prototype.hasOwnProperty.call(d.follows, p);
+    const keys = d.follows[forward ? p : reverse(p)];
+    return keys ?? [p];
+  });
+}
+
 /** One change as How it works lists it: where on the drawing, and why it is drawn so. */
 export interface ShapeLine {
   /** The box id or arrow key it draws. */

@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * One pattern: what it is and when it applies, its drawing, then the tabs beneath. Enable comes
- * first because it is what a reader came for; how the pattern works, where risk enters, how
- * data flows and the incidents that happened on it sit behind it. The pattern itself is fixed by the address
- * (`/patterns/<slug>/`); the tab, the cloud it is shown as built on, how it is hosted there, the
- * stack chosen (`stack=`, `addons=`) and the open product ride in the query, the open control in
- * the anchor, so every view of a pattern can be shared and comes back with Back.
+ * One pattern: what it is and when it applies, its drawing, then the tabs beneath: how it works
+ * (the default), its threat model, Enable, where it is put in place, how data flows and the
+ * incidents that happened on it. The pattern itself is fixed by the address
+ * (`/patterns/<slug>/`); the tab, the open threat (`threat=`), the cloud it is shown as built on,
+ * how it is hosted there, the stack chosen (`stack=`, `addons=`), the open product and whether
+ * the drawing tags every risk (`risks=1`) ride in the query, the open control in the anchor, so
+ * every view of a pattern can be shared and comes back with Back.
  */
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -33,6 +34,9 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
   const linkedPlatform = tool0?.platform && tool0.architecture === archetype.id ? tool0.platform : null;
   const linkedProduct = linkedPlatform ?? (linkedTool && productsForArchetype(archetype.id).some((p) => p.id === linkedTool) ? linkedTool : null);
   const linkedTab = params.get("tab") as PatternTab | null;
+  // The threat open on the Threat model tab, and whether the drawing tags every pinned risk.
+  const linkedThreat = params.get("threat");
+  const linkedRisks = params.get("risks") === "1";
   // The cloud the pattern is shown as built on: `?cloud=aws`, or an older link that opened the cloud as a product.
   const linkedCloud = cloudProductFor(archetype.id, cloudFromSlug(params.get("cloud") ?? (linkedProduct && cloudById.has(linkedProduct) ? linkedProduct : null))?.id ?? null)?.id ?? null;
   // A product named in the address opens the settings step on it, whether a tool or a cloud.
@@ -58,10 +62,14 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
   const [walkIndex, setWalkIndex] = useState<number | null>(tab === "flows" ? 0 : null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
   const [selected, setSelected] = useState<{ tool: string } | null>(linkedToolOnly ? { tool: linkedToolOnly } : null);
+  const [threat, setThreat] = useState<string | null>(linkedThreat);
+  const [showRisks, setShowRisks] = useState(linkedRisks);
+  // A threat named by a link from this page (search) is scrolled to once its row has opened.
+  const [revealThreat, setRevealThreat] = useState<string | null>(null);
 
   // A link to this page from this page (search, say) changes the URL but not the mounted view:
   // adopt what it names. Our own replaceState echoes back here too, but matches the state already.
-  const linkKey = `${linkedTab}|${linkedTool}|${linkedCloud}|${linkedHost}|${linkedStackKey}`;
+  const linkKey = `${linkedTab}|${linkedTool}|${linkedCloud}|${linkedHost}|${linkedStackKey}|${linkedThreat}|${linkedRisks}`;
   const [seenKey, setSeenKey] = useState(linkKey);
   if (linkKey !== seenKey) {
     setSeenKey(linkKey);
@@ -71,7 +79,20 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     if (linkedCloud !== cloud) setCloud(linkedCloud);
     if (linkedHost !== host) setHost(linkedHost);
     if (linkedStack.pack !== stack.pack || linkedStack.addons.join(",") !== stack.addons.join(",")) setStack(linkedStack);
+    if (linkedThreat !== threat) {
+      setThreat(linkedThreat);
+      setRevealThreat(linkedThreat);
+    }
+    if (linkedRisks !== showRisks) setShowRisks(linkedRisks);
   }
+  useEffect(() => {
+    if (!revealThreat) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`threat-${revealThreat}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setRevealThreat(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [revealThreat]);
 
   // A product of another pattern in the address belongs on that pattern's page (a platform's own
   // service, on that platform). The address is left alone meanwhile, or the forward would lose it.
@@ -99,9 +120,10 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
         setHighlight({ kind: "mitigation", id: control });
       }
       setArrived(true);
-      const target = control ? `control-${control}` : linkedToolOnly ? "tools" : linkedTab || linkedCloud ? "pattern-drawing" : null;
+      const threatRow = !control && linkedTab === "threats" && linkedThreat ? `threat-${linkedThreat}` : null;
+      const target = control ? `control-${control}` : threatRow ?? (linkedToolOnly ? "tools" : linkedTab || linkedCloud ? "pattern-drawing" : null);
       // A further frame, so the opened row has been painted before it is measured.
-      if (target) requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: control ? "center" : "start" }));
+      if (target) requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: control || threatRow ? "center" : "start" }));
     });
     return () => cancelAnimationFrame(frame);
     // Arrival only: later tab changes are the reader's own and should not move the page.
@@ -114,6 +136,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     if (!arrived || elsewhere) return;
     const query = new URLSearchParams();
     if (tab !== "overview") query.set("tab", tab);
+    if (tab === "threats" && threat) query.set("threat", threat);
     if (cloud) query.set("cloud", cloudSlug(cloud));
     if (cloud && host) query.set("host", host);
     if (cloud && stack.pack) query.set("stack", stack.pack);
@@ -121,9 +144,10 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     // The open product stays in the address, a cloud included: the address is read back into
     // this page's state, so leaving it out would fold the step the reader just opened.
     if (tab === "enable" && selected) query.set("tool", selected.tool);
+    if (showRisks) query.set("risks", "1");
     const open = tab === "enable" && highlight?.kind === "mitigation" ? `#control-${highlight.id}` : "";
     window.history.replaceState(null, "", `${window.location.pathname}${query.size ? `?${query}` : ""}${open}`);
-  }, [arrived, elsewhere, tab, selected, highlight, cloud, host, stack]);
+  }, [arrived, elsewhere, tab, selected, highlight, cloud, host, stack, threat, showRisks]);
 
   const onWalk = (i: number | null) => {
     setWalkIndex(i);
@@ -202,6 +226,10 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
           }}
           stack={stack}
           onStack={setStack}
+          threat={threat}
+          onThreat={setThreat}
+          showRisks={showRisks}
+          onShowRisks={setShowRisks}
         />
       </div>
     </>

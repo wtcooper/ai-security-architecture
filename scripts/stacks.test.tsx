@@ -7,7 +7,6 @@ import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks
 import { PatternPage } from "../src/components/patterns/PatternPage";
 import { ChooseBuild } from "../src/components/enable/ChooseBuild";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
-import { ComponentList } from "../src/components/reference/ArchetypeDetail";
 import { BoxDiagram } from "../src/components/drawing/BoxDiagram";
 import { boundaryLayout } from "../src/components/drawing/layout";
 import {
@@ -290,7 +289,7 @@ test("the address carries the stack: unknown or unoffered packs are dropped, and
   assert.match(html, /data-cloud-caption[^>]*>[^<]*Red Hat OpenShift AI/, "the caption names the pack");
 });
 
-test("every box with options lists them in its hover help and under How it works, the one in effect marked", () => {
+test("every box with options lists them in its hover help and in the options table on Enable, the one in effect marked", () => {
   for (const a of hosted) {
     const p = onpremOf(a.id);
     if (!p) continue;
@@ -303,16 +302,19 @@ test("every box with options lists them in its hover help and under How it works
       const on = productsInEffect(b, { pack: UP, addons: [] }, isControlBox(a, b.block));
       for (const o of on) assert.ok(g.includes(`${esc(o.name)} (${o.kind === "open" ? "open source" : "commercial"}, in effect)`), `${a.id} ${b.block}: ${o.name} marked in effect`);
     }
-    const list = renderToStaticMarkup(<ComponentList archetype={a} cloud={p} stack={{ pack: UP, addons: [] }} />);
+    // On Enable, the options table lists every option with its page, its watch notes in its hover, the ones in effect marked.
+    const table = renderToStaticMarkup(
+      <ChooseBuild archetype={a} products={productsForArchetype(a.id)} platform={p} framework={null} host={null} stack={{ pack: UP, addons: [] }} onStack={() => {}} onPickPlatform={() => {}} onPickHost={() => {}} onPickFramework={() => {}} />,
+    );
     for (const b of bound) {
-      assert.match(list, new RegExp(`data-component-options="${b.block}"`), `${a.id} ${b.block}: its options under How it works`);
+      const row = table.slice(table.indexOf(`data-role-row="${b.block}"`));
       for (const o of b.options!) {
-        assert.ok(list.includes(`data-component-option="${esc(o.name)}"`), `${a.id} ${b.block}: ${o.name}`);
-        assert.ok(list.includes(`href="${esc(o.url)}"`), `${a.id} ${b.block}: ${o.name} links to its page`);
-        for (const w of o.watch ?? []) assert.ok(list.includes(esc(w.text)), `${a.id} ${b.block}: ${o.name}'s watch note`);
+        const li = row.match(new RegExp(`<li[^>]*data-option="${esc(o.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[\\s\\S]*?</li>`))?.[0] ?? "";
+        assert.ok(li.includes(`href="${esc(o.url)}"`), `${a.id} ${b.block}: ${o.name} links to its page`);
+        for (const w of o.watch ?? []) assert.ok(li.includes(esc(w.text)), `${a.id} ${b.block}: ${o.name}'s watch note`);
       }
     }
-    assert.match(list, /data-component-in-effect/, `${a.id}: says what the stack puts in each box`);
+    assert.match(table, /data-in-effect="true"/, `${a.id}: says what the stack puts in each box`);
   }
 });
 

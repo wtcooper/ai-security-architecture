@@ -141,7 +141,8 @@ test(
       const contracted = a.blocks.some((b) => b.kind === "provider" && (a.zones ?? []).find((z) => z.id === b.zone)?.owner === "external");
       if (contracted) assert.doesNotMatch(html, /no agreement/, `${a.id}: a contracted provider is not tagged "no agreement"`);
       // The drawing's own words (everything but the pattern's text) use the reader's vocabulary.
-      const chrome = html.replace(/<text[^>]*>[\s\S]*?<\/text>/g, "").replace(/aria-label="[^"]*: trust-boundary drawing"/, "");
+      // A box's accessible description repeats what it holds, which is the pattern's own text.
+      const chrome = html.replace(/<text[^>]*>[\s\S]*?<\/text>/g, "").replace(/aria-label="[^"]*: trust-boundary drawing"/, "").replace(/aria-description="[^"]*"/g, "");
       assert.doesNotMatch(chrome, /capabilit|archetype|architecture/i, `${a.id}: reader-facing words`);
     }
   }),

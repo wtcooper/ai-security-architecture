@@ -6,10 +6,13 @@
  */
 import { archetypeById, toolById } from "@/lib/data";
 
-/** The tabs of a pattern page. Enable is the default and is left out of the address. */
-/** A pattern page opens on How it works ("overview"); Enable is where it is put in place. Risks are a section of How it works. */
-export type PatternTab = "overview" | "enable" | "flows" | "incidents";
-export const PATTERN_TABS: PatternTab[] = ["overview", "enable", "flows", "incidents"];
+/**
+ * The tabs of a pattern page, in their order. A page opens on How it works ("overview"), which is
+ * left out of the address; the threat model follows it, then Enable, where the pattern is put in
+ * place. Risks are a section of How it works.
+ */
+export type PatternTab = "overview" | "threats" | "enable" | "flows" | "incidents";
+export const PATTERN_TABS: PatternTab[] = ["overview", "threats", "enable", "flows", "incidents"];
 
 export const ROUTES = {
   home: "/",
@@ -29,13 +32,16 @@ export const ROUTES = {
 /** "cloudAws" -> "aws": how a cloud is named in an address. */
 export const cloudSlug = (cloudId: string) => cloudId.replace(/^cloud/, "").toLowerCase();
 
-/** A pattern's page, optionally on a tab, as built on a cloud, with a product open, or at one control's row. */
-export function patternHref(archetypeId: string, opts: { tab?: PatternTab; tool?: string; control?: string; cloud?: string } = {}): string {
+/** A pattern's page, optionally on a tab, as built on a cloud, with a product open, at one control's row, or with one threat open. */
+export function patternHref(archetypeId: string, opts: { tab?: PatternTab; tool?: string; control?: string; cloud?: string; threat?: string } = {}): string {
   const arch = archetypeById.get(archetypeId);
   if (!arch) return ROUTES.patterns;
   const query = new URLSearchParams();
   // How it works is the default; a product or a control opens Enable by itself, so neither needs the tab named.
-  if (opts.tab && opts.tab !== "overview" && !(opts.tab === "enable" && (opts.tool || opts.control))) query.set("tab", opts.tab);
+  // A threat is a row of the Threat model tab, so naming one names the tab.
+  const tab = opts.threat ? "threats" : opts.tab;
+  if (tab && tab !== "overview" && !(tab === "enable" && (opts.tool || opts.control))) query.set("tab", tab);
+  if (opts.threat) query.set("threat", opts.threat);
   if (opts.cloud) query.set("cloud", cloudSlug(opts.cloud));
   if (opts.tool) query.set("tool", opts.tool);
   return `${ROUTES.patterns}/${arch.slug}${query.size ? `?${query}` : ""}${opts.control ? `#control-${opts.control}` : ""}`;

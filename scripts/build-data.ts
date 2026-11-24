@@ -18,6 +18,7 @@ import { loadEnablement, loadOrgControls } from "./lib/enablement";
 import { standIn } from "../src/components/drawing/crossings";
 import { checkSettings, loadClouds, loadProductStatus } from "./lib/products";
 import { loadSpecializations } from "./lib/specializations";
+import { loadThreatModels } from "./lib/threat-models";
 import { CROSSING_KINDS } from "../src/lib/types";
 
 import type {
@@ -374,6 +375,15 @@ async function main() {
     for (const id of Object.keys(doc.patterns ?? {})) if (!archetypes.some((a) => a.id === id)) fail(`patterns.yaml: unknown architecture ${id}`);
   }
 
+  // --- Threat models (data/reference/threat-models/), named after each pattern's file ------------
+  const { threatModels, atlasTechniques } = await loadThreatModels(ROOT, {
+    archetypes,
+    riskIds,
+    incidentIds: new Set(incidents.map((i) => i.id)),
+    frameworkEntries,
+    fail,
+  });
+
   // --- Enable layers and the organisation's own controls (data/org/) -----------------
   const enablement = await loadEnablement(ROOT, mitigationsDoc.mitigations, mitigationsDoc.surfaces, archetypes, frameworkEntries["nist-csf"] ?? {});
   // The CSF crosswalk for controls is the Enable grouping itself, so the two cannot disagree.
@@ -483,6 +493,7 @@ async function main() {
         tools: tools.length,
         vendors: toolingLoaded.vendors.length,
         statuses: Object.values(status).filter((s) => s.status).length,
+        threatModels: threatModels.length,
       },
     },
     componentCategories: componentsDoc.categories,
@@ -518,6 +529,8 @@ async function main() {
     productStatus,
     clouds,
     enablement,
+    threatModels,
+    atlasTechniques,
   };
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -529,7 +542,7 @@ async function main() {
       `${authored} authored), ${controls.length} CoSAI controls, ${components.length} components, ` +
       `${incidents.length} incidents, ${mitigationsDoc.mitigations.length} controls in the catalogue, ` +
       `${archetypes.length} archetypes, ${guidance.length} guidance docs, ` +
-      `${tools.length} tools, ${orgControls.length} of your own controls recorded`,
+      `${tools.length} tools, ${threatModels.length} threat models, ${orgControls.length} of your own controls recorded`,
   );
 }
 

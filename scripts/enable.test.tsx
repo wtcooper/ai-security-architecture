@@ -8,10 +8,8 @@ import { ControlTable } from "../src/components/enable/ControlTable";
 import { PatternPage } from "../src/components/patterns/PatternPage";
 import { PatternRisks } from "../src/components/patterns/PatternPanels";
 import { PatternFinder } from "../src/components/patterns/PatternFinder";
-import { ArchetypeDetail, ComponentList } from "../src/components/reference/ArchetypeDetail";
 import HomePage from "../src/app/page";
 import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
-import { CloudComparison } from "../src/components/cloud/CloudViews";
 import { cloudOptionsForControl, cloudProductsFor, cloudSlug, optionsFor } from "../src/components/cloud/model";
 import { ControlDetail } from "../src/components/controls/ControlDetail";
 import { ProductSettings, SettingsTable } from "../src/components/enable/ProductSettings";
@@ -218,9 +216,10 @@ test("a pattern opens on How it works, with a link to Enable; a tab link opens t
   assert.doesNotMatch(home, /id="controls"/);
   assert.match(home, /Use this pattern when: /);
   assert.ok(home.includes(arch.useWhen.replace(/'/g, "&#x27;")), "the header says when the pattern applies");
-  // Four tabs: How it works, Enable, Data flows, Incidents. The risks are a section of How it works.
+  // Five tabs: How it works, Threat model, Enable, Data flows, Incidents. The risks are a section of How it works.
   const labels = [...home.matchAll(/role="tab"[^>]*>([A-Za-z ]+)/g)].map((m) => m[1].trim());
-  assert.deepEqual(labels.slice(0, 4), ["How it works", "Enable", "Data flows", "Incidents"]);
+  assert.deepEqual(labels.slice(0, 5), ["How it works", "Threat model", "Enable", "Data flows", "Incidents"]);
+  assert.match(page(arch.id, "tab=threats"), /role="tab"[^>]*aria-selected="true"[^>]*>Threat model/, "the threat model has its own address");
   assert.match(home, new RegExp(`>Risks<span[^>]*>\\s*${arch.risks.length}<`), "the risks are a section of How it works");
   assert.match(page(arch.id, "tab=enable"), /id="controls"/);
   // An old link to the Risks tab lands on How it works.
@@ -239,7 +238,7 @@ test("a pattern opens on How it works, with a link to Enable; a tab link opens t
   assert.match(linked, new RegExp(`id="setting-${tool.id}-|not catalogued row by row`), "the product's settings are open");
 });
 
-test("a pattern page shows its summary and examples in the header, and How it works opens on its overview", () => {
+test("a pattern page shows its summary and examples in the header; How it works is the overview, the description and three folds", () => {
   const text = (blocks: unknown) => (Array.isArray(blocks) ? blocks.map((b) => (Array.isArray(b) ? b.join(" ") : String(b))).join(" ") : String(blocks ?? "")).replace(/\s+/g, " ").trim();
   const seen = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ");
   for (const arch of dataset.archetypes) {
@@ -251,8 +250,20 @@ test("a pattern page shows its summary and examples in the header, and How it wo
     // drawing and a separate "why its own pattern" are not for the reader.
     assert.ok(seen(how).includes(arch.overview.trim().slice(0, 80)), `${arch.id}: the overview`);
     assert.doesNotMatch(how, /How to govern this pattern|Why this is its own pattern|departs from the catalogue|data-guidance-item/, `${arch.id}: no authors' sections`);
-    if (arch.exemplars?.length) assert.match(how, new RegExp(`Examples[^<]*(<[^>]+>\\s*)*${arch.exemplars.length}`), `${arch.id}: examples section`);
-    assert.match(how, /Sources/, arch.id);
+    // Then "In more detail": the description, shown plainly.
+    assert.match(how, /In more detail/, `${arch.id}: the description follows the overview`);
+    for (const para of arch.description) assert.ok(seen(how).includes(text([para]).slice(0, 60)), `${arch.id}: "${text([para]).slice(0, 30)}" is shown`);
+    assert.ok(how.indexOf("data-overview") < how.indexOf("data-detail"), `${arch.id}: overview first`);
+    // No components, examples or side-by-side folds: the header names the examples and the drawing's hover help each box's options.
+    assert.doesNotMatch(how, />Components<|>Examples<|>Each (?:platform|cloud) side by side<|data-cloud-comparison|data-component=|data-example=/, `${arch.id}: the removed folds are gone`);
+    for (const q of cloudProductsFor(arch.id).map((p) => `tab=overview&cloud=${cloudSlug(p.id)}`)) {
+      const on = page(arch.id, q);
+      assert.doesNotMatch(on, />Components<|>Examples<|>Each (?:platform|cloud) side by side<|data-cloud-comparison|data-component=/, `${arch.id} ${q}: the removed folds are gone`);
+      // One fold for the platform, then the sources last.
+      assert.equal([...on.matchAll(/data-on-cloud="/g)].length, 1, `${arch.id} ${q}: one fold for the platform`);
+      assert.ok(on.lastIndexOf(">Sources<") > on.indexOf("data-on-cloud="), `${arch.id} ${q}: sources come last`);
+    }
+    assert.match(how, />Sources</, arch.id);
   }
 });
 
@@ -277,25 +288,17 @@ test("a cloud architecture lists its clouds first, binds every component and cov
       const product = products.find((p) => p.id === cloud.id)!;
       const delivered = new Set(product.settings.flatMap((s) => s.mitigations));
       for (const id of arch.mitigations) assert.ok(delivered.has(id), `${cloud.id} ${arch.id}: ${id} has a row`);
-      // What plays each component is named on the drawing and listed, with its note, under How it works.
-      const cloudProduct = cloudProductsFor(arch.id).find((p) => p.id === cloud.id)!;
-      const html = renderToStaticMarkup(<ComponentList archetype={arch} cloud={cloudProduct} />);
-      for (const b of impl.bindings) {
-        assert.ok(html.includes(esc(b.service)), `${cloud.id} ${arch.id}: ${b.block} binding shown`);
-        if (b.note) assert.ok(html.includes(esc(b.note)), `${cloud.id} ${arch.id}: ${b.block} note shown`);
-      }
     }
   }
 });
 
-test("How it works lists every component and everything each one holds, so nothing is hover-only", () => {
-  const seen = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ");
+test("what a box holds is in its hover help and its accessible description, now How it works has no component list", () => {
   for (const arch of dataset.archetypes) {
-    assert.match(page(arch.id, "tab=overview"), new RegExp(`Components[^<]*(<[^>]+>\\s*)*${arch.blocks.length}`), `${arch.id}: components section`);
-    const html = renderToStaticMarkup(<ComponentList archetype={arch} />);
-    const text = seen(html);
-    assert.equal([...html.matchAll(/data-component="/g)].length, arch.blocks.length, `${arch.id}: every box once`);
-    for (const b of arch.blocks) for (const item of b.items ?? []) assert.ok(text.includes(item.label), `${arch.id}: ${b.id} holds ${item.label}`);
+    const html = page(arch.id);
+    for (const b of arch.blocks.filter((x) => x.items?.length)) {
+      const g = html.match(new RegExp(`<g data-block="${b.id}"[^>]*>`))?.[0] ?? "";
+      for (const item of b.items!) assert.ok(g.includes(esc(item.label)), `${arch.id}: ${b.id} holds ${item.label}`);
+    }
   }
 });
 
@@ -348,7 +351,7 @@ test("a pattern read as built on a cloud names every component's service and tha
   }
 });
 
-test("an open control gives each cloud option's place, value and reason; How it works compares the clouds side by side", () => {
+test("an open control gives each cloud option's place, value and reason", () => {
   const arch = dataset.archetypes.find((a) => a.id === "archChatAgent")!;
   const [product] = cloudProductsFor(arch.id);
   const control = arch.mitigations[0];
@@ -358,17 +361,6 @@ test("an open control gives each cloud option's place, value and reason; How it 
   for (const s of optionsFor(product, control)) {
     assert.match(html, new RegExp(`data-native-options="${product.id}"`));
     for (const text of [s.name, s.where, s.recommended, s.why]) assert.ok(html.includes(esc(text)), `the open control shows "${text.slice(0, 40)}"`);
-  }
-  for (const a of dataset.archetypes) {
-    const products = cloudProductsFor(a.id);
-    if (!products.length) continue;
-    if (products.length > 1) assert.match(page(a.id, `tab=overview&cloud=${cloudSlug(products[0].id)}`), /side by side/, `${a.id}: the platforms can be compared side by side`);
-    const list = renderToStaticMarkup(<ComponentList archetype={a} cloud={products[0]} />);
-    assert.equal([...list.matchAll(/data-component-service/g)].length, products[0].implementation.bindings.length, `${a.id}: every named component shows its service`);
-    const table = renderToStaticMarkup(<CloudComparison archetype={a} products={products} />);
-    // A control-plane box is compared by the settings that deliver its controls, wherever a platform also lists its options.
-    const control = new Set(a.blocks.filter((b) => b.kind === "governance").map((b) => b.id));
-    for (const p of products) for (const b of p.implementation.bindings) if (!control.has(b.block)) assert.ok(table.includes(esc(b.service)), `${a.id}: ${p.cloud.short} ${b.block}`);
   }
 });
 
