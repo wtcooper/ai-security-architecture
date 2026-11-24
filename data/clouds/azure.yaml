@@ -243,6 +243,19 @@ settings:
     mitigations: [D3-APA]
     url: https://learn.microsoft.com/en-us/azure/app-service/overview-authentication-authorization
     verified: "2026-10-30"
+  - id: appServiceAccessRestrictions
+    name: "Access restrictions: app access and site access rules"
+    product: "App Service"
+    where: "App Service or function app › Networking: app access (publicNetworkAccess) and site access rules, or a private endpoint"
+    setVia: [cloudPolicy, apiCli]
+    area: network
+    default: "The default entry point is public; with no rules the unmatched rule allows all access"
+    recommended: "Admit only API Management: a private endpoint reached from the gateway's virtual network with public app access disabled, or site access rules for the gateway's subnet (service endpoint) or its service tag, with the unmatched rule set to Deny. Apply the same to the advanced tools (scm) site. Traffic through a private endpoint bypasses access restrictions, so limit it with network security groups"
+    value: "Only API Management; unmatched traffic denied"
+    why: "A server reachable at its own public address lets a caller skip the gateway's token check, rate limits and logs."
+    mitigations: [AML.M0028]
+    url: https://learn.microsoft.com/en-us/azure/app-service/overview-access-restrictions
+    verified: "2026-11-24"
   - id: agentManagedIdentity
     name: Managed identity on the agent's container app
     where: Container Apps › (agent app) › Identity
@@ -261,9 +274,10 @@ settings:
     setVia: [cloudPolicy, apiCli]
     area: identity
     default: "false (API keys allowed)"
-    recommended: "true"
-    why: Model calls need an Entra token; an API key copied from a config file opens nothing. Enforce it fleet-wide with Azure Policy.
-    mitigations: [D3-CH]
+    recommended: "true, with Foundry model roles held only by the AI gateway's managed identity and public network access disabled, so the agent's model client must point at the gateway"
+    why: "Model calls need an Entra token; an API key copied from a config file opens nothing. Microsoft's baseline has the agent call the Foundry endpoint directly, so model calls cross the gateway only once keys are off and no identity but the gateway's holds a model role. Enforce it fleet-wide with Azure Policy."
+    mitigations: [D3-CH, D3-AA]
+    value: "true; model roles for the gateway's identity only"
     url: https://learn.microsoft.com/en-us/azure/ai-services/disable-local-auth
     verified: "2026-10-30"
   - id: apimValidateToken
@@ -279,6 +293,19 @@ settings:
     mitigations: [D3-AA, AML.M0028]
     url: https://learn.microsoft.com/en-us/azure/api-management/validate-azure-ad-token-policy
     verified: "2026-11-18"
+  - id: apimForwardAuthorization
+    name: Forward tokens to backend (Authorization as a required header, set-header in the outbound policy)
+    product: "API Management"
+    where: API Management › the MCP server's API settings (Authorization as a required header) and its outbound policy (set-header name="Authorization" exists-action="override")
+    setVia: [cloudPolicy]
+    area: identity
+    default: "Request headers are forwarded to MCP tool invocations with certain exclusions; Microsoft says to forward Authorization explicitly when the backend validates incoming requests"
+    recommended: "Define Authorization as a required header on the MCP server and forward it with set-header, so the server receives the caller's own token on every call and validates it itself; never replace it with a gateway-wide credential"
+    value: "Caller's Authorization forwarded on every call"
+    why: "The server checks the caller's token on each call only if it arrives: without the header it can neither authenticate the caller nor narrow the call to the caller's scopes and tenant."
+    mitigations: [D3-AA]
+    url: https://learn.microsoft.com/en-us/azure/api-management/secure-mcp-servers
+    verified: "2026-11-24"
   - id: apimCredentialManager
     name: Credential manager (user-delegated connections)
     product: "API Management"
@@ -342,12 +369,24 @@ settings:
     where: "Microsoft Entra admin center › App registrations › (MCP server) › Expose an API"
     setVia: [identityProvider]
     area: identity
-    recommended: "An Application ID URI that uniquely identifies the server, repeated exactly as the resource value in the server's protected resource metadata. Microsoft's guidance supports v2.0 access tokens only"
+    recommended: "An Application ID URI that uniquely identifies the server, repeated exactly as the resource value in the server's protected resource metadata. Behind a gateway that metadata, the address clients call and the URI name the same canonical URL; App Service publishes the metadata (preview) for the address it was reached on. Microsoft's guidance supports v2.0 access tokens only"
     value: "A unique URI, matching the metadata resource value"
     why: "Clients request tokens for this URI, and the server accepts only tokens whose aud is this app registration's client ID (v2.0 tokens carry the GUID, not the URI), so one minted for another resource is refused. The same metadata names the authorization server, https://login.microsoftonline.com/<tenant>/oauth21/2026-08."
     mitigations: [D3-CTS]
     url: https://learn.microsoft.com/en-us/entra/agent-id/secure-mcp-server-with-entra-id
     verified: "2026-11-18"
+  - id: entraCimdUserConsent
+    name: User consent settings (Client ID Metadata Document clients)
+    where: Microsoft Entra admin center › Entra ID › Enterprise apps › Consent and permissions › User consent settings; or a custom user consent policy with clientApplicationsFromVerifiedPublisherOnly set to true
+    setVia: [identityProvider]
+    area: identity
+    default: "Users can sign in to any CIMD client, which creates an agent identity in the tenant, and grant it basic scopes such as openid and User.Read; risk-based step-up consent sends other permissions to an administrator"
+    recommended: "The strict posture where only pre-registered clients may connect: Do not allow user consent, or a consent policy that admits verified publishers only (CIMD clients cannot be publisher verified). An administrator adds each approved CIMD client as an agent identity and grants its scopes. These settings revoke no existing grant, so review those separately. Client ID Metadata Document support is public preview"
+    value: "No user consent to CIMD or other unverified clients"
+    why: "Anyone can publish a metadata document, and owning a URL does not make a client trustworthy; without this, a user's consent alone adds an unknown MCP client to the tenant."
+    mitigations: [D3-APA]
+    url: https://learn.microsoft.com/en-us/entra/agent-id/manage-client-id-metadata-document-clients
+    verified: "2026-11-24"
   - id: entraApiScopes
     name: Scopes (Expose an API › Add a scope)
     where: Microsoft Entra admin center › App registrations › (MCP server) › Expose an API
@@ -433,7 +472,7 @@ settings:
     where: Key Vault (signing vault, Azure RBAC permission model) › Access control (IAM)
     setVia: [cloudPolicy]
     area: identity
-    recommended: Assigned only to the promotion pipeline's identity, which runs after a separate human approval
+    recommended: "Assigned only to the promotion pipeline's identity, which runs after a separate human approval. Azure Machine Learning has no built-in approval gate or signing, so the approval is that pipeline's own gate: MLOps v2 promotes models through CI pipelines gated by human-in-the-loop approval, in Azure Pipelines or GitHub Actions"
     value: "Promotion pipeline's identity only"
     why: "Only the promotion step can produce a release signature, so a signed model proves the gate was passed: the training job cannot sign its own output."
     mitigations: [AML.M0013]
@@ -512,13 +551,25 @@ settings:
     mitigations: [AML.M0031]
     url: https://learn.microsoft.com/en-us/azure/durable-task/scheduler/durable-task-scheduler-auto-purge
     verified: "2026-10-30"
+  - id: dtsTaskHubRoles
+    name: Durable Task Scheduler roles (Durable Task Worker, Durable Task Data Contributor) at task hub scope
+    where: Durable Task Scheduler › (scheduler) › (task hub) › Access control (IAM); private endpoints for private connectivity to the scheduler
+    setVia: [cloudPolicy, apiCli]
+    area: identity
+    default: "No identity can reach a task hub until a role is assigned; apps connect to {scheduler}.{region}.durabletask.io over the public internet unless a private endpoint is added"
+    recommended: "Assign at task hub scope, not scheduler scope: Durable Task Worker to identities that only process orchestrations and activities, Durable Task Data Contributor only to the host that starts runs and passes the operator's answer, and people Durable Task Data Reader at most, where they need to read runs. Route the workers to the scheduler through a private endpoint"
+    value: "Task hub scope; Worker role where it suffices"
+    why: "The journal of every step lives in the scheduler, not your database, so the roles on its task hub decide who can read a run's state, start one or change it."
+    mitigations: [AML.M0031]
+    url: https://learn.microsoft.com/en-us/azure/durable-task/scheduler/durable-task-scheduler-identity
+    verified: "2026-11-24"
   - id: tenantClaimValidation
     name: Validate the tenant (tid) and subject claims
     where: "Your server's handlers: every read and write keyed by the token's tid and oid"
     setVia: [code]
     area: data
     default: Not enforced by the protocol or the platform
-    recommended: Every record access filtered to the caller's tenant and delegation; never data from one tenant served to another
+    recommended: "Every record access filtered to the caller's tenant and delegation; never data from one tenant served to another. Entra's on-behalf-of exchange works only for tokens that carry a user, so for an autonomous caller with an app-only token the handler reads with the server's own managed identity and filters by the caller's tenant itself"
     value: "Every access filtered to the caller's tenant"
     why: MCP has no notion of a tenant, so the token's tenant claim checked in the handler is the only thing keeping one customer's records from another's caller.
     mitigations: [cap-data-access-governance]
@@ -580,7 +631,7 @@ settings:
     where: "Azure Machine Learning › Data › (asset): referenced as azureml:<name>:<version>, with source and licence recorded as tags"
     setVia: [apiCli, code]
     area: data
-    recommended: Every training input registered as a data asset version with its source and licence; jobs read assets by version, never by raw path
+    recommended: "Every training input registered as a data asset version with its source and licence; jobs read assets by version, never by raw path. A version only points at a storage path, so write each corpus version to a new path with Blob versioning or immutability on"
     value: "Every input a versioned data asset, read by version"
     why: A version is immutable, so the exact bytes a run consumed, and where they came from, can be named after the fact.
     mitigations: [AML.M0025]
@@ -623,6 +674,18 @@ settings:
     mitigations: [AML.M0023]
     url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-models
     verified: "2026-10-30"
+  - id: amlStorageRegistryInstanceRule
+    name: "Public network access: Enabled from selected virtual networks and IP addresses, with a resource instance rule for the registry"
+    where: Storage account attached to the training workspace › Networking › Public network access › Resource instances › Resource type Microsoft.MachineLearningServices/registries, instance name of your registry
+    setVia: [cloudPolicy]
+    area: network
+    default: "With public network access disabled on the workspace's storage account, sharing a model from the workspace to the registry fails"
+    recommended: "Set the workspace storage account to Enabled from selected virtual networks and IP addresses and add one resource instance rule naming your registry, with no other public rule"
+    value: "Selected networks; one rule for your registry"
+    why: "Microsoft blocks sharing from a locked-down workspace for data exfiltration protection; this exception admits only your registry, so a candidate can be promoted without opening the store to anything else."
+    mitigations: [D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-registry-network-isolation
+    verified: "2026-11-24"
   - id: amlModelTags
     name: Model description and tags (tags.stage)
     product: "Azure Machine Learning registry"
@@ -782,7 +845,7 @@ settings:
     default: "Public versions are blocked only for a package name that already has a private version in the feed"
     recommended: "Keep the default, but do not rely on it to limit what enters the feed. Packages that are entirely public are still saved automatically when a Collaborator installs them, so give the Collaborator role only to a reviewed admission pipeline and everyone else Reader"
     value: "Default, Collaborator only for the admission pipeline"
-    why: "A public package cannot shadow an internal one of the same name. That is a dependency-confusion guard only; which public packages enter the feed is decided by who holds the Collaborator role."
+    why: "A public package cannot shadow an internal one of the same name. That is a dependency-confusion guard only: Azure Artifacts documents no review, malware, look-alike or package-age check, so which public packages enter the feed is decided by who holds the Collaborator role."
     mitigations: [D3-FA]
     url: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-behavior
     verified: "2026-11-18"
@@ -846,8 +909,9 @@ settings:
     default: No policy
     recommended: enforce-on-completions="true" on every model API with no provider-side content filter
     value: "enforce-on-completions set to true"
-    why: With open weights and no provider applying policy, the gateway checks completions as well as prompts and blocks harmful output before it is returned.
+    why: "With open weights and no provider applying policy, the gateway checks completions as well as prompts and blocks harmful output before it is returned. The gateway sends both to a separate Azure AI Content Safety resource, and on a streamed answer it ends the stream rather than returning 403."
     mitigations: [cap-output-guardrails]
+    requires: "An Azure AI Content Safety resource connected as a backend"
     url: https://learn.microsoft.com/en-us/azure/api-management/llm-content-safety-policy
     verified: "2026-10-30"
   - id: apimWeightedPool
@@ -931,7 +995,7 @@ settings:
     setVia: [apiCli, configFile]
     area: tools
     default: Pods share the host kernel
-    recommended: "Every pod that runs model-generated code uses the Kata runtime class, one pod per task, deleted after. This is an AKS setting on Azure Linux node pools only: in a training pipeline it covers steps that run model-generated code, such as RL rollouts, which belong on the agent sandbox's AKS node pools and not on the Azure Machine Learning compute cluster. Microsoft Defender for Containers cannot assess Kata pods, so detection for them must come from your own logs and network flow records"
+    recommended: "Every pod that runs model-generated code uses the Kata runtime class, one pod per task, deleted after, with a deny-by-default network policy on its namespace: Microsoft states the pod VM boundary is compute isolation only, and a sandbox pod sends and receives any traffic until a policy engine and that policy are in place. This is an AKS setting on Azure Linux node pools only: in a training pipeline it covers steps that run model-generated code, such as RL rollouts, which belong on the agent sandbox's AKS node pools and not on the Azure Machine Learning compute cluster. Microsoft Defender for Containers cannot assess Kata pods, so detection for them must come from your own logs and network flow records"
     value: "Kata runtime class, one pod per task"
     why: Generated code runs in a lightweight VM with its own guest kernel, so a container escape lands in that VM rather than on the host or beside other pods.
     mitigations: [D3-EI]
@@ -1032,8 +1096,8 @@ settings:
     where: "AKS cluster outbound type userDefinedRouting; route table on the node subnet (0.0.0.0/0 to the firewall's private IP) → Azure Firewall › Application rules"
     setVia: [cloudPolicy]
     area: network
-    default: Outbound through a Standard Load Balancer (outbound type loadBalancer), unfiltered
-    recommended: "Outbound type userDefinedRouting with the node subnet's default route on Azure Firewall, an application rule for the AzureKubernetesService FQDN tag so the cluster keeps working, and an FQDN allowlist for everything the pods may reach"
+    default: "Outbound through a Standard Load Balancer (outbound type loadBalancer), or a managed NAT gateway on AKS Automatic, unfiltered"
+    recommended: "Outbound type userDefinedRouting with the node subnet's default route on Azure Firewall, an application rule for the AzureKubernetesService FQDN tag so the cluster keeps working, and an FQDN allowlist for everything the pods may reach; or a network-isolated cluster"
     value: "userDefinedRouting through Azure Firewall, FQDN allowlist"
     why: The nodes have no outbound path but the firewall, so pods reach only the hosts you list; anything else is dropped and logged.
     mitigations: [cap-agent-egress-control]
@@ -1080,7 +1144,7 @@ settings:
     setVia: [cloudPolicy, configFile]
     area: network
     default: All pods can send and receive traffic without limitations
-    recommended: Cilium, with default deny; only the gateway reaches the serving pods, and inter-node serving traffic stays inside the namespace
+    recommended: "Cilium, with default deny; only the gateway reaches the serving pods, and inter-node serving traffic stays inside the namespace. A network policy cannot name API Management, which is not a pod, and a load balancer can rewrite source addresses, so also restrict the serving Service to the gateway's subnet range, for example with loadBalancerSourceRanges"
     value: "Cilium, default deny"
     why: The serving plane's unauthenticated job and inter-node channels are reachable from nothing else in the cluster.
     mitigations: [D3-NI]
@@ -1091,7 +1155,7 @@ settings:
     where: Azure Machine Learning workspace › Networking › Workspace managed outbound access
     setVia: [cloudPolicy, apiCli]
     area: network
-    recommended: Allow only approved outbound (Private with Approved Outbound in the portal), with the package mirror and the dataset and model storage as the only added rules
+    recommended: "Allow only approved outbound (Private with Approved Outbound in the portal), with the package mirror and the dataset and model storage as the only added rules, plus a private endpoint or outbound rule for each AI service a curation step calls (Azure AI Language, Content Safety), which receives every example, and access for the curation identity"
     value: "Allow only approved outbound"
     why: The training job can reach the stores it needs and nothing else, so a compromised dependency or a run holding the corpus has no route out.
     mitigations: [D3-NI]
@@ -1103,8 +1167,8 @@ settings:
     setVia: [cloudPolicy, configFile]
     area: network
     default: All pods can send and receive traffic without limitations
-    recommended: The offline web, the package feed and the platform services as the rollout's whole list; every other DNS request refused
-    value: "Only the offline web, package feed and platform"
+    recommended: "The package feed and the platform services outside the cluster as the rollout's whole FQDN list, every other DNS request refused. FQDN rules cannot name Kubernetes services, so in-cluster targets such as the offline web and the inference runtime are allowed with label-based Cilium policies"
+    value: "Only listed names; in-cluster targets by label"
     why: DNS requests are checked against the policy before they are answered, so a rollout cannot resolve, or tunnel through, a name that is not on its list.
     mitigations: [cap-agent-egress-control]
     requires: Advanced Container Networking Services
@@ -1280,7 +1344,7 @@ settings:
     recommended: "Enabled where the cluster's add-ons allow it. Microsoft lists Container Insights, Azure Policy and application routing among the add-ons that cannot run with it; on those clusters apply the network policy from the AKS cluster security best practices that blocks pod egress to 169.254.169.254/32 in every user namespace"
     value: "Enabled, or a network policy blocking IMDS egress"
     why: "A pod that reaches the node's metadata service can request tokens for the node's managed identity. Blocking it leaves the agent and the sandbox with only the federated workload identity you gave them."
-    mitigations: [D3-CH]
+    mitigations: [D3-CH, D3-AA]
     url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
     verified: "2026-11-18"
   - id: aksNodeOsUpgradeChannel
@@ -1314,9 +1378,9 @@ settings:
     setVia: [configFile]
     area: network
     default: "Not set; Microsoft's Gateway API examples create an external load balancer that is reachable from outside the cluster"
-    recommended: "Set on the Service or Gateway in front of the agent, so that it gets a private IP address from the cluster's virtual network and no public IP. Let only the front end and API Management reach it, and give the agent no public Service."
+    recommended: "Set on the Service or Gateway in front of the agent or the model server, so that it gets a private IP address from the cluster's virtual network and no public IP. Let only its callers (the front end, API Management) reach it, join API Management to that virtual network, and publish no public Service."
     value: "Set; private IP only, no public Service"
-    why: "A Container Apps internal environment has no public endpoint. On AKS each Service or Gateway decides this for itself, so the path from the front end and the gateway to the agent is private only where the annotation is set."
+    why: "A Container Apps internal environment has no public endpoint. On AKS each Service or Gateway decides this for itself, so the path from the front end and the gateway is private only where the annotation is set; with API Management outside the cluster's virtual network the cluster must publish public endpoints, and Microsoft then suggests mutual TLS at the ingress."
     mitigations: [D3-NI]
     url: https://learn.microsoft.com/en-us/azure/aks/internal-lb
     verified: "2026-11-18"
@@ -1328,7 +1392,7 @@ settings:
     requires: "AKS cluster with the OIDC issuer and workload identity enabled; a user-assigned managed identity with a federated credential for the pod's service account"
     recommended: "SignedAssertionFilePath, so the sidecar reads the service account token that the workload identity webhook projects into the pod and no client secret or certificate is stored. Keep the sidecar on localhost and never publish it through a LoadBalancer or Ingress."
     value: "SignedAssertionFilePath"
-    why: "The sidecar that gets the agents' tokens needs a credential of its own. On AKS that is the projected, automatically refreshed service account token, not the managed identity credential type used on VMs or App Service."
+    why: "The sidecar that gets the agents' tokens needs a credential of its own. On AKS that is the projected, automatically refreshed service account token, not the managed identity credential type used on VMs or App Service. Microsoft warns that every application inside the sidecar's trust boundary can ask it for tokens, so it stays on localhost in the agent's own pod."
     mitigations: [D3-AA, D3-CH]
     url: https://learn.microsoft.com/en-us/entra/msidweb/agent-id-sdk/scenarios/managed-identity
     verified: "2026-11-18"
@@ -1340,7 +1404,7 @@ settings:
     setVia: [identityProvider, apiCli]
     area: identity
     default: "No identity can call the pool management API until the role is assigned"
-    recommended: "Assign the role at the scope of the one session pool to the orchestrator's and harness's workload identity only, never to people or to graders, and request tokens for the audience https://dynamicsessions.io."
+    recommended: "Assign the role at the scope of the one session pool to the orchestrator's and harness's workload identity only, never to people or to graders, and request tokens for the audience https://dynamicsessions.io. The role gives no read-only access, so the orchestrator fetches a rollout's end state through your tool server and hands it to the graders; generate session identifiers unpredictably and never take one from model output."
     value: "Orchestrator and harness identity only, at pool scope"
     why: "A valid token can create and enter any session in the pool, so the set of identities holding this role is the set that can reach rollouts."
     mitigations: [D3-APA, D3-AA]
@@ -1354,7 +1418,7 @@ settings:
     default: "None: the identity is used only to pull the image"
     recommended: "None. Give the pool a user-assigned identity with AcrPull for image pull, and never set lifecycle to Main for a pool that runs model-generated code."
     value: "None (image pull only), never Main"
-    why: "With Main, any code in the session can mint Microsoft Entra tokens for the pool's identity; with None the model's tools hold no Azure permission at all."
+    why: "With Main, any code in the session can mint Microsoft Entra tokens for the pool's identity; with None the model's tools hold no Azure permission at all. No shared volume is documented either, so files and results leave a session only through your tool server's HTTP API."
     mitigations: [AML.M0028]
     url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
     verified: "2026-11-18"
@@ -1400,7 +1464,7 @@ settings:
     setVia: [apiCli, cloudPolicy]
     area: network
     default: "No virtual network integration; outbound calls go straight to the internet"
-    recommended: "Integrate the function app with its own subnet delegated to Microsoft.App/environments and associate a route table whose default route points at Azure Firewall. On Flex Consumption all outbound traffic already goes through the virtual network, so there is no Route All flag to set."
+    recommended: "Integrate the function app with its own subnet delegated to Microsoft.App/environments and associate a route table whose default route points at Azure Firewall, with the host storage account reachable from that subnet. On Flex Consumption all outbound traffic already goes through the virtual network, so there is no Route All flag to set."
     value: "Own subnet, default route to Azure Firewall"
     why: "A tool tricked by injected text can then reach only the destinations the firewall allows, the same wall the App Service mapping builds with outboundVnetRouting.allTraffic."
     mitigations: [D3-OTF]
@@ -1412,7 +1476,7 @@ settings:
     setVia: [configFile]
     area: identity
     default: "System: the endpoint requires the mcp_extension system key"
-    recommended: "Keep System and let only API Management hold the mcp_extension key, sent in the x-functions-key header. Set Anonymous only when built-in MCP authorisation is on and access restrictions or a private endpoint already limit the app to the gateway."
+    recommended: "Keep System and let only API Management hold the mcp_extension key, sent in the x-functions-key header to the extension's fixed path, /runtime/webhooks/mcp. Set Anonymous only when built-in MCP authorisation is on (turning it on in the portal, a preview, switches the key requirement off) and access restrictions or a private endpoint already limit the app to the gateway."
     value: "System, key held only by API Management"
     why: "The key is one shared secret for the whole server, so it suits a single trusted caller, the gateway, and must never be handed to MCP clients in place of their own tokens."
     mitigations: [D3-APA]
@@ -1438,7 +1502,7 @@ settings:
     default: "A secret's value can be stored directly in the container app"
     recommended: "Define every secret, including the client secret that built-in authentication creates, as a Key Vault reference resolved by the app's user-assigned identity holding Key Vault Secrets User on that vault only; leave the version out of the URI so rotation is picked up."
     value: "Every secret a Key Vault reference, unversioned"
-    why: "Secret values stay in Key Vault under its access control, and a rotated secret reaches the app within about 30 minutes without anyone copying it into configuration."
+    why: "Secret values stay in Key Vault under its access control, and a rotated secret reaches the app within about 30 minutes without anyone copying it into configuration; a secret stored in the app and changed by hand reaches running revisions only on a new revision or a restart."
     mitigations: [D3-CH]
     url: https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets
     verified: "2026-11-18"
@@ -1447,8 +1511,8 @@ settings:
     where: "az containerapp env create --infrastructure-subnet-resource-id <subnet delegated to Microsoft.App/environments> --internal-only; chosen when the environment is created"
     setVia: [apiCli, cloudPolicy]
     area: network
-    default: "An Azure-generated network that is publicly accessible and can reach internet-accessible endpoints"
-    recommended: "Create a workload profiles environment in your own subnet, delegated to Microsoft.App/environments and internal-only, and associate the route table that sends outbound traffic to Azure Firewall. The network type cannot be changed after creation."
+    default: "An Azure-generated network that is publicly accessible and can reach internet-accessible endpoints; external ingress with no IP restriction rules admits all inbound traffic"
+    recommended: "Create a workload profiles environment in your own subnet, delegated to Microsoft.App/environments and internal-only (or ingress IP restrictions that admit only API Management), and associate the route table that sends outbound traffic to Azure Firewall. The network type cannot be changed after creation, so an environment created with defaults is rebuilt."
     value: "Your own subnet, internal-only, egress via Azure Firewall"
     why: "User-defined routes work only on a workload profiles environment in a network you supply, so this choice is what makes the outbound allow list at the firewall possible."
     mitigations: [D3-OTF]
@@ -1582,7 +1646,7 @@ settings:
     default: "defaultinstancetype, created at attach with minimal resources"
     recommended: "Define an instance type per trust level whose nodeSelector matches only that level's tainted GPU node pool, and set it explicitly in every training job; do not leave jobs on the default instance type."
     value: "One instance type per trust level, set in every job"
-    why: "Training jobs land only on the node pool reserved for them, so job code does not share nodes with the extension's own pods or with other teams' workloads."
+    why: "Training jobs land only on the node pool reserved for them, so job code does not share nodes with the extension's own pods or with other teams' workloads. One cluster can be attached several times, to several workspaces or namespaces, and each job writes with its compute target's managed identity, so without this the same nodes serve jobs with different identities."
     mitigations: [D3-EI]
     url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-kubernetes-instance-types
     verified: "2026-11-18"
@@ -1620,7 +1684,7 @@ settings:
     setVia: [adminConsole, apiCli]
     area: network
     default: "Public endpoint"
-    recommended: "Give the gateway a private address only, and allow inbound traffic from the delegated agent subnet and the front end's subnet alone. A gateway created from the Foundry portal is public until you change it in the Azure portal."
+    recommended: "Give the gateway a private address only, and allow inbound traffic from its callers' subnets alone (the delegated agent subnet, the front end, consuming applications). A gateway created from the Foundry portal is public until you change it in the Azure portal."
     value: "Internal; private address only"
     why: "The agent's tool calls leave your delegated subnet and must find the gateway inside your network. A public gateway would accept a valid token from anywhere."
     mitigations: [D3-NI]
@@ -1635,7 +1699,7 @@ settings:
     requires: "Key Vault with soft delete and purge protection, reachable publicly or through the trusted Microsoft services bypass"
     recommended: "Create the account that holds conversations with a key from your Key Vault before you name it in the project's capability settings. An existing account follows a separate procedure to add a key."
     value: "A key from your Key Vault, set at account creation"
-    why: "Conversation history and agent definitions are written here. Your key adds a second layer of encryption that you hold, rotate and can withdraw; the account needs the key to stay reachable."
+    why: "Conversation history and agent definitions are written here. A customer-managed key on the Foundry resource does not cover prompt or hosted agent state, so your key is set on each store you bring; it adds a second layer of encryption that you hold, rotate and can withdraw, and the account needs the key to stay reachable."
     mitigations: [AML.M0012]
     url: https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-setup-customer-managed-keys
     verified: "2026-11-18"
@@ -1658,9 +1722,9 @@ settings:
     setVia: [cloudPolicy]
     area: network
     default: "Not assigned"
-    recommended: "Assign with effect Deny above every subscription that may hold a Foundry resource. Add the Deny definitions Azure Cosmos DB should disable public network access and Azure AI Search services should disable public network access for the stores."
+    recommended: "Assign with effect Deny above every subscription that may hold a Foundry resource. Add the Deny definitions Azure Cosmos DB should disable public network access and Azure AI Search services should disable public network access for the stores. No built-in definition requires standard setup or outbound network injection, so those need a custom definition."
     value: "Deny, above every Foundry subscription"
-    why: "A Foundry resource is public unless someone closes it. With Deny, a deployment that leaves network access open is refused before the resource exists."
+    why: "A Foundry resource is public to any caller with a valid credential unless someone closes it, and its private endpoints and public access flag apply to the whole resource, not one project; outbound network injection is chosen when the resource is created and cannot be added later. With Deny, a deployment that leaves network access open is refused before the resource exists."
     mitigations: [D3-ACH, D3-NI]
     url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
     verified: "2026-11-18"
@@ -1688,6 +1752,18 @@ settings:
     mitigations: [D3-ACH, AML.M0012]
     url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
     verified: "2026-11-18"
+  - id: policyFoundryApprovedTools
+    name: "[Preview]: Microsoft Foundry agents and toolboxes should only use approved tools"
+    where: Azure Policy › Definitions › built-in (Cognitive Services) › assign at management group or subscription scope, effect Deny, with the tool types, MCP endpoints and MCP connectors you approve
+    setVia: [cloudPolicy]
+    area: tools
+    default: "Not assigned: an agent may name any tool, and a direct MCP address keeps working beside the gateway-routed one"
+    recommended: "Assign with effect Deny, approving only gateway-routed MCP endpoints and the tool types the workload needs, beside network rules on the agent subnet. Foundry does not register an MCP server with the gateway or rewrite a direct endpoint, so each tool is given the gateway-routed address by hand"
+    value: "Deny; only gateway-routed MCP endpoints approved"
+    why: "Tool calls cross your gateway only if every tool names its address; with the policy, an agent or toolbox that names an unapproved endpoint is refused."
+    mitigations: [cap-agent-tool-registry, D3-ACH]
+    url: https://learn.microsoft.com/en-us/azure/ai-services/policy-reference
+    verified: "2026-11-24"
   - id: policyAllowedLocations
     name: "Allowed locations"
     where: "Azure Policy › Definitions › built-in (General) › assign at management group or subscription scope, effect Deny"
@@ -1746,6 +1822,18 @@ settings:
     mitigations: [D3-CH, AML.M0031]
     url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
     verified: "2026-11-18"
+  - id: foundryStandardSetup
+    name: Standard agent setup (capability settings)
+    where: Foundry account and project › capability settings naming your Azure Cosmos DB for NoSQL account, Storage account and Foundry IQ (Azure AI Search) resource, set on the account before projects are created
+    setVia: [cloudPolicy, apiCli]
+    area: data
+    default: "Basic setup: conversations, files and vector stores in Microsoft-managed resources"
+    recommended: "Standard setup on every project, from capability settings on the account that projects inherit. Capability settings cannot be updated on an existing project: changing the stores means deleting and recreating it"
+    value: "Standard setup on every project"
+    why: "Agent state then sits in single-tenant resources whose network, keys and roles you control; on basic setup a customer-managed key on prompt agent state is not supported."
+    mitigations: [AML.M0031]
+    url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
+    verified: "2026-11-24"
   - id: webSearchSubscriptionBlock
     name: "OpenAI.BlockedTools.web_search (subscription feature registration)"
     where: "Subscription › resource provider Microsoft.CognitiveServices › feature OpenAI.BlockedTools.web_search, registered with the Azure CLI"
@@ -1754,7 +1842,7 @@ settings:
     default: "Web search available"
     recommended: "Register the feature on every subscription whose agents must not search the web. It disables the web search tool for all Foundry accounts in the subscription and needs Contributor at subscription scope."
     value: "Registered where agents must not search the web"
-    why: "Web search is called from Microsoft's side over public endpoints and bypasses the agent subnet, so your firewall cannot limit it. This switch removes the tool for a whole subscription."
+    why: "Web search is called from Microsoft's side over public endpoints and bypasses the agent subnet, so your firewall cannot limit it; Bing grounding and SharePoint grounding also use public endpoints in a network-isolated project. This switch removes the web search tool for a whole subscription."
     mitigations: [cap-agent-egress-control]
     url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/web-search
     verified: "2026-11-18"
@@ -1810,6 +1898,7 @@ settings:
     value: "Owner team required, prevent self-review, no bypass"
     why: "The named owner approves each exact release run before it meets real data, and nobody, administrators included, can deploy around that decision."
     mitigations: [AML.M0029]
+    requires: "Read access to the repository for every reviewer, so every app owner has an account in the GitHub enterprise"
     url: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments
     verified: "2026-11-21"
   - id: deployIdentityFederated
@@ -1857,7 +1946,7 @@ settings:
     default: "No policy: outbound access unrestricted; no telemetry exported"
     recommended: "At creation on every sandbox: default Deny with traffic inspection Full; Allow rules for the gateway, feed hosts and github.com; Transform rules injecting gateway and git credentials; NetworkEgressDecisions to Log Analytics."
     value: "Deny by default; gateway, feed, repository allowed"
-    why: "Commands the agent runs never pass the gateway, so this list is the only limit on where they go, and every allowed or denied request is on record."
+    why: "Commands the agent runs never pass the gateway, so this list is the only limit on where they go, and every allowed or denied request is on record. A policy belongs to one sandbox and no group default is documented, so the orchestrator sets it on every sandbox it creates."
     mitigations: [cap-agent-egress-control, cap-agent-tracing]
     url: https://sandboxes.azure.com/docs/sandboxes/sandbox/egress
     verified: "2026-11-21"
@@ -1870,7 +1959,7 @@ settings:
     default: "Malware block on; vulnerabilities Critical only; minimum age 1 day"
     recommended: "Have the admission pipeline resolve each requested npm package through the firewall before saving it to Azure Artifacts: malware, new install scripts and attestation downgrades blocked, High or higher, minimum age 7 days. Other ecosystems need their own check."
     value: "Malware blocked, High or higher, minimum age 7 days"
-    why: "Azure Artifacts saves what a Collaborator installs without scanning it. Holding back very new versions and known malware catches the names agents invent and look-alikes registered for them."
+    why: "Azure Artifacts saves what a Collaborator installs without scanning it. Holding back very new versions and known malware catches the names agents invent and look-alikes registered for them. GitHub documents the firewall in front of JFrog Artifactory (experimental), not Azure Artifacts, so the admission pipeline resolves through it itself."
     mitigations: [D3-FA]
     url: https://docs.github.com/en/enterprise-cloud@latest/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/protecting-endpoints-with-package-firewall
     verified: "2026-11-21"
@@ -1923,7 +2012,7 @@ settings:
     default: "Not enabled: every request reaches the container"
     recommended: "Deploy every generated app and preview from the platform template with the Microsoft provider and Require authentication, browsers redirected to Entra sign-in, HTTPS only, and Assignment required on the app's enterprise application."
     value: "Entra ID provider, Require authentication"
-    why: "Sign-in runs in a platform sidecar before any request reaches code the agent wrote, so an app is never open because its code forgot a check."
+    why: "Sign-in runs in a platform sidecar before any request reaches code the agent wrote, so an app is never open because its code forgot a check. Without Assignment required any user in the tenant can get a token, and the built-in policy for built-in authentication only audits, so the platform template and the pipeline check are what put it in front of every app and preview."
     mitigations: [D3-APA]
     url: https://learn.microsoft.com/en-us/azure/container-apps/authentication
     verified: "2026-11-21"
@@ -2081,31 +2170,13 @@ implementations:
       internalTools: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
       openWeb: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/bing-tools
       registry: https://learn.microsoft.com/en-us/azure/devops/artifacts/start-using-azure-artifacts
-    differences:
-      - at: agent->gateway
-        text: "Microsoft's baseline has the agent call its model directly on the Foundry endpoint; API Management is optional. The builder must point the agent's model client at API Management, disable Foundry public access and keys, and give model access only to API Management's managed identity."
-        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
-      - at: gateway
-        text: "Microsoft now offers two gateways for Foundry models and tools: Azure API Management and a separate Azure AI Gateway resource type. The settings in this mapping apply to API Management only, so the builder must choose API Management deliberately."
-        url: https://learn.microsoft.com/en-us/azure/foundry/configuration/enable-ai-api-management-gateway-portal
-      - at: gateway->openWeb
-        text: "Web search runs inside Foundry as a tool of the model platform. Its traffic uses public egress, bypasses API Management and Azure Firewall, and leaves Azure's compliance boundary. Only pages your own code fetches can be forced through your network controls."
+    shape:
+      - reroute: { from: gateway->openWeb, to: provider->openWeb }
+        why: "Grounding with Bing Search is a tool the model platform runs: its queries leave from Microsoft's side over public egress, outside the Azure compliance boundary, through neither API Management nor Azure Firewall. Only pages your own code fetches pass your network controls."
         url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/bing-tools
-      - at: localTools
-        text: "The code sandbox is a separate service, not part of the agent process. The agent calls a session pool over HTTPS at a dynamicsessions.io address using an Entra token and the Session Executor role. Allow that address through Azure Firewall."
+      - move: { block: localTools, zone: zoneExternal, call: "code & files / output" }
+        why: "The code sandbox is Container Apps dynamic sessions, a session pool Azure runs outside the agent's process: the agent calls its management endpoint at a dynamicsessions.io address over HTTPS, with an Entra token and the Session Executor role."
         url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
-      - at: localTools->registry
-        text: "With egress disabled (the default) sandbox sessions cannot reach the package feed or the memory stores. The agent passes files in and out through the pool API; packages beyond the preinstalled set need a custom container pool."
-        url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
-      - at: agent
-        text: "Azure adds a separate way out that the generic drawing lacks: the agent's outbound traffic is routed to Azure Firewall with user-defined routes. This works only in a workload profiles Container Apps environment and needs an allow rule per outside address."
-        url: https://learn.microsoft.com/en-us/azure/container-apps/use-azure-firewall
-      - at: events->agent
-        text: "Event Grid delivers events, not schedules. A scheduled run on Azure is an Azure Functions timer trigger with a cron-style expression. The builder adds a timer-triggered function that calls the agent."
-        url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer
-      - at: sources->registry
-        text: "Azure Artifacts has no review step for public packages: when anyone with the Collaborator role installs through the feed, the package is saved automatically. Give that role only to a curation pipeline and everyone else Reader."
-        url: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources
     alsoNeeded:
       - service: "Microsoft Entra ID"
         role: identity
@@ -2188,7 +2259,7 @@ implementations:
       - block: localTools
         service: "Container Apps dynamic sessions (code interpreter)"
         options:
-          - { name: "Container Apps dynamic sessions (code interpreter)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool", note: "Today's mapping. Hyper-V isolated sessions with a preinstalled package set; session egress is disabled by default.", packs: [azureNative] }
+          - { name: "Container Apps dynamic sessions (code interpreter)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool", note: "Today's mapping. Hyper-V isolated sessions with a preinstalled package set; session egress is disabled by default.", packs: [azureNative], watch: [{ text: "With session egress disabled (the default) sessions reach neither the package feed nor the memory stores: files pass in and out through the pool API, and packages beyond the preinstalled set come from a custom container pool built from the feed, where the pinned installs happen.", url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool" }] }
           - { name: "Container Apps dynamic sessions, custom container pools", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container", note: "Same isolation with your own image, so packages and tools beyond the preinstalled set are available." }
           - { name: "Azure Container Apps Sandboxes", kind: commercial, url: "https://techcommunity.microsoft.com/blog/appsonazureblog/azure-container-apps-sandboxes-now-generally-available/4559125", note: "Generally available since September 2026: a hardware-isolated microVM per sandbox with per-sandbox egress policy and VNet integration." }
           - { name: "Foundry Code Interpreter tool", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/code-interpreter", note: "Built-in Foundry tool: the model's code runs in a sandboxed environment Foundry provides, charged per session beyond tokens." }
@@ -2312,21 +2383,10 @@ implementations:
         dropSettings: [firewallEgress, agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
         addSettings: [aksFirewallEgress, aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel, aksDisableLocalAccounts, aksInternalLoadBalancer]
         differences:
-          - at: agent->gateway
-            text: "By default an AKS cluster has unrestricted outbound internet access, so the agent's pods can reach hosts other than the gateway. The drawing holds only once the outbound type is userDefinedRouting through Azure Firewall, and the firewall must then also allow the outbound network rules and FQDNs that the cluster itself requires."
-            url: https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
-          - at: agent
-            text: "By default every pod can reach the node's metadata service at 169.254.169.254, which Microsoft says can be exploited to obtain tokens, so the agent is not limited to its own workload identity. IMDS restriction is in preview and excludes add-ons such as Container Insights, Azure Policy and application routing; the alternative is a network policy in each namespace."
-            url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
-          - at: entry->agent
-            text: "Container Apps gives the agent HTTPS ingress without other infrastructure. On AKS you build the path from App Service: a Service or Gateway that is internal only where you annotate it, since Microsoft's Gateway API examples create a load balancer reachable from outside the cluster. The add-on's managed NGINX ingress loses Azure support after November 2026."
-            url: https://learn.microsoft.com/en-us/azure/aks/app-routing-gateway-api
-          - at: localTools
-            text: "Pod Sandboxing gives each sandbox pod its own VM and guest kernel, but Microsoft states that this boundary is compute isolation only. A Container Apps session blocks outbound requests by default; a pod on AKS can send and receive traffic without limitation until a network policy engine and a default-deny policy for the sandbox namespace are in place."
-            url: https://learn.microsoft.com/en-us/azure/aks/concepts-pod-sandboxing
-          - at: events->agent
-            text: "The Kubernetes API is another way to reach or change the agent with no user in the thread: anyone who can edit workloads in its namespace acts outside the front end and the scheduled-run path. Local accounts are enabled by default and Microsoft describes their admin access as a non-auditable backdoor, so disable them and authorise the API with Microsoft Entra ID."
-            url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+        shape:
+          - move: { block: localTools, zone: zoneCloud, col: 2.5, row: 1 }
+            why: "On AKS the code sandbox is Kata-isolated pods in your own cluster, apart from the agent's pods: inside your network, called by the agent rather than run in its process."
+            url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
         alsoNeeded:
           - service: "Microsoft Entra Workload ID and the cluster OIDC issuer"
             role: identity
@@ -2481,28 +2541,13 @@ implementations:
       provider: https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle
       openWeb: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/bing-tools
       registry: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-behavior
-    differences:
-      - at: gateway->provider
-        text: "Microsoft's baseline has the agent call its model directly; API Management in front of the model is optional. Sending model calls through the gateway is a choice you build and enforce."
-        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/azure-openai-gateway-guide
-      - at: gateway->internalTools
-        text: "In Microsoft's baseline, tool traffic leaves through the agent's subnet and Azure Firewall, not through API Management. Putting your tool servers behind API Management is this mapping's choice."
-        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
-      - at: gateway->openWeb
-        text: "Grounding with Bing Search is a tool of the model platform. Its traffic uses public outbound access and passes through neither API Management nor Azure Firewall, so neither can filter or log it."
+    shape:
+      - reroute: { from: gateway->openWeb, to: provider->openWeb }
+        why: "Grounding with Bing Search is a tool the model platform runs: its queries leave from Microsoft's side over public egress, through neither API Management nor Azure Firewall, so neither filters or logs them. Only pages your own code fetches pass your network controls."
         url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/bing-tools
-      - at: localTools->registry
-        text: "With outbound access disabled, as recommended, the code sandbox has no network, so it cannot install packages. This flow applies only to building the agent's own image."
-        url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
-      - at: localTools
-        text: "The code sandbox is a Container Apps dynamic sessions pool: a separate service the agent calls over the network, not something inside the agent's own process."
-        url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
-      - at: gateway
-        text: "Microsoft now describes a separate AI Gateway product, in preview in two regions, as its main path. The gateway features of API Management used here remain available and supported."
-        url: https://learn.microsoft.com/en-us/azure/ai-gateway/compare-api-management-service
-      - at: planner
-        text: "Microsoft documents hosting Agent Framework agents on Foundry hosted agents or Azure Functions. Running one on Container Apps is this mapping's choice."
-        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns
+      - move: { block: localTools, zone: zoneExternal, call: "code & files / output" }
+        why: "The code sandbox is Container Apps dynamic sessions, a session pool Azure runs outside the agent's process: the agent calls its management endpoint at a dynamicsessions.io address over HTTPS, with an Entra token and the Session Executor role."
+        url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
     alsoNeeded:
       - service: "Microsoft Entra ID and managed identities"
         role: identity
@@ -2573,7 +2618,7 @@ implementations:
       - block: localTools
         service: "Container Apps dynamic sessions (code interpreter)"
         options:
-          - { name: "Container Apps dynamic sessions (code interpreter)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool", note: "Today's mapping. Hyper-V isolated sessions with a preinstalled package set; session egress is disabled by default.", packs: [azureNative] }
+          - { name: "Container Apps dynamic sessions (code interpreter)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool", note: "Today's mapping. Hyper-V isolated sessions with a preinstalled package set; session egress is disabled by default.", packs: [azureNative], watch: [{ text: "With session egress disabled (the default) sessions reach neither the package feed nor the memory stores: files pass in and out through the pool API, and packages beyond the preinstalled set come from a custom container pool built from the feed, where the pinned installs happen.", url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool" }] }
           - { name: "Container Apps dynamic sessions, custom container pools", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container", note: "Same isolation with your own image, so packages and tools beyond the preinstalled set are available." }
           - { name: "Azure Container Apps Sandboxes", kind: commercial, url: "https://techcommunity.microsoft.com/blog/appsonazureblog/azure-container-apps-sandboxes-now-generally-available/4559125", note: "Generally available since September 2026: a hardware-isolated microVM per sandbox with per-sandbox egress policy and VNet integration." }
           - { name: "Foundry Code Interpreter tool", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/code-interpreter", note: "Built-in Foundry tool: the model's code runs in a sandboxed environment Foundry provides, charged per session beyond tokens." }
@@ -2596,7 +2641,7 @@ implementations:
           - { name: "agentgateway on AKS", kind: open, url: "https://agentgateway.dev/docs/kubernetes/latest/integrations/llm/providers/azure/", note: "Linux Foundation project on the Gateway API; Azure Marketplace AKS extension; Azure OpenAI and Foundry backends with Workload ID; MCP and A2A.", packs: [openSourceOnAks] }
           - { name: "LiteLLM Proxy on Container Apps or AKS", kind: open, url: "https://docs.litellm.ai/docs/providers/azure/", note: "Calls Azure OpenAI with an Entra token; MCP and A2A gateways; SSO, audit logs and guardrails are in its Enterprise edition." }
           - { name: "Databricks Unity Gateway", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/databricks/ai-gateway/", note: "Governs model services, external providers and MCP servers as Unity Catalog securables; fits where Azure Databricks already holds the data.", packs: [azureDatabricks] }
-      - { block: internalTools, service: Your action catalogue as MCP servers and APIs, build: true, note: "Named, parameter-validated actions, each with a compensating transaction, exposed only through API Management." }
+      - { block: internalTools, service: Your action catalogue as MCP servers and APIs, build: true, note: "Named, parameter-validated actions, each with a compensating transaction, exposed only through API Management. Microsoft's baseline sends tool traffic out through the agent's subnet and Azure Firewall instead; brokering each call at the gateway is what gives every action its own authorisation and log." }
       - block: provider
         service: "Azure OpenAI in Foundry Models"
         options:
@@ -2694,23 +2739,11 @@ implementations:
           - { block: events, service: "Azure Service Bus queues and KEDA scaled jobs on AKS", note: "The KEDA add-on's azure-servicebus trigger creates a Kubernetes Job as queue messages arrive and authenticates with workload identity. A Kubernetes CronJob covers timers.", url: https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity }
           - { block: localTools, service: "AKS Pod Sandboxing (Kata Containers)", note: "Each sandbox pod runs in its own Kata VM on an Azure Linux node pool. The Agent Sandbox cluster extension (preview) adds per-session claims but needs the preview v2 runtime and AKS Standard.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
         dropSettings: [firewallEgress, agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
-        addSettings: [aksFirewallEgress, aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksKedaTriggerAuth, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel]
-        differences:
-          - at: planner->gateway
-            text: "By default an AKS cluster has unrestricted outbound internet access (through a load balancer public IP, or a managed NAT gateway on AKS Automatic), so the agent's pods can reach hosts other than the gateway. The drawing holds only once the outbound type is userDefinedRouting through Azure Firewall, which must then also allow the cluster's own required FQDNs."
-            url: https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
-          - at: planner
-            text: "By default every pod can reach the node's Instance Metadata Service at 169.254.169.254 and ask for tokens for the node's managed identity, so the agent is not limited to its own identity. IMDS restriction is still a preview and cannot be enabled alongside several add-ons, including Container Insights and Azure Policy; the alternative is a network policy in each namespace."
-            url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
-          - at: localTools
-            text: "Pod Sandboxing gives each sandbox pod its own VM and guest kernel, but Microsoft states the boundary is compute isolation only. A Container Apps session pool blocks outbound traffic by default; an AKS sandbox pod can send and receive traffic without limitation until a network policy engine and a default-deny policy for its namespace are in place."
-            url: https://learn.microsoft.com/en-us/azure/aks/concepts-pod-sandboxing
-          - at: events->planner
-            text: "The trigger path gains an actor: the KEDA operator polls the queue with its own identity to decide when a run starts. Microsoft's tutorial gives one identity, shared with the workload, the Azure Service Bus Data Owner role (full access) on the whole namespace. The queue stays the only way in only if this identity is separated and scoped by choice."
-            url: https://learn.microsoft.com/en-us/azure/aks/keda-workload-identity
-          - at: events
-            text: "The Kubernetes API is a second way to start or change a run: anyone who can create Jobs or edit workloads in the namespace bypasses the queue. AKS Standard enables local accounts by default and Microsoft describes their admin access as a non-auditable backdoor, so the single entry point holds only with them disabled and Microsoft Entra authorisation on the cluster."
-            url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+        addSettings: [aksFirewallEgress, aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksKedaTriggerAuth, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel, aksDisableLocalAccounts]
+        shape:
+          - move: { block: localTools, zone: zoneCloud, col: 2.5, row: 1 }
+            why: "On AKS the code sandbox is Kata-isolated pods in your own cluster, apart from the agent's pods: inside your network, called by the agent rather than run in its process."
+            url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
         alsoNeeded:
           - service: "Microsoft Entra Workload ID and the cluster OIDC issuer"
             role: identity
@@ -2864,34 +2897,28 @@ implementations:
       internalTools: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
       openWeb: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/bing-tools
       registry: https://learn.microsoft.com/en-us/azure/devops/artifacts/start-using-azure-artifacts
-    differences:
-      - at: harness->gateway
-        text: "Microsoft's durable agent samples create the model client straight against the Foundry endpoint; nothing routes it through API Management. The builder must point every agent's client at API Management and give model access only to API Management's managed identity."
-        url: https://learn.microsoft.com/en-us/azure/durable-task/sdks/durable-agents-microsoft-agent-framework
-      - at: gateway
-        text: "Microsoft now offers two gateways for Foundry models and tools: Azure API Management and a separate Azure AI Gateway resource type. The settings in this mapping apply to API Management only, so the builder must choose API Management deliberately."
-        url: https://learn.microsoft.com/en-us/azure/foundry/configuration/enable-ai-api-management-gateway-portal
-      - at: gateway->openWeb
-        text: "Web search runs inside Foundry as a tool of the model platform. Its traffic uses public egress, bypasses API Management and Azure Firewall, and leaves Azure's compliance boundary. Only pages your own code fetches can be forced through your network controls."
+    shape:
+      - reroute: { from: gateway->openWeb, to: provider->openWeb }
+        why: "Grounding with Bing Search is a tool the model platform runs: its queries leave from Microsoft's side over public egress, outside the Azure compliance boundary, through neither API Management nor Azure Firewall. Only pages your own code fetches pass your network controls."
         url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/bing-tools
-      - at: localTools
-        text: "The code sandbox is a separate service, not part of the agent process. The agent calls a session pool over HTTPS at a dynamicsessions.io address using an Entra token and the Session Executor role. Allow that address through Azure Firewall."
+      - move: { block: localTools, zone: zoneExternal, call: "code & files / output" }
+        why: "The code sandbox is Container Apps dynamic sessions, a session pool Azure runs outside the workflow's process: the workflow calls its management endpoint at a dynamicsessions.io address over HTTPS, with an Entra token and the Session Executor role."
         url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
-      - at: localTools->registry
-        text: "With egress disabled (the default) sandbox sessions cannot reach the package feed or the memory stores. The agent passes files in and out through the pool API; packages beyond the preinstalled set need a custom container pool."
-        url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
-      - at: harness
-        text: "Azure adds a separate way out that the generic drawing lacks: the agent's outbound traffic is routed to Azure Firewall with user-defined routes. This works only in a workload profiles Container Apps environment and needs an allow rule per outside address."
-        url: https://learn.microsoft.com/en-us/azure/container-apps/use-azure-firewall
-      - at: orchestration->state
-        text: "The journal does not live in your database. Workers stream it to the managed Durable Task Scheduler service at a durabletask.io address, signed in with the app's identity. Add a private endpoint and the Durable Task Worker role; payloads are capped at 1 MB."
+      - insert:
+          id: durableTaskScheduler
+          title: "Durable Task Scheduler"
+          summary: "Managed journal: every step's history, outside your network"
+          on: orchestration->state
+          zone: zoneExternal
+          kind: provider
+        why: "The step journal does not live in your database: workers stream it over gRPC to the managed Durable Task Scheduler at a durabletask.io address, signed in with the app's identity, or through a private endpoint where you add one."
         url: https://learn.microsoft.com/en-us/azure/durable-task/scheduler/durable-task-scheduler
-      - at: operator->events
-        text: "A queue message does not resume a paused step by itself. When self-hosted on Container Apps the host must expose its own API and pass the operator's answer to the workflow client; only Azure Functions hosting generates the respond endpoint for you."
+      - drop: durableTaskScheduler->state
+        why: "The scheduler keeps orchestration state in its own internal store, with no storage account of yours; Cosmos DB and Foundry IQ hold only shared memory and the index."
+        url: https://learn.microsoft.com/en-us/azure/durable-task/scheduler/durable-task-scheduler
+      - reroute: { from: operator->events, to: operator->harness }
+        why: "A queue message does not resume a paused step by itself: self-hosted, the workflow's host exposes its own API and passes the operator's answer to the workflow client, and who may call that API is the approval control. Only Azure Functions hosting generates the endpoint."
         url: https://learn.microsoft.com/en-us/agent-framework/hosting/durable-extension
-      - at: sources->registry
-        text: "Azure Artifacts has no review step for public packages: when anyone with the Collaborator role installs through the feed, the package is saved automatically. Give that role only to a curation pipeline and everyone else Reader."
-        url: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources
     alsoNeeded:
       - service: "Microsoft Entra ID"
         role: identity
@@ -2957,9 +2984,9 @@ implementations:
     bindings:
       - block: events
         service: "Azure Service Bus queues and Event Grid"
-        note: "Starts runs, and carries the operator's response that resumes a suspended step."
+        note: "Starts runs. The operator's answer to a suspended step reaches the workflow through the host's own API, not a queue message."
         options:
-          - { name: "Azure Service Bus queues and Event Grid", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-messaging-overview", note: "Today's mapping. Messages start runs and carry the operator's response that resumes a step.", packs: [azureNative] }
+          - { name: "Azure Service Bus queues and Event Grid", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-messaging-overview", note: "Today's mapping. Messages start runs.", packs: [azureNative] }
           - { name: "Azure Event Hubs (Kafka protocol)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/event-hubs/azure-event-hubs-apache-kafka-overview", note: "Streams of events, with Apache Kafka clients supported." }
           - { name: "Azure Logic Apps triggers", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/logic-apps/logic-apps-overview", note: "Business system events through Logic Apps connectors start or resume runs." }
           - { name: "Azure Queue Storage", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/storage/queues/storage-queues-introduction", note: "Simple queues without sessions or ordering." }
@@ -2967,7 +2994,7 @@ implementations:
       - block: localTools
         service: "Container Apps dynamic sessions (code interpreter)"
         options:
-          - { name: "Container Apps dynamic sessions (code interpreter)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool", note: "Today's mapping. Hyper-V isolated sessions with a preinstalled package set; session egress is disabled by default.", packs: [azureNative] }
+          - { name: "Container Apps dynamic sessions (code interpreter)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool", note: "Today's mapping. Hyper-V isolated sessions with a preinstalled package set; session egress is disabled by default.", packs: [azureNative], watch: [{ text: "With session egress disabled (the default) sessions reach neither the package feed nor the memory stores: files pass in and out through the pool API, and packages beyond the preinstalled set come from a custom container pool built from the feed, where the pinned installs happen.", url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool" }] }
           - { name: "Container Apps dynamic sessions, custom container pools", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container", note: "Same isolation with your own image, so packages and tools beyond the preinstalled set are available." }
           - { name: "Azure Container Apps Sandboxes", kind: commercial, url: "https://techcommunity.microsoft.com/blog/appsonazureblog/azure-container-apps-sandboxes-now-generally-available/4559125", note: "Generally available since September 2026: a hardware-isolated microVM per sandbox with per-sandbox egress policy and VNet integration." }
           - { name: "Foundry Code Interpreter tool", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/code-interpreter", note: "Built-in Foundry tool: the model's code runs in a sandboxed environment Foundry provides, charged per session beyond tokens." }
@@ -2989,7 +3016,7 @@ implementations:
         service: "Durable Task Scheduler, Cosmos DB and Foundry IQ"
         note: "Journal in the scheduler's task hub; shared memory in Azure Cosmos DB; the vector index in Foundry IQ (Azure AI Search), renamed in November 2026."
         options:
-          - { name: "Durable Task Scheduler, Cosmos DB and Foundry IQ", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/durable-task/scheduler/durable-task-scheduler", note: "Today's mapping. Journal in the scheduler's task hub; shared memory in Cosmos DB; index in Foundry IQ.", packs: [azureNative] }
+          - { name: "Durable Task Scheduler, Cosmos DB and Foundry IQ", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/durable-task/scheduler/durable-task-scheduler", note: "Today's mapping. Journal in the scheduler's task hub; shared memory in Cosmos DB; index in Foundry IQ.", packs: [azureNative], watch: [{ text: "Durable Task Scheduler caps orchestrator and activity inputs and outputs, external event data and entity state at 1 MB each, and a work item completion at 3.9 MB; larger payloads need its large payload support.", url: "https://learn.microsoft.com/en-us/azure/durable-task/scheduler/durable-task-scheduler" }] }
           - { name: "Your workflow engine's store (Temporal or Dapr) with a vector store", kind: open, url: "https://docs.dapr.io/developing-applications/building-blocks/workflow/workflow-overview/", note: "The journal lives wherever the chosen engine keeps it; Dapr signs workflow state to detect tampering.", packs: [openSourceOnAks] }
           - { name: "Azure Cosmos DB for NoSQL with integrated vector search", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/cosmos-db/vector-search", note: "Shared memory and vectors in one operational store." }
           - { name: "Azure Database for PostgreSQL with pgvector or DiskANN", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/postgresql/extensions/how-to-use-pgdiskann", note: "Shared memory and vectors beside relational data." }
@@ -3098,26 +3125,14 @@ implementations:
           - https://learn.microsoft.com/en-us/agent-framework/hosting/durable-extension
         summary: "The Agent Framework workflow runs as a self-hosted Durable Task worker in pods on AKS, the host Microsoft's Durable Task guide assigns to the standalone Durable Task SDKs. Durable Task Scheduler stays the managed journal outside the cluster, reached with workload identity; model-written code runs in Kata-isolated sandbox pods. On AKS Standard the builder carries node and Kubernetes upgrades, identity federation, worker scaling, network policy, outbound routing, logging and rollouts."
         bindings:
-          - { block: harness, service: "Your workflow in pods on Azure Kubernetes Service", note: "Self-hosted Durable Extension (preview): a Durable Task worker in your pods connects to Durable Task Scheduler. Microsoft's hosting table puts AKS on the standalone Durable Task SDKs.", url: https://learn.microsoft.com/en-us/azure/durable-task/common/choose-orchestration-framework }
+          - { block: harness, service: "Your workflow in pods on Azure Kubernetes Service", note: "Self-hosted Durable Extension (preview): a Durable Task worker in your pods connects to Durable Task Scheduler. Microsoft's hosting table puts AKS on the standalone Durable Task SDKs.", url: https://learn.microsoft.com/en-us/azure/durable-task/common/choose-orchestration-framework, watch: [{ text: "The scheduler's worker autoscaler is documented for Container Apps only, so on AKS worker scaling is yours or KEDA's. Workers reach the scheduler with a workload identity you federate and grant a Durable Task role.", url: "https://learn.microsoft.com/en-us/azure/durable-task/common/choose-orchestration-framework" }] }
           - { block: localTools, service: "AKS Pod Sandboxing (Kata Containers)", note: "Each sandbox pod runs in its own Kata pod VM on an Azure Linux node pool. The Agent Sandbox extension (preview) adds a Sandbox resource per session but needs the preview v2 runtime and AKS Standard.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
         dropSettings: [firewallEgress, agentManagedIdentity, sessionPoolEgress, containerAppsTrafficSplit]
         addSettings: [aksFirewallEgress, aksWorkloadIdentity, aksPodSandboxing, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksCanaryRollout, aksImdsRestriction, aksNodeOsUpgradeChannel, aksKedaTriggerAuth, aksDisableLocalAccounts, entraSidecarWorkloadIdentity]
-        differences:
-          - at: harness->gateway
-            text: "By default an AKS cluster has unrestricted outbound internet access, so the workflow's pods can reach hosts other than the gateway. The drawing holds only once the outbound type is userDefinedRouting through Azure Firewall, and the firewall must then also allow the outbound network rules and FQDNs that the cluster itself requires."
-            url: https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
-          - at: harness
-            text: "By default every pod can reach the node's metadata service at 169.254.169.254, which Microsoft says can be exploited to obtain tokens, so the workflow is not limited to its own workload identity. IMDS restriction is in preview and excludes add-ons such as Container Insights, Azure Policy and application routing; the alternative is a network policy in each namespace."
-            url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
-          - at: orchestration->state
-            text: "Durable Task Scheduler still journals every step, and Microsoft's hosting guide puts AKS on the standalone Durable Task SDKs. The scheduler's autoscaler is documented for Container Apps only: on AKS you manage worker scaling yourself or with KEDA, and the workers reach the scheduler through a workload identity that you federate and grant a Durable Task role."
-            url: https://learn.microsoft.com/en-us/azure/durable-task/common/choose-orchestration-framework
-          - at: localTools
-            text: "Pod Sandboxing gives each sandbox pod its own VM and guest kernel, but Microsoft states that this boundary is compute isolation only. A Container Apps session blocks outbound requests by default; a pod on AKS can send and receive traffic without limitation until a network policy engine and a default-deny policy for the sandbox namespace are in place."
-            url: https://learn.microsoft.com/en-us/azure/aks/concepts-pod-sandboxing
-          - at: events
-            text: "The Kubernetes API is a second way to start, change or stop a run: anyone who can edit workloads in the namespace bypasses the queue. Local accounts are enabled by default and Microsoft describes their admin access as a non-auditable backdoor, so the single entry point holds only with local accounts disabled and Microsoft Entra ID authorisation on the cluster."
-            url: https://learn.microsoft.com/en-us/azure/aks/local-accounts
+        shape:
+          - move: { block: localTools, zone: zoneCloud, col: 1, row: 2 }
+            why: "On AKS the code sandbox is Kata-isolated pods in your own cluster, apart from the workflow's pods: inside your network, called by the workflow rather than run in its process."
+            url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
         alsoNeeded:
           - service: "Microsoft Entra Workload ID and the cluster OIDC issuer"
             role: identity
@@ -3241,6 +3256,7 @@ implementations:
       - foundryDisableLocalAuth
       - apimValidateToken
       - apimCredentialManager
+      - dtsTaskHubRoles
       - dtsAutopurge
       - cosmosConversationTtl
       - cosmosCmk
@@ -3272,31 +3288,6 @@ implementations:
       authServer: https://learn.microsoft.com/en-us/entra/agent-id/client-id-metadata-documents
       service: https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-mcp
       orgData: https://learn.microsoft.com/en-us/azure/app-service/overview-managed-identity
-    differences:
-      - at: callers->authServer
-        text: "Entra now also accepts unregistered clients through Client ID Metadata Documents (public preview): Entra fetches the client's metadata URL and creates an agent identity on consent. To keep a pre-registered-only design, turn off user consent for these clients."
-        url: https://learn.microsoft.com/en-us/entra/agent-id/manage-client-id-metadata-document-clients
-      - at: callers->idp
-        text: "Microsoft's guide has clients obtain the server's token directly from Entra, by user sign-in with PKCE or as a registered agent identity. It describes no identity-assertion (ID-JAG) exchange, so plan for sign-in and preauthorized clients rather than ID-JAG."
-        url: https://learn.microsoft.com/en-us/entra/agent-id/secure-mcp-server-with-entra-id
-      - at: gateway
-        text: "API Management policies apply to the whole MCP server, not to single tools, and App Service's built-in authorization is also server-wide. Per-tool scope and role checks must be written in the server's own handlers."
-        url: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
-      - at: gateway->service
-        text: "App Service has its own public endpoint by default, so callers could skip the gateway. Restrict the app to API Management with access restrictions or a private endpoint."
-        url: https://learn.microsoft.com/en-us/azure/app-service/overview-access-restrictions
-      - at: gateway->service
-        text: "API Management forwards most request headers to the backend, but Microsoft notes the Authorization header may need an explicit policy. Without it the server cannot check the caller's token on every call."
-        url: https://learn.microsoft.com/en-us/azure/api-management/secure-mcp-servers
-      - at: service
-        text: "App Service publishes the server's discovery document (protected resource metadata, still in preview) for the address it was reached on. Behind API Management the builder must make that document, the gateway address and the Application ID URI agree."
-        url: https://learn.microsoft.com/en-us/azure/app-service/overview-authentication-authorization
-      - at: service->authServer
-        text: "The server does not ask Entra about each token; it checks signature, issuer and audience locally. A revoked user's token therefore keeps working until it expires, one hour by default."
-        url: https://learn.microsoft.com/en-us/entra/identity/users/users-revoke-access
-      - at: service->orgData
-        text: "On-behalf-of exchange works only for tokens that carry a user. For autonomous callers with app-only tokens the handler must use the server's managed identity and filter by the caller's tenant itself."
-        url: https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-on-behalf-of-flow
     alsoNeeded:
       - service: "App Service access restrictions or private endpoint"
         role: network
@@ -3348,11 +3339,11 @@ implementations:
         and preauthorized, and the organisation's callers are governed where they sign in: the server's
         enterprise app assignment and Conditional Access.
     bindings:
-      - { block: idp, service: Microsoft Entra ID, note: "Sign-in, the server's enterprise app assignment and Conditional Access decide who can get a token at all." }
+      - { block: idp, service: Microsoft Entra ID, note: "Sign-in, the server's enterprise app assignment and Conditional Access decide who can get a token at all.", watch: [{ text: "Microsoft's guide describes no identity-assertion (ID-JAG) exchange: clients get the server's token directly from Entra, by user sign-in with PKCE or as a registered agent identity.", url: "https://learn.microsoft.com/en-us/entra/agent-id/secure-mcp-server-with-entra-id" }] }
       - block: gateway
         service: "Azure API Management (MCP servers)"
         options:
-          - { name: "Azure API Management (MCP servers)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview", note: "Today's mapping. Expose or pass through MCP servers with Entra token validation; classic and v2 tiers, not workspaces.", packs: [azureNative] }
+          - { name: "Azure API Management (MCP servers)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview", note: "Today's mapping. Expose or pass through MCP servers with Entra token validation; classic and v2 tiers, not workspaces.", packs: [azureNative], watch: [{ text: "Policies apply to the whole MCP server, not single tools, and App Service's built-in authorization is server-wide too, so per-tool scope and role checks run in the server's own handlers.", url: "https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview" }] }
           - { name: "Azure AI Gateway", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/ai-gateway/overview", note: "MCP endpoints combining remote MCP servers, OpenAPI APIs and connectors, with backend credentials kept at the gateway." }
           - { name: "Kong AI MCP Proxy", kind: commercial, url: "https://developer.konghq.com/cookbooks/secure-mcp-entra-id/", note: "Kong's cookbook makes Kong the resource server for Entra: serves PRM, returns the 401 challenge, checks Entra JWTs (Kong 3.14).", packs: [kongKonnect], watch: [{ text: "Serves PRM and checks Entra JWTs by JWKS (Kong 3.14).", url: "https://developer.konghq.com/cookbooks/secure-mcp-entra-id/" }] }
           - { name: "agentgateway on AKS", kind: open, url: "https://agentgateway.dev/docs/kubernetes/latest/", note: "MCP routing, authentication and service discovery on the Gateway API.", packs: [openSourceOnAks] }
@@ -3430,25 +3421,9 @@ implementations:
           - https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-mcp
         summary: "The MCP server becomes a function app on the Flex Consumption plan: each tool is an MCP tool trigger function, or an existing SDK-built server runs unchanged as a custom handler (preview). The same built-in MCP authorisation as App Service still serves the discovery document. The builder now carries a host storage account, the extension's system key and cold starts, and no longer sizes an App Service plan."
         bindings:
-          - { block: service, service: "Your MCP server on Azure Functions (Flex Consumption)", builtWith: "Azure Functions MCP extension", note: "Tools are MCP tool trigger functions served at /runtime/webhooks/mcp, or an SDK-built server runs as a custom handler (preview). Built-in MCP authorisation (preview) still serves the discovery document.", url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-mcp-tutorial }
+          - { block: service, service: "Your MCP server on Azure Functions (Flex Consumption)", builtWith: "Azure Functions MCP extension", note: "Tools are MCP tool trigger functions served at /runtime/webhooks/mcp, or an SDK-built server runs as a custom handler (preview). Built-in MCP authorisation (preview) still serves the discovery document.", url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-mcp-tutorial, watch: [{ text: "Hosting an SDK-built server is public preview: stateless Streamable HTTP only, Flex Consumption only, and the feature flag EnableMcpCustomHandlerPreview; Microsoft says to use the MCP extension when the server keeps state.", url: "https://learn.microsoft.com/en-us/azure/azure-functions/self-hosted-mcp-servers" }, { text: "With the MCP extension each tool's name, description and properties are written in the function's trigger declaration, so the reviewed and pinned artefact is the deployment package: pin it by hash and review trigger metadata in code review.", url: "https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp-tool-trigger" }, { text: "Instances scale to zero, so the first call after a quiet period waits for a cold start unless always-ready instances are set (default zero), and an HTTP-triggered function has at most 230 seconds to respond whatever the timeout.", url: "https://learn.microsoft.com/en-us/azure/azure-functions/functions-scale" }] }
         dropSettings: [appServiceRouteAll]
         addSettings: [apiCenterInventory, functionsFlexVnetIntegration, functionsMcpWebhookAuthLevel]
-        differences:
-          - at: gateway->service
-            text: "The MCP extension serves the server at /runtime/webhooks/mcp, not at a path your code chooses, and by default asks for the mcp_extension system key. API Management must be pointed at that path and send the key, or the level is set to Anonymous. Turning on built-in MCP authentication in the portal (preview) switches the key requirement off automatically."
-            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp
-          - at: service
-            text: "Hosting a server built with an MCP SDK is in public preview. It supports only stateless servers on the Streamable HTTP transport, only the Flex Consumption plan, and needs the feature flag AzureWebJobsFeatureFlags=EnableMcpCustomHandlerPreview. Microsoft's page says to use the MCP extension when the server must keep state."
-            url: https://learn.microsoft.com/en-us/azure/azure-functions/self-hosted-mcp-servers
-          - at: toolDefs->service
-            text: "With the MCP extension there is no definitions file for the server to load. Each tool's name, description and properties are written in the function's trigger declaration, so the reviewed and pinned artefact is the deployment package itself. Pin the package by hash and review trigger metadata in code review."
-            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp-tool-trigger
-          - at: service
-            text: "Instances scale to zero, so the first call after a quiet period waits for a cold start unless always-ready instances are set (the default is zero). Microsoft also states that an HTTP-triggered function has at most 230 seconds to respond, whatever the function timeout, so plan long tool calls within that limit."
-            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-scale
-          - at: service->orgData
-            text: "A function app has a public endpoint and, without virtual network integration, calls out directly to the internet. Both walls are choices: access restrictions or a private endpoint inbound, and an integration subnet routed to a firewall outbound. The app also needs its host storage account reachable from that subnet."
-            url: https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options
         alsoNeeded:
           - service: "Azure Storage account (function app host storage)"
             role: other
@@ -3510,25 +3485,9 @@ implementations:
           - https://learn.microsoft.com/en-us/azure/container-apps/health-probes
         summary: "The MCP server is a container you build, run as a container app behind the platform's HTTPS ingress, published through API Management. Microsoft runs the hosts and scaling; the builder now carries a Dockerfile, an image registry and the minimum replica count. Built-in authentication checks Entra tokens much as App Service does, but no protected resource metadata support is documented, and outbound filtering needs an environment created in your own virtual network."
         bindings:
-          - { block: service, service: "Your MCP server on Azure Container Apps", note: "A container serving Streamable HTTP behind Container Apps ingress, with built-in authentication set to return 401 and ingress reachable only from API Management.", url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview }
-        dropSettings: [appServiceRequireAuth, keyVaultReferences, appServiceRouteAll]
+          - { block: service, service: "Your MCP server on Azure Container Apps", note: "A container serving Streamable HTTP behind Container Apps ingress, with built-in authentication set to return 401 and ingress reachable only from API Management.", url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview, watch: [{ text: "Container Apps has no MCP-specific awareness: built-in authentication validates Entra bearer tokens but no protected resource metadata is documented, so the server serves its own discovery document or clients are configured with the scope in advance.", url: "https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview" }, { text: "Replicas scale to zero by default and the first request after idle takes 10 to 30 seconds, so set minimum replicas to 1; ingress times out at 240 seconds (premium ingress raises idle to 30 minutes); point HTTP health probes at a GET path, not the POST-only MCP endpoint.", url: "https://learn.microsoft.com/en-us/azure/container-apps/mcp-troubleshooting" }] }
+        dropSettings: [appServiceRequireAuth, appServiceAccessRestrictions, keyVaultReferences, appServiceRouteAll]
         addSettings: [agentManagedIdentity, firewallEgress, containerAppsTrafficSplit, containerAppsRequireAuth, containerAppsKeyVaultSecrets, containerAppsEnvironmentVnet]
-        differences:
-          - at: service
-            text: "In this hosting model Container Apps has, in Microsoft's words, no MCP-specific awareness. Its built-in authentication validates Microsoft Entra bearer tokens, but the pages read do not mention the protected resource metadata that App Service Authentication publishes. Plan for the server to serve its own discovery document, or for clients configured with the scope in advance."
-            url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-overview
-          - at: gateway->service
-            text: "A container app with external ingress in a default environment is reachable from the internet, and with no IP restriction rules all inbound traffic is allowed. To keep API Management as the only door, use an internal environment joined to the gateway's network or IP restrictions, and leave built-in authentication on Return401."
-            url: https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview
-          - at: service->orgData
-            text: "By default the environment sits on an Azure-generated network and can call any internet-accessible endpoint. Routing outbound traffic to Azure Firewall needs a workload profiles environment in a virtual network you supply, and the network type cannot be changed afterwards, so an environment created with defaults has to be rebuilt."
-            url: https://learn.microsoft.com/en-us/azure/container-apps/networking
-          - at: service
-            text: "Replicas scale to zero by default, and Microsoft's troubleshooting page puts the first request after idle at 10 to 30 seconds; set minimum replicas to 1. The ingress request timeout is 240 seconds; premium ingress can raise the idle limit to 30 minutes. Default probes are TCP; point any HTTP health probe at a separate GET path, not the MCP endpoint, which accepts only POST."
-            url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-troubleshooting
-          - at: service->authServer
-            text: "Microsoft's steps give built-in authentication a client secret for the server's app registration and store it as a secret in the container app, where the mapping uses certificate credentials. A secret changed by hand does not reach running revisions until a new revision is deployed or the revision is restarted; a Key Vault reference without a version avoids that."
-            url: https://learn.microsoft.com/en-us/azure/container-apps/authentication-entra
         alsoNeeded:
           - service: "Azure Container Registry"
             role: registry
@@ -3585,24 +3544,8 @@ implementations:
         summary: "The MCP server is a container you build, run as a Deployment on an AKS cluster you operate and published to API Management through an internal load balancer or gateway. Nothing on the cluster does what App Service did for the server: you now carry token validation and the discovery document in code, secrets through the Key Vault CSI driver, outbound routing, network policy, node patching and image scanning."
         bindings:
           - { block: service, service: "Your MCP server on AKS (Deployment, Service and ingress)", note: "A container exposing Streamable HTTP, reachable only from API Management. No built-in MCP authorisation: the server publishes its own protected resource metadata and validates every token.", url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-choosing-azure-service }
-        dropSettings: [appServiceRequireAuth, keyVaultReferences, appServiceRouteAll]
+        dropSettings: [appServiceRequireAuth, appServiceAccessRestrictions, keyVaultReferences, appServiceRouteAll]
         addSettings: [aksWorkloadIdentity, aksInternalLoadBalancer, aksNetworkPolicy, aksImdsRestriction, aksNodeOsUpgradeChannel, aksEntraIdAuthorisation, aksDisableLocalAccounts, defenderContainerVa, aksMcpAuthMiddleware, aksKeyVaultCsiProvider, aksOutboundUserDefinedRouting]
-        differences:
-          - at: service
-            text: "AKS has no built-in MCP authorisation. Microsoft's guide says to secure the endpoint with Microsoft Entra Workload Identity for service-to-service calls or with custom authentication middleware, so the 401 challenge, the protected resource metadata document and token validation are all code the builder writes and tests."
-            url: https://learn.microsoft.com/en-us/azure/container-apps/mcp-choosing-azure-service
-          - at: gateway->service
-            text: "A Kubernetes Service is reachable only inside the cluster until the builder publishes it. Use an internal load balancer or a Gateway, and join API Management to the virtual network. The NGINX-based application routing add-on loses Azure support after November 2026; Microsoft points to its Gateway API implementation instead."
-            url: https://learn.microsoft.com/en-us/azure/aks/app-routing-gateway-api
-          - at: service->orgData
-            text: "By default all pods in an AKS cluster can send and receive traffic without limitations, and the default outbound type sends traffic out through a load balancer's public IP. The outbound filter of this pattern exists only once the builder adds network policies and routes the node subnet to a firewall."
-            url: https://learn.microsoft.com/en-us/azure/aks/use-network-policies
-          - at: service->authServer
-            text: "By default every pod can reach the Instance Metadata Service at 169.254.169.254, which Microsoft says could be exploited to obtain tokens and other platform information. Blocking it is a preview feature; until it is on, exclude that address with a network policy so the server relies only on its workload identity."
-            url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
-          - at: service
-            text: "Microsoft's guidance for this option is thin: one paragraph in the hosting guide (a Deployment, a Service and an ingress) and one walkthrough that deploys a specific open-source server with the KMCP controller. There is no AKS counterpart to the App Service and Functions authorisation tutorials."
-            url: https://learn.microsoft.com/en-us/azure/aks/openwebsearch-on-aks
         alsoNeeded:
           - service: "Azure Container Registry"
             role: registry
@@ -3693,12 +3636,15 @@ implementations:
     # <<< hosting options
     settings:
       - entraAssignmentRequired
+      - entraCimdUserConsent
       - appServiceRequireAuth
+      - appServiceAccessRestrictions
       - entraApplicationIdUri
       - entraApiScopes
       - entraAppRoles
       - entraCertificateCredentials
       - apimValidateToken
+      - apimForwardAuthorization
       - entraObo
       - apimCredentialManager
       - keyVaultReferences
@@ -3723,28 +3669,6 @@ implementations:
       storage: https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction
       sources: https://learn.microsoft.com/en-us/azure/aks/kaito-custom-inference-model
       registry: https://learn.microsoft.com/en-us/azure/machine-learning/concept-machine-learning-registries-mlops
-    differences:
-      - at: gateway->api
-        text: "API Management sits outside the cluster and KAITO's endpoint is a cluster-only address. You must publish the service on an internal load balancer or ingress and join API Management to the cluster's virtual network; otherwise the cluster has to expose a public endpoint."
-        url: https://learn.microsoft.com/en-us/azure/api-management/api-management-kubernetes
-      - at: gateway->api
-        text: "A Kubernetes network policy cannot name API Management, which is not a pod, and load balancers can rewrite source addresses. As well as default deny, restrict the serving service to the gateway's subnet range, for example with loadBalancerSourceRanges."
-        url: https://learn.microsoft.com/en-us/azure/aks/use-network-policies
-      - at: storage->runtime
-        text: "KAITO does not load from Blob Storage. Its presets pull public container images that already hold the weights, and its custom path downloads from Hugging Face. To serve your own verified release, mount Blob into a vLLM deployment you define, or build a private image."
-        url: https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator
-      - at: runtime
-        text: "Microsoft's page says only the Hugging Face runtime supports the KAITO custom-model template. A model outside the preset list therefore does not run on vLLM through KAITO; deploy vLLM as your own Kubernetes workload if you need it."
-        url: https://learn.microsoft.com/en-us/azure/aks/kaito-custom-inference-model
-      - at: runtime
-        text: "KAITO creates a GPU node pool for each workspace by itself, from the instance type in the manifest. Node pools you add and taint by hand for each sensitivity tier are a separate mechanism; decide which one owns the GPU nodes."
-        url: https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator
-      - at: registry->storage
-        text: "The registry keeps model files in storage accounts it creates in its own managed resource group, not in your serving Blob account. A release step must copy the promoted version out (az ml model download) into the serving account and record its digest."
-        url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-registry-network-isolation
-      - at: gateway
-        text: "The gateway does not check content itself. The llm-content-safety policy sends prompts and completions to a separate Azure AI Content Safety resource you must create and connect. On streamed answers it stops the stream instead of returning a 403 error."
-        url: https://learn.microsoft.com/en-us/azure/api-management/llm-content-safety-policy
     alsoNeeded:
       - service: "Microsoft Entra Workload ID on AKS"
         role: identity
@@ -3833,7 +3757,7 @@ implementations:
         note: "KAITO's custom-model template downloads from Hugging Face at start-up; load from your storage instead."
         options:
           - { name: "vLLM on AKS GPU node pools (KAITO)", kind: open, url: "https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator-monitoring", packs: [azureNative] }
-          - { name: "KAITO (AI toolchain operator add-on)", kind: open, url: "https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator", note: "Today's mapping. Microsoft-managed AKS add-on of the CNCF Sandbox project; lags one upstream release; Ampere or newer NVIDIA GPUs." }
+          - { name: "KAITO (AI toolchain operator add-on)", kind: open, url: "https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator", note: "Today's mapping. Microsoft-managed AKS add-on of the CNCF Sandbox project; lags one upstream release; Ampere or newer NVIDIA GPUs.", watch: [{ text: "Per Microsoft's add-on page, presets pull public container images that already hold the weights and the custom path downloads from Hugging Face; to serve your own verified release, mount Blob into a vLLM deployment you define, or build a private image.", url: "https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator" }, { text: "Only its Hugging Face (transformers) runtime supports the custom-model template, so a model outside the preset list does not run on vLLM through KAITO; deploy the server as your own Kubernetes workload for that.", url: "https://learn.microsoft.com/en-us/azure/aks/kaito-custom-inference-model" }] }
           - { name: "Your own Deployment or Helm release on GPU node pools", kind: open, url: "https://learn.microsoft.com/en-us/azure/aks/use-nvidia-gpu", note: "Any engine on AKS GPU node pools with the NVIDIA device plugin or GPU Operator; you own scaling and rollout." }
           - { name: "KubeRay with Kueue on AKS", kind: open, url: "https://learn.microsoft.com/en-us/azure/aks/ray-overview", note: "Ray clusters as RayService or RayJob with quota-based admission; managed KubeRay and Kueue extensions are preview." }
           - { name: "Anyscale on Azure", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/anyscale-on-azure/overview", note: "Managed Ray: Anyscale's control plane, an operator on your AKS cluster, Entra sign-in; several features in preview." }
@@ -3850,7 +3774,7 @@ implementations:
       - block: registry
         service: "Azure Machine Learning registry"
         options:
-          - { name: "Azure Machine Learning registry", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/machine-learning/concept-machine-learning-registries-mlops?view=azureml-api-2", note: "Today's mapping. Versioned models and assets shared across workspaces and regions.", packs: [azureNative] }
+          - { name: "Azure Machine Learning registry", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/machine-learning/concept-machine-learning-registries-mlops?view=azureml-api-2", note: "Today's mapping. Versioned models and assets shared across workspaces and regions.", packs: [azureNative], watch: [{ text: "Keeps model files in storage accounts it creates in its own managed resource group, not your serving account; on AKS a release step copies the promoted version out (az ml model download) and records its digest.", url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-registry-network-isolation" }] }
           - { name: "Models in Unity Catalog (Azure Databricks)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/databricks/machine-learning/manage-model-lifecycle/", note: "Hosted MLflow registry with Unity Catalog access control, lineage and audit; not available in Azure Government regions.", packs: [azureDatabricks] }
           - { name: "MLflow open source on AKS", kind: open, url: "https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/", note: "Self-hosted tracking server and registry; artifacts in Azure Blob Storage.", packs: [openSourceOnAks], watch: [{ text: "Self-hosted; artifacts in Azure Blob Storage.", url: "https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/" }] }
           - { name: "Azure Container Registry OCI artifacts", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-manage-artifact", note: "Weights pushed with ORAS as OCI artifacts beside the images that load them; KAITO already ships preset weights this way." }
@@ -3921,27 +3845,15 @@ implementations:
           - https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints
         summary: "The model server runs as a container you supply on GPU virtual machines that Azure Machine Learning provisions, patches and replaces, behind a managed online endpoint that API Management calls. The cluster, node pools, ingress and network policy of the mapping disappear. In exchange the weights load from a registered model rather than your own Blob account, requests are capped at 180 seconds, and network isolation follows the workspace."
         bindings:
-          - { block: api, service: "Azure ML managed online endpoint (scoring URI)", note: "One HTTPS scoring address per endpoint with Microsoft Entra token authentication; with public network access disabled, API Management reaches it through the workspace private endpoint.", url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints-online }
-          - { block: runtime, service: "Your container on an Azure ML managed online deployment", note: "A serving image you bring, on GPU instances Azure ML provisions; Microsoft's guide shows TensorFlow Serving, TorchServe and Triton. One deployment per release, with traffic split across them.", url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container }
-          - { block: storage, service: "Azure ML registered model, mounted into the deployment", note: "The deployment names a model version in the workspace or a registry and Azure ML mounts its files into the container, replacing the separate serving Blob account.", url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container }
-        dropSettings: [aksGpuNodeTaints, aksNetworkPolicy]
+          - { block: api, service: "Azure ML managed online endpoint (scoring URI)", note: "One HTTPS scoring address per endpoint with Microsoft Entra token authentication; with public network access disabled, API Management reaches it through the workspace private endpoint.", url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints-online, watch: [{ text: "A request times out after 5 seconds by default and 180 seconds at most (request_timeout_ms), so long generations stream or finish inside that limit.", url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-quotas" }] }
+          - { block: runtime, service: "Your container on an Azure ML managed online deployment", note: "A serving image you bring, on GPU instances Azure ML provisions; Microsoft's guide shows TensorFlow Serving, TorchServe and Triton. One deployment per release, with traffic split across them.", url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container, watch: [{ text: "Azure updates the host OS image at least monthly, but a patched base image reaches a deployment only on redeploy, and an image you bring is yours to rebuild; Azure ML reserves 20% extra quota on some VM sizes for these upgrades.", url: "https://learn.microsoft.com/en-us/azure/machine-learning/concept-vulnerability-management" }] }
+          - { block: storage, service: "Azure ML registered model, mounted into the deployment", note: "The deployment names a model version in the workspace or a registry and Azure ML mounts its files into the container, replacing the separate serving Blob account.", url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container, watch: [{ text: "The server does not pull from a store you manage, so the signature check runs inside your image before it serves. The platform may re-read the model and image at any time, so deleting either breaks the deployment at the next reimage.", url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container" }] }
+        dropSettings: [aksGpuNodeTaints, aksNetworkPolicy, aksInternalLoadBalancer]
         addSettings: [amlManagedNetwork, amlEndpointPublicNetworkAccess, amlEndpointAadToken, amlOnlineDeploymentInstances, amlEndpointTraffic, amlEndpointIdentity, amlEndpointDiagnostics]
-        differences:
-          - at: gateway->api
-            text: "A managed online endpoint is public unless public_network_access is set to disabled, and it authenticates with a key by default. To keep the gateway as the only door, disable public access, join API Management to a network that reaches the workspace private endpoint, and have it call with a Microsoft Entra token for https://ml.azure.com."
-            url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-secure-online-endpoint
-          - at: api
-            text: "A request to a managed online endpoint times out after 5 seconds by default and 180 seconds at most (request_timeout_ms). Long generations must stream or finish inside that limit; there is no such platform cap in front of a vLLM service on AKS."
-            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-quotas
-          - at: storage->runtime
-            text: "Azure Machine Learning mounts the registered model into the container; the server does not pull from a Blob account you manage. The signature check must therefore run inside your image before it starts serving. The platform may re-read the model and image at any time, so deleting either breaks the deployment on the next reimage."
-            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-custom-container
-          - at: registry->storage
-            text: "The copy step of the AKS mapping is not needed: Microsoft documents deploying a model from a registry directly to an online endpoint in a workspace. The release record becomes the registry model name and version named in the deployment. For an endpoint with a user-assigned identity, Microsoft says the identity needs AcrPull and Storage Blob Data Reader at subscription level."
+        shape:
+          - rename: { at: registry->storage, label: "version named in the deployment" }
+            why: "Azure ML deploys a model version from the registry straight to the online endpoint and mounts its files, so there is no copy into a serving store: the release record is the registry model name and version the deployment names."
             url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-share-models-pipelines-across-workspaces-with-registries
-          - at: runtime
-            text: "Azure updates the host operating system image at least once a month by itself, but a patched base image reaches a deployment only when you redeploy, and an image you bring is yours to rebuild. Azure ML also reserves 20% extra quota on some virtual machine sizes for these upgrades."
-            url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-vulnerability-management
         alsoNeeded:
           - service: "Azure Machine Learning workspace (with its storage account, Key Vault and container registry)"
             role: other
@@ -4047,6 +3959,8 @@ implementations:
       - servingModelRecord
       - aksGpuNodeTaints
       - aksNetworkPolicy
+      - aksInternalLoadBalancer
+      - apimInternalVnet
       - defenderContainerVa
       - apimGatewayLogs
 
@@ -4063,31 +3977,6 @@ implementations:
       storage: https://learn.microsoft.com/en-us/azure/machine-learning/concept-workspace
       evaluation: https://learn.microsoft.com/en-us/azure/foundry/concepts/ai-red-teaming-agent
       registry: https://learn.microsoft.com/en-us/azure/machine-learning/concept-machine-learning-registries-mlops
-    differences:
-      - at: upstreamArtifacts->pkgRegistry
-        text: "An Azure Artifacts feed with upstream sources is a pull-through cache: any package a Collaborator installs is saved automatically, with no approval step. Give build and training identities the plain Reader role, and admit packages and base checkpoints through a separate reviewed job."
-        url: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources
-      - at: pkgRegistry->trainJob
-        text: "The training job does not fetch packages itself. Azure ML installs them when it builds the environment's container image, on a build compute you must nominate when the registry is private, then caches the image in Azure Container Registry. The mirror needs an outbound rule."
-        url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-managed-network
-      - at: storage->registry
-        text: "Azure adds a step: the candidate is first registered in the training workspace from the job output, then copied to the registry with az ml model share. The registry stores its own copy, so compare digests after the copy, not only before."
-        url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-share-models-pipelines-across-workspaces-with-registries
-      - at: storage->registry
-        text: "Sharing from a locked-down workspace fails if its storage account has public access disabled. Microsoft's fix is to set the account to selected networks and add the registry as an allowed resource instance, a deliberate exception you must configure."
-        url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-registry-network-isolation
-      - at: evaluation->registry
-        text: "Azure ML has no built-in approval gate or signing. MLOps v2 puts the human approval in a CI/CD pipeline (Azure Pipelines or GitHub Actions) that promotes the model. You must build that pipeline, and it becomes the identity holding the signing key."
-        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/machine-learning-operations-v2
-      - at: corpus
-        text: "A data asset version cannot be edited or deleted, but it only points at a storage path. The files underneath can still change unless you write each corpus version to a new path and turn on Blob versioning or immutability."
-        url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-create-data-assets
-      - at: evaluation
-        text: "Cloud and portal red teaming runs only target Foundry or Azure OpenAI deployments and Foundry agents. A candidate trained in Azure ML must be tested with the local SDK through a callback to your evaluation endpoint, and still needs a Foundry project."
-        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/develop/run-ai-red-teaming-cloud
-      - at: curation
-        text: "Curation steps that call Azure AI Language or Content Safety send every example to those services. Under approved-outbound isolation each needs its own outbound rule or private endpoint, and the curation identity needs access to them."
-        url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-managed-network
     alsoNeeded:
       - service: "Azure Container Registry"
         role: registry
@@ -4184,7 +4073,7 @@ implementations:
         service: "Azure ML GPU compute cluster"
         note: "In a managed virtual network; RL rollouts go to the agent sandbox drawing."
         options:
-          - { name: "Azure ML GPU compute cluster", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-create-attach-compute-cluster", packs: [azureNative] }
+          - { name: "Azure ML GPU compute cluster", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-create-attach-compute-cluster", packs: [azureNative], watch: [{ text: "The job does not fetch packages itself: Azure ML installs them when it builds the environment's image, on a build compute you nominate when the workspace is private, and caches the image in Azure Container Registry; the feed needs an outbound rule in the managed network.", url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-managed-network" }] }
           - { name: "KubeRay RayJob with Kueue, or KAITO tuning (LoRA, QLoRA)", kind: open, url: "https://kaito-project.github.io/kaito/docs/tuning/", note: "Hosting is compared separately; these run on the AKS option.", packs: [openSourceOnAks] }
           - { name: "Databricks AI Runtime (serverless GPU)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/databricks/machine-learning/ai-runtime/", note: "On-demand A10 and H100 GPUs for training and fine-tuning; hosting compared separately.", packs: [azureDatabricks] }
       - block: storage
@@ -4208,7 +4097,7 @@ implementations:
       - block: registry
         service: "Azure Machine Learning registry"
         options:
-          - { name: "Azure Machine Learning registry", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/machine-learning/concept-machine-learning-registries-mlops?view=azureml-api-2", note: "Today's mapping. Versioned models and assets shared across workspaces and regions.", packs: [azureNative] }
+          - { name: "Azure Machine Learning registry", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/machine-learning/concept-machine-learning-registries-mlops?view=azureml-api-2", note: "Today's mapping. Versioned models and assets shared across workspaces and regions.", packs: [azureNative], watch: [{ text: "A candidate is registered in the training workspace from the job output, then copied to the registry with az ml model share; the registry keeps its own copy, so compare digests after the copy as well as before.", url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-share-models-pipelines-across-workspaces-with-registries" }] }
           - { name: "Models in Unity Catalog (Azure Databricks)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/databricks/machine-learning/manage-model-lifecycle/", note: "Hosted MLflow registry with Unity Catalog access control, lineage and audit; not available in Azure Government regions.", packs: [azureDatabricks] }
           - { name: "MLflow open source on AKS", kind: open, url: "https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/", note: "Self-hosted tracking server and registry; artifacts in Azure Blob Storage.", packs: [openSourceOnAks] }
           - { name: "Azure Container Registry OCI artifacts", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-manage-artifact", note: "Weights pushed with ORAS as OCI artifacts beside the images that load them; KAITO already ships preset weights this way." }
@@ -4271,25 +4160,9 @@ implementations:
           - https://learn.microsoft.com/en-us/azure/machine-learning/how-to-troubleshoot-kubernetes-extension
         summary: "The pipeline stays in Azure Machine Learning, but the training job runs as pods on an AKS cluster the organisation operates, attached to the workspace through the Azure Machine Learning extension. The builder now carries what the compute cluster did by itself: node patching, GPU capacity with no autoscaling, the job's network wall, and the identity given to the compute target. The workspace's managed virtual network no longer surrounds the job."
         bindings:
-          - { block: trainJob, service: "Azure ML job on AKS (Kubernetes compute target)", note: "The Azure Machine Learning extension, installed with enableTraining=True, runs each job as pods in the namespace named at attach, on GPU node pools you size, patch and isolate.", url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere }
+          - { block: trainJob, service: "Azure ML job on AKS (Kubernetes compute target)", note: "The Azure Machine Learning extension, installed with enableTraining=True, runs each job as pods in the namespace named at attach, on GPU node pools you size, patch and isolate.", url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere, watch: [{ text: "An attached cluster is outside the workspace's managed virtual network: the job's network wall is the cluster's own virtual network, with private endpoints for the workspace, storage, registry and vault, plus the firewall route and network policy you add.", url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere" }, { text: "Behind a firewall, training on Kubernetes compute also needs pypi.org (job environment initialisation) and the Ubuntu archive hosts (security patches), each an opening beside the private feed to grant, proxy or replace with an internal mirror.", url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-access-azureml-behind-firewall" }, { text: "Node autoscaling is unsupported for training: the extension's Volcano scheduler blocks the cluster autoscaler unless you supply a scheduler configuration without the gang plugin, so capacity is provisioned ahead and billed while idle; node patching is yours.", url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere" }, { text: "The extension does not support disabling local accounts or service-principal clusters, and needs its control-plane ranges allowed where the API server has authorised IP ranges, so local accounts stay on for this cluster.", url: "https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-kubernetes-extension" }] }
         dropSettings: [amlComputeIdentity]
         addSettings: [aksNetworkPolicy, aksGpuNodeTaints, aksFirewallEgress, aksNodeOsUpgradeChannel, aksContainerLogs, defenderContainerVa, amlKubernetesComputeIdentity, amlKubernetesInstanceType, amlKubernetesNamespace]
-        differences:
-          - at: trainJob
-            text: "The workspace's managed virtual network isolates compute that Azure Machine Learning creates; an attached AKS cluster is outside it. Microsoft's pattern is an AKS cluster in its own virtual network with private endpoints there for the workspace and its storage, registry and vault, plus whatever firewall and network policy the builder adds."
-            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere
-          - at: pkgRegistry->trainJob
-            text: "Behind a firewall, Microsoft lists outbound addresses that training on Kubernetes compute needs beyond the workspace, storage and registry: pypi.org for job environment initialisation and the Ubuntu archive hosts for security patches. Each is an opening beside the private feed that the builder must grant, proxy or replace with an internal mirror."
-            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-access-azureml-behind-firewall
-          - at: trainJob
-            text: "Microsoft lists node autoscaling as unsupported for training on Kubernetes compute: the extension's Volcano scheduler blocks the AKS cluster autoscaler unless you supply a scheduler configuration without the gang plugin. Otherwise capacity is provisioned ahead and billed while idle. Node patching is the builder's: OS and image vulnerabilities are the customer's responsibility."
-            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-anywhere
-          - at: trainJob
-            text: "The extension constrains cluster hardening: Azure Machine Learning does not support disabling local accounts on the AKS cluster, does not support service-principal clusters, and needs its control plane address ranges allowed if the API server has authorised IP ranges. The repository's disable-local-accounts setting therefore cannot be applied here."
-            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-deploy-kubernetes-extension
-          - at: trainJob->storage
-            text: "The job writes its candidate with the managed identity assigned to the compute target, not with a compute cluster identity. One cluster can be attached several times, to several workspaces or namespaces, so the same nodes may serve jobs with different identities unless instance types pin each to its own node pool."
-            url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-kubernetes-to-workspace
         alsoNeeded:
           - service: "AKS cluster with GPU node pools"
             role: other
@@ -4391,6 +4264,7 @@ implementations:
       - amlModelFromJob
       - amlModelTags
       - amlManagedNetwork
+      - amlStorageRegistryInstanceRule
       - amlComputeIdentity
       - aksPodSandboxing
       - amlWorkspaceDiagnostics
@@ -4409,28 +4283,10 @@ implementations:
       storage: https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction
       inference: https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator-monitoring
       registry: https://learn.microsoft.com/en-us/azure/devops/artifacts/start-using-azure-artifacts
-    differences:
-      - at: sandbox
-        text: "A standard AKS cluster has unrestricted outbound internet access by default. Azure Firewall is a wall only if the builder sets the cluster's outbound type to user-defined routing through the firewall, or builds a network-isolated cluster."
-        url: https://learn.microsoft.com/en-us/azure/aks/concepts-network-isolated
-      - at: localTools->registry
-        text: "Azure Artifacts is a public Azure DevOps service. Microsoft's allow list for it includes every Azure Storage address (*.blob.core.windows.net), which opens a data-leak path. Put a package proxy inside the cluster, or accept and monitor that opening."
-        url: https://learn.microsoft.com/en-us/azure/devops/organizations/security/allow-list-ip-url
-      - at: localTools->platform
-        text: "Every pod can reach the node's metadata service (169.254.169.254) by default and may obtain tokens there. Blocking it is a preview feature; the builder must enable it or block the address with network policy."
-        url: https://learn.microsoft.com/en-us/azure/aks/imds-restriction
-      - at: localTools->platform
-        text: "Container logs are collected by the Azure Monitor agent on each node, not sent by the sandbox. The rollout needs no network path to Azure Monitor unless the harness exports its own traces."
-        url: https://learn.microsoft.com/en-us/azure/azure-monitor/containers/kubernetes-monitoring-overview
-      - at: platform
-        text: "Microsoft Defender for Containers does not assess pods that run under the Kata runtime. Threat detection for rollouts must come from the builder's own logs and network flow records."
-        url: https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing
-      - at: platform
-        text: "AKS mounts Azure Files with the storage account key by default. With shared-key access turned off, mounts fail unless the storage class uses managed identity (AKS 1.34 or later) or the share sits in a separate account."
-        url: https://learn.microsoft.com/en-us/azure/aks/create-volume-azure-files
-      - at: localTools->offlineWeb
-        text: "FQDN filtering cannot name Kubernetes services. The offline web, inference and other in-cluster targets must be allowed with label-based Cilium policies; the FQDN list covers only names outside the cluster."
-        url: https://learn.microsoft.com/en-us/azure/aks/container-network-security-fqdn-filtering-concepts
+    shape:
+      - move: { block: registry, zone: zoneExternal }
+        why: "Azure Artifacts is a public Azure DevOps service, and Microsoft's allow list for it includes every Azure Storage address (*.blob.core.windows.net), an exfiltration path from rollouts. Either put a package proxy inside the cluster, or accept and monitor that opening."
+        url: https://learn.microsoft.com/en-us/azure/devops/organizations/security/allow-list-ip-url?view=azure-devops
     alsoNeeded:
       - service: "Azure Container Registry"
         role: registry
@@ -4488,7 +4344,7 @@ implementations:
         Container Apps dynamic sessions are the managed alternative for lighter code-execution tasks.
     bindings:
       - { block: graders, service: Your graders on a separate AKS node pool, build: true, note: "Unreachable from rollout pods by network policy; read end state, never write it." }
-      - { block: platform, service: "Azure Monitor, Workload ID, Azure Files", note: "Log collection, token issuance and shared storage: each reachable only as far as the rollout needs." }
+      - { block: platform, service: "Azure Monitor, Workload ID, Azure Files", note: "Log collection, token issuance and shared storage: each reachable only as far as the rollout needs.", watch: [{ text: "AKS mounts Azure Files with the storage account key by default; with shared-key access off, mounts fail unless the storage class uses managed identity (AKS 1.34 or later) or the share sits in a separate account.", url: "https://learn.microsoft.com/en-us/azure/aks/create-volume-azure-files" }] }
       - { block: orchestrator, service: Your run orchestrator on AKS, build: true }
       - block: sandbox
         service: "AKS Pod Sandboxing (Kata) node pool"
@@ -4581,25 +4437,13 @@ implementations:
         bindings:
           - { block: sandbox, service: "Container Apps custom container session pool", note: "One Hyper-V isolated session per rollout, allocated from prewarmed instances by a session identifier the orchestrator generates, and destroyed by stopSession, cooldown or container exit.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container }
           - { block: harness, service: "Your episode harness on AKS, driving the session over HTTP", build: true, note: "Runs beside the orchestrator, not in the sandbox, because a session with outbound traffic disabled cannot call the inference runtime; it sends each action through the pool management endpoint.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage }
-          - { block: localTools, service: "Shell, file and browser tool server in the session image", build: true, note: "An HTTP server in your image on the pool's target port; anything after the management endpoint in the request path is forwarded to it.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage }
+          - { block: localTools, service: "Shell, file and browser tool server in the session image", build: true, note: "An HTTP server in your image on the pool's target port; anything after the management endpoint in the request path is forwarded to it.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage, watch: [{ text: "Session networking has two values, EgressDisabled and EgressEnabled (code can reach the internet), and no destination list or route is documented, so a browsing task cannot be held to the offline web on session pools.", url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool" }, { text: "With egress disabled nothing installs at run time: everything is built into the session image from the private feed, the pool caches it, and changes reach sessions only when the pool moves to a new, unique image tag.", url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool" }] }
           - { block: platform, service: "Azure Monitor session logs (Log Analytics)", note: "Console output and session lifecycle events reach Log Analytics through the environment's logging. Sessions get no identity by default, and no shared volume is documented.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container }
-        dropSettings: [aksPodSandboxing, aksFqdnFiltering, aksFirewallEgress]
+        dropSettings: [aksPodSandboxing, aksFqdnFiltering, aksFirewallEgress, aksImdsRestriction]
         addSettings: [sessionPoolEgress, sessionExecutorRole, sessionPoolIdentityLifecycle, sessionPoolLifecycle, sessionStopApi, sessionPoolLogs]
         differences:
           - at: harness->inference
-            text: "By default a session cannot make outbound requests, so a harness inside the sandbox cannot sample actions from the inference runtime. The documented way in is the pool management endpoint, so the harness runs outside and sends each action in. Enabling egress to call inference from inside would open the sandbox to the internet as well."
-            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
-          - at: localTools->offlineWeb
-            text: "Session networking is one setting with two values, EgressDisabled and EgressEnabled; Microsoft's warning for the second is that code in the session can access the internet. The pages read describe no destination list or route for session traffic, so a browsing task cannot be held to the offline web here. Keep such tasks on the AKS option."
-            url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
-          - at: localTools->registry
-            text: "With outbound traffic disabled a rollout cannot install packages at run time, pinned or not. Everything it needs is built into the session image from the private feed beforehand. The pool caches that image, and changes reach sessions only when the pool is updated to a new, unique image tag."
-            url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
-          - at: graders->harness
-            text: "The pages read describe one data-plane role: a token holder can create and enter any session in the pool, so graders cannot be given read-only access to a sandbox. Have the orchestrator fetch the end state through your tool server and hand it to the graders. Session identifiers alone separate rollouts, so generate them unpredictably and never take one from model output."
-            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
-          - at: localTools->platform
-            text: "There is no token issuance to the sandbox unless the pool's managed identity is exposed with lifecycle Main, which lets any code in the session act as that identity. No shared volume is documented either, so files and results leave only through your tool server's HTTP API, and logs are collected by the platform from console output."
+            text: "A session cannot make outbound requests by default, so a harness inside it cannot sample from the inference runtime; the documented way in is the pool management endpoint, so the harness runs outside and sends each action in. Enabling egress to reach inference would open the internet too."
             url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
         alsoNeeded:
           - service: "Container Apps environment with workload profiles"
@@ -4693,6 +4537,7 @@ implementations:
       - artifactsFeedReader
       - artifactsUpstream
       - aksWorkloadIdentity
+      - aksImdsRestriction
       - storageSharedKeyAccess
       - aksContainerLogs
       - appInsightsOtel
@@ -4715,24 +4560,14 @@ implementations:
       peerVendor: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/what-is-single-sign-on
       provider: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure
     differences:
-      - at: harness->gateway
-        text: "Microsoft's baseline has the agent call its model directly on the Foundry endpoint; API Management is optional. The builder must point the agent's model client at API Management, disable Foundry public access and keys, and give model access only to API Management's managed identity."
-        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
-      - at: gateway
-        text: "Microsoft now offers two gateways for Foundry models and tools: Azure API Management and a separate Azure AI Gateway resource type. The settings in this mapping apply to API Management only, so the builder must choose API Management deliberately."
-        url: https://learn.microsoft.com/en-us/azure/foundry/configuration/enable-ai-api-management-gateway-portal
       - at: gateway->authServer
-        text: "API Management only checks incoming Entra tokens. Exchanging a user's token for the agent's own token is done by the agent, or its auth sidecar, calling Entra directly. So the agent process holds those tokens, not the gateway."
+        text: "API Management only validates incoming Entra tokens; exchanging a user's token for the agent's own peer-bound token is done by the agent, or its auth sidecar, calling Entra directly, so the agent process holds those tokens, not the gateway."
         url: https://learn.microsoft.com/en-us/entra/agent-id/agent-on-behalf-of-oauth-flow
-      - at: idp->authServer
-        text: "Both blocks are the same Microsoft Entra tenant, so there is no link between them to build or secure. The vendor platform is added as an enterprise application; the partner's authorization server sits outside Entra."
+    shape:
+      - drop: idp->authServer
+        pins: idp
+        why: "The identity provider and the authorization server are one Microsoft Entra tenant, so there is no federation link between them to build or secure: the vendor platform is an enterprise application in that tenant, and a partner's own authorization server sits outside Entra."
         url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/what-is-single-sign-on
-      - at: gateway->peerVendor
-        text: "API Management's A2A support covers JSON-RPC agents only, applies policies to the whole agent rather than each skill, and cannot read response bodies. Classifying or redacting artifacts that come back must be done in your agent code."
-        url: https://learn.microsoft.com/en-us/azure/api-management/agent-to-agent-api
-      - at: gateway->peerVendor
-        text: "API Management republishes each imported agent card with its own hostname, JSON-RPC as the only transport and a subscription-key requirement. The rewrite breaks the card's signature and uses A2A 0.3 card fields; publish a card you sign after the rewrite, or serve the signed card outside API Management."
-        url: https://learn.microsoft.com/en-us/azure/api-management/agent-to-agent-api
     alsoNeeded:
       - service: "Azure Key Vault"
         role: secrets
@@ -4826,7 +4661,7 @@ implementations:
       - block: gateway
         service: "Azure API Management (A2A agent APIs)"
         options:
-          - { name: "Azure API Management (A2A agent APIs)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/api-management/agent-to-agent-api", note: "Today's mapping. Mediates JSON-RPC, rewrites the agent card to the gateway host and adds OpenTelemetry agent attributes.", packs: [azureNative] }
+          - { name: "Azure API Management (A2A agent APIs)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/api-management/agent-to-agent-api", note: "Today's mapping. Mediates JSON-RPC, rewrites the agent card to the gateway host and adds OpenTelemetry agent attributes.", packs: [azureNative], watch: [{ text: "A2A support covers JSON-RPC agents only, applies policy to the whole agent rather than each skill, and cannot read response bodies, so classifying or redacting returned artifacts happens in the agent's code.", url: "https://learn.microsoft.com/en-us/azure/api-management/agent-to-agent-api" }, { text: "Each imported agent card is republished with the gateway's hostname, JSON-RPC as the only transport and a subscription-key requirement, which breaks the card's signature and uses A2A 0.3 card fields: publish a card you sign after the rewrite, or serve the signed card outside API Management.", url: "https://learn.microsoft.com/en-us/azure/api-management/agent-to-agent-api" }] }
           - { name: "Kong AI A2A Proxy", kind: commercial, url: "https://developer.konghq.com/plugins/ai-a2a-proxy/", note: "A2A plugin from Kong 3.14; AI Gateway Enterprise.", packs: [kongKonnect], watch: [{ text: "From Kong 3.14.", url: "https://developer.konghq.com/plugins/ai-a2a-proxy/" }] }
           - { name: "agentgateway on AKS", kind: open, url: "https://agentgateway.dev/blog/2026-08-27-agents-on-every-cloud/", note: "A2A-native data plane; Solo.io's walkthrough runs an A2A call through it on AKS.", packs: [openSourceOnAks], watch: [{ text: "A2A through the gateway on AKS, per Solo.io's walkthrough.", url: "https://agentgateway.dev/blog/2026-08-27-agents-on-every-cloud/" }] }
           - { name: "LiteLLM A2A agent gateway", kind: open, url: "https://docs.litellm.ai/docs/a2a", note: "A2A agents behind the same proxy as models and MCP servers." }
@@ -4911,17 +4746,7 @@ implementations:
         summary: "Our agent runs as pods on AKS and still speaks A2A both ways through API Management; Entra ID, API Center, memory and the model stay as mapped. The Entra auth SDK sidecar runs in the agent's pod and authenticates through workload identity. On AKS Standard the builder carries the ingress that brings turns and peers' A2A tasks to the pod, identity federation, network policy and outbound routing, node and Kubernetes upgrades, and logging add-ons."
         bindings:
           - { block: harness, service: "Your agent in pods on Azure Kubernetes Service", builtWith: "Microsoft Agent Framework", note: "Agent Framework's prerelease A2A hosting exposes the agent as an A2A server from your own host, behind an internal Service API Management calls. The Entra auth SDK sidecar shares the pod.", url: https://learn.microsoft.com/en-us/agent-framework/hosting/self-hosting/a2a/server }
-        addSettings: [aksWorkloadIdentity, aksNetworkPolicy, aksFqdnFiltering, aksContainerLogs, aksImdsRestriction, aksNodeOsUpgradeChannel, aksDisableLocalAccounts, aksInternalLoadBalancer, entraSidecarWorkloadIdentity]
-        differences:
-          - at: harness->gateway
-            text: "By default AKS has unrestricted outbound internet access, so the agent's pods could call a peer or a model directly and skip the gateway that attaches peer-bound tokens and classifies artifacts. It holds only with outbound type userDefinedRouting through Azure Firewall, or a Cilium FQDN policy (paid ACNS add-on) that leaves the gateway as the pods' only destination."
-            url: https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress
-          - at: entry->harness
-            text: "Container Apps has ingress built in. On AKS you build the one path that carries turns from the front end and peers' A2A tasks from API Management: a Service or Gateway that is internal only where annotated. Microsoft notes that when API Management is outside the cluster's virtual network the cluster must publish public endpoints, and suggests mutual TLS at the ingress."
-            url: https://learn.microsoft.com/en-us/azure/api-management/api-management-kubernetes
-          - at: harness
-            text: "The agent's tokens come from the Entra auth SDK sidecar in its pod, which on AKS signs in with a projected workload identity token. Microsoft warns that every application inside the sidecar's trust boundary can ask it for tokens, and by default every pod can also reach the node's metadata service, so localhost binding, network policy and IMDS blocking are choices you make."
-            url: https://learn.microsoft.com/en-us/entra/msidweb/agent-id-sdk/security
+        addSettings: [aksWorkloadIdentity, aksNetworkPolicy, aksFirewallEgress, aksFqdnFiltering, aksContainerLogs, aksImdsRestriction, aksNodeOsUpgradeChannel, aksDisableLocalAccounts, aksInternalLoadBalancer, entraSidecarWorkloadIdentity]
         alsoNeeded:
           - service: "Microsoft Entra Workload ID and the cluster OIDC issuer"
             role: identity
@@ -5045,6 +4870,7 @@ implementations:
       - entraAgentObo
       - apimCredentialManager
       - apimValidateToken
+      - foundryDisableLocalAuth
       - cosmosConversationTtl
       - a2aPayloadRedaction
       - apimContentSafety
@@ -5072,6 +4898,9 @@ implementations:
       - block: memory
         service: "Azure Cosmos DB, Blob Storage, Foundry IQ (Azure AI Search)"
         note: "Standard setup only: conversations in Cosmos DB, files in Blob Storage, vector stores in Foundry IQ (Azure AI Search). Basic setup keeps all three in Microsoft-managed storage."
+        watch:
+          - text: "Memory stores (preview) are managed by the service, not kept in your accounts, and virtual network integration is not supported for them."
+            url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/what-is-memory
         options:
           - { name: "Azure Cosmos DB, Blob Storage, Foundry IQ (Azure AI Search)", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup", note: "Today's mapping. Agent state in single-tenant resources in your subscription; needed for private networking.", packs: [azureNative] }
           - { name: "Basic setup: Microsoft-managed storage", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup", note: "Simpler, but agent data is stored in resources Microsoft manages, not yours." }
@@ -5079,13 +4908,13 @@ implementations:
         service: "Azure API Management (MCP servers), internal"
         note: "Fronts your MCP servers on a private address and validates the agent's Entra token. Azure AI Gateway is a newer preview alternative, in two regions only."
         options:
-          - { name: "Azure API Management (MCP servers), internal", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview", note: "Today's mapping. Fronts your MCP servers on a private address and validates the agent's Entra token.", packs: [azureNative] }
+          - { name: "Azure API Management (MCP servers), internal", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview", note: "Today's mapping. Fronts your MCP servers on a private address and validates the agent's Entra token.", packs: [azureNative], watch: [{ text: "Policies apply to a whole MCP server, and the documented ones are token validation, rate limits, IP filtering and caching, so approval checks and screening of tool results are built or left to Foundry guardrails. Foundry no longer links API Management, and a gateway it created earlier is public.", url: "https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview" }] }
           - { name: "Azure AI Gateway", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/foundry/configuration/enable-ai-api-management-gateway-portal", note: "Its own resource type; Foundry projects consume its model aliases and gateway-routed tools; Foundry UI integration is rolling out." }
           - { name: "Kong AI MCP Proxy", kind: commercial, url: "https://developer.konghq.com/cookbooks/secure-mcp-entra-id/", note: "Entra-secured MCP resource server in front of your tools.", packs: [kongKonnect] }
           - { name: "agentgateway on AKS", kind: open, url: "https://agentgateway.dev/docs/kubernetes/latest/", note: "MCP gateway inside your cluster.", packs: [openSourceOnAks], watch: [{ text: "In front of your MCP servers in the virtual network.", url: "https://agentgateway.dev/docs/kubernetes/latest/" }] }
       - { block: internalTools, service: "Your MCP servers and APIs in the virtual network", build: true, note: "Workload-owned MCP servers, OpenAPI tools and A2A agents on a subnet of their own, accepting traffic from the gateway only. Container Apps is the tested private MCP host; Functions is not validated." }
       - { block: orgData, service: "Your Azure data services behind private endpoints", build: true, note: "Systems of record and knowledge indexes reached by your tool servers, or by Foundry IQ knowledge bases with the user's token so source permissions apply." }
-      - { block: managedRuntime, service: "Microsoft Foundry Agent Service", note: "Prompt agents: Microsoft runs the loop. Hosted agents: your code in a VM sandbox per session. Models are deployments in the same Foundry resource. Tool calls leave by a data proxy per project." }
+      - { block: managedRuntime, service: "Microsoft Foundry Agent Service", note: "Prompt agents: Microsoft runs the loop. Hosted agents: your code in a VM sandbox per session. Models are deployments in the same Foundry resource. Tool calls leave by a data proxy per project.", watch: [{ text: "Two runtimes sit behind one endpoint: a prompt agent runs Microsoft's loop, while a hosted agent runs your container or code in a VM-isolated sandbox per session attached to your delegated subnet, whose own outbound traffic leaves through that subnet while its tool calls use the data proxy.", url: "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agents-networking-deep-dive" }, { text: "A hosted agent's per-session $HOME volume sits on platform-managed storage, is not encrypted with your customer-managed key, is kept 30 days unless you delete the session, and cannot be switched off.", url: "https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys" }] }
       - { block: nativeTools, service: "Foundry built-in tools (file search, code interpreter)", note: "File search reaches your stores by private endpoint. Code interpreter runs in a Microsoft sandbox on the backbone network. Computer use and image generation are not supported when network isolated." }
       - { block: vendorTools, service: "Foundry tool catalogue and remote MCP servers", note: "Catalogue MCP servers, SharePoint grounding and public MCP servers the definition names, with credentials in project connections. Work IQ is not supported in a network-isolated project." }
       - block: openWeb
@@ -5107,31 +4936,6 @@ implementations:
       nativeTools: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
       vendorTools: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/toolbox-overview
       openWeb: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/web-search
-    differences:
-      - at: managedRuntime->aiGateway
-        text: "Nothing forces tool calls through your gateway. Foundry does not register or rewrite an MCP endpoint: each tool or connection must be given the gateway-routed address by hand, and a direct address keeps working. Hold it with the approved-tools policy (preview) listing only gateway endpoints, and with network rules on the agent subnet."
-        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/governance
-      - at: nativeTools->memory
-        text: "State is in your account only with standard setup, chosen when the project is created and not changeable afterwards. Agent Service reaches Cosmos DB, Storage and Foundry IQ as the project's managed identity, shared by every agent in the project, not as each agent's own identity. Memory stores (preview) stay in managed storage with no virtual network support."
-        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/standard-agent-setup
-      - at: memory
-        text: "A customer-managed key on the Foundry resource does not cover prompt agent state in Microsoft-managed storage. You bring the three stores and set your key on each one separately. A hosted agent's per-session $HOME volume sits on platform storage, is not encrypted with your key, is kept for 30 days and cannot be switched off."
-        url: https://learn.microsoft.com/en-us/azure/foundry/concepts/customer-managed-keys
-      - at: entry->managedRuntime
-        text: "A new Foundry resource is fully public: any caller with a valid credential can reach the endpoint. Private endpoints and the public access flag apply to the whole resource, not to one project. Network injection for outbound traffic must be chosen when the resource is created and cannot be added or changed later."
-        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
-      - at: nativeTools->openWeb
-        text: "Web search, Bing grounding and SharePoint grounding use public endpoints even in a network-isolated project, and web search bypasses the agent subnet, so Azure Firewall never sees it. Bing data leaves the Azure compliance and geographic boundary. The limits are the definition, the tool policies, or a subscription-wide block on web search."
-        url: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
-      - at: managedRuntime
-        text: "Two runtimes sit behind one endpoint. For a prompt agent Microsoft runs the loop. For a hosted agent you supply the loop as a container or source code; it runs in a VM-isolated sandbox per session attached to your delegated subnet, and its own outbound traffic leaves directly through that subnet while its tool calls still use the data proxy."
-        url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agents-networking-deep-dive
-      - at: aiGateway
-        text: "API Management policies apply to a whole MCP server, not to one tool, and the documented policies are token validation, rate limits, IP filtering and caching: approval checks and screening of tool results must be built or left to Foundry guardrails. Foundry no longer links API Management; a gateway it created earlier is public. Azure AI Gateway is preview, in two regions."
-        url: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
-      - at: agentDef->managedRuntime
-        text: "Built-in Azure Policy can deny public network access, key access, missing customer-managed keys and unapproved models. The agent and tool definitions are preview, and the agent content-filter ones only audit. No built-in definition was found that requires standard setup or network injection; that needs a custom definition."
-        url: https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies
     alsoNeeded:
       - service: "Microsoft Entra ID with Microsoft Entra Agent ID"
         role: identity
@@ -5180,7 +4984,7 @@ implementations:
         url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/virtual-networks
       - title: "Networking options for Foundry Agent Service"
         url: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/networking-options
-    settings: [entraAssignmentRequired, apimValidateToken, apimMcpServers, searchDocumentAccess, tenantClaimValidation, storageCmk, firewallEgress, entraAgentDisable, storePrivateEndpoints, apimInternalVnet, cosmosCmk, searchCmk, policyAiServicesNetworkAccess, policyAiServicesKeyAccess, policyAiServicesCmk, policyAllowedLocations, foundryDiagnosticSetting, activityLogExport, entraAgentSignInLogs, storeDataPlaneRoles, webSearchSubscriptionBlock]
+    settings: [entraAssignmentRequired, apimValidateToken, apimMcpServers, policyFoundryApprovedTools, searchDocumentAccess, tenantClaimValidation, foundryStandardSetup, storageCmk, firewallEgress, entraAgentDisable, storePrivateEndpoints, apimInternalVnet, cosmosCmk, searchCmk, policyAiServicesNetworkAccess, policyAiServicesKeyAccess, policyAiServicesCmk, policyAllowedLocations, foundryDiagnosticSetting, activityLogExport, entraAgentSignInLogs, storeDataPlaneRoles, webSearchSubscriptionBlock]
   # <<< managed agent service mapping
   # >>> software factory mapping (checked against the vendor's pages by two people)
   - architecture: archSoftwareFactory
@@ -5279,7 +5083,7 @@ implementations:
         note: "Created by subscription vending under the Online landing zone management group: own unpeered VNet, own identity, Key Vault and budget, tagged with owner and end date. A shared subscription with a Container Apps environment, identity and Key Vault per app is the lighter way; apps in one environment share its network and log destination, so give each app its own environment at least."
         url: https://learn.microsoft.com/en-us/azure/architecture/landing-zones/subscription-vending
         options:
-          - { name: "One subscription per app", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/architecture/landing-zones/subscription-vending", note: "Today's mapping. Own identity, network, keys and logs per app under the landing zone.", packs: [azureNative] }
+          - { name: "One subscription per app", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/architecture/landing-zones/subscription-vending", note: "Today's mapping. Own identity, network, keys and logs per app. Online vending leaves app networks unpeered; Corp routes them through the hub firewall.", packs: [azureNative] }
           - { name: "Shared subscription with a Container Apps environment per app", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/architecture/guide/multitenant/service/container-apps", note: "Microsoft's multitenant guide: a separate environment per tenant for untrusted code." }
           - { name: "Namespace per app on a shared AKS cluster", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/architecture/guide/multitenant/service/aks", note: "Logical isolation with namespaces, network policy and resource quotas, per Microsoft's multitenant AKS guide." }
       - block: appHosting
@@ -5287,7 +5091,7 @@ implementations:
         note: "Built-in authentication with Entra ID in front, a user-assigned identity, secrets as Key Vault references, multiple revision mode for staged release. Not Container Apps Express."
         url: https://learn.microsoft.com/en-us/azure/container-apps/authentication
         options:
-          - { name: "Container Apps, one environment per app", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/environment", note: "Today's mapping. Built-in auth, managed identity, Key Vault references.", packs: [azureNative] }
+          - { name: "Container Apps, one environment per app", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/container-apps/environment", note: "Today's mapping. Built-in auth, managed identity, Key Vault references.", packs: [azureNative], watch: [{ text: "Container Apps Express has no built-in authentication, no Key Vault references and no multiple revisions or traffic splitting, so it cannot host apps that need sign-in in front, vaulted secrets or a staged release.", url: "https://learn.microsoft.com/en-us/azure/container-apps/express-overview" }] }
           - { name: "Azure App Service with built-in authentication", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/app-service/overview-authentication-authorization", note: "Code or containers on App Service plans with Easy Auth." }
           - { name: "AKS namespace per app", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/aks/operator-best-practices-cluster-isolation", note: "Apps on a shared cluster, isolated per Microsoft's cluster isolation guidance." }
           - { name: "Azure Static Web Apps", kind: commercial, url: "https://learn.microsoft.com/en-us/azure/static-web-apps/authentication-authorization", note: "Static front end with built-in authentication and roles." }
@@ -5328,30 +5132,9 @@ implementations:
       provider: https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities
       sources: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources?view=azure-devops
     differences:
-      - at: nativeTools
-        text: "A sandbox has unrestricted outbound access until an egress policy is set, and the documentation describes policies per sandbox, not a default for the group. Group managed identities are also offered to every sandbox unless their lifecycle is None. The orchestrator must apply both to every sandbox it creates."
-        url: https://sandboxes.azure.com/docs/sandboxes/sandbox/egress
       - at: nativeTools->registry
-        text: "Microsoft's allow list for Azure Artifacts includes *.blob.core.windows.net, *.visualstudio.com and *.dedup.microsoft.com, so allowing the feed in the sandbox egress policy also opens every Azure Storage account. Run a package proxy in your own network, or accept that opening and watch the egress decisions."
+        text: "Azure Artifacts is a public Azure DevOps service, and Microsoft's allow list for it includes *.blob.core.windows.net, *.visualstudio.com and *.dedup.microsoft.com, so allowing the feed in the egress policy also opens every Azure Storage account. Either run a package proxy in your own network, or accept the opening and watch the egress decisions."
         url: https://learn.microsoft.com/en-us/azure/devops/organizations/security/allow-list-ip-url?view=azure-devops
-      - at: sources->registry
-        text: "Azure Artifacts saves any public package a Collaborator installs and documents no malware, look-alike or package-age check. GitHub Package Firewall does this for npm only, is public preview, and is documented in front of JFrog Artifactory rather than Azure Artifacts, so admission for other ecosystems is yours to build."
-        url: https://docs.github.com/en/enterprise-cloud@latest/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/protecting-endpoints-with-package-firewall
-      - at: appHosting
-        text: "Built-in authentication is off on a new container app, and once on, any user in the tenant can get a token unless Assignment required is set. The built-in policy for it can only audit, not deny, so identity in front of every app and preview holds only because the platform template and the pipeline check put it there."
-        url: https://learn.microsoft.com/en-us/azure/container-apps/authentication
-      - at: appHosting
-        text: "Container Apps Express, which Microsoft calls developer-first and agent-first, has no built-in authentication, no Key Vault references and no multiple revisions or traffic splitting. A factory deploying there would lose sign-in in front, vaulted secrets and staged release, so generated apps go to workload profiles environments."
-        url: https://learn.microsoft.com/en-us/azure/container-apps/express-overview
-      - at: appTenant
-        text: "Apps in one Container Apps environment share its virtual network and log destination, so isolation needs an environment per app. The corp-connected vending product line routes traffic between landing zones through the hub firewall; only the online line leaves app networks unpeered, which is the deliberate choice here."
-        url: https://learn.microsoft.com/en-us/azure/container-apps/environment
-      - at: appOwner->deployGate
-        text: "Required reviewers need read access to the repository, so every app owner needs an account in the GitHub enterprise. GitHub enforces no second factor itself for Enterprise Managed Users: Conditional Access applies at the Entra sign-in, not at the approval. Administrators can bypass protection rules unless the environment disallows it."
-        url: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments
-      - at: govObservability
-        text: "A removed Azure RBAC assignment can keep working for up to 10 minutes, and group or app role changes carried in managed identity tokens for hours, as tokens are cached about 24 hours with no forced refresh. The stop runbook therefore deactivates every revision first, then disables sign-in and removes roles."
-        url: https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
     alsoNeeded:
       - service: "Microsoft Entra ID (Enterprise Managed Users OIDC, Conditional Access, an enterprise app per generated app)"
         role: identity
@@ -5451,20 +5234,10 @@ implementations:
           - https://learn.microsoft.com/en-us/azure/aks/container-network-security-fqdn-filtering-concepts
         summary: "The coding agent and its tools run in a Kata VM-isolated pod per build on AKS, claimed from a warm pool through the Agent Sandbox cluster extension (preview) on the kata-vm-isolation-v2 runtime (preview). Cilium network policy with FQDN filtering and Azure Firewall replace the sandbox egress policy, and Workload ID replaces the sandbox group identity. GitHub, the pipeline, the gate and the per-app subscriptions stay as mapped."
         bindings:
-          - { block: harness, service: "Your coding agent in a Kata pod on AKS", build: true, note: "Claimed per build from a SandboxWarmPool by your orchestrator; runs under a service account federated to a narrowly scoped identity.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension }
-          - { block: nativeTools, service: "AKS Pod Sandboxing with Agent Sandbox (preview)", note: "Each build's commands run in a pod VM with its own guest kernel on a dedicated Azure Linux node pool; the claim is deleted when the build ends.", url: https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing }
+          - { block: harness, service: "Your coding agent in a Kata pod on AKS", build: true, note: "Claimed per build from a SandboxWarmPool by your orchestrator; runs under a service account federated to a narrowly scoped identity.", url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension, watch: [{ text: "Warm-pool sandboxes consume compute while idle, and in preview one snapshot cannot restore to several sandboxes, so capacity for parallel builds is planned and paid for in node pools.", url: "https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension" }] }
+          - { block: nativeTools, service: "AKS Pod Sandboxing with Agent Sandbox (preview)", note: "Each build's commands run in a pod VM with its own guest kernel on a dedicated Azure Linux node pool; the claim is deleted when the build ends.", url: https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing, watch: [{ text: "The Agent Sandbox extension and the kata-vm-isolation-v2 runtime it needs are preview, outside SLAs and not for production; they need Kubernetes 1.35, a v6 VM family and a region with the right AKS release, and installing the extension does not enable Pod Sandboxing.", url: "https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension" }] }
         dropSettings: [firewallEgress, sandboxPerBuild, sandboxEgressPolicy]
         addSettings: [aksFirewallEgress, aksPodSandboxing, aksFqdnFiltering, aksNetworkPolicy, aksWorkloadIdentity, aksImdsRestriction, aksContainerLogs, aksAgentSandboxClaim]
-        differences:
-          - at: nativeTools
-            text: "The Agent Sandbox extension and the kata-vm-isolation-v2 runtime it requires are both preview, excluded from service-level agreements and not meant for production. They need Kubernetes 1.35, a v6 VM family and a region with the right AKS release, and installing the extension does not itself enable Pod Sandboxing."
-            url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
-          - at: nativeTools
-            text: "Microsoft Defender for Containers does not assess pods that run under the Kata runtime, so threat detection for build sandboxes must come from your own container logs and network flow records."
-            url: https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing
-          - at: harness
-            text: "Warm-pool Sandboxes consume compute while no build is using them, and in preview a single snapshot cannot be restored to several independent Sandboxes, so capacity for parallel builds is planned and paid for in node pools."
-            url: https://learn.microsoft.com/en-us/azure/aks/agent-sandbox-cluster-extension
         alsoNeeded:
           - service: "Advanced Container Networking Services"
             role: network
