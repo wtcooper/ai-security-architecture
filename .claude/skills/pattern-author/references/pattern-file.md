@@ -315,9 +315,15 @@ around it (gateway, network, identity, keys, policy, logs, stores) in the platfo
         # put it in brackets after the service: the platform says where the box runs, and what it
         # is built with is the builder's choice. Quote a service or note that contains a comma.
       - { block: tools, service: "Your tool servers", build: true }     # nothing managed fills it
+      - block: gateway2             # where the organisation chooses (always on-premises): the box
+        service: "Self-hosted AI gateway"   # names the role, and `options` list what plays it
+        options:
+          - { name: "LiteLLM Proxy", kind: open, url: https://…, note: "One line.", packs: [upstreamOpenSource],
+              watch: [ { text: "A limit, edition or preview of this product.", url: https://… } ] }
+        watch: [ { text: "A limit of the named service itself (clouds).", url: https://… } ]
     sources:                        # block id -> the vendor page that service was checked on
       gateway: https://…
-    differences:                    # where this platform does not follow the drawing, in prose
+    differences:                    # only what cannot be drawn or put elsewhere (see below), in prose
       - at: harness->gateway        # a flow or a block of the pattern; listed under How it works
         text: "Plain words: what happens here instead, and what the builder does about it."
         url: https://…              # the page that shows it
@@ -325,9 +331,17 @@ around it (gateway, network, identity, keys, policy, logs, stores) in the platfo
       - insert: { id: frontEnd, title: "Front-end code", summary: "…", on: entry->harness }
         # a box on an arrow, which becomes entry->frontEnd->harness. zone defaults to the zone of
         # `from`; labels: [first leg, second leg] (the first keeps the arrow's label unless given);
-        # parent, col and row where the derived place is not the right one
+        # parent, col and row where the derived place is not the right one (parent: null sits
+        # outside the box the arrow leaves)
+        id: frontEnd                # optional; a hosting option lists `dropShape: [ids]` that do not hold for it
         why: "One or two plain sentences, shown under How it works and on hover."
         url: https://…
+      # the other kinds, each with why and url:
+      #   move:    { block, zone, call? }   another zone, or its own zone to lift it out of its parent
+      #   drop:    "from->to"               with `pins:` saying where an arrow's pins go
+      #   reroute: { from: "a->b", to: "c->b" }
+      #   rename:  { at: "from->to", label }
+      #   add:     { from, to, label, crossing?: { via } }   an arrow the pattern does not draw
       - move: { block: gateway, zone: zoneExternal }    # drawn in another zone; call: "label" adds
         why: "…"                                         # the arrow from the box that held it
         url: https://…
@@ -378,14 +392,28 @@ around it (gateway, network, identity, keys, policy, logs, stores) in the platfo
         tool: toolTheProduct               # the product catalogued on that pattern
         offers: [ { name: "…", what: "One sentence.", url: https://… } ]
     settings: [settingIdOne, settingIdTwo]   # rows of the file's settings library
+# At the platform level: packs, products their makers document as working together.
+packs:
+  - { id: upstreamOpenSource, name: "…", kind: open, scope: platform, status: mixed, asOf: "2026-11",
+      summary: "…", fits: "…", compare: { licence: "…", support: "…", covers: "…", bringYourOwn: "…",
+      integration: "…", effort: "…" }, sources: [https://…] }   # scope: addon replaces some boxes
+# A settings row that belongs to one product carries `product: "<an option's name>"` and reads
+# "If you use …"; choosing a pack without that product hides it.
 ```
+
+Follow `docs/NEUTRALITY.md`: name roles and offer options where the organisation chooses; a
+pick of ours is never the default; a design is an outcome with options, not a rule; every flow
+that happens in any design stays drawn.
 
 - Every pinned control needs at least one listed setting whose `mitigations` names it; where no
   product setting provides the control, the row is `setVia: [code]` and says what to build.
 - Test each flow against the vendor's documentation before you accept the drawing for that
   platform: is the gateway really in the path, or does the default call direct; is search a
-  feature of the model platform; does the sandbox have a network. What does not hold is a
-  `differences` entry, not a quiet omission. Where the vendor's own pages show a different shape
+  feature of the model platform; does the sandbox have a network. Put what you find where a
+  reader acts on it, never as a quiet omission: a default that leaves a gap is a settings row
+  whose `default` states it; a limit, edition or preview is a `watch` note on that product; a
+  design choice is `options`. Only what fits none of these is a `differences` entry. Where the
+  vendor's own pages show a different shape
   (an extra hop, a component outside your network, an arrow that is not there, a flow that starts
   at another box), draw it with `shape` instead, and drop the prose difference it replaces. The
   build applies the changes and refuses one that names what is not there; `npm run
