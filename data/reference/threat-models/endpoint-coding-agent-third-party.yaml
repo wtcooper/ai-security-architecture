@@ -1,0 +1,182 @@
+pattern: archCodingAgentThirdParty
+reviewed: "2026-11-24"
+summary: >-
+  A vendor's coding agent runs as the developer, beside their git, cloud and SSH credentials, and
+  turns what it reads into commands, edits and tool calls. Code, issues and pages anyone can write
+  steer it; files that arrive with a project, and plugins that update themselves, run code before
+  anyone approves. The vendor supplies expiring credentials, a signed update channel and managed
+  settings, but a default install switches none of them on, so the person approving each step is
+  most of the defence until sandboxing, egress limits and enforced settings make prompts rare
+  enough to read.
+concentrates: >-
+  A third-party repository opened at the default permission mode with no sandbox and open egress,
+  on a machine holding production credentials: outsiders' text then reaches a shell that can read
+  every secret on it and send it anywhere, often before a prompt is shown.
+scope: >-
+  Developers run a vendor's coding agent (CLI, editor or desktop) on their workstations, signed in
+  through SSO, at its default permission mode, sandbox off, open egress, their own git, cloud and
+  SSH credentials on the machine. They add MCP servers and plugins themselves; managed settings
+  are off.
+lists: [owasp-llm-2026, owasp-agentic, owasp-mcp]
+assets:
+  - "Credentials on the machine: git, cloud and SSH keys, tokens in .env files"
+  - "Source code, and the integrity of what the developer pushes and merges"
+  - "The organisation's tools and data reached through the AI gateway"
+  - "The workstation itself, including signed-in browser sessions"
+  - "Code, transcripts and traces held by the vendor and its providers"
+actors:
+  - who: "Author of content the agent reads"
+    access: "Writes a README, issue, dependency, rules file, tool result or page the agent opens; needs no exploit"
+    wants: "Commands run as the developer, secrets, backdoors"
+  - who: "Malicious or compromised publisher"
+    access: "Controls an MCP server, plugin, skill or gateway release that the developer or the agent installs"
+    wants: "Credentials and persistence across many organisations"
+  - who: "Malware already on the machine"
+    access: "Runs as the developer and can launch the installed agent with any flags"
+    wants: "A ready-made, credentialed tool to search for secrets"
+  - who: "The agent itself, no adversary"
+    access: "The developer's shell, files and credentials"
+    wants: "None; misreads scope, takes shortcuts, misreports what it did"
+  - who: "The vendor and its providers"
+    access: "Receive prompts, code, traces and telemetry; ship the agent's updates"
+    wants: "Product operation; trusted but outside your control"
+threats:
+  - id: T1
+    title: "Content the agent reads takes over its tools"
+    rating: critical
+    evidence: disclosed
+    story: >-
+      READMEs, dependencies, issue threads, tool results and fetched pages carry instructions,
+      often hidden, that the agent follows with the developer's credentials. In one CLI a line
+      hidden in a README's licence text ran a command after a harmless one was approved; vendors
+      describe injection as reduced, not solved.
+    at: [toolPlane->publicRepos, toolPlane->sourceControl, toolPlane->openWeb, hostedTools->orgData]
+    risks: [riskPromptInjection, riskInsecureModelOutput]
+    atlas: [AML.T0051.001, AML.T0068, AML.T0053]
+    owasp: [LLM01:2026, ASI01, ASI05, MCP06:2025]
+    controls: [D3-EI, AML.M0028, cap-input-guardrails, cap-agent-egress-control]
+    refs:
+      - { title: "Tracebit: code execution through deception in Gemini CLI", url: "https://tracebit.com/blog/code-exec-deception-gemini-ai-cli-hijack" }
+  - id: T2
+    title: "Files that arrive with a project run code before the trust prompt"
+    rating: high
+    evidence: observed
+    story: >-
+      Git settings, hooks, tool-server declarations and settings files are executed, not read.
+      GitSpawn ran a repository's git setting in seven agents, several before trust was accepted;
+      project settings in two agents ran servers or sent the API key before trust. The CHAINDROP
+      worm wrote a start-up hook to persist.
+    at: [developer->harness, memory, toolPlane]
+    risks: [riskInsecureIntegratedComponent, riskPromptInjection]
+    atlas: [AML.T0081, AML.T0142, AML.T0080]
+    owasp: [ASI05, ASI06, MCP05:2025]
+    controls: [D3-EI, AML.M0031, cap-agent-action-policy-enforcement, D3-PA]
+    incidents: [coding-agent-git-hijack, coding-agent-hijack]
+  - id: T3
+    title: "Tool servers and plugins change after you approved them"
+    rating: high
+    evidence: observed
+    story: >-
+      Developers add MCP servers, plugins and skills themselves. An approved server definition was
+      swapped without a new prompt, a plugin pinned to a reviewed commit checked out a look-alike
+      branch on auto-update, and an MCP package copied every email it sent after 15 clean
+      releases.
+    at: [toolPlane, toolPlane->registry, sources->registry]
+    risks: [riskToolRegistryTampering, riskToolSourceProvenance, riskZombieShadowMCPServers]
+    atlas: [AML.T0109, AML.T0010.005, AML.T0110]
+    owasp: [LLM04:2026, ASI04, MCP03:2025, MCP04:2025, MCP09:2025]
+    controls: [cap-mcp-tool-integrity, cap-agent-tool-registry, D3-FA]
+    incidents: [mcp-supply-chain, coding-agent-git-hijack]
+  - id: T4
+    title: "Secrets in the workspace leave through tools, transcripts and vendor traces"
+    rating: high
+    evidence: observed
+    story: >-
+      Ordinary work puts .env files, tokens and keys in context. An injected step sends them out in
+      a fetch, an image link or a commit, and once read they also sit in transcripts and traces. In
+      2026 coding-agent traces a vendor shared with its inference provider were copied, and
+      credentials in them opened further systems.
+    at: [toolPlane->openWeb, harness->vendorService, vendorService->provider]
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandlingDuringInference]
+    atlas: [AML.T0086, AML.T0055, AML.T0085.002]
+    owasp: [LLM02:2026, ASI03, MCP01:2025, MCP10:2025]
+    controls: [cap-agent-egress-control, cap-sensitive-data-redaction, D3-CH, cap-ai-vendor-assessment, D3-EI]
+    refs:
+      - { title: "Cursor: security incident update", url: "https://cursor.com/blog/security-incident-update" }
+      - { title: "Legit Security: CamoLeak in GitHub Copilot Chat", url: "https://www.legitsecurity.com/blog/camoleak-critical-github-copilot-vulnerability-leaks-private-source-code" }
+  - id: T5
+    title: "Approvals that do not hold, and actions past the task"
+    rating: high
+    evidence: observed
+    story: >-
+      Prompts on every write train people to accept, broad allow rules skip them, and parser flaws
+      have let commands past them. With no attacker the agent can push, reset or delete with the
+      developer's credentials and misreport it: a hosted one deleted a production database in a
+      code freeze, by the user's account.
+    at: [developer->harness, toolPlane->sourceControl, hostedTools->orgData]
+    risks: [riskRogueActions, riskInsecureModelOutput]
+    atlas: [AML.T0101, AML.T0053, AML.T0050]
+    owasp: [LLM03:2026, LLM10:2026, ASI02, ASI09, ASI10, MCP02:2025]
+    controls: [AML.M0029, cap-agent-action-policy-enforcement, D3-EI, AML.M0028]
+    refs:
+      - { title: "SaaStr: the affected user's account of the Replit agent incident", url: "https://www.saastr.com/replits-new-release-address-most-of-the-challenges-we-hit-vibe-coding-but-is-prosumer-vibe-coding-really-ready-for-commercial-apps-yet" }
+  - id: T6
+    title: "A compromised AI gateway release steals every key it brokers"
+    rating: high
+    evidence: observed
+    story: >-
+      The gateway that scopes the agent's reach into our tools is third-party code holding the
+      brokered credentials. In 2026 two compromised release paths shipped a widely used gateway
+      with a stealer for the provider keys it holds, live for about two hours the second time on
+      floating image tags.
+    at: [aiGateway, aiGateway->provider, aiGateway->hostedTools]
+    risks: [riskInsecureIntegratedComponent, riskCrossTenantCredentialPropagation]
+    atlas: [AML.T0010.001, AML.T0055]
+    owasp: [ASI08]
+    controls: [D3-FA, D3-CH, cap-agent-tracing, cap-agent-kill-switch]
+    incidents: [litellm-release-hijack, mcp-supply-chain]
+  - id: T7
+    title: "Malware on the machine drives an installed agent nobody enrolled"
+    rating: medium
+    evidence: observed
+    story: >-
+      A copy with no managed settings can be started by any process running as the developer, with
+      flags that skip every prompt, and asked to find secrets; its traffic looks like normal use.
+      Malicious Nx releases did this in 2025 and posted what they found to victims' own
+      repositories.
+    at: [harness, developer->harness]
+    risks: [riskShadowAndUnknownAgents, riskRogueActions, riskSensitiveDataDisclosure]
+    atlas: [AML.T0112.000, AML.T0098, AML.T0053]
+    owasp: [ASI03, MCP08:2025]
+    controls: [cap-shadow-ai-discovery, cap-agent-action-policy-enforcement, D3-PA, cap-agent-kill-switch]
+    refs:
+      - { title: "Nx: s1ngularity postmortem", url: "https://nx.dev/blog/s1ngularity-postmortem" }
+  - id: T8
+    title: "Remote steering and scheduled runs take the person out of the loop"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      Phone, web and chat steering and scheduled sessions are opt-in and bound to the owner's vendor
+      account. A taken-over account steers a machine that holds the developer's keys, and a
+      scheduled run has nobody to notice it looping or acting past its task.
+    at: [remoteDevice->vendorService, harness]
+    risks: [riskRunawayAgentToolLoops, riskRogueActions]
+    atlas: [AML.T0012, AML.T0034.002]
+    owasp: [LLM06:2026]
+    controls: [D3-MFA, AML.M0036, cap-agent-kill-switch, cap-agent-action-policy-enforcement]
+coverage:
+  - { id: "LLM05:2026", why: "Rules and memory files that steer later sessions are T2; poisoning of the model itself belongs to the vendor's own threat model." }
+  - { id: "LLM07:2026", why: "Code that passes its tests and is still exploitable is a review question for what the agent merges; its wrong account of its actions is T5." }
+  - { id: "LLM08:2026", why: "The vendor's instructions give an attacker little; what is sensitive in context is code and secrets, covered by T4." }
+  - { id: "LLM09:2026", why: "No threat here depends on embeddings; a codebase index retrieves repository content that T1 already treats as untrusted." }
+  - { id: "ASI07", why: "Subagents inside one harness share its process and permissions; their messages cross no trust boundary in this drawing." }
+  - { id: "MCP07:2025", why: "Who may add a server (T3) matters more here than client and server authentication, which the vendor and the gateway handle." }
+questions:
+  - "Which agent version and permission mode do sessions start in, and are bypass and auto modes disabled by managed settings?"
+  - "Is the sandbox on, does it cover every tool including hooks and tool servers, and are keys kept outside it?"
+  - "Which project files does the agent run or load before trust: git settings, hooks, tool servers, rules, settings?"
+  - "Who may add MCP servers and plugins, from where, pinned how, and would you see one change after approval?"
+  - "Which hosts can the agent's shell and fetch tool reach, and are internal services and metadata endpoints among them?"
+  - "What does the vendor keep (code, transcripts, traces), for how long, and which providers does it share them with?"
+  - "Is the AI gateway installed from a pinned, verified build, and could you rotate every key it holds within the hour?"
+  - "Could you switch sessions off in the vendor console, revoke access at the gateway and end the app from device management?"
