@@ -91,7 +91,12 @@ test("a pattern with a change draws the changed shape when its platform is chose
     assert.doesNotMatch(chosen, /≠|data-differs=/, `${at}: no difference mark`);
     assert.doesNotMatch(own, /data-shaped=|data-legend-placed/, `${at}: the pattern's own drawing carries no platform marks`);
     // Another platform, or the mapping without the option, keeps its own shape.
-    if (v.host) assert.doesNotMatch(page(v.pattern.id, `cloud=${cloudSlug(v.product.id)}`), new RegExp(added.map((b) => `data-block="${b.id}"`).join("|") || "$^"), `${at}: only the option that changes the shape draws it`);
+    // A hosting option draws its own changes on top of the mapping's; only the ones it adds are missing without it.
+    if (v.host) {
+      const mapped = drawnOn(v.pattern, cloudProductFor(v.pattern.id, v.product.id)!, null);
+      const own = added.filter((b) => !mapped.blocks.some((x) => x.id === b.id));
+      assert.doesNotMatch(page(v.pattern.id, `cloud=${cloudSlug(v.product.id)}`), new RegExp(own.map((b) => `data-block="${b.id}"`).join("|") || "$^"), `${at}: only the option that changes the shape draws it`);
+    }
   }
 });
 
