@@ -164,13 +164,57 @@ test("on Google Cloud another gateway hides Apigee's rows, and the drawing names
   const own = nativePack(p.cloud)!;
   const kong = p.cloud.packs!.find((x) => x.scope === "addon" && p.implementation.bindings.find((b) => b.block === "gateway")!.options!.some((o) => o.packs?.includes(x.id) && /Kong/.test(o.name)))!;
   const { hidden } = stackedAs(chat, p, { pack: own.id, addons: [kong.id] });
-  assert.ok(hidden.length && hidden.every((s) => s.product === "Apigee"), "only Apigee's rows go");
-  assert.ok(p.settings.filter((s) => s.product === "Apigee").every((s) => hidden.includes(s)), "every Apigee row goes");
+  // A row of Apigee as the gateway names that option ("Apigee (AI gateway)"); a row of any Apigee proxy names Apigee.
+  const apigee = (s: { product?: string }) => Boolean(s.product && namesProduct(s.product, "Apigee"));
+  assert.ok(hidden.length && hidden.every(apigee), "only Apigee's rows go");
+  assert.ok(p.settings.filter(apigee).every((s) => hidden.includes(s)), "every Apigee row goes");
   const html = page(chat.id, `tab=enable&cloud=${cloudSlug(p.id)}&stack=${own.id}&addons=${kong.id}`);
   assert.ok(boxText(html, "gateway").includes("Kong"), "the gateway box names Kong");
   assert.ok(boxText(html, "provider").includes("Gemini"), "the model provider stays the cloud's own");
   assert.match(html, /data-cloud-caption[^>]*>[^<]*Each box names the product/, "the caption says the stack's products are drawn");
   assert.doesNotMatch(page(chat.id, `cloud=${cloudSlug(p.id)}`), /Each box names its role/, "with nothing chosen the boxes name Google Cloud's services");
+});
+
+test("on Google Cloud the open-source pack alone hides Apigee's gateway rows, and keeps those MCP in Apigee needs on the tool services it leaves to you", () => {
+  const oss: Stack = { pack: "openSourceOnGke", addons: [] };
+  for (const id of ["archChatAgent", "archActionAgent", "archAgentWorkflow", "archAgentFederation"]) {
+    const a = dataset.archetypes.find((x) => x.id === id)!;
+    const p = cloudProductsFor(id).find((x) => x.id === "cloudGcp")!;
+    const { product: kept, hidden } = stackedAs(a, p, oss);
+    // Rows of Apigee as the gateway name the gateway's option, which LiteLLM takes the place of.
+    const gateway = p.implementation.bindings.find((b) => b.block === "gateway")!;
+    const ofGateway = p.settings.filter((s) => s.product && s.product !== "Apigee" && namesProduct(s.product, "Apigee"));
+    assert.ok(ofGateway.length, `${id}: the rows of Apigee as the gateway are tagged with that option`);
+    for (const s of ofGateway) {
+      assert.ok(gateway.options!.some((o) => namesProduct(o.name, s.product!)), `${id} ${s.id}: ${s.product} is the gateway's option`);
+      assert.ok(hidden.includes(s), `${id} ${s.id}: goes with another gateway in the box`);
+    }
+    // The pack leaves the tool services to you, and MCP in Apigee is one of their options: the rows of an
+    // Apigee proxy in front of MCP servers stay, and nothing that is not Apigee's goes.
+    const tools = p.implementation.bindings.find((b) => b.block === "internalTools")!;
+    assert.equal(productsInEffect(tools, oss).length, 0, `${id}: the tool services are yours to choose`);
+    for (const s of kept.settings.filter((x) => x.product === "Apigee")) assert.ok(tools.options!.some((o) => namesProduct(o.name, s.product!)), `${id} ${s.id}: kept for MCP in Apigee`);
+    for (const s of hidden) assert.ok(s.product, `${id} ${s.id}: a row with no product is never left out`);
+    // A row that mentions Apigee but also serves without it (Model Armor called from ADK callbacks, say) stays.
+    for (const s of p.settings.filter((x) => !x.product && /Apigee/.test(x.where))) assert.ok(kept.settings.includes(s), `${id} ${s.id}: still needed`);
+  }
+});
+
+test("on AWS the Knowledge Bases rows go where a pack puts another store in the box, and stay where nothing replaces it", () => {
+  const eksPack: Stack = { pack: "awsEksOpenSource", addons: [] };
+  for (const id of ["archChatAgent", "archActionAgent", "archAgentWorkflow"]) {
+    const a = dataset.archetypes.find((x) => x.id === id)!;
+    const p = cloudProductsFor(id).find((x) => x.id === "cloudAws")!;
+    const kb = p.settings.filter((s) => s.product === "Knowledge Bases");
+    assert.ok(kb.length, `${id}: the Knowledge Bases rows are tagged`);
+    const { hidden } = stackedAs(a, p, eksPack);
+    for (const s of kb) assert.ok(hidden.includes(s), `${id} ${s.id}: goes with Milvus or OpenSearch in the box`);
+    assert.ok(!stackedAs(a, p, { pack: "awsNative", addons: [] }).hidden.some((s) => kb.includes(s)), `${id}: AWS's own pack keeps them`);
+  }
+  // On the managed agent Knowledge Bases is the enterprise data behind the tools, which no pack replaces.
+  const managed = dataset.archetypes.find((x) => x.id === "archCloudManagedAgent")!;
+  const p = cloudProductsFor(managed.id).find((x) => x.id === "cloudAws")!;
+  for (const pack of packsFor(p).platform) assert.ok(!stackedAs(managed, p, { pack: pack.id, addons: [] }).hidden.some((s) => s.product === "Knowledge Bases"), `${pack.id}: keeps them`);
 });
 
 test("choosing a pack puts its products in the boxes, marks them in the options table, and narrows the settings", () => {

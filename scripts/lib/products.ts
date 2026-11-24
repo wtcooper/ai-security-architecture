@@ -262,8 +262,12 @@ export async function loadClouds(
       for (const q of impl.quickstart ?? []) if (!q.title?.trim() || !/^https:\/\//.test(q.url ?? "")) ctx.fail(`${at}: a quickstart needs a title and an https address`);
       // Where the platform's drawing has another shape: every change applies cleanly to the
       // pattern, in order, and a hosting variant's apply cleanly on top of the mapping's.
-      const shaped = (where: string, field: unknown, before: ShapeChange[] = []) => {
-        if (field === undefined) return;
+      const shaped = (where: string, field: unknown, before: ShapeChange[] = [], dropsSome = false) => {
+        if (field === undefined) {
+          // A variant that only drops some of the mapping's changes is drawn with the rest, which must still apply.
+          if (dropsSome) for (const p of applyShape(arch, before, { key: where, on: where }).problems) ctx.fail(`${where}: once dropShape is applied, ${p}`);
+          return;
+        }
         if (!Array.isArray(field) || !field.length) {
           ctx.fail(`${where}: shape is a list of changes`);
           return;
@@ -292,8 +296,24 @@ export async function loadClouds(
           if (unknownRows.length) ctx.fail(`${oat}: unknown compare row ${unknownRows.join(", ")}`);
           for (const u of o.sources ?? []) if (!/^https:\/\//.test(u)) ctx.fail(`${oat}: a source must be an https address`);
           // Only a variant of this pattern changes its shape; the mapped option's changes are the mapping's.
+          // A variant may drop the mapping's changes that do not hold for it, by id, and is drawn with the rest.
+          const dropShape: unknown = o.dropShape;
+          const changeIds = new Set((impl.shape ?? []).map((c) => c.id).filter(Boolean));
+          if (dropShape !== undefined && (o.mapped || o.kind === "managed")) ctx.fail(`${oat}: dropShape is for a variant: ${o.mapped ? "the mapped option is the mapping itself and drops none of its own changes" : "a managed option is not drawn on this pattern"}`);
+          else if (dropShape !== undefined && (!Array.isArray(dropShape) || !dropShape.length)) ctx.fail(`${oat}: dropShape is a list of the ids of the mapping's changes of shape`);
+          else if (dropShape !== undefined) {
+            const seen = new Set<string>();
+            for (const id of dropShape as unknown[]) {
+              if (typeof id !== "string" || !changeIds.has(id)) ctx.fail(`${oat}: dropShape names ${String(id)}, which is not the id of a change in the mapping's shape${changeIds.size ? ` (${[...changeIds].join(", ")})` : ""}`);
+              else if (seen.has(id)) ctx.fail(`${oat}: dropShape names ${id} twice`);
+              seen.add(String(id));
+            }
+          }
           if (o.shape !== undefined && (o.mapped || o.kind === "managed")) ctx.fail(`${oat}: ${o.mapped ? "the mapped option is the mapping itself; put its shape there" : "a managed option is not drawn on this pattern, so it changes no shape here"}`);
-          else shaped(oat, o.shape, impl.shape ?? []);
+          else if (!o.mapped && o.kind !== "managed") {
+            const dropped = new Set(Array.isArray(dropShape) ? (dropShape as string[]) : []);
+            shaped(oat, o.shape, (impl.shape ?? []).filter((c) => !c.id || !dropped.has(c.id)), dropped.size > 0);
+          }
           if (o.kind === "managed") {
             // The vendor runs it there. A managed agent is drawn as another pattern, which the option names.
             if (o.pattern && !archById.has(o.pattern)) ctx.fail(`${oat}: unknown pattern ${o.pattern}`);
@@ -325,6 +345,8 @@ export async function loadClouds(
           const kept = [...(impl.settings ?? []).filter((id) => !dropped.has(id)), ...(o.addSettings ?? [])];
           const covered = new Set(kept.flatMap((id) => settingById.get(id)?.mitigations ?? []));
           for (const id of arch.mitigations) if (!covered.has(id)) ctx.fail(`${oat}: pinned control ${id} has no setting once the dropped ones are gone`);
+          // A difference the variant drops is one of the mapping's, named by where it is.
+          for (const at2 of o.dropDifferences ?? []) if (!(impl.differences ?? []).some((d) => d.at === at2)) ctx.fail(`${oat}: dropDifferences names ${at2}, which is not where one of the mapping's differences is`);
           for (const d of o.differences ?? []) {
             proseOnly(oat, d);
             if (!arch.blocks.some((x) => x.id === d.at) && !edgeKeys.has(d.at)) ctx.fail(`${oat}: difference at "${d.at}" is neither a block nor a flow of ${arch.id}`);

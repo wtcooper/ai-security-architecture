@@ -57,6 +57,12 @@ export const hostingInEffect = (product: CloudProduct, optionId: string | null):
   return chosen ?? mappedHosting(product);
 };
 
+/** The changes of shape a variant is drawn with: the mapping's, less those it drops, then its own. */
+const shapeOn = (impl: CloudProduct["implementation"], option: HostingOption) => {
+  const dropped = new Set(option.dropShape ?? []);
+  return [...(impl.shape ?? []).filter((c) => !c.id || !dropped.has(c.id)), ...(option.shape ?? [])];
+};
+
 /**
  * A platform as hosted on one of its options. The mapped option is the mapping itself; a variant
  * changes only some components and settings, so everything else is carried over. A managed
@@ -85,8 +91,8 @@ export function hostedAs(product: CloudProduct, optionId: string | null): CloudP
       differences: [...(impl.differences ?? []).filter((d) => !gone.has(d.at)), ...(option.differences ?? [])],
       alsoNeeded: [...(impl.alsoNeeded ?? []), ...(option.alsoNeeded ?? [])],
       quickstart: option.quickstart?.length ? option.quickstart : impl.quickstart,
-      // A variant's changes of shape apply on top of the mapping's.
-      shape: [...(impl.shape ?? []), ...(option.shape ?? [])],
+      // A variant's changes of shape apply on top of the mapping's, less those that do not hold for it.
+      shape: shapeOn(impl, option),
     },
     settings: [...ids.map((id) => byId.get(id)!).filter(Boolean), ...(product.service?.settings ?? [])],
   };
@@ -114,12 +120,15 @@ export function drawnOn(archetype: Archetype, product: CloudProduct, hostId: str
   return drawn;
 }
 
-/** Every drawing of a pattern that differs from its own: each mapping with changes of shape, and each hosting option that adds its own. */
+/**
+ * Every drawing of a pattern that differs from its own: each mapping with changes of shape, and each
+ * hosting option that adds its own or drops some of the mapping's (and still has some left).
+ */
 export function drawnVariants(archetype: Archetype): { label: string; short: string; product: CloudProduct; host: string | null; archetype: Archetype }[] {
   return cloudProductsFor(archetype.id).flatMap((p) => [
     ...(p.implementation.shape?.length ? [{ label: platformWords(p.cloud).on, short: p.cloud.short, product: p, host: null, archetype: drawnOn(archetype, p, null) }] : []),
     ...hostingOptionsFor(p)
-      .filter((o) => !o.mapped && o.kind !== "managed" && o.shape?.length)
+      .filter((o) => !o.mapped && o.kind !== "managed" && (o.shape?.length || o.dropShape?.length) && shapeOn(p.implementation, o).length)
       .map((o) => {
         const hosted = hostedAs(p, o.id);
         return { label: `${platformWords(p.cloud).on}, hosted on ${o.name}`, short: `${p.cloud.short} · ${o.name}`, product: hosted, host: o.id, archetype: drawnOn(archetype, hosted, o.id) };

@@ -20,6 +20,10 @@ import { crossingsOf } from "../src/components/drawing/crossings";
 import { dataset } from "../src/lib/data";
 import type { Archetype, ShapeChange } from "../src/lib/types";
 import { audit } from "./drawing-audit";
+import { loadClouds } from "./lib/products";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
 const page = (archetypeId: string, query = "") =>
@@ -246,6 +250,131 @@ test("each kind of change applies to a copy, and pins and walk steps follow what
   assert.deepEqual(legs.map((e) => [keyOf(e), e.label, e.path, e.crossing?.kind]), [["memory->proxy", "embeddings", "primary", undefined], ["proxy->provider", undefined, "external", "direct"]], "the leg that crosses keeps the crossing");
   assert.ok(!chain.archetype.edges.some((e) => keyOf(e) === "memory->provider"), "the added arrow is split");
   audit(chain.archetype, { content: false });
+});
+
+const sandbox = dataset.archetypes.find((a) => a.id === "archAgentSandbox")!;
+/** Is one drawn box inside another's rectangle? */
+const within = (spec: ReturnType<typeof boundaryLayout>, inner: string, outer: string) => {
+  const [i, o] = [spec.boxes.find((b) => b.id === inner)!, spec.boxes.find((b) => b.id === outer)!];
+  return i.x >= o.x && i.y >= o.y && i.x + i.w <= o.x + o.w && i.y + i.h <= o.y + o.h;
+};
+
+test("a move within a box's own zone takes it out of the box that holds it, with the call from that box", () => {
+  const why = "The sandbox is a service the agent calls, not code in its process.";
+  const out = apply([{ move: { block: "localTools", zone: "zoneCloud", col: 1.5, row: 2, call: "code & files / output" }, why, url: DOCS }]);
+  assert.deepEqual(out.problems, []);
+  const lt = out.archetype.blocks.find((b) => b.id === "localTools")!;
+  assert.deepEqual([lt.zone, lt.parent, lt.col, lt.row], ["zoneCloud", undefined, 1.5, 2], "its own box, in the zone it was in, at the cell given");
+  const call = out.archetype.edges.find((e) => keyOf(e) === "agent->localTools")!;
+  assert.deepEqual([call.label, call.outbound, call.path, call.crossing], ["code & files / output", true, "primary", undefined], "called by the agent, across no boundary");
+  assert.equal(out.archetype.drawn!.boxes.localTools, why, "marked as placed for the platform, with its why");
+  assert.deepEqual(out.archetype.pins, chat.pins, "its pins and its arrows' pins stay where they were");
+  const spec = boundaryLayout(out.archetype);
+  assert.ok(!within(spec, "localTools", "agent"), "drawn outside the agent");
+  assert.deepEqual(audit(out.archetype, { content: false }).findings, [], "laid out by the same rules");
+  assert.deepEqual(describeShape(chat, [{ move: { block: "localTools", zone: "zoneCloud" }, why, url: DOCS }]).map((l) => l.where), ["Native tools, taken out of Agent harness"]);
+  // Without a cell it is placed beside the box it leaves.
+  const beside = apply([{ move: { block: "localTools", zone: "zoneCloud" }, why, url: DOCS }]);
+  assert.deepEqual(beside.problems, []);
+  assert.deepEqual([beside.archetype.blocks.find((b) => b.id === "localTools")!.col, beside.archetype.blocks.find((b) => b.id === "localTools")!.row], [2, 3], "under the agent, the box it left");
+
+  // One level at a time: the tools out of the harness stay in the sandbox; the harness out of the sandbox
+  // stands on its own, in one cell, and a boundary only holds, so nothing calls it from there.
+  const sessions = applyShape(sandbox, [
+    { move: { block: "localTools", zone: "zoneCloud", call: "each action" }, why: "The tool server stays in the session.", url: DOCS },
+    { move: { block: "harness", zone: "zoneCloud", col: 2, row: 0 }, why: "The harness runs outside the session.", url: DOCS },
+  ], { key: "sandbox|test|sessions", on: "on Testcloud" });
+  assert.deepEqual(sessions.problems, []);
+  const [tools, harness] = ["localTools", "harness"].map((id) => sessions.archetype.blocks.find((b) => b.id === id)!);
+  assert.equal(tools.parent, "sandbox", "the tools stay in the session");
+  assert.deepEqual([harness.parent, harness.rowSpan], [undefined, undefined], "the harness stands on its own, in one cell");
+  assert.ok(sessions.archetype.edges.some((e) => keyOf(e) === "harness->localTools" && e.label === "each action"), "the harness calls the tools it held");
+  assert.ok(!sessions.archetype.edges.some((e) => e.from === "sandbox"), "the session calls nothing");
+  const drawn = boundaryLayout(sessions.archetype);
+  assert.ok(within(drawn, "localTools", "sandbox") && !within(drawn, "harness", "sandbox"), "drawn so");
+  assert.deepEqual(audit(sessions.archetype, { content: false }).findings, []);
+  const twice = (c: ShapeChange) => applyShape(sandbox, [{ move: { block: "localTools", zone: "zoneCloud" }, why: "Why.", url: DOCS }, c], { key: `sandbox|test|${(tried += 1)}`, on: "on Testcloud" }).problems.join(" | ");
+  assert.match(twice({ move: { block: "harness", zone: "zoneCloud", call: "runs" }, why: "Why.", url: DOCS }), /Sandbox only holds; it does not call Agent harness/);
+  assert.match(apply([{ move: { block: "gateway", zone: "zoneCloud" }, why: "Why.", url: DOCS }]).problems.join(" | "), /already in zoneCloud and stands on its own/);
+});
+
+test("an inserted box can stand outside the box the arrow it splits leaves", () => {
+  const why = "Browsing goes through a separate session.";
+  // localTools->offlineWeb leaves the harness and the sandbox: by default the new hop is drawn inside the harness.
+  const inside = applyShape(sandbox, [{ insert: { id: "browser", title: "Browser session", on: "localTools->offlineWeb" }, why, url: DOCS }], { key: "sandbox|test|inside", on: "on Testcloud" });
+  assert.deepEqual(inside.problems, []);
+  assert.equal(inside.archetype.blocks.find((b) => b.id === "browser")!.parent, "harness");
+  // parent null draws it on its own, between the sandbox and the offline web.
+  const own = applyShape(sandbox, [{ insert: { id: "browser", title: "Browser session", on: "localTools->offlineWeb", parent: null, labels: ["browser actions", "browse & search"] }, why, url: DOCS }], { key: "sandbox|test|own", on: "on Testcloud" });
+  assert.deepEqual(own.problems, []);
+  const browser = own.archetype.blocks.find((b) => b.id === "browser")!;
+  assert.deepEqual([browser.parent, browser.zone], [undefined, "zoneCloud"]);
+  const spec = boundaryLayout(own.archetype);
+  assert.ok(!within(spec, "browser", "sandbox"), "drawn outside the sandbox");
+  assert.deepEqual(own.archetype.edges.filter((e) => e.from === "browser" || e.to === "browser").map((e) => [keyOf(e), e.label]), [["localTools->browser", "browser actions"], ["browser->offlineWeb", "browse & search"]]);
+  assert.deepEqual(audit(own.archetype, { content: false }).findings, []);
+  // So do an explicit cell, and the build's checks on what parent may be.
+  const placed = applyShape(sandbox, [{ insert: { id: "browser", title: "Browser session", on: "localTools->offlineWeb", parent: null, col: 2.5, row: 2 }, why, url: DOCS }], { key: "sandbox|test|placed", on: "on Testcloud" });
+  assert.deepEqual([placed.problems, placed.archetype.blocks.find((b) => b.id === "browser")!.col], [[], 2.5]);
+  const problems = (c: ShapeChange) => apply([c]).problems.join(" | ");
+  assert.match(problems({ insert: { id: "hop", title: "X", on: "entry->agent", parent: null }, why, url: DOCS }), /neither end of entry->agent is drawn inside one/);
+  assert.match(problems({ insert: { id: "hop", title: "X", on: "entry->agent", parent: "nothing" }, why, url: DOCS }), /parent nothing is not a box of archChatAgent; null draws it outside every box/);
+});
+
+test("a hosting option is drawn without the mapping's changes it names in dropShape", () => {
+  // The ids: camelCase, one per change.
+  const ids = (cs: ShapeChange[]) => apply(cs).problems.join(" | ");
+  assert.match(ids([{ id: "Not ok", rename: { at: "agent->gateway", label: "calls" }, why: "Why.", url: DOCS }]), /id must be camelCase/);
+  assert.match(ids([{ id: "same", rename: { at: "agent->gateway", label: "calls" }, why: "Why.", url: DOCS }, { id: "same", rename: { at: "entry->agent", label: "turns" }, why: "Why.", url: DOCS }]), /id same is already used by another change/);
+  assert.deepEqual(apply([{ id: "named", rename: { at: "agent->gateway", label: "calls" }, why: "Why.", url: DOCS }]).problems, []);
+  // On AWS the front end calls the runtime through your own code; on EKS the load balancer forwards to the pods.
+  const p = cloudProductFor(chat.id, "cloudAws")!;
+  const mapped = drawnOn(chat, p, null);
+  assert.ok(mapped.blocks.some((b) => b.id === "runtimeCaller") && !mapped.edges.some((e) => keyOf(e) === "entry->agent"));
+  const eks = hostedAs(p, "eks");
+  assert.ok(p.implementation.hosting!.find((o) => o.id === "eks")!.dropShape!.includes("runtimeCaller"));
+  assert.deepEqual(eks.implementation.shape!.map((c) => c.id ?? Object.keys(c).find((k) => k !== "why" && k !== "url")), ["move"], "the move still holds there");
+  const onEks = drawnOn(chat, eks, "eks");
+  assert.ok(!onEks.blocks.some((b) => b.id === "runtimeCaller") && onEks.edges.some((e) => keyOf(e) === "entry->agent"), "no front-end code on EKS");
+  assert.equal(onEks.blocks.find((b) => b.id === "localTools")!.parent, undefined, "Code Interpreter stays apart from the agent");
+  assert.ok(drawnVariants(chat).some((v) => v.product.id === "cloudAws" && v.host === "eks"), "a drawing of its own");
+  assert.deepEqual(shapeLinesFor(chat, eks).map((l) => l.key), ["localTools"], "How it works lists only what holds");
+  // An option that drops every change is drawn as the pattern, and is no drawing of its own.
+  const inference = dataset.archetypes.find((a) => a.id === "archSelfHostedInference")!;
+  const g = cloudProductFor(inference.id, "cloudGcp")!;
+  assert.ok(drawnOn(inference, g, null).blocks.some((b) => b.id === "endpointPicker"), "the GKE mapping draws the endpoint picker");
+  assert.equal(drawnOn(inference, hostedAs(g, "cloudRun"), "cloudRun"), inference, "Cloud Run has none");
+  assert.ok(!drawnVariants(inference).some((v) => v.product.id === "cloudGcp" && v.host === "cloudRun"));
+  const endpoints = drawnOn(inference, hostedAs(g, "agentPlatformEndpoints"), "agentPlatformEndpoints");
+  assert.ok(!endpoints.blocks.some((b) => b.id === "endpointPicker") && endpoints.blocks.some((b) => b.id === "managedModelCopy"), "endpoints drop the picker and keep their own change");
+});
+
+test("the build refuses a dropShape that names no change, sits on the mapped option, or leaves a later change with nothing to apply to", async () => {
+  const root = await mkdtemp(join(tmpdir(), "shape-"));
+  await mkdir(join(root, "data", "clouds"), { recursive: true });
+  const aws = await readFile(join(process.cwd(), "data", "clouds", "aws.yaml"), "utf8");
+  const failures = async (yaml: string) => {
+    await writeFile(join(root, "data", "clouds", "aws.yaml"), yaml);
+    const out: string[] = [];
+    await loadClouds(root, { archetypes: dataset.archetypes, mitigationIds: new Set(dataset.mitigations.map((m) => m.id)), fail: (m) => out.push(m) });
+    return out.filter((m) => /dropShape|dropDifferences/.test(m)).join(" | ");
+  };
+  assert.equal(await failures(aws), "", "the data as it is");
+  const once = (from: string, to: string) => {
+    assert.equal(aws.split(from).length, 2, `the edit applies once: ${from}`);
+    return aws.replace(from, to);
+  };
+  assert.match(await failures(once("albOidcClaimsVerify]\n        dropShape: [runtimeCaller]", "albOidcClaimsVerify]\n        dropShape: [nothingLikeIt]")), /dropShape names nothingLikeIt, which is not the id of a change in the mapping's shape \(runtimeCaller\)/);
+  // The first mapped option in the file is the chat agent's AgentCore Runtime, the mapping itself.
+  assert.match(await failures(aws.replace("        mapped: true\n", "        mapped: true\n        dropShape: [runtimeCaller]\n")), /hosting agentCoreRuntime: dropShape is for a variant: the mapped option is the mapping itself and drops none of its own changes/);
+  assert.match(await failures(once("dropShape: [starterFunction, callbackApproval]\n        alsoNeeded:\n          - service: \"AWS Lambda ingress function\"", "dropDifferences: [events->harness]\n        alsoNeeded:\n          - service: \"AWS Lambda ingress function\"")), /dropDifferences names events->harness, which is not where one of the mapping's differences is/);
+  // Dropping the inserted box but not the change that rerouted the arrow onto it leaves the reroute nothing to move.
+  const picker = (await readFile(join(process.cwd(), "data", "clouds", "gcp.yaml"), "utf8")).replace("dropShape: [endpointPicker, pickedPod, pickerMetrics]\n        alsoNeeded:", "dropShape: [endpointPicker]\n        alsoNeeded:");
+  await writeFile(join(root, "data", "clouds", "aws.yaml"), "id: cloudNone\nname: None\nshort: None\nsettings: []\nimplementations: []\n");
+  await writeFile(join(root, "data", "clouds", "gcp.yaml"), picker);
+  const out: string[] = [];
+  await loadClouds(root, { archetypes: dataset.archetypes, mitigationIds: new Set(dataset.mitigations.map((m) => m.id)), fail: (m) => out.push(m) });
+  assert.match(out.join(" | "), /hosting cloudRun: once dropShape is applied, shape change 1 \(reroute endpointPicker->api\): from "endpointPicker->api" is not an arrow/);
 });
 
 test("the build refuses a change that names what is not there, reuses an id, or says too much", () => {

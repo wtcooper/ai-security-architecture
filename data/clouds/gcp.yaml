@@ -592,7 +592,7 @@ settings:
   # --- Tools & extensions --------------------------------------------------------------
   - id: apigeeSanitizeUserPrompt
     name: SanitizeUserPrompt policy
-    product: "Apigee"
+    product: "Apigee (AI gateway)"   # its model proxies: the gateway box, not the MCP in Apigee tool option
     where: Apigee › model proxies › request flow, pointing at a Model Armor template
     setVia: [cloudPolicy]
     area: tools
@@ -616,7 +616,7 @@ settings:
     verified: "2026-11-18"
   - id: apigeeLlmTokenQuota
     name: LLMTokenQuota policy
-    product: "Apigee"
+    product: "Apigee (AI gateway)"   # its model proxies: the gateway box, not the MCP in Apigee tool option
     where: Apigee › model proxies › request and response flow (with PromptTokenLimit for bursts)
     setVia: [cloudPolicy]
     area: tools
@@ -1030,7 +1030,7 @@ settings:
     verified: "2026-11-18"
   - id: a2aSkillAuthorization
     name: Per-skill authorization on A2A requests
-    product: "Apigee"
+    product: "Apigee (A2A and model proxies)"   # its A2A proxy: the gateway box
     where: "Apigee A2A proxy: the skill named in the message metadata checked against the peer app's allowed skills before dispatch"
     setVia: [cloudPolicy, code]
     area: tools
@@ -1043,7 +1043,7 @@ settings:
     verified: "2026-10-30"
   - id: apigeeQuota
     name: Quota policy
-    product: "Apigee"
+    product: "Apigee (A2A and model proxies)"   # its A2A proxy: the gateway box
     where: Apigee A2A proxy › per peer app, with stream duration and payload size limits beside it
     setVia: [cloudPolicy]
     area: tools
@@ -1243,7 +1243,7 @@ settings:
     verified: "2026-10-30"
   - id: apigeeRevokeApp
     name: Approve or revoke an app
-    product: "Apigee"
+    product: "Apigee (A2A and model proxies)"   # peer apps of its A2A proxy: the gateway box
     where: Apigee › Distribution › Apps › (peer's app) › Revoke
     setVia: [adminConsole, apiCli]
     area: audit
@@ -2050,9 +2050,8 @@ implementations:
       - reroute: { from: gateway->openWeb, to: provider->openWeb }
         why: "Grounding with Google Search is a tool inside the model request: Google runs the search from its side, and the gateway never sees or filters the pages. A search API or fetch that your own code makes would still cross the gateway."
         url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search
-    differences:
-      - at: localTools
-        text: "Code Execution is a separate Agent Platform service with no network, called by API: generated code runs in a Google-managed sandbox outside the agent's container, while function tools stay in-process."
+      - move: { block: localTools, zone: zoneCloud, col: 1.5, row: 2, call: "code & files / output" }   # beside memory: as wide on GKE as on Cloud Run
+        why: "Code Execution is a separate Agent Platform service with no network, called by API: generated code runs in a Google-managed sandbox outside the agent's container. Function tools stay in the agent's own process."
         url: https://adk.dev/integrations/code-exec-agent-runtime/
     alsoNeeded:
       - service: "IAM service accounts"
@@ -2127,10 +2126,10 @@ implementations:
           - { name: "Managed Service for Apache Kafka", kind: commercial, url: "https://docs.cloud.google.com/managed-service-for-apache-kafka/docs/overview", note: "Google-run open-source Kafka clusters, for organisations whose business events already flow through Kafka." }
       - { block: agent, service: Your agent on Cloud Run, builtWith: Agent Development Kit (ADK), note: "Google's reference names Agent Runtime on Gemini Enterprise Agent Platform here as the alternative, the managed runtime." }
       - block: localTools
-        service: "Your function tools and Code Execution"
-        note: "Tools compiled into the agent run in its container; generated code runs in an Agent Platform Code Execution sandbox."
+        service: "Agent Platform Code Execution"
+        note: "Generated code runs in an Agent Platform Code Execution sandbox the agent calls by API; function tools compiled into the agent run in its own container."
         options:
-          - { name: "Your function tools and Code Execution", kind: commercial, url: "https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview", note: "Tools run in the agent's container; generated code runs in an Agent Platform Code Execution sandbox that keeps state up to 14 days.", packs: [googleCloudNative], watch: [{ text: "ADK says the agent's service account needs roles/aiplatform.user for Code Execution, the same role that permits direct model calls, so narrow it with a custom role or the gateway-only path weakens.", url: "https://adk.dev/integrations/code-exec-agent-runtime/" }] }
+          - { name: "Agent Platform Code Execution", kind: commercial, url: "https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview", note: "Generated code runs in a Code Execution sandbox that keeps state up to 14 days; function tools stay in the agent's container.", packs: [googleCloudNative], watch: [{ text: "ADK says the agent's service account needs roles/aiplatform.user for Code Execution, the same role that permits direct model calls, so narrow it with a custom role or the gateway-only path weakens.", url: "https://adk.dev/integrations/code-exec-agent-runtime/" }] }
           - { name: "Cloud Run sandboxes", kind: commercial, url: "https://docs.cloud.google.com/run/docs/code-execution", note: "Preview: sandboxes created inside the Cloud Run service or job the agent runs in, for code, sub-agents or a browser." }
           - { name: "Agent Sandbox on GKE with GKE Sandbox", kind: commercial, url: "https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-sandbox", note: "A kernel-isolated Pod per agent from the open-source SIG Apps controller, under gVisor or microVMs; you upgrade the controller." }
           - { name: "Agent Sandbox with Kata Containers", kind: open, url: "https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/kata-gke-sandbox/", note: "The same controller with Kata Containers you install on Ubuntu node pools; Google's support and SLAs do not cover Kata.", packs: [openSourceOnGke] }
@@ -2786,9 +2785,8 @@ implementations:
       - reroute: { from: gateway->openWeb, to: provider->openWeb }
         why: "Grounding with Google Search is a tool inside the model request: Google runs the search from its side, and the gateway never sees or filters the pages. A search API or fetch that your own code makes would still cross the gateway."
         url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search
-    differences:
-      - at: localTools
-        text: "Code Execution is a separate Agent Platform service with no network, called by API: generated code runs in a Google-managed sandbox outside the app's container, called directly by the harness, while function tools stay in-process."
+      - move: { block: localTools, zone: zoneCloud, col: 1, row: 2, call: "code & files / output" }   # under state, so the drawing stays as wide as the pattern's
+        why: "Code Execution is a separate Agent Platform service with no network, called directly by the harness over its API: generated code runs in a Google-managed sandbox outside the app's container. Function tools stay in the app's own process."
         url: https://adk.dev/integrations/code-exec-agent-runtime/
     alsoNeeded:
       - service: "IAM service accounts"
@@ -2862,9 +2860,10 @@ implementations:
           - { name: "Managed Service for Apache Kafka", kind: commercial, url: "https://docs.cloud.google.com/managed-service-for-apache-kafka/docs/overview", note: "Google-run open-source Kafka clusters, for organisations whose business events already flow through Kafka." }
       - { block: harness, service: Your multi-agent app on Cloud Run, builtWith: Agent Development Kit (ADK), note: "Agent Runtime on Gemini Enterprise Agent Platform is the managed alternative Google's reference names." }
       - block: localTools
-        service: "Your function tools and Code Execution"
+        service: "Agent Platform Code Execution"
+        note: "Generated code runs in an Agent Platform Code Execution sandbox the harness calls by API; function tools compiled into the app run in its own container."
         options:
-          - { name: "Your function tools and Code Execution", kind: commercial, url: "https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview", note: "Tools run in the agent's container; generated code runs in an Agent Platform Code Execution sandbox that keeps state up to 14 days.", packs: [googleCloudNative], watch: [{ text: "ADK says the agent's service account needs roles/aiplatform.user for Code Execution, the same role that permits direct model calls, so narrow it with a custom role or the gateway-only path weakens.", url: "https://adk.dev/integrations/code-exec-agent-runtime/" }] }
+          - { name: "Agent Platform Code Execution", kind: commercial, url: "https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview", note: "Generated code runs in a Code Execution sandbox that keeps state up to 14 days; function tools stay in the agent's container.", packs: [googleCloudNative], watch: [{ text: "ADK says the agent's service account needs roles/aiplatform.user for Code Execution, the same role that permits direct model calls, so narrow it with a custom role or the gateway-only path weakens.", url: "https://adk.dev/integrations/code-exec-agent-runtime/" }] }
           - { name: "Cloud Run sandboxes", kind: commercial, url: "https://docs.cloud.google.com/run/docs/code-execution", note: "Preview: sandboxes created inside the Cloud Run service or job the agent runs in, for code, sub-agents or a browser." }
           - { name: "Agent Sandbox on GKE with GKE Sandbox", kind: commercial, url: "https://docs.cloud.google.com/kubernetes-engine/docs/concepts/machine-learning/agent-sandbox", note: "A kernel-isolated Pod per agent from the open-source SIG Apps controller, under gVisor or microVMs; you upgrade the controller." }
           - { name: "Agent Sandbox with Kata Containers", kind: open, url: "https://agent-sandbox.sigs.k8s.io/docs/use-cases/examples/kata-gke-sandbox/", note: "The same controller with Kata Containers you install on Ubuntu node pools; Google's support and SLAs do not cover Kata.", packs: [openSourceOnGke] }
@@ -3407,9 +3406,25 @@ implementations:
       storage: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/cloud-storage-fuse-csi-driver
       sources: https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/serve-gemma-gpu-vllm
       registry: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/model-registry/introduction
-    differences:
-      - at: api->runtime
-        text: "The load balancer first asks an in-cluster endpoint picker which replica to use, then sends the request to that pod, so network policy lets only the gateway and the picker reach the inference server."
+    shape:
+      - id: endpointPicker
+        insert:
+          id: endpointPicker
+          title: "Endpoint picker"
+          summary: "In-cluster extension: picks the replica for each request"
+          on: gateway->api
+          col: 2   # above the inference server, so the request can go straight to it
+          row: 0
+          labels: ["which replica? / pod", "brokered inference"]
+        why: "The load balancer first asks an in-cluster endpoint picker which replica to use, reading each replica's load and cache from the server, then sends the request to that pod."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-gke-inference-gateway
+      - id: pickedPod
+        reroute: { from: endpointPicker->api, to: gateway->api }
+        why: "The request itself goes from the load balancer to the pod the picker named, not through the picker."
+        url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-gke-inference-gateway
+      - id: pickerMetrics
+        add: { from: endpointPicker, to: api, label: "load & cache metrics" }
+        why: "The picker reads each replica's queue and cache metrics from the server, so network policy lets only the gateway and the picker reach the inference server."
         url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-gke-inference-gateway
     alsoNeeded:
       - service: "Apigee instance and Apigee Operator for Kubernetes"
@@ -3575,6 +3590,8 @@ implementations:
           - { block: sources, service: "Public model hubs (Hugging Face)", note: "Google's custom vLLM guide lets the container download from Hugging Face with an access token, and Model Garden deploys open models in one click; creating the Model from vetted weights in your bucket, with no hub token in the container, is one way to keep the check before load." }
         dropSettings: [modelArmorInferenceGateway, inferencePoolRollout, confidentialGpuNodes, gkeNetworkPolicy, servingPrivateNodes]
         addSettings: [apigeeSanitizeUserPrompt, apigeeSanitizeModelResponse, endpointPredictGatewayOnly, endpointPscPrivate, endpointTrafficSplit, endpointDedicatedResources, endpointServiceAccount, endpointAccessLogging]
+        # No GKE Inference Gateway here, so no endpoint picker: Agent Platform routes to its own replicas.
+        dropShape: [endpointPicker, pickedPod, pickerMetrics]
         shape:
           - insert:
               id: managedModelCopy
@@ -3647,6 +3664,8 @@ implementations:
           - { block: runtime, service: "vLLM on a Cloud Run service with a GPU", note: "One NVIDIA L4 or RTX PRO 6000 Blackwell per instance, instance-based billing, scaling to zero when idle.", url: https://docs.cloud.google.com/run/docs/configuring/services/gpu, watch: [{ text: "Exactly one GPU per instance, in a short list of regions, with no multi-GPU or multi-node serving and no Confidential Computing option described, so very large models and the confidential tier of the GKE mapping do not fit.", url: "https://docs.cloud.google.com/run/docs/configuring/services/gpu" }, { text: "Weights are downloaded or mounted every time an instance starts, each scale-out from zero included.", url: "https://docs.cloud.google.com/run/docs/configuring/services/gpu-best-practices" }] }
         dropSettings: [modelArmorInferenceGateway, inferencePoolRollout, confidentialGpuNodes, gkeNetworkPolicy, servingPrivateNodes]
         addSettings: [apigeeSanitizeUserPrompt, apigeeSanitizeModelResponse, cloudRunServiceIdentity, cloudRunIngress, cloudRunTrafficSplit, cloudRunDirectVpcFirewall, cloudRunGen2Isolation]
+        # No GKE Inference Gateway here, so no endpoint picker: Apigee calls the service directly.
+        dropShape: [endpointPicker, pickedPod, pickerMetrics]
         alsoNeeded:
           - service: "Direct VPC egress subnet with Private Google Access"
             role: network
@@ -4279,7 +4298,7 @@ implementations:
       provider: https://docs.cloud.google.com/gemini-enterprise-agent-platform/overview
     differences:
       - at: gateway->authServer
-        text: "There is no separate authorization server: the token endpoints are proxies inside the same Apigee as the gateway, so validating and exchanging a token is a call inside one product."
+        text: "There is no separate authorization server: the token endpoints are proxies inside the same Apigee as the gateway, so validating and exchanging a token is a call inside one product. The drawing keeps two boxes because they are two roles, and one product playing both is not a change it can draw."
         url: https://docs.cloud.google.com/apigee/docs/api-platform/reference/policies/oauthv2-policy
     alsoNeeded:
       - service: "IAM service accounts"

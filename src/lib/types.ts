@@ -637,7 +637,8 @@ export interface Archetype {
  * that does not exist there, a flow that starts from another box, a flow the pattern does not
  * draw), its mapping records the change
  * and the platform's drawing is the pattern with the changes applied to a copy, before layout. A
- * hosting option's changes apply on top of its mapping's. Everything else a platform does
+ * hosting option's changes apply on top of its mapping's, less those of the mapping's changes it
+ * names in `dropShape` (a change it drops carries an `id`). Everything else a platform does
  * differently stays prose (`differences`).
  */
 
@@ -659,15 +660,24 @@ export interface ShapeInsert {
    * second has none, unless given.
    */
   labels?: string[];
-  /** The box it is drawn inside, and its cell there, where the derived place is not the right one. */
-  parent?: string;
+  /**
+   * The box it is drawn inside, and its cell there, where the derived place is not the right one.
+   * null draws it on its own, outside every box: for an arrow that leaves a box (from inside the
+   * agent to a store beside it, say) where the new hop runs outside the box the arrow leaves.
+   */
+  parent?: string | null;
   col?: number;
   row?: number;
 }
 
-/** A box drawn in another zone: the provider's, say, for a component that runs outside your network. */
+/**
+ * A box drawn in another zone: the provider's, say, for a component that runs outside your network.
+ * Or, for a box drawn inside another, its own zone: it is taken out of the box that holds it and
+ * drawn beside it there, as its own box (a sandbox the agent calls rather than code in its process).
+ */
 export interface ShapeMove {
   block: string;
+  /** The zone it is drawn in: another, or its own to take it out of the box that holds it. */
   zone: string;
   /** Its cell there, where the derived place is not the right one. */
   col?: number;
@@ -695,6 +705,11 @@ export interface ShapeAdd {
 }
 
 interface ShapeChangeBase {
+  /**
+   * camelCase, unique within the mapping and its hosting options: how a hosting option names this
+   * change in `dropShape` where it does not hold there. Only a change some option drops needs one.
+   */
+  id?: string;
   /** One or two plain sentences: why it is drawn so here. Shown under How it works and in the drawing's hover help. */
   why: string;
   /** The vendor's or project's page that says so. */
@@ -1188,7 +1203,9 @@ export interface HostingOption {
   differences?: CloudDifference[];
   alsoNeeded?: CloudSupportingService[];
   quickstart?: GuidanceLink[];
-  /** A variant's own changes of shape, applied after the mapping's. */
+  /** The ids of the mapping's changes of shape that do not hold on this variant: it is drawn without them. */
+  dropShape?: string[];
+  /** A variant's own changes of shape, applied after the mapping's (less those it drops). */
   shape?: ShapeChange[];
 }
 

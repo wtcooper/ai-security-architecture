@@ -494,6 +494,7 @@ settings:
     verified: "2026-10-30"
   - id: kbMetadataFilter
     name: Manual metadata filtering
+    product: "Knowledge Bases"
     where: Bedrock Knowledge Bases › Retrieve / RetrieveAndGenerate › retrievalConfiguration filter, set by your tool code
     setVia: [apiCli, code]
     area: data
@@ -1853,6 +1854,7 @@ settings:
     verified: "2026-11-18"
   - id: kbAclAwareness
     name: "Access Control Lists awareness on Managed Knowledge Base data sources"
+    product: "Knowledge Bases"
     where: "Amazon Bedrock › Knowledge Bases › Managed Knowledge Base › data source › ACL awareness; userContext on Retrieve"
     setVia: [adminConsole, apiCli]
     area: data
@@ -2217,12 +2219,18 @@ implementations:
       internalTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-supported-targets.html
       openWeb: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-integrations.html
       registry: https://docs.aws.amazon.com/codeartifact/latest/ug/welcome.html
-    differences:
-      - at: entry->agent
-        text: "AgentCore Runtime is not a load balancer target. On Runtime the front end is your own code (Lambda or containers) that calls InvokeAgentRuntime with the user's token, behind an ingress such as an Application Load Balancer, API Gateway or CloudFront; AWS's cited reference solution uses CloudFront, API Gateway and Lambda."
+    shape:
+      - id: runtimeCaller
+        insert:
+          id: runtimeCaller
+          title: "Front-end code"
+          summary: "Your Lambda or container code: calls InvokeAgentRuntime as the user"
+          on: entry->agent
+          labels: ["turn / reply & proposal", "InvokeAgentRuntime / stream"]
+        why: "AgentCore Runtime is not a load balancer target, so the load balancer forwards each turn to your own code (Lambda or containers), which calls InvokeAgentRuntime with the user's token. API Gateway or CloudFront can be the ingress instead; AWS's reference solution uses CloudFront, API Gateway and Lambda."
         url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html
-      - at: localTools
-        text: "Native tools run apart from the agent here: AgentCore Code Interpreter is a separate AWS-managed service the agent calls over the AgentCore API, not code in its own process, and it runs outside your VPC unless created in VPC mode. The other choices for this box (MicroVMs, sandbox pods, remote kernels) also run outside the agent's process."
+      - move: { block: localTools, zone: zoneCloud, col: 1.5, row: 2, call: "code & files / output" }   # beside memory, under the front-end code: as wide on EKS as with it
+        why: "AgentCore Code Interpreter is a separate AWS-managed service the agent calls over the AgentCore API, not code in its own process, and it runs outside your VPC unless created in VPC mode. The other choices for this box (MicroVMs, sandbox pods, remote kernels) also run outside the agent's process."
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-management.html
     alsoNeeded:
       - service: "Amazon Cognito"
@@ -2233,10 +2241,6 @@ implementations:
         role: identity
         why: "Workload identity for each agent and credential providers for outbound tokens."
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity.html
-      - service: "Front-end compute (AWS Lambda or Amazon ECS)"
-        role: other
-        why: "Runs the chat application behind the load balancer and calls InvokeAgentRuntime with the user's token."
-        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-invoke-agent.html
       - service: "Amazon VPC with NAT gateway"
         role: network
         why: "VPC-mode runtimes get no internet from public subnets; private subnets need a NAT route."
@@ -2431,7 +2435,7 @@ implementations:
           - { block: events, service: "EventBridge Scheduler and Amazon SQS", note: "The schedule's SendMessage target puts a message on a queue that the agent pods poll; no Lambda function invokes a runtime.", url: https://docs.aws.amazon.com/scheduler/latest/UserGuide/managing-targets-templated.html }
         dropSettings: [runtimeInboundJwt, runtimeExecutionRole, runtimeVpcMode, runtimeStopSession]
         addSettings: [eksPodIdentity, eksNetworkPolicy, agentWorkloadIdentity, sqsQueueAccessPolicy, eksImdsHopLimit, eksAppNetworkPolicy, eksIsolatedPods, eksAgentQuarantine, eksClusterAccessEntries, eksControlPlaneLogs, eksPrivateEndpoint, albOidcClaimsVerify]
-        dropDifferences: [entry->agent]
+        dropShape: [runtimeCaller]
         alsoNeeded:
           - service: "AWS Load Balancer Controller (built into EKS Auto Mode)"
             role: ingress
@@ -2565,9 +2569,9 @@ implementations:
       orgData: https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-patterns/tool-based-agents-for-calling-functions.html
       openWeb: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-integrations.html
       registry: https://docs.aws.amazon.com/codeartifact/latest/ug/package-origin-controls.html
-    differences:
-      - at: localTools
-        text: "Native tools run apart from the agent here: AgentCore Code Interpreter is a separate AWS-managed service the agent calls directly over the AgentCore API, as it calls AgentCore Memory, rather than code in its own process. Neither call crosses the gateway."
+    shape:
+      - move: { block: localTools, zone: zoneCloud, call: "code & files / output" }
+        why: "AgentCore Code Interpreter is a separate AWS-managed service the agent calls directly over the AgentCore API, as it calls AgentCore Memory, rather than code in its own process. Neither call crosses the gateway."
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-resource-management.html
     alsoNeeded:
       - service: "AgentCore Identity, with an identity provider such as Amazon Cognito"
@@ -2887,12 +2891,21 @@ implementations:
       internalTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-supported-targets.html
       openWeb: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-integrations.html
       registry: https://docs.aws.amazon.com/codeartifact/latest/ug/welcome.html
-    differences:
-      - at: events->harness
-        text: "A durable function started by an SQS event source mapping must finish within the function's maximum timeout (30 minutes, or 90 on Lambda Managed Instances), so a run that waits days for approval is started through a small ordinary Lambda function between the queue and the workflow, which invokes it asynchronously. EventBridge rules already invoke asynchronously."
+    shape:
+      - id: starterFunction
+        insert:
+          id: starterFunction
+          title: "Starter function"
+          summary: "An ordinary Lambda function: starts each run asynchronously"
+          on: events->harness
+          col: 2   # above the workflow, in its column, so the drawing stays as wide as the pattern's
+          row: -1
+          labels: ["trigger", "asynchronous invoke"]
+        why: "A durable function started by an SQS event source mapping must finish within its maximum timeout (30 minutes, or 90 on Lambda Managed Instances), so a run that waits days for approval is started by a small ordinary Lambda function between the queue and the workflow, which invokes it asynchronously. EventBridge rules invoke it asynchronously already."
         url: https://docs.aws.amazon.com/lambda/latest/dg/durable-invoking-esm.html
-      - at: operator->events
-        text: "Approvals do not come back through EventBridge or SQS: the approval service calls Lambda's SendDurableExecutionCallbackSuccess API directly with the callback ID, so the operator's answer reaches the workflow itself, and who holds that IAM permission is what restricts approval."
+      - id: callbackApproval
+        reroute: { from: operator->events, to: operator->harness }
+        why: "Approvals do not come back through EventBridge or SQS: the approval service calls Lambda's SendDurableExecutionCallbackSuccess API with the callback ID, so the operator's answer reaches the workflow itself. Who holds that IAM permission is what restricts approval."
         url: https://docs.aws.amazon.com/lambda/latest/dg/durable-security.html
     alsoNeeded:
       - service: "Amazon Cognito"
@@ -2985,10 +2998,10 @@ implementations:
           - { name: "Jupyter Enterprise Gateway on EKS", kind: open, url: "https://awslabs.github.io/ai-on-eks/docs/guidance/agentic-ai/agent-tools", note: "Remote kernels for agent code execution, run as a shared service in AI on EKS's Agents on EKS environment." }
           - { name: "E2B Bring Your Own Cloud", kind: commercial, url: "https://docs.e2b.dev/byoc", note: "Commercial sandboxes deployed in your own AWS account and VPC; Enterprise customers only." }
       - block: state
-        service: "Durable checkpoints and AgentCore Memory"
+        service: "Durable checkpoints, AgentCore Memory and Knowledge Bases"
         note: "Bedrock Knowledge Bases as the vector index; the checkpoint log is the step journal."
         options:
-          - { name: "Durable checkpoints and AgentCore Memory", kind: commercial, url: "https://docs.aws.amazon.com/lambda/latest/dg/durable-configuration.html", packs: [awsNative] }
+          - { name: "Durable checkpoints, AgentCore Memory and Knowledge Bases", kind: commercial, url: "https://docs.aws.amazon.com/lambda/latest/dg/durable-configuration.html", packs: [awsNative] }
           - { name: "Amazon Bedrock AgentCore Memory", kind: commercial, url: "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html", note: "Managed short-term (per session) and long-term memory extracted across sessions; today's mapping." }
           - { name: "Amazon Bedrock Knowledge Bases", kind: commercial, url: "https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base-setup.html", note: "Managed retrieval over a store you pick: OpenSearch Serverless or Managed, Aurora PostgreSQL, Neptune Analytics, S3 Vectors or Pinecone." }
           - { name: "Amazon OpenSearch Service (k-NN)", kind: commercial, url: "https://docs.aws.amazon.com/opensearch-service/latest/developerguide/knn.html", note: "An index you query directly with knn_vector fields; AWS's EKS guidance uses an OpenSearch cluster for RAG." }
@@ -3100,7 +3113,7 @@ implementations:
           - { block: state, service: "AgentCore Memory and session storage", note: "Session storage (preview) keeps a session's files across stop and resume; AgentCore Memory holds events. Neither journals or replays steps.", url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-filesystem-configurations.html }
         dropSettings: [lambdaInvokePolicy, durableConfig, durableCallbackApproval, lambdaVpcConfig, durableStopExecution]
         addSettings: [runtimeResourcePolicy, runtimeExecutionRole, runtimeVpcMode, runtimeStopSession, strandsInterrupts, runtimeLifecycleConfig]
-        dropDifferences: [events->harness, operator->events]
+        dropShape: [starterFunction, callbackApproval]
         alsoNeeded:
           - service: "AWS Lambda ingress function"
             role: ingress
@@ -3168,7 +3181,7 @@ implementations:
           - { block: state, service: "Step Functions execution history and AgentCore Memory", note: "Execution history is the step journal, readable for 90 days after a run completes; Bedrock Knowledge Bases stays the vector index.", url: https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html }
         dropSettings: [lambdaInvokePolicy, durableConfig, durableCallbackApproval, lambdaVpcConfig, durableStopExecution]
         addSettings: [eksPodIdentity, eksNetworkPolicy, eksImdsHopLimit, eksAppNetworkPolicy, eksIsolatedPods, eksAgentQuarantine, eksClusterAccessEntries, eksControlPlaneLogs, eksPrivateEndpoint, sfnStartExecutionRole, sfnTaskTokenApproval, sfnStopExecution, sfnEncryptionConfig]
-        dropDifferences: [events->harness, operator->events]
+        dropShape: [starterFunction, callbackApproval]
         alsoNeeded:
           - service: "AWS Step Functions (Standard workflow and activities)"
             role: other
@@ -3296,9 +3309,9 @@ implementations:
       service: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-mcp.html
       toolDefs: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry-supported-record-types.html
       orgData: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/on-behalf-of-token-exchange.html
-    differences:
-      - at: toolDefs->service
-        text: "Callers get tool names and descriptions from AgentCore Gateway's stored catalogue, not from your service, so a hash check inside the service does not cover what callers see. The reviewed schema is loaded into the gateway's mcpToolSchema on every release: a second path for the published schemas, beside the one into the service."
+    shape:
+      - add: { from: toolDefs, to: gateway, label: "published schemas (mcpToolSchema)" }
+        why: "Callers get tool names and descriptions from AgentCore Gateway's stored catalogue, not from your service, so a hash check inside the service does not cover what callers see. The reviewed schema is loaded into the gateway's mcpToolSchema on every release: a second path for the published schemas, beside the one into the service."
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
     alsoNeeded:
       - service: "Amazon Bedrock AgentCore Identity"
@@ -4294,9 +4307,15 @@ implementations:
       offlineWeb: https://docs.aws.amazon.com/opensearch-service/latest/developerguide/what-is.html
       registry: https://docs.aws.amazon.com/codeartifact/latest/ug/welcome.html
       sources: https://docs.aws.amazon.com/codeartifact/latest/ug/external-connection.html
-    differences:
-      - at: localTools->offlineWeb
-        text: "AgentCore Browser is not inside the rollout's microVM: the rollout drives a separate Browser session through the AgentCore API, so browsing leaves through that session, not the shell. Create the custom browser in VPC mode on the sandbox subnets, grant the rollout role only the browser actions it uses, and stop the session with the episode."
+    shape:
+      - insert:
+          id: browserSession
+          title: "Browser session"
+          summary: "AgentCore Browser, in VPC mode on the sandbox subnets"
+          on: localTools->offlineWeb
+          parent: null
+          labels: ["browser actions (AgentCore API)", "browse & search"]
+        why: "AgentCore Browser is not inside the rollout's microVM: the rollout drives a separate Browser session through the AgentCore API, so browsing leaves through that session, not the shell. Create the custom browser in VPC mode on the sandbox subnets, give the rollout role only the browser actions it uses, and stop the session with the episode."
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-tool.html
     alsoNeeded:
       - service: "Amazon ECR"
@@ -4625,15 +4644,19 @@ implementations:
       gateway: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-http-passthrough.html
       internalTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-supported-targets.html
       provider: https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-bedrock.html
-    differences:
-      - at: entry->harness
-        text: "AgentCore Runtime is not a load balancer target. On Runtime, front-end code (Lambda or containers) behind an ingress such as an Application Load Balancer, API Gateway or CloudFront calls InvokeAgentRuntime with the user's token."
+    shape:
+      - id: runtimeCaller
+        insert:
+          id: runtimeCaller
+          title: "Front-end code"
+          summary: "Your Lambda or container code: calls InvokeAgentRuntime as the user"
+          on: entry->harness
+          col: 2   # above the agent, in its column, so the drawing stays as wide as the pattern's
+          row: 0
+          labels: ["turn / result", "InvokeAgentRuntime / stream"]
+        why: "AgentCore Runtime is not a load balancer target, so the load balancer forwards each turn to your own code (Lambda or containers), which calls InvokeAgentRuntime with the user's token. API Gateway or CloudFront can be the ingress instead; AWS's reference solution uses CloudFront, API Gateway and Lambda."
         url: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html
     alsoNeeded:
-      - service: "Front-end compute (AWS Lambda or Amazon ECS)"
-        role: other
-        why: "Runs the chat application behind the load balancer and calls InvokeAgentRuntime with the user's token."
-        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-invoke-agent.html
       - service: "Amazon VPC with NAT gateway and AWS Network Firewall"
         role: network
         why: "VPC-mode runtime needs private subnets and NAT; no VPC or firewall setting is listed here."
@@ -4819,7 +4842,7 @@ implementations:
           - { block: localTools, service: "Your tool handlers in the agent pod", note: "In-process handlers in the agent's container; they call AgentCore Memory under the pod's Pod Identity role.", url: https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html }
         dropSettings: [runtimeInboundJwt, runtimeExecutionRole]
         addSettings: [eksPodIdentity, eksNetworkPolicy, agentWorkloadIdentity, eksImdsHopLimit, eksAppNetworkPolicy, eksIsolatedPods, eksAgentQuarantine, eksClusterAccessEntries, eksControlPlaneLogs, eksPrivateEndpoint, gatewayTargetPrivateEndpoint]
-        dropDifferences: [entry->harness]
+        dropShape: [runtimeCaller]
         alsoNeeded:
           - service: "AWS Load Balancer Controller (built into EKS Auto Mode)"
             role: ingress
@@ -4977,10 +5000,17 @@ implementations:
       nativeTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
       vendorTools: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connectors.html
       openWeb: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connector-web-search-tool.html
-    differences:
-      - at: nativeTools->openWeb
-        text: "Web search is not a native tool here: it is the Web Search Tool connector behind your gateway, so gateway policy and CloudTrail apply and an Amazon index answers inside AWS. AgentCore Browser reaches live pages on its own network mode, PUBLIC by default, and the web_fetch path is undocumented, so site lists at the network level need a firewall."
+    shape:
+      - add:
+          from: aiGateway
+          to: openWeb
+          label: "web search (Web Search Tool)"
+          crossing: { via: "AI gateway: the Web Search Tool connector, under gateway policy and CloudTrail; an Amazon-run index answers" }
+        why: "Web search is not a native tool here: it is the Web Search Tool connector behind your gateway, so gateway policy and CloudTrail apply and an Amazon index answers inside AWS."
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connector-web-search-tool.html
+      - rename: { at: nativeTools->openWeb, label: "live pages (Browser, web_fetch)" }
+        why: "What leaves from the session itself is live pages: AgentCore Browser on its own network mode, PUBLIC by default, and web_fetch on a path AWS does not document. A site list at the network level therefore needs a firewall."
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-tool.html
     alsoNeeded:
       - service: "AWS IAM"
         role: identity
