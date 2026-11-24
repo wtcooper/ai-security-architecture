@@ -80,3 +80,31 @@ On each of the 20 patterns:
   with no release to sign.
 - The CoSAI Risk Map refresh (above).
 - The design review in `DESIGN-REVIEW-2026-11-21.md`, for the owner to choose from.
+
+## Neutrality pass, 2026-11-24
+
+The owner asked that the site stop forcing technologies and designs where an organisation
+chooses (rules in `NEUTRALITY.md`). Three inventories, five research passes (each checked by a
+second reader where it set product facts) and a set of fixes followed:
+
+- **Base patterns:** 80 of 82 opinionated items reworded (designs as outcomes with options,
+  environments made general, one mechanism as an example). On four SaaS patterns the tunnel is
+  a note on the vendor's arrow, not a box; on the low-code builder the relay likewise; browser
+  AI's "AI gateway" is a web inspection point; the multi-agent workflow's supervisor is an
+  orchestrator.
+- **On-premises:** every box names its role. Options per box, open source and commercial, and
+  nine packs: six platform packs (upstream open source on Kubernetes, Red Hat OpenShift AI,
+  NVIDIA AI Enterprise, VMware Private AI Foundation, Canonical Charmed Kubeflow, HPE Private
+  Cloud AI) and three add-ons (Kong, Gravitee, GitLab Ultimate). The model provider is a choice
+  between self-hosted and a hosted API.
+- **AWS, Azure, Google Cloud:** the provider's services stay in the boxes, with options where the
+  cloud offers several ways and packs (the cloud's own, open source on its Kubernetes service,
+  and add-ons). 1,373 options and 26 packs across the four platforms; 267 settings rows tagged
+  with the product they belong to, hidden when a chosen pack does not use it.
+- **The ≠ marks are gone.** The 482 notes they stood for moved to where a reader acts on them:
+  about 257 into settings (with 29 rows added), about 134 into product `watch` notes, opinions
+  into options, and 50 differences in shape drawn on that platform's drawing by a new engine
+  (insert, move, drop, reroute, rename, add; checked against the layout rules on every changed
+  drawing). Two remain as prose because they cannot be drawn honestly: Apigee playing both
+  gateway and authorisation server on Google Cloud federation, and Azure Artifacts outside the
+  network on the software factory.
