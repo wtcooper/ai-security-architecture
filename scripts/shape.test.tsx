@@ -86,7 +86,8 @@ test("a pattern with a change draws the changed shape when its platform is chose
     }
     // What it draws differently is marked quietly and says why on hover; no difference symbol.
     for (const id of Object.keys(v.archetype.drawn!.boxes)) assert.match(chosen, new RegExp(`data-block="${id}" data-shaped="box"`), `${at}: ${id} is marked as placed for the platform`);
-    assert.match(chosen, /data-legend-placed/, `${at}: the legend says what a dashed box is`);
+    // A reroute or a rename places no box, so the legend for a placed box appears only when one is.
+    if (Object.keys(v.archetype.drawn!.boxes).length) assert.match(chosen, /data-legend-placed/, `${at}: the legend says what a dashed box is`);
     assert.doesNotMatch(chosen, /≠|data-differs=/, `${at}: no difference mark`);
     assert.doesNotMatch(own, /data-shaped=|data-legend-placed/, `${at}: the pattern's own drawing carries no platform marks`);
     // Another platform, or the mapping without the option, keeps its own shape.
@@ -144,7 +145,12 @@ test("the Knative option draws the activator between the front door and the agen
   assert.ok(!drawn.edges.some((e) => e.from === "entry" && e.to === "knativeLocalGateway"), "the front end does not");
   // The mapping itself (plain Kubernetes) and every cloud keep the pattern's shape.
   assert.equal(drawnOn(chat, cloudProductFor(chat.id, "cloudOnPrem")!, null), chat);
-  for (const id of ["cloudAws", "cloudAzure", "cloudGcp"]) assert.equal(drawnOn(chat, cloudProductFor(chat.id, id)!, null), chat, id);
+  // A cloud that changes the shape for its own reasons does so in its own mapping, never through the Knative option.
+  for (const id of ["cloudAws", "cloudAzure", "cloudGcp"]) {
+    const p = cloudProductFor(chat.id, id)!;
+    if (!p.implementation.shape?.length) assert.equal(drawnOn(chat, p, null), chat, id);
+    else assert.ok(!drawnOn(chat, p, null).blocks.some((b) => b.id === "knativeActivator"), `${id}: no Knative activator`);
+  }
   const walk = walkOn(drawn, chat.walkthrough!);
   const second = walk.steps.filter((s) => s.n === 2);
   assert.deepEqual(second.map((s) => [s.follow, Boolean(s.continues)]), [["entry->knativeActivator", false], ["knativeActivator->agent", true]], "step 2 passes the activator");
