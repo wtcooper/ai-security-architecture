@@ -352,7 +352,7 @@ export function DrawingLegend({
   cloud?: string;
   /** True when the chosen platform is the organisation's own data centre: it runs software, not a provider's services. */
   own?: boolean;
-  /** True when the boxes name their role, with the products that can play it in the hover help. */
+  /** True when the platform has packs: the products that can play a box are in its hover help (on-premises the box names its role). */
   roles?: boolean;
   /** Where the drawing has boxes the chosen platform adds or draws elsewhere: that platform, as the legend names it. */
   placedFor?: string;
@@ -415,9 +415,11 @@ export function DrawingLegend({
       </span>
       {cloud && (
         <span className="flex items-center gap-1.5" data-legend-cloud>
-          <span aria-hidden className="text-[11px] font-semibold text-ink">{roles ? "Role or product" : own ? "Software name" : "Service name"}</span>
+          <span aria-hidden className="text-[11px] font-semibold text-ink">{roles ? (own ? "Role or product" : "Service or product") : own ? "Software name" : "Service name"}</span>
           {roles
-            ? "The role, or the product your stack puts there; hover a box for its options"
+            ? own
+              ? "The role, or the product your stack puts there; hover a box for its options"
+              : `The ${cloud} service, or the product your stack puts there; hover a box for its options`
             : own
               ? "The software that plays the box in your data centre"
               : `The ${cloud} service that plays the box`}{" "}
