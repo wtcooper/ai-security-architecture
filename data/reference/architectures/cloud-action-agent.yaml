@@ -14,7 +14,7 @@ overview: >-
   A queue or timer hands one agent a request, often from the customer who gains from the outcome,
   and it acts on systems of record under its own identity, choosing from a fixed list of checked
   actions. Unlike a chat agent with tools, nobody approves in the thread, so safety rests on that
-  list, human approval kept for high-consequence actions, and a way to undo every action.
+  list, human approval kept for high-consequence actions, and a way to undo the rest.
 
 description:
   - >
@@ -240,7 +240,7 @@ blocks:
   - id: internalTools
     kind: service
     title: Tool services
-    summary: "action catalogue: named, validated, each with a compensating transaction"
+    summary: "action catalogue: named, validated, each reversible or held for approval"
     zone: zoneCloud
     col: 3
     row: 1
@@ -249,8 +249,10 @@ blocks:
     note: >
       Our own action surface, and this architecture's primary control. Whatever the transport,
       what is admitted here should form a deterministic catalogue (named, parameter-validated
-      actions with a declared blast radius and a compensating transaction) rather than
-      arbitrary calls. With no human in the loop, this is what stands in for approval.
+      actions with a declared blast radius and a way back: a compensating transaction such as a
+      refund reversal or a cancellation, soft-deleted or versioned records restored on request, or a
+      hold before the effect becomes final; an action that has none goes to operator approval)
+      rather than arbitrary calls. With no human in the loop, this is what stands in for approval.
 
   - id: provider
     kind: provider
@@ -351,13 +353,13 @@ blocks:
   - id: govSecrets
     kind: governance
     title: Secrets & key management
-    summary: "credentials minted per call; no standing keys"
+    summary: "short-lived credentials per call or run; no standing keys"
     icon: key
     zone: zoneGovernance
     col: 1
     row: 5
     mitigations: [ D3-CH ]
-    note: Short-lived credentials minted per call, so a loop running with nobody watching holds no standing keys for brokered calls.
+    note: Short-lived credentials per call or run (from the gateway, a token exchange, workload identity or a secrets manager), so a loop running with nobody watching holds no standing keys for brokered calls.
 
   - id: govPolicy
     kind: governance
@@ -638,11 +640,14 @@ pins:
         is no later opportunity to notice the change was wrong.
     - mitigation: AML.M0028
       at: gateway->internalTools
-      do: "Run each tool with only the actions and records that request needs, on the requester's access."
+      do: "Run each tool with only the actions and records that request needs, on the access the run was given before it started."
       why: "The agent's own standing access is far wider than any one request."
       note: >-
-        Each tool runs least-privilege on the requester's delegated grant: only the actions and records
-        this request needs, never the agent's standing access.
+        Each tool runs least-privilege on the access the D3-APA pin fixed for the run: only the
+        actions and records this request needs, never the agent's standing access. That access is
+        the requester's delegated grant (on-behalf-of or token exchange, scoped to the task), or a
+        service account with named limits plus a check of the requester's entitlement on each
+        record.
     - mitigation: AML.M0029
       at: internalTools->orgData
       do: "Require an operator's approval for actions that are costly or cannot be undone, and keep those approvals rare."
@@ -654,12 +659,15 @@ pins:
         scenario walks the round trip.
     - mitigation: cap-agent-action-policy-enforcement
       at: gateway
-      do: "Check every action at your AI gateway when it is requested: this action, this record, this amount."
+      do: "Check every action before it runs, at a point outside the agent such as your AI gateway: this action, this record, this amount."
       why: "Allow it only if both the requester and the agent are permitted, never if just one of them is."
       note: >-
         A per-invocation policy decision (this action, this record, this value, now) rather than a
-        session-time grant, made on the intersection of the requester's grant and the agent's own identity,
-        never the union, which is what a confused deputy runs on.
+        session-time grant, made on the intersection of the requester's grant and the agent's own
+        identity, never the union, which is what a confused deputy runs on. It can be made at the AI
+        gateway as the call crosses (an MCP or API gateway's per-call policy), in the tool service
+        itself before it executes, or by a policy engine either of them calls (Open Policy Agent,
+        Cedar).
     - mitigation: D3-AA
       at: planner->gateway
       do: "Give each agent its own identity that can be revoked, and check it at the gateway on every call."
@@ -679,9 +687,13 @@ pins:
       note: "Case-scoped memory with hard boundaries: no cross-case reads, ever."
     - mitigation: D3-CH
       at: planner->gateway
-      do: "Issue a short-lived credential for each call from your gateway."
+      do: "Make sure the agent's own code holds no long-lived key: every call it makes carries a short-lived credential scoped to that call or run, for example one your gateway issues."
       why: "The agent's own code then holds no lasting key to leak."
-      note: Brokered, per-workload, expiring model credentials; the agent tier holds no standing model key.
+      note: >-
+        Expiring credentials per call or run, however they are issued: minted or injected per call by the AI
+        gateway, a token exchange (RFC 8693) at the authorization server per run or tool audience, the
+        platform's workload identity, or short-lived secrets from a secrets manager. The agent tier holds no
+        standing model key.
     - mitigation: AML.M0036
       at: gateway
       do: "Set quotas and cost ceilings at your AI gateway."

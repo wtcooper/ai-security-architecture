@@ -549,12 +549,12 @@ edges:
     to: managedRuntime
     crossing:
       kind: brokered
-      via: "Our cloud identity and a private endpoint: only the application's workload identity may invoke the agent, with no API key and no public address"
+      via: "Our cloud identity on a private path: only the application's workload identity may invoke the agent, with no API key and no access from the internet"
     path: external
     bidir: true
     label: session invoke
     note: >
-      Our application calls the agent's endpoint through a private endpoint on our network,
+      Our application calls the agent's endpoint on a private path (a private endpoint on our network, or inside a service perimeter where the service has none),
       signed in as its own workload identity and carrying the user the front end bound. The
       session stream carries everything after: events out, approvals and custom tool results
       back. The cloud's access policy decides who may invoke, and the audit log records that
@@ -743,11 +743,12 @@ pins:
         follows the latest version by default.
     - mitigation: D3-CTS
       at: managedRuntime
-      do: "Keep each connector's credential in the service's own connection store, tied to one named tool or server, and pass the signed-in user's access through wherever the tool supports it."
+      do: "Keep each connector's credential in a managed store, tied to one named tool or server, and pass the signed-in user's access through wherever the tool supports it."
       why: "A credential that every agent and every user shares gives each of them the same reach."
       note: >-
-        Connector credentials are held by the service and attached at call time only toward the named
-        target, so the model never sees a value. Per-user delegation is our arrangement, not the default:
+        Connector credentials are held in a managed store (the service's own connection or
+        credential store, or the cloud's secrets manager referenced by the service) and attached at
+        call time only toward the named target, so the model never sees a value. Per-user delegation is our arrangement, not the default:
         a connection on a shared identity or a stored key gives every caller the same downstream access.
     - mitigation: cap-agent-action-policy-enforcement
       at: managedRuntime
@@ -862,11 +863,17 @@ pins:
         default service account, that is the finding.
     - mitigation: D3-NI
       at: entry->managedRuntime
-      do: "Close the service's public endpoint and reach it only through a private endpoint on your own network."
+      do: "Make sure the service cannot be called from outside your network with a stolen credential: close its public access and reach it privately, or put it inside a service perimeter where it has no private endpoint."
       why: "Most of these services are open to the internet until you change it, so a stolen credential works from anywhere."
       note: >-
-        Public network access disabled on the service and a private endpoint in our network as the only
-        way in, with the endpoint's own policy limiting which identities may use it.
+        No way in from the internet: public network access disabled on the service and a private
+        endpoint in our network as the only way in (a private endpoint or interface endpoint, where
+        the cloud offers one), with the endpoint's own policy limiting which identities may use it;
+        or, where the service has no private endpoint, a service perimeter around the cloud's AI
+        APIs; or, at the least, identity-only access with source-network or conditional-access
+        conditions on the caller. Use a private endpoint where the service offers one: Microsoft's
+        Foundry networking page says a Foundry resource created without networking configuration is
+        reachable over the public internet by any caller with a valid credential.
     - mitigation: D3-NI
       at: managedRuntime->aiGateway
       do: "Connect the service to your network through private endpoints or a subnet you delegate to it, and let it reach your gateway and stores only."
@@ -1000,8 +1007,8 @@ scenarios:
           network access is not allowed for agent resources in this account. Nothing was
           created, and the denial is in the audit log.
       - follow: engineer->agentDef
-        label: private endpoint declared
-        note: The definition is corrected to use the private endpoint and the delegated subnet.
+        label: private path declared
+        note: The definition is corrected to use the private path (here a private endpoint) and the delegated subnet.
       - follow: agentDef->managedRuntime
         label: deploy accepted, registered
         note: The same call now passes policy, and the new version is registered.

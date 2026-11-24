@@ -89,8 +89,8 @@ zones:
     owner: cloud
     gloss: "the narrow strip we still run"
     note: >
-      The narrow strip that is still ours: the tunnel the platform reaches us through, the
-      gateway a published agent is admitted at, and our own tool servers and data behind it.
+      The narrow strip that is still ours: the gateway a published agent is admitted at (reached
+      through a relay we run, on platforms that use one), and our own tool servers and data behind it.
   - id: zoneExternal
     owner: external
     note: The model the vendor calls on our behalf, and the open web its search reads.
@@ -202,29 +202,6 @@ blocks:
       platform directly. The platform's data policies regulate its MCP tools the same way they
       regulate its connectors.
 
-  - id: dataGateway
-    kind: service
-    title: Tunnel connector
-    summary: "on-premises data gateway: dials out, relays on stored credentials"
-    cosaiComponent: componentAgentUserQuery
-    zone: zoneCloud
-    col: 2
-    row: 2
-    note: >
-      The platform's on-premises data gateway, or its private-network equivalent: vendor-supplied
-      software on a host we run that dials out, so nothing is opened inbound, and relays the
-      platform's connector calls to our gateway, the same chain as on every SaaS sibling. It
-      does not run agents, and its payload limits make it a query path rather than a bulk one.
-      It connects with the credentials stored for each connection, whoever invoked the agent,
-      so the invoker's identity does not reach the far side: the confused-deputy path this
-      pattern turns on. Those stored credentials sit on this host, which is why the secrets
-      pin lands here.
-    items:
-      - id: outbound
-        label: Outbound connector
-        icon: plug
-        note: Polls outward; no inbound firewall rule, and a small ceiling on what any one call may carry.
-
   - id: orgData
     kind: external
     title: Enterprise data
@@ -293,28 +270,30 @@ blocks:
   - id: govSecrets
     kind: governance
     title: Secrets & key management
-    summary: "connection credentials cached on the tunnel host"
+    summary: "connection credentials, wherever the platform keeps them"
     icon: key
     zone: zoneGovernance
     col: 3
     row: 5
     mitigations: [ D3-CH ]
     note: >
-      The tunnel host's cached connection credentials: issued, rotated and revoked from here,
-      because they sit on a host we run and nowhere our gateway can see.
+      The connection credentials, wherever the platform keeps them (on some platforms cached on a
+      relay host we run): issued, rotated and revoked from here, because they sit nowhere our
+      gateway can see.
 
   - id: govPolicy
     kind: governance
     title: Policy & authorization
-    summary: "connector data policies; violating agents blocked"
+    summary: "which connectors agents may use and combine; agents that break it blocked"
     icon: scale
     zone: zoneGovernance
     col: 4
     row: 5
     mitigations: [ AML.M0028, cap-data-access-governance, cap-input-guardrails, AML.M0029 ]
     note: >
-      Data policies that classify every connector, forbid mixing groups across the boundary and
-      block publication of a violating agent. Whether a platform enforces them by default, and
+      Which connectors agents may use and which may be combined (on some platforms, data policies
+      that classify every connector and forbid mixing groups across the boundary), and blocking
+      publication of a violating agent. Whether a platform enforces them by default, and
       which agents they exempt, differs by platform.
 
   - id: govSupplyChain
@@ -390,25 +369,26 @@ edges:
     label: scoped reads & writes
     note: Grounding content and action targets, reached on our terms.
   - from: platform
-    to: dataGateway
+    to: aiGateway
     crossing:
       kind: brokered
-      via: "Tunnel connector: outbound-only relay on stored connection credentials; hands to our AI gateway"
+      via: "Into our AI gateway: an outbound relay we run, private connectivity from the vendor, or an internet-facing endpoint behind OAuth"
     path: external
     bidir: true
-    label: outbound-only tunnel
+    label: tool calls · outbound relay
     note: >
-      Their cloud reaching back into us through software we run. Outbound-only, so nothing is
-      opened inbound; the public-endpoint form most platforms default to is recorded as a
-      deviation.
-  - from: dataGateway
-    to: aiGateway
-    path: primary
-    bidir: true
-    label: tool call / result
-    note: >
-      The tunnel hands to our gateway rather than to a server or the data. A vendor-hosted
-      agent reaching our data crosses here or it does not reach it at all.
+      Their cloud reaching back into us, always into our gateway rather than to a server or the
+      data: a vendor-hosted agent reaching our data crosses here or it does not reach it at
+      all. How it is carried is a note, not a second drawing. On some platforms it is an
+      outbound relay we run (Microsoft's on-premises data gateway, for Power Platform):
+      vendor-supplied software on a host of ours that dials out, so nothing is
+      opened inbound, and relays the platform's connector calls; it does not run agents, and
+      its payload limits make it a query path rather than a bulk one. Others offer private
+      connectivity from the vendor's cloud, and most default to calling an internet-facing
+      endpoint of ours with OAuth; a platform may also have no path into our network at all,
+      only its SaaS connectors. Whatever carries it, the call is made with the credentials
+      stored for each connection, whoever invoked the agent, so the invoker's identity does
+      not reach the far side: the confused-deputy path this pattern turns on.
   - from: platform
     to: vendorTools
     path: external
@@ -465,9 +445,9 @@ pins:
         Search results and fetched pages return into the agent's turn: content somebody else
         authored, read with the same standing as the maker's instructions.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: dataGateway
+      at: platform->aiGateway
       note: >
-        The relay reads with each connection's stored credential whoever is asking, so an agent
+        The platform reads with each connection's stored credential whoever is asking, so an agent
         can answer with records the person invoking it could never open.
     - risk: riskExcessiveDataHandlingDuringInference
       at: platform->provider
@@ -494,20 +474,24 @@ pins:
   mitigations:
     - mitigation: D3-APA
       at: consumer->platform
-      do: "Require each published agent to run on the access of the person using it, treat running on its maker's access as a reviewed exception, and turn sign-in on for every channel."
+      do: "Require each published agent to run on the access of the person using it or on a service identity with its own named, reviewed limits, treat running on its maker's access as a reviewed exception, and turn sign-in on for every channel."
       why: "An agent published with sign-in off answers anyone who has the link."
       note: >-
-        Whose credentials a published agent runs on, and who may run it at all: end-user credentials
-        required, maker credentials as a deliberate, reviewed exception, and authentication on for every
+        Whose credentials a published agent runs on, and who may run it at all: end-user
+        credentials, or a dedicated service identity per agent with named, reviewed limits,
+        required; maker credentials as a deliberate, reviewed exception; and authentication on for every
         channel an agent is published to; an agent published with authentication off answers anyone with the
         URL.
     - mitigation: D3-AA
       at: platform
-      do: "Give each published agent its own identity in your directory."
+      do: "Give each published agent its own identity in your directory where the platform supports it, for example Microsoft Entra Agent ID for Copilot Studio agents."
       why: "You can then block or limit one agent without touching the rest."
       note: >-
-        Each published agent signs in as its own directory principal; the identity provider verifies that
-        credential and conditional access can refuse it, per agent rather than for the whole population.
+        Each published agent signs in as its own directory principal where the platform gives it one
+        (Copilot Studio agents each get an Entra agent identity, with their maker recorded as
+        sponsor); the identity provider verifies that credential and conditional access can refuse
+        it, per agent rather than for the whole population. Where there is no directory identity,
+        per-agent connection ownership and sharing limits are what single one agent out.
     - mitigation: cap-agent-tool-registry
       at: platform
       do: "Query the platform's inventory of agents regularly, including which connectors run on a maker's access."
@@ -533,20 +517,24 @@ pins:
         authentication toggles drift as the vendor ships.
     - mitigation: AML.M0028
       at: platform->vendorTools
-      do: "Set one connector policy for the whole account: classify every connector, never pair a confidential source with one that sends data out, and block unclassified connectors."
+      do: "Decide for the whole account which connectors agents may use and which may be combined in one agent, so a confidential source cannot be paired with one that sends data out, and block connectors nobody has reviewed."
       why: "It is the only control on connections that never touch your network."
       note: >-
-        Connector policy authored centrally in the tenant: every connector classified, a confidential source
-        never paired with a path that sends data out, unclassified connectors blocked, enforced at
-        publication where the platform supports it. The only control on a path that never touches our network.
+        Connector policy authored centrally in the tenant: which connectors agents may use and
+        combine, a confidential source never paired with a path that sends data out, unreviewed
+        connectors blocked, enforced at publication where the platform supports it. Power Platform
+        data policies do this for Copilot Studio; other platforms have an admin allowlist of
+        connectors and actions, and where a platform has no grouping, each agent's connector
+        combination is reviewed. The only control on a path that never touches our network.
     - mitigation: D3-CH
-      at: dataGateway
-      do: "Issue the connection credentials on the tunnel host with narrow scope and short life, rotate them, and be able to revoke them without rebuilding the host."
-      why: "That host is where the secret actually sits."
+      at: platform->aiGateway
+      do: "Issue the connection credentials with narrow scope and short life, rotate them, and be able to revoke them, including any cached on a relay host you run, without rebuilding it."
+      why: "Those credentials are what the platform reaches into your systems with, whoever is asking."
       note: >-
-        The cached connection credentials on the tunnel host: issued scoped and short-lived, rotated, and
-        revocable without redeploying the host. Absorbed here per the recorded deviation, because this is
-        where the secret actually sits.
+        The connection credentials this crossing is made with: issued scoped and short-lived, rotated, and
+        revocable without redeploying anything. On a platform that relays through a host we run, they are
+        cached on that host, which is where the secret actually sits; pinned on the crossing per the
+        recorded deviation.
     - mitigation: AML.M0028
       at: aiGateway->internalTools
       do: "Decide at your own gateway which of your servers a published agent may reach."
@@ -595,13 +583,13 @@ pins:
         event-triggered agent has nobody to ask, and its writes stay off or go to a named approver.
     - mitigation: cap-input-guardrails
       at: platform
-      do: "Turn on the platform's runtime threat detection in every environment that hosts published agents, and set it to block when the detector does not answer."
+      do: "Turn on the platform's runtime threat detection where it offers one, in every environment that hosts published agents, and make it block when the detector does not answer, where that is a setting."
       why: "Planted records and documents reach the agent inside the platform, where your gateway never sees them."
       note: >-
         The platform's built-in prompt-injection blocking plus an external detector it consults before each
-        tool call, sent the recent conversation, earlier tool results and the proposed call. It is configured
-        per environment, with no tenant-wide switch, and by default lets the call run when the detector is
-        slow or failing, so new environments and the error behaviour are what to check.
+        tool call, sent the recent conversation, earlier tool results and the proposed call. Where
+        the platform offers it, it may be configured per environment, with no tenant-wide switch,
+        and by default let the call run when the detector is slow or failing, so new environments and the error behaviour are what to check.
 
 walkthrough:
   title: An agent is built, published, and used
@@ -634,12 +622,12 @@ walkthrough:
     - follow: openWeb->platform
       label: search results
       note: Results and fetched pages enter the turn, written by whoever owns the page.
-    - follow: platform->dataGateway
-      label: down the tunnel
-      note: Their cloud reaches back into us through the connection our tunnel holds open.
-    - follow: dataGateway->aiGateway
+    - follow: platform->aiGateway
       label: reach into our data
-      note: Handed to our gateway. A published agent reaching our data crosses here or not at all.
+      note: >
+        Their cloud reaches back into our gateway (through the connection our relay holds open,
+        on platforms that use one). A published agent reaching our data crosses here or not at
+        all.
     - follow: aiGateway->internalTools
       label: scoped grant
       note: Scoped to grants we decided, rather than to the maker's standing access.
@@ -652,12 +640,9 @@ walkthrough:
     - follow: internalTools->aiGateway
       label: recorded
       note: Through our crossing, where the call is recorded.
-    - follow: aiGateway->dataGateway
-      label: into the tunnel
-      note: Classified at the gateway, then back into the connector.
-    - follow: dataGateway->platform
+    - follow: aiGateway->platform
       label: tool result
-      note: And up the tunnel to their runtime as a tool result.
+      note: Classified at the gateway, then back to their runtime as a tool result.
     - follow: platform->provider
       label: grounded model call
       note: The records go to the model with the turn, on the vendor's key.
@@ -680,20 +665,16 @@ scenarios:
           Colleagues run it, and inherit the maker's access to whatever it was attached to.
           The gap between who built an agent and whose access it uses is where this
           pattern's incidents live.
-      - follow: platform->dataGateway
-        label: back into us
-        note: The agent reaches back into our systems through the tunnel.
-      - follow: dataGateway->aiGateway
+      - follow: platform->aiGateway
         label: reach bounded at our tier
-        note: Which is only bounded at all because the reach into our systems crosses a tier we run.
+        note: >
+          The agent reaches back into our systems, which is only bounded at all because the
+          reach crosses a tier we run.
   - title: A shared drive becomes an instruction channel
     steps:
-      - follow: platform->dataGateway
+      - follow: platform->aiGateway
         label: folder as grounding
-        note: A running agent asks for a folder somebody uses as grounding.
-      - follow: dataGateway->aiGateway
-        label: to our gateway
-        note: The request comes up the tunnel to our gateway.
+        note: A running agent asks our gateway for a folder somebody uses as grounding.
       - follow: aiGateway->internalTools
         label: admitted read
         note: Admitted like any other read.
@@ -706,12 +687,9 @@ scenarios:
       - follow: internalTools->aiGateway
         label: tool result
         note: It crosses back as an ordinary tool result.
-      - follow: aiGateway->dataGateway
-        label: into the tunnel
-        note: Classified at the gateway, which cannot tell it apart from any other record.
-      - follow: dataGateway->platform
+      - follow: aiGateway->platform
         label: model input
-        note: And enters their runtime as model input.
+        note: Classified at the gateway, which cannot tell it apart from any other record, and enters their runtime as model input.
       - follow: platform->vendorTools
         label: acts with maker's authority
         note: >
@@ -728,14 +706,12 @@ scenarios:
           The maker's connector grants to our SaaS tenants keep flowing: these never touch our
           network, so only the platform's connection-ownership transfer or revocation can cut
           them. That inventory operation is the primary response.
-      - follow: platform->dataGateway
-        label: grants into us
-        note: The departed maker's grants into our systems still arrive through the tunnel.
-      - follow: dataGateway->aiGateway
+      - follow: platform->aiGateway
         label: our slice cut
         note: >
-          Our gateway cuts the slice it issued (the grants into our own systems), which is
-          real, and is not most of what the departed maker left behind.
+          The departed maker's grants into our systems still arrive. Our gateway cuts the slice
+          it issued (the grants into our own systems), which is real, and is not most of what
+          the departed maker left behind.
 
   - title: Published to anyone with the link
     steps:
@@ -745,12 +721,9 @@ scenarios:
           A failure variant: a maker publishes to a public channel and leaves authentication
           off. The "consumer" is now anyone who finds the URL, and recon tooling finds them by
           the thousands.
-      - follow: platform->dataGateway
-        label: down the tunnel
-        note: The stranger's question comes back into us through the tunnel.
-      - follow: dataGateway->aiGateway
+      - follow: platform->aiGateway
         label: agent's own grants
-        note: It reaches our crossing on the agent's stored credential, with no invoker identity behind it.
+        note: The stranger's question comes back into us, reaching our crossing on the agent's stored credential, with no invoker identity behind it.
       - follow: aiGateway->internalTools
         label: admitted like any run
         note: >
@@ -763,18 +736,20 @@ scenarios:
           that carry no invoker, are what would have stopped it.
 
 deviations:
-  - subject: The tunnel absorbs secrets
+  - subject: Secrets consumption is pinned on the crossing into the gateway
     reason: >
       Credential hardening (D3-CH) is embodied by the AI gateway, but the load-bearing secrets
-      on this path are the connection credentials cached on the tunnel host: the pin sits
-      where they live, and the issuance story in the governance call-out.
-  - subject: The tunnel is drawn; the public endpoint and the direct data path are recorded
+      on this path are the connection credentials the platform calls with (cached on the relay
+      host, on platforms that use one): the pin sits on the crossing they are used on, and the
+      issuance story in the governance call-out.
+  - subject: The relay is a note on the arrow; the direct data path is recorded
     reason: >
-      The target state is the SaaS siblings': the platform reaches our gateway through an
-      outbound-only tunnel on a host we run, so none of our endpoints faces the internet. Most
-      platforms in this class default instead to calling an internet-facing endpoint of ours,
-      admitted at our edge by their published IP ranges (the same crossing with a weaker
-      admission), and some offer private networking in place of a relay. The on-premises data
+      As on the SaaS siblings, the flow is the platform calling our tool servers through our
+      gateway, so that arrow is drawn and what carries it is its crossing note. An outbound
+      relay on a host we run means none of our endpoints faces the internet. Most platforms in
+      this class default instead to calling an internet-facing endpoint of ours, admitted at
+      our edge by their published IP ranges (the same crossing with a weaker admission), and
+      some offer private networking in place of a relay. Microsoft's on-premises data
       gateway can also carry the platform's standard data connectors straight to an
       on-premises source, bypassing our gateway; where that path is used, the connector's
       data-policy classification and the relay's scoped credentials are the only controls on

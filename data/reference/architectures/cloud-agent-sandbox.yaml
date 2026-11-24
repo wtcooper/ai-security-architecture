@@ -11,8 +11,8 @@ summary:
     contained, and the drawing is built on the assumption that each wall around it will fail.
 overview: >-
   Each run gets a fresh sandbox, destroyed after its task, on hosts that reach only the services the
-  run needs, with an offline copy of the web and monitoring outside the sandbox that stops a run
-  automatically. Unlike the training pipeline, where the model only reads data, here the model acts
+  run needs, with web content from a copy you control wherever the task allows it, and monitoring
+  outside the sandbox that stops a run automatically. Unlike the training pipeline, where the model only reads data, here the model acts
   and is the suspect, so every wall assumes the one inside it has failed.
 description:
   - >
@@ -342,15 +342,20 @@ blocks:
   - id: offlineWeb
     kind: service
     title: Offline web
-    summary: "cached pages, search index & simulated apps, in place of the live web"
+    summary: "cached pages, search index & simulated apps, where tasks allow"
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 3
     row: 2
     note: >
-      A cached, indexed copy of the web, with simulated applications behind it, that rollouts
-      browse and search instead of the live one. It is what lets a model learn to use the web
-      with no route to it, and so what makes a short egress list possible at all. It is still
+      A cached, indexed copy of the web, with simulated applications behind it, that rollouts browse
+      and search instead of the live one, for tasks that can run without the live web. It is what
+      lets a model learn to use the web with no route to it, and so what keeps the egress list
+      short. The other ways are no web at all, or the live web through an allowlisting egress proxy
+      that records every request (Inspect's Kubernetes sandbox, for example, takes a list of allowed
+      domains); prefer no web or an offline copy wherever the task allows, as the UK AI Security
+      Institute's Inspect sandbox guidance treats no internet access as the default and does not
+      recommend broad internet access. It is still
       shared state: a certificate cache in this tier was one of the covert channels the red
       teams found between rollouts.
     items:
@@ -389,14 +394,16 @@ blocks:
   - id: openWeb
     kind: external
     title: Open web
-    summary: "the live web: crawled into the cache, never reached by a rollout"
+    summary: "the live web: crawled into the cache, or via a logged allowlist proxy"
     cosaiComponent: componentDataSources
     zone: zoneExternal
     col: 4
     row: 2
     note: >
-      The live web, drawn so its absence from every rollout's reach is visible. It reaches the
-      run only as content crawled into the offline web.
+      The live web, drawn so its place in every rollout's reach is visible. In this drawing it
+      reaches the run only as content crawled into the offline web; a task that needs the live web
+      reaches only the domains on its list, through an allowlisting egress proxy that records every
+      request.
     items:
       - id: livePages
         label: Arbitrary pages
@@ -547,9 +554,11 @@ edges:
     bidir: true
     label: metrics, logs & auth
     note: >
-      The support services the host can reach: telemetry out, a workload token in, shared
-      storage where a task needs it. Each is enumerated and segmented, because each is a way
-      out if it is not.
+      The support services the host can reach: telemetry out, a workload token in, shared storage
+      where a task needs it. Each is enumerated and segmented, because each is a way out if it is
+      not. Telemetry need not leave from inside the sandbox: where a node agent reads container
+      output, or the orchestrator records trajectories, the sandbox needs no network path to the
+      logging service unless the harness exports its own traces.
   - from: orchestrator
     to: storage
     path: primary
@@ -633,12 +642,14 @@ pins:
         against it, not assumed.
     - mitigation: D3-NI
       at: sandbox
-      do: "Limit the sandbox hosts' network to the services a run needs, with cloud firewalls behind that and no route from one host to another."
+      do: "Limit the sandbox hosts' network to the services a run needs, with a second, independent network layer behind that and no route from one host to another."
       why: "This is the second wall, built to hold if the sandbox itself fails."
       note: >-
         The second wall, built to hold if the first has fallen: the host network reaches only the
-        services the run needs, cloud firewalls and security groups behind that, and no lateral route
-        from one sandbox host to another.
+        services the run needs, a second, independent layer behind that (cloud security groups or
+        firewall rules for a cloud-hosted fleet, Kubernetes network policy plus node-level
+        firewalls, or VLAN segmentation and firewalls on premises), and no lateral route from one
+        sandbox host to another.
     - mitigation: D3-HBPI
       at: sandbox
       do: "Do not let tasks that must stay apart share a machine, processor cores or cache, and schedule them by trust group."
@@ -650,18 +661,21 @@ pins:
     - mitigation: cap-agent-egress-control
       at: localTools
       do: "Give each task one short list of places it can reach: the offline copy of the web, your package mirror and the platform services it needs, with name lookups limited to that list."
-      why: "One model got out through an unrestricted name lookup. The list stays short because the offline web replaces the live one."
+      why: "One model got out through an unrestricted name lookup. An offline copy of the web keeps the list short; where a task needs the live web, its domains go on the list and nothing else does."
       note: >-
         The rollout's whole egress list: the offline web, the mirror and the platform services it needs.
         DNS resolves inside the run to that list and the record types it needs, enforced at two independent
-        layers: the gap one internal model tunnelled out through. Short enough to hold because the offline web replaces the live one.
+        layers: the gap one internal model tunnelled out through. Short enough to hold because the offline web replaces the live one; where a task needs the live web, only its domains are added, through a proxy that records each request. Logs and metrics can be collected outside the sandbox (an agent on each node reading container output under the node's own identity, or the orchestrator recording trajectories), so the logging service need not be on the list unless the harness exports its own traces.
     - mitigation: AML.M0028
       at: localTools->registry
-      do: "Make the package mirror read-only to tasks, and do not let a task trigger it to fetch from outside."
+      do: "Make the package mirror read-only to tasks, and make sure no task can use it to reach anything outside, for example by filling it in advance with remote fetching off."
       why: "A mirror tasks can write to becomes a message board between them, and its outside fetching a way to the internet."
       note: >-
-        Installs only: the mirror is read-only to a rollout, and its remote-repository fetching is not a
-        route a rollout can steer.
+        Installs only: the mirror is read-only to a rollout, and its remote-repository fetching is
+        not a route a rollout can steer. Common ways: a mirror populated in advance with remote
+        fetching off; a pull-through cache limited to an allowlist of packages and versions, so a
+        request for anything else is refused without an outside fetch; or packages preinstalled in
+        the task image with no mirror reachable.
     - mitigation: D3-FA
       at: registry
       do: "Scan and pin everything on its way into the mirror, on a system the tasks cannot reach."
@@ -705,11 +719,13 @@ pins:
         sandbox; widening anything afterwards is a person's decision.
     - mitigation: D3-SYSVA
       at: govSupplyChain
-      do: "Before a run, have agents attack the sandbox, the host network and the platform services, and let the findings decide whether the run goes ahead."
+      do: "Before a run, red-team the sandbox, the host network and the platform services, and let the findings decide whether the run goes ahead."
       why: "The walls are software, so test them the way the model will."
       note: >-
-        Containment red teaming before a run: agents given the infrastructure's source and, in some
-        tests, full host access, attacking the sandbox, the host network and the platform services. The
+        Containment red teaming before a run, by people, by automated or agent-driven attack runs,
+        or both, with the automated runs repeated on every change to the walls. In the tests this
+        drawing draws on, agents were given the infrastructure's source and, in some, full host
+        access, and attacked the sandbox, the host network and the platform services. The
         findings decide whether the run goes ahead, and fixes go upstream.
     - mitigation: D3-APA
       at: researcher->orchestrator
@@ -861,8 +877,11 @@ deviations:
       than as a conditional edge here.
   - subject: The open web is drawn though nothing in a sandbox reaches it
     reason: >
-      Its only edge is the one-way crawl into the offline web. Leaving it off would hide the
-      design decision the drawing turns on: that the live web is not on any rollout's list.
+      Its only edge is the one-way crawl into the offline web. Leaving it off would hide the design
+      decision the drawing turns on: that the live web is not on any rollout's list here. A task
+      that needs the live web puts its domains on its own list, reached through an allowlisting
+      proxy that records each request; that variant is recorded here rather than drawn as a second
+      path.
   - subject: No AI gateway brokers the rollout's tools
     reason: >
       Every cloud agent drawing reaches tools and data through an AI gateway. This one has no

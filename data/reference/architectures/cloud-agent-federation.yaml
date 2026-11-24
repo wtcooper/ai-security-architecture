@@ -7,15 +7,17 @@ abbrev: A2A federation
 summary:
   - >
     Our agent working with agents other organisations run (a vendor platform's agent, a
-    partner's) over the Agent2Agent protocol, in both directions. The whole architecture is
+    partner's) over an agent-to-agent protocol (the Agent2Agent protocol, A2A, in this drawing), in both directions. The whole architecture is
     an identity problem: which agent is speaking, on whose behalf, with what it may do, and how
-    far that authority is allowed to travel. Both peers are treated as equally untrusted and
-    get the same checks. Only one thing differs between them: our users' identity travels to
-    the federated vendor peer, never to the partner.
+    far that authority is allowed to travel. Both peers are treated as equally untrusted and get the
+    same checks. The drawing shows both cases side by side: a peer whose platform federates with our
+    identity provider, so our users' identity can travel to it, and one that does not, so only our
+    agent's identity does. Which case a peer is depends on the partnership, not on whether it is a
+    vendor or a partner.
 
 overview: >-
-  Your agent and other organisations' agents exchange tasks over the Agent2Agent protocol, and you
-  add what it leaves out: an identity per agent, tokens for one peer and one skill, and each peer's
+  Your agent and other organisations' agents exchange tasks over an agent-to-agent protocol (A2A in
+  this drawing), and you add what it leaves out: an identity per agent, tokens for one peer and one skill, and each peer's
   signed description checked before use. Unlike a multi-agent workflow of your own agents, every hop
   crosses an organisation, so tokens never travel onward and what a peer returns is untrusted text.
 
@@ -29,7 +31,7 @@ description:
     sits in front of the agent. Everything an enterprise needs for identity is therefore
     plumbing it brings itself, and this drawing is that plumbing, made explicit: workload
     identities for agents, identity assertions for users, an authorization server that mints
-    and exchanges, and a gateway that admits cards and enforces scopes per skill.
+    and exchanges, and a gateway that admits cards and enforces scopes per skill. A2A is the drawing's example, not a premise: two organisations' agents can also meet as MCP tools one side exposes, or over a plain REST or event API, and the same identity plumbing applies. Prefer A2A where both sides support it, because its cards can name per-skill security requirements a gateway can check and, since v1.0, can be signed.
   - >
     Two identities travel on every task a user starts, and must never be confused. The agent's identity says
     which workload is calling (our harness registered as a client in the peer's platform, the
@@ -729,28 +731,34 @@ pins:
       at: gateway->partner
       note: >-
         The partner's card can change after admission in the same way, and with no federation
-        its card and the registration it gave us are all we hold. It is verified against the pinned
-        key and fingerprint on every task.
+        its card and the registration it gave us are all we hold. It is checked on every task
+        against what was recorded at admission: its fingerprint, and its signing key where the
+        partner signs it.
   mitigations:
     - mitigation: D3-AA
       at: authServer
-      do: "Register one identity for each agent in each partnership, with its own key that your secrets service issues and rotates, an owner and an expiry."
+      do: "Register one identity for each agent in each partnership, with its own credential that you issue and rotate centrally, an owner and an expiry."
       why: "Shared secrets and borrowed human sign-ins make it impossible to tell which agent did what."
       note: >-
-        One identity per agent per relationship: our harness registered in each peer platform with its own
-        key, each peer agent registered with us the same way, keys issued and rotated by the secrets service,
-        never in the harness. No shared secrets, no borrowed human sessions, a lifecycle with an owner and an
+        One identity per agent per relationship: our harness registered in each peer platform with
+        its own credential, each peer agent registered with us the same way, issued and rotated
+        centrally, never in the harness. The credential is a private key for signed client
+        assertions (private_key_jwt) kept in a key management service or hardware security module, a
+        mutual-TLS client certificate from an internal CA, or workload identity federation where the
+        peer platform accepts our issuer. No shared secrets, no borrowed human sessions, a lifecycle with an owner and an
         expiry.
     - mitigation: D3-APA
       at: idp->authServer
-      do: "Decide in your identity provider which partner agents may be told about which of your users, and review each partnership like any access grant."
+      do: "Decide in one place you own which partner agents may be told about which of your users, for example your identity provider's app policy, and review each partnership like any access grant."
       why: "A partnership is a standing relationship that someone must own."
       note: >-
-        Which peers may be told about which users, decided in the identity provider's registry and evaluated
-        at every exchange. A federation is a relationship a person owns, reviewed like any access grant.
+        Which peers may be told about which users, decided in one place we own and evaluated at
+        every exchange: the identity provider's app policy where it issues the user assertions (as
+        drawn), the authorization server's per-peer grant profiles, or the gateway's partner
+        register. A federation is a relationship a person owns, reviewed like any access grant.
     - mitigation: D3-CTS
       at: gateway->authServer
-      do: "Issue a new token at every hand-off, limited to the next agent, short-lived and usable once, and never pass on the credential a request arrived with."
+      do: "Issue a new token at every hand-off, limited to the next agent and skill, short-lived and unusable by anyone who copies it (single-use, or bound to the sender), and never pass on the credential a request arrived with."
       why: "Each token then works for one hop only and cannot be replayed, and the exchanges are your record of who delegated to whom."
       note: >-
         Every hop gets its own token: user assertion → peer-bound token outbound; peer token →
@@ -761,11 +769,16 @@ pins:
         a captured token or task cannot be sent again.
     - mitigation: cap-agent-tool-registry
       at: govSupplyChain
-      do: "Keep a register of approved partner agents, with each one's description verified by signature and fingerprint, and a register of the descriptions you publish."
+      do: "Keep a register of approved partner agents, each with the description you approved pinned by fingerprint and its signature verified where the partner signs it, and a register of the descriptions you publish."
       why: "An agent that is not in the register is not a partner."
       note: >-
-        The registry of admitted peer cards (signature verified against a published key, hash pinned, skills
-        and security schemes reviewed) and the registry of our own published cards. An agent not in it is not
+        The registry of admitted peer cards (hash pinned, signature verified against the partner's
+        published key where the partner signs it, skills and security schemes reviewed) and the
+        registry of our own published cards. A card is admitted signed, or fetched over TLS from the
+        partner's own domain and pinned by fingerprint where it is unsigned, or exchanged at
+        onboarding and held here. Require signed cards where the partner can produce them: A2A v1.0
+        added card signatures, so a card is bound to the partner's key rather than to whoever
+        answers at the URL. An agent not in it is not
         a peer.
     - mitigation: cap-input-guardrails
       at: gateway
@@ -778,13 +791,15 @@ pins:
     - mitigation: cap-agent-action-policy-enforcement
       at: gateway
       do: "Set at your AI gateway which partner may use which of your agent's skills, and which of a partner's skills your agent may use for which users."
-      why: "The protocol leaves this decision to you, so the gateway must route by the named skill and never by what a message asks for."
+      why: "The protocol leaves this decision to you and has no skill selector, so enforce it on something the request carries that the model's text cannot change, never on what a message asks for."
       note: >-
         Per-skill authorization on both directions (which peer may invoke which of our skills, which of a
         peer's skills our agent may invoke for which users) enforced at the crossing because the protocol
         leaves authorization to the implementation. A2A has no standard skill selector, so inbound requests
-        name the skill in `metadata` (this profile's dispatch convention) and the gateway dispatches to that
-        skill, never to whatever the message text asks for.
+        name the skill in `metadata` (this profile's dispatch convention, checked against the
+        token's scope) and the gateway dispatches to that skill, never to whatever the message text
+        asks for. One endpoint or A2A tenant per skill, or one OAuth scope per skill checked by the
+        receiving agent, meet the same need.
     - mitigation: cap-sensitive-data-redaction
       at: gateway
       do: "Inspect and redact everything your agent sends to a partner agent at your AI gateway."
@@ -845,11 +860,12 @@ pins:
       note: Artifacts stored only after classification, scoped to the task that received them.
     - mitigation: cap-mcp-tool-integrity
       at: gateway
-      do: "Verify each partner agent's description against the key and fingerprint you recorded at approval, on every task."
+      do: "Check each partner agent's description against what you recorded at approval (its fingerprint, and its signing key where it is signed) on every task."
       why: "A partner can change its description after approval, and your agent trusts it as a statement of what the partner does."
       note: >-
-        Each peer's card, the vendor's and the partner's, treated as a dependency: signature verified against
-        the key pinned at admission and on every task, hash pinned, a change a decision rather than a surprise.
+        Each peer's card, the vendor's and the partner's, treated as a dependency: its hash checked
+        against the one pinned at admission on every task, and its signature against the pinned key
+        where the partner signs it, a change a decision rather than a surprise.
     - mitigation: D3-APA
       at: user->entry
       do: "Record at your front end what each person has agreed your agent may do with other organisations' agents on their behalf, and show them which organisation a task will go to before it is sent."
@@ -872,7 +888,7 @@ walkthrough:
         The person asks for something a peer platform's agent can do part of: a booking, a record
         in their system, an analysis only they can run.
     - follow: entry->idp
-      label: SSO (OIDC + PKCE)
+      label: SSO
       note: >
         Single sign-on at our identity provider: the OpenID Connect authorization-code flow with
         PKCE. The front end keeps the ID token; that token, not a session cookie, is the
@@ -921,21 +937,26 @@ walkthrough:
     - follow: gateway->authServer
       label: client assertion + user exchange
       note: >
-        Two credentials for one task. Our agent's: a `client_assertion` signed with the private key
-        registered in the peer's platform (`client_assertion_type` JWT-bearer), or the mutual-TLS
-        certificate the platform pinned. The user's: an RFC 8693 exchange for an identity-assertion
-        grant (`requested_token_type` = `urn:ietf:params:oauth:token-type:id-jag`, `subject_token` =
-        the ID token, `subject_token_type` = `urn:ietf:params:oauth:token-type:id_token`, `audience` =
-        the platform's authorization-server issuer, `resource` = the peer agent's URL from its card,
-        `scope` = this one skill). The
-        identity provider's registry decides whether this platform may be told about this user; a
-        denial here means the task will stop later for the person's own consent instead.
+        Two credentials for one task. Our agent's own client authentication: a `client_assertion`
+        signed with the private key registered in the peer's platform (`client_assertion_type`
+        JWT-bearer), or the mutual-TLS certificate the platform pinned. And an assertion about the
+        user that names the peer's authorization server, this peer and this one skill, which the
+        identity provider issues only if its policy lets this platform learn about this user. In
+        this drawing that assertion is an identity-assertion grant (ID-JAG) obtained by an RFC 8693
+        exchange (`requested_token_type` = `urn:ietf:params:oauth:token-type:id-jag`,
+        `subject_token` = the ID token, `subject_token_type` =
+        `urn:ietf:params:oauth:token-type:id_token`, `audience` = the platform's
+        authorization-server issuer, `resource` = the peer agent's URL from its card, `scope` = this
+        one skill); a platform that federates differently takes a SAML or JWT bearer assertion (RFC
+        7522, RFC 7523), or runs its own on-behalf-of exchange. A denial here means the task will
+        stop later for the person's own consent instead.
     - follow: authServer->gateway
       label: identity assertion
       note: >
-        A signed ID-JAG (`typ: oauth-id-jag+jwt`; `iss` us, `sub` the user, `aud` the platform's
-        authorization server, `client_id` our harness's registration there, `scope` the skill, `exp`
-        minutes away, `jti` single-use) and the client assertion.
+        A signed user assertion bound to the peer's authorization server and this skill, minutes
+        long and single-use (as an ID-JAG: `typ: oauth-id-jag+jwt`; `iss` us, `sub` the user, `aud`
+        the platform's authorization server, `client_id` our harness's registration there, `scope`
+        the skill, `exp` minutes away, `jti` single-use), and the client assertion.
         Neither is a token the peer could replay elsewhere.
     - follow: gateway->peerVendor
       label: token at peer; message:send
@@ -1225,10 +1246,13 @@ scenarios:
           An agent whose registration was revoked an hour ago (the agreement ended, or its key was
           reported compromised) calls `POST /message:send` (`SendMessage`) with a token issued before the revocation.
       - follow: gateway->authServer
-        label: introspection
+        label: token check
         note: >
-          Introspection, not local validation: the authorization server knows the client was revoked,
-          and its key is gone from the registration.
+          Revocation takes effect at once where the gateway introspects each token (RFC 7662) or
+          checks a revocation list; where it validates tokens locally, it takes effect when the
+          token expires, which is why lifetimes are minutes. Here the gateway introspects: the
+          authorization server knows the client was revoked, and its key is gone from the
+          registration.
       - follow: authServer->gateway
         label: revoked
         note: >

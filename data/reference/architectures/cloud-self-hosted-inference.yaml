@@ -14,8 +14,8 @@ summary:
 
 overview: >-
   Weights from a public hub or your own pipeline pass a blocking scan before promotion and a check
-  against the approved copy at load, then serve many tenants on shared accelerators, where a cache
-  shared across tenants can leak one tenant's context. Unlike a managed model API, no provider
+  against the approved copy at load, then serve the organisation's callers, often many teams on
+  shared accelerators, where a cache shared across them can leak one team's context. Unlike a managed model API, no provider
   supplies content policy, abuse monitoring, spare capacity or patching, so you run each one or do
   without.
 
@@ -35,12 +35,12 @@ description:
     promotion gate, before an artifact reaches the runtime (a blocking gate, not a report) and
     digest verification at load, so the gate cannot be bypassed by writing to storage directly.
   - >
-    Multi-tenancy inside the runtime has no equivalent elsewhere in this catalogue. Continuous
-    batching mixes tenants' requests in one forward pass on shared accelerators, the KV cache
+    Multi-tenancy inside the runtime, where callers share a deployment, has no equivalent elsewhere
+    in this catalogue. Continuous batching mixes tenants' requests in one forward pass on shared accelerators, the KV cache
     holds their context, and prefix caching across tenants is a performance feature that is also
     a disclosure path. Whether cache entries are shared across tenants is a serving setting
-    with data-protection consequences (in vLLM, a secret salt the gateway must set on every
-    request), and it rarely reaches a review.
+    with data-protection consequences (in vLLM, for example, a secret salt the gateway sets on every
+    request, which vLLM says is not an isolation boundary), and it rarely reaches a review.
   - >
     Availability is a security property here in a way it is not with a managed API. Capacity is
     finite and expensive, admission control at the gateway is what stops one caller becoming
@@ -104,14 +104,18 @@ blocks:
   - id: consumers
     kind: service
     title: Consuming applications
-    summary: "internal apps and agents sharing one cluster"
+    summary: "internal apps and agents, on a shared or a dedicated deployment"
     zone: zoneCloud
     icon: code
     col: 0
     row: 1
     note: >
-      Internal applications and agents sharing one cluster. Their isolation from each other is a
-      property of the serving configuration, not of the network between them.
+      Internal applications and agents calling the model. They can share one deployment (the
+      cheapest, and it needs cache isolation per tenant), have a dedicated deployment per team or
+      sensitivity tier, or mix the two: shared for low-sensitivity callers, dedicated for the rest.
+      Where they share, their isolation from each other is a property of the serving configuration,
+      not of the network between them. Give tenants that must share nothing their own instance:
+      vLLM's own security guide says its per-request cache salt is not an isolation boundary.
 
   - id: gateway
     kind: service
@@ -135,17 +139,20 @@ blocks:
   - id: api
     kind: service
     title: Inference API
-    summary: "OpenAI-compatible endpoint; its own auth is opt-in"
+    summary: "the engine's API, often OpenAI-compatible; caller checks vary by engine"
     cosaiComponent: componentModelServing
     zone: zoneCloud
     col: 2
     row: 1
     note: >
-      The OpenAI-compatible endpoint the serving stack publishes: the same component the
-      local runtime draws, at a different scale. Authentication here is opt-in too: vLLM's
-      `--api-key` is a flag, not a default, and even when set it covers only the /v1, /v2,
-      /inference and /cohere routes: /invocations serves the same inference without it. Only the
-      gateway may reach this port, or the tier is an unauthenticated laptop with a larger blast radius.
+      The endpoint the serving engine publishes (often OpenAI-compatible): the same component the
+      local runtime draws, at a different scale. Whether it checks callers depends on the engine and
+      on what fronts it: an API-key flag on the engine, authentication at an ingress, service mesh
+      or sidecar in front of it (mutual TLS, an OAuth2 proxy, the platform's ingress
+      authentication), or both. vLLM's `--api-key`, for example, is a flag, not a default, and even
+      when set it covers only the /v1, /v2, /inference and /cohere routes: /invocations serves the
+      same inference without it. So admit only the gateway at the network layer, whatever the engine
+      offers, or the tier is an unauthenticated laptop with a larger blast radius.
     items:
       - id: endpoint
         label: Completion endpoint
@@ -159,15 +166,15 @@ blocks:
   - id: runtime
     kind: service
     title: Inference runtime
-    summary: "loads weights; batches and caches every tenant on shared accelerators"
+    summary: "loads weights; batches & caches requests, across tenants where shared"
     zone: zoneCloud
     col: 3
     row: 1
     cosaiComponent: componentModelServing
     note: >
       The same runtime the endpoint architecture draws (loading weights, batching requests,
-      serving completions) operated here as a shared service across tenants on shared
-      accelerators. The serving stack is third-party code with its own CVE stream, and its
+      serving completions) operated here as a service for the organisation's callers, often across
+      tenants on shared accelerators. The serving stack is third-party code with its own CVE stream, and its
       distributed control plane assumes a trusted network: job APIs and inter-node channels
       ship unauthenticated by design, so network isolation is a control, not a hardening step.
     items:
@@ -211,14 +218,15 @@ blocks:
   - id: sources
     kind: external
     title: Model sources
-    summary: "public open-weights hub; publisher identity is the only assurance"
+    summary: "public open-weights hub; whatever it scans or signs, it is not your approval"
     zone: zoneExternal
     col: 5
     row: 1
     cosaiComponent: componentModelStorage
     note: >
-      Where hub weights come from: a public catalogue, where publisher identity says nothing
-      about what the artifact does on load. The organisation's own fine-tuned models do not
+      Where hub weights come from: a public catalogue. What it checks (a hub's malware scan of
+      uploads, a publisher's signature where there is one) says who published a file and what was
+      looked for, not that it is safe to load here: that is the promotion gate's decision. The organisation's own fine-tuned models do not
       enter here: they arrive from the model registry, inside our custody.
     items:
       - id: hub
@@ -229,16 +237,16 @@ blocks:
   - id: govIdentity
     kind: governance
     title: Identity services
-    summary: "workload identity per calling tenant"
+    summary: "an identity per calling team or service"
     icon: person
     zone: zoneGovernance
     col: 1
     row: 5
     mitigations: [ D3-AA ]
     note: >
-      Workload identity per calling tenant: the thing every quota, cache-isolation and
-      attribution decision on this page keys off, issued by the platform rather than a shared
-      key in a config map.
+      An identity per calling team or service (platform workload identity where callers run on the
+      platform): the thing every quota, cache-isolation and attribution decision on this page keys
+      off, never a shared key in a config map.
 
   - id: govSupplyChain
     kind: governance
@@ -483,18 +491,20 @@ pins:
         absorbed by the promotion gate over Storage, per the recorded deviation.
     - mitigation: cap-staged-rollout-gate
       at: storage->runtime
-      do: "Test each model version for safety before approving it, send it a small share of traffic first, and keep the previous version ready to restore."
+      do: "Test each model version for safety before approving it, release it in stages (for example a small share of traffic first), and keep the previous version ready to restore."
       why: "You can then roll back without downloading anything."
       note: >-
-        Safety and adversarial evaluation of each model version gates its promotion; then the new version
-        serves a slice before it serves everyone, and the previous promoted artifact stays loadable:
+        Safety and adversarial evaluation of each model version gates its promotion; then the new
+        version is released in stages before it serves everyone (a canary share of traffic, shadow
+        traffic whose answers are not returned, a blue/green switch with an immediate switch back,
+        or one consuming team opting in first), and the previous promoted artifact stays loadable:
         rollback is a registry operation, not a re-download.
     - mitigation: D3-AA
       at: gateway
-      do: "Give each calling team its own identity, issued by the platform."
+      do: "Give each calling team or service its own identity, which the gateway checks on every request, never a key they share."
       why: "A shared key in a settings file belongs to everyone and no one."
       note: >-
-        Workload identity per calling tenant, issued by the platform rather than a shared key in a config map.
+        An identity per calling team or service, checked by the gateway on every request, never a key shared in a config map. Common ways: platform workload identity (Kubernetes service-account tokens, cloud workload identity, SPIFFE/SPIRE), mutual TLS client certificates from an internal CA, or a per-team key the gateway issues, scopes and rotates. Platform workload identity fits best where callers run on your platform, for the reason the D3-CH pin gives: a copied credential stops working at the next rotation.
     - mitigation: AML.M0004
       at: consumers->gateway
       do: "Set a usage quota for each calling team at the gateway."
@@ -530,16 +540,21 @@ pins:
         Access control on weights at rest: only the promotion pipeline writes, and only the serving identity reads.
     - mitigation: D3-ACH
       at: api
-      do: "Turn off live model updates, block the server's control endpoints from callers, and keep each team's cache separate."
+      do: "Make sure no caller can load, swap or update a model or adapter at runtime, keep the server's control endpoints off the network callers use, and keep each team's cache separate."
       why: "These are security settings, not tuning options: a shared cache or an open control endpoint lets one caller affect another."
       note: >-
-        Runtime weight and adapter updating disabled, the control endpoints outside the versioned API
-        unreachable from any tenant, and the serving configuration reviewed as security settings rather than
-        tuning knobs. Cache isolation is part of it: the gateway sets a secret per-tenant cache salt on every
-        request, overwriting any the caller sent, and strips or regenerates multimodal uuid values, or prefix
-        sharing is off; vLLM says the salt is not an isolation boundary, so tenants that must share nothing get
-        their own instance; and the compile and kernel cache
-        directory is private to the serving identity, never shared or tenant-writable.
+        No caller can change what is loaded: runtime weight and adapter loading switched off (vLLM's
+        runtime LoRA updating left disabled, for example), or multi-adapter serving where only the
+        control plane loads adapters, from promoted storage and digest-verified. The control
+        endpoints outside the versioned API are bound to a separate administration network or
+        blocked at the gateway, and the serving configuration is reviewed as security settings
+        rather than tuning knobs. Cache isolation is part of it: a per-tenant cache salt the gateway
+        sets on every request, overwriting any the caller sent and stripping or regenerating
+        multimodal uuid values (vLLM's cache_salt), prefix caching turned off for traffic that
+        crosses tenants, or a separate instance per tenant or sensitivity tier. vLLM says its salt
+        is not an isolation boundary, so tenants that must share nothing get their own instance. The
+        compile and kernel cache directory is private to the serving identity, never shared or
+        tenant-writable.
     - mitigation: D3-NI
       at: runtime
       do: "Isolate the network that serving nodes use to talk to each other."
@@ -574,16 +589,16 @@ walkthrough:
     Prompts from our own services into weights we host, and completions back.
   steps:
     - follow: consumers->gateway
-      label: request with workload identity
-      note: The workload identity on the request decides its quota and its cache scope.
+      label: request with caller identity
+      note: The caller's identity on the request decides its quota and its cache scope.
     - follow: gateway->api
       label: admitted; request policy check
       note: Admitted within quota, with the content-policy check applied to the request at the crossing.
     - follow: api->runtime
-      label: batched, tenant-salted cache
+      label: batched; cache scoped to tenant
       note: >
-        Scheduled into a batch alongside other tenants' traffic; the per-tenant cache salt the
-        gateway set keeps the prefix lookup inside this tenant.
+        Scheduled into a batch alongside other tenants' traffic; the serving stack's per-tenant
+        cache isolation keeps the prefix lookup inside this tenant.
     - follow: runtime->api
       label: raw completion
       note: "The completion leaves the batch: raw model output, nothing yet between it and the caller."
@@ -610,9 +625,8 @@ scenarios:
       - follow: storage->runtime
         label: digest-verified load
         note: >
-          The promoted artifact loads, digest-verified against the promotion record, and
-          serves a staged slice first, with the previous version still loadable if the slice
-          misbehaves.
+          The promoted artifact loads, digest-verified against the promotion record, and is released
+          in stages, with the previous version still loadable if it misbehaves.
   - title: A spike hits finite capacity
     steps:
       - follow: consumers->gateway
@@ -633,10 +647,11 @@ scenarios:
       - follow: api->runtime
         label: timing reveals cache
         note: >
-          Time to first token says whether the prefix was already cached by someone else. A
-          secret per-tenant salt, set by the gateway on every request, keeps other tenants'
-          prefixes out of reach; vLLM leaves it opt-in and says it is not an isolation boundary,
-          so tenants that must share nothing are served by their own instance.
+          Time to first token says whether the prefix was already cached by someone else. Per-tenant
+          cache isolation keeps other tenants' prefixes out of reach, and tenants that must share
+          nothing get their own instance. In vLLM, for example, that isolation is a secret cache
+          salt the gateway sets on every request; vLLM leaves it opt-in and says it is not an
+          isolation boundary.
 
 deviations:
   - subject: No separate GPU or cache blocks are drawn

@@ -18,7 +18,8 @@ summary:
 
 overview: >-
   Training jobs turn curated data into checkpoints that are evaluated, promoted to a registry by a
-  separate human decision and signed with a key kept outside the training environment. Unlike a
+  separate decision the training job cannot make, and signed with a key kept outside the training
+  environment. Unlike a
   software build, there is no code to review: a few hundred poisoned documents can plant a hidden
   trigger, so curation, evaluation and a record tying each model to its exact dataset do that job.
 
@@ -49,7 +50,7 @@ description:
     corpus becomes part of an artifact served far more widely than the dataset ever was. The two
     access questions to settle early: who may promote a checkpoint to production, and who may
     read the corpus. Both default to a broad platform-team role, and both are higher-privilege
-    than they look, which is why promotion is a separated human decision and the signing key
+    than they look, which is why promotion is a decision separated from the job and the signing key
     lives outside the training environment, so a compromised job cannot sign its own output.
 
 distinguishedBy:
@@ -107,7 +108,7 @@ zones:
     gloss: "our build system for models"
     note: >
       The build system end to end: the mirror that admits upstream artifacts, the curation
-      stage, the assembled dataset, the GPU pool, the candidate store, and the evaluation and
+      stage, the assembled dataset, the accelerator pool, the candidate store, and the evaluation and
       registry tiers that stand between a new checkpoint and anything that serves it.
   - id: zoneGovernance
     owner: governance
@@ -234,13 +235,13 @@ blocks:
   - id: trainJob
     kind: service
     title: Training job
-    summary: "GPU pool and tuning run; holds data, base weights and credentials"
+    summary: "accelerator pool and tuning run; holds data, base weights and credentials"
     cosaiComponent: componentModelTrainingTuning
     zone: zoneCloud
     col: 2
     row: 0
     note: >
-      The GPU pool and the framework running on it. The technique decides the shape more than
+      The accelerator pool (GPUs, TPUs or other accelerators) and the framework running on it. The technique decides the shape more than
       anything else does: a quantized low-rank run fits on a single node, while a full
       fine-tune needs sharded optimizer state across nodes and a high-bandwidth interconnect.
       Everything the job holds (the dataset, the base weights, the credentials it was handed)
@@ -452,13 +453,20 @@ edges:
     label: candidate out
     note: >
       The output artifact (a full checkpoint, or an adapter of a few megabytes) lands
-      unsigned. The job holds no signing identity; what it writes is a candidate, not a
-      release.
+      unsigned. The job holds no signing identity; what it writes is a candidate, not a release.
+      Something starts each stage and hands its output to the next: the job writes the candidate
+      here and its location reaches the evaluation step, whatever orchestrates the pipeline (a
+      managed pipeline service, or a workflow engine such as Argo Workflows, Kubeflow Pipelines or
+      Airflow).
   - from: storage
     to: evaluation
     path: primary
     label: candidate under test
-    note: The gate loads the candidate the way a serving tier would, and probes what cannot be read.
+    note: >-
+      The gate loads the candidate the way a serving tier would, and probes what cannot be read.
+      Every stage is started by the pipeline and records its lineage; a stage run outside the
+      pipeline service (a Kubernetes Job, for example) needs a component that launches it, waits
+      for it and writes its lineage.
   - from: storage
     to: registry
     path: primary
@@ -474,8 +482,8 @@ edges:
     path: primary
     label: promotion
     note: >
-      A passing candidate is promoted: a separated human decision, a signature from an
-      identity the job never held, and a registry entry tying artifact to data, base and run.
+      A passing candidate is promoted: a decision the job cannot make, a signature from an identity
+      the job never held, and a registry entry tying artifact to data, base and run.
 
 pins:
   risks:
@@ -562,12 +570,16 @@ pins:
         file, and independent of the job it protects.
     - mitigation: AML.M0013
       at: evaluation->registry
-      do: "Sign a model only when it is approved for release, with an identity the training job never holds, after a separate human decision."
+      do: "Sign a model only when it is approved for release, with an identity the training job never holds, by a decision the job cannot make or influence."
       why: "A signature then proves the model passed the gate, not just that a job finished."
       note: >-
-        Sign at promotion, with the OpenSSF Model Signing spec and a Sigstore bundle, using an identity the
-        training job never possesses and only on a separated human decision, so a signature proves the gate
-        was passed, not merely that a job finished.
+        Sign at promotion (for example with the OpenSSF Model Signing spec and a Sigstore bundle),
+        using an identity the training job never possesses and only on a decision the job cannot
+        make, so a signature proves the gate was passed, not merely that a job finished. The
+        decision is a named person approving each release (separation of duties), an automated
+        promotion gate whose thresholds, evaluation sets and signing identity are out of the job's
+        reach, or automated gating for routine fine-tunes with a person's approval for new base
+        models or broad deployment.
     - mitigation: AML.M0008
       at: evaluation
       do: "Test each model for capability, safety, hidden backdoors and memorised data, and block release if it fails."
@@ -652,7 +664,7 @@ pins:
 walkthrough:
   title: A tuning run produces a promoted adapter
   moves: >-
-    Curated data and an admitted base checkpoint through GPU compute, evaluation and
+    Curated data and an admitted base checkpoint through accelerator compute, evaluation and
     promotion, into a signed registry entry.
   steps:
     - follow: dataOrigins->curation
@@ -679,8 +691,8 @@ walkthrough:
     - follow: evaluation->registry
       label: promotion, signed
       note: >
-        A human promotes; the artifact is signed by an identity the job never held, and the
-        registry entry ties it to its data, base and run.
+        The release is approved outside the job; the artifact is signed by an identity the job never
+        held, and the registry entry ties it to its data, base and run.
 
 scenarios:
   - title: A poisoning is discovered months later
@@ -733,9 +745,9 @@ scenarios:
         label: gate it cannot pass
         note: The only road to promotion runs through a gate the job has no credentials for.
       - follow: evaluation->registry
-        label: signed on human approval
+        label: signed on approval
         note: >
-          Signature and registry entry happen here, on a human approval: a candidate that
+          Signature and registry entry happen here, on an approval the job cannot give: a candidate that
           skipped the gate has no signature, and the serving tier's load-time verification
           refuses it.
 

@@ -11,8 +11,9 @@ summary:
     from the person who set it up. Unlike a coding & desktop session, it holds standing
     connector grants and saved logins, so each consequential action is approved at dispatch
     rather than through a reviewed pull request. It works through the vendor's connectors and
-    a hosted computer, and reaches our systems only through two crossings: the tunnel to our AI gateway
-    for tool calls, and a GitHub App for our source control.
+    a hosted computer, and reaches our systems only through two crossings: our AI gateway for tool
+    calls (by an outbound tunnel we run, where the vendor offers one), and a scoped installation on
+    our code host (for example a GitHub App) for our source control.
 
 overview: >-
   The agent works from its own cloud computer, using any signed-in app by mouse and keyboard, so
@@ -43,9 +44,10 @@ description:
     and shell); the vendor's connectors to the SaaS we approved (Tool services in the vendor
     band); package installs and public source control under one egress allowlist; its retained
     memory; and its schedules. The critical boundary is the way back in, through two
-    controlled crossings: a GitHub App on named repositories of our GitHub Enterprise Cloud,
-    admitted from the vendor's published IPs, for code; and an outbound-only tunnel we run to
-    our AI gateway, for tool calls to our tool servers and data. Letting the agent onto an
+    controlled crossings: a scoped installation on named repositories of our code host (a GitHub
+    App, on GitHub), admitted from the vendor's published IPs, for code; and our AI gateway, reached
+    through an outbound-only tunnel we run where the vendor offers one, for tool calls to our tool
+    servers and data. Letting the agent onto an
     employee's own laptop would be a third crossing this drawing does not include; keep it
     disabled by policy.
   - >
@@ -110,11 +112,11 @@ zones:
       consequential action.
   - id: zoneCloud
     owner: cloud
-    gloss: "our GitHub tenant and our network"
+    gloss: "our code host and our network"
     note: >
-      Our GitHub Enterprise, reached by the vendor's GitHub App; the tunnel the agent reaches
-      back through, our gateway where it is admitted to our tool servers, and the systems behind
-      them.
+      Our code host, reached by the vendor's scoped installation; our gateway, which the agent
+      reaches back to (through an outbound tunnel we run, where the product has one) and where it is
+      admitted to our tool servers, and the systems behind them.
   - id: zoneVendor
     owner: vendor
     gloss: "the agent provider's cloud"
@@ -227,7 +229,7 @@ blocks:
       - id: mcp
         label: MCP client
         icon: plug
-        note: Calls the vendor's connectors, and our gateway down the tunnel, on the grants the vault holds for this agent.
+        note: Calls the vendor's connectors, and our gateway (down the tunnel, where we run one), on the grants the vault holds for this agent.
   - id: nativeTools
     kind: provider
     title: Native tools
@@ -276,15 +278,15 @@ blocks:
   - id: sourceControl
     kind: service
     title: Source control
-    summary: "our GitHub Enterprise: instructions in, branch and draft PR out"
+    summary: "our code host: instructions in, branch and draft change out, merge gate"
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 2
     row: 1
     note: >
-      Our GitHub Enterprise: the code bases the agent reads and changes. Code, instruction files and
+      Our code host (GitHub, GitLab or another, as the product supports): the code bases the agent reads and changes. Code, instruction files and
       threads reach the agent as instruction; a branch and a draft pull request come back out for a
-      person to review. It sits in our band, and the vendor reaches it only through a GitHub App on named repositories, admitted from its published IPs by our enterprise IP allow list.
+      person to review. It sits in our band, and the vendor reaches it only through a scoped installation on named repositories (a GitHub App, on GitHub), admitted from its published IPs by the host's IP allow list.
     items:
       - id: repos
         label: Repositories & instruction files
@@ -304,26 +306,6 @@ blocks:
         note: >
           The draft the agent opens, the review a person gives, the workflows the pull request would
           fire, and the single branch the agent may write.
-  - id: tunnel
-    kind: service
-    title: Tunnel connector
-    summary: "vendor software we run: dials out; verify agents can use it"
-    cosaiComponent: componentAgentUserQuery
-    zone: zoneCloud
-    col: 2
-    row: 2
-    note: >
-      Vendor-supplied software we run inside our own network so the agent's runtime can reach
-      our gateway without an inbound rule: it dials out, holds the connection open and carries
-      the requests in. Transport only (it does not authenticate to the upstream, and the
-      payloads still traverse the vendor's cloud), so it hands to the AI gateway, never to a
-      server or the data. Verify per product that its persistent agents can use the tunnel;
-      where they cannot, this path stays closed.
-    items:
-      - id: tunnelClient
-        label: Outbound connector
-        icon: plug
-        note: Dials out to the vendor's edge; opens nothing inbound.
   - id: aiGateway
     kind: service
     title: AI gateway
@@ -480,14 +462,13 @@ edges:
     to: sourceControl
     crossing:
       kind: direct
-      via: "Nothing between: the vendor's git proxy reaches our GitHub tenant; App scope, IP allow list and branch protection apply at the host"
+      via: "Nothing between: the vendor reaches our code host (through its git proxy, on products that have one); the installation's repository scope, the IP allow list and branch protection apply at the host"
     path: external
     bidir: true
-    label: GitHub App · IP allowlist
+    label: scoped app install · IP allowlist
     note: >
-      Both directions of our GitHub Enterprise Cloud tenant, on a GitHub App installed on named
-      repositories and admitted by the enterprise IP allow list only from the vendor's published
-      IPs. Where the credential is held inside the vendor's platform is the vendor's to state: confirm for
+      Both directions of our code host, on a scoped installation on named repositories (a GitHub
+      App, on GitHub) admitted by the host's IP allow list only from the vendor's published IPs. Where the credential is held inside the vendor's platform is the vendor's to state: confirm for
       each product that it stays outside the hosted computer, as part of the vendor assessment. Inward: the code,
       instruction files and threads, and the events that start or steer work. Outward: the push to
       the agent's own branch and the draft pull request, the only writes the installation
@@ -563,26 +544,25 @@ edges:
       allowlist. A write credential the agent holds belongs to its own approved destinations
       alone.
   - from: managedRuntime
-    to: tunnel
+    to: aiGateway
     crossing:
       kind: brokered
-      via: "Tunnel connector: outbound-only, on a token and TLS key we rotate; hands to our AI gateway"
+      via: "Into our AI gateway: an outbound tunnel we run, on a token and TLS key we rotate, where the product's agents can use one; otherwise an internet-facing gateway endpoint behind OAuth"
     path: external
     bidir: true
-    label: outbound-only tunnel
+    label: tool calls · outbound tunnel
     note: >
-      The agent reaching back into our systems through software the vendor publishes and we
-      run. Our side dials out, so nothing is opened inbound; the requests still traverse the
-      vendor's cloud. The public-endpoint form (the vendor calling an internet-facing gateway
-      URL) is not part of this baseline.
-  - from: tunnel
-    to: aiGateway
-    path: primary
-    bidir: true
-    label: tool call / result
-    note: >
-      Tool calls the tunnel hands to our gateway's aggregate MCP endpoint, never straight to a tool
-      server or the data (git never comes this way; it reaches our GitHub Enterprise Cloud through the vendor's GitHub App):
+      The agent reaching back into our systems, always into our gateway's aggregate MCP
+      endpoint, never straight to a tool server or the data (git never comes this way; it
+      reaches our code host through the vendor's scoped installation). How it is carried is a
+      note, not a second drawing. Where the vendor offers one, it is an outbound tunnel:
+      software the vendor publishes and we run inside our network dials out, holds the
+      connection open and carries the requests in, so nothing is opened inbound; it is
+      transport only (it does not authenticate to the upstream, and the requests still traverse
+      the vendor's cloud). Verify per product that its persistent agents can use the tunnel;
+      where they cannot, the reach-back is an internet-facing gateway URL behind OAuth,
+      admitted by the vendor's published IP ranges, or this path stays closed. Prefer the
+      tunnel where it is offered, because nothing is opened inbound. Either way calls are
       admitted on audience-bound tokens and per-agent grants our own authorization server
       issued, per-call policy evaluated at the gateway, the servers and tools scoped to a named
       list, and every call recorded against the grant. The vendor's identity and IP ranges
@@ -664,7 +644,7 @@ pins:
         Pinning and hash verification stop a changed artifact; they do not make a reviewed
         version benign.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: tunnel->aiGateway
+      at: managedRuntime->aiGateway
       note: >
         Their infrastructure exercising our authority, steered by whatever the agent read or
         kept. The grant is the only thing bounding it, and the grant is issued at our gateway;
@@ -762,13 +742,14 @@ pins:
         tools. Enable these routes only for the data class their enforceable restrictions
         support; a connector allowlist is not egress control.
     - mitigation: D3-CH
-      at: tunnel
-      do: "Issue the tunnel host's token and key with narrow scope, rotate them, and be able to revoke them without rebuilding the host."
+      at: managedRuntime->aiGateway
+      do: "Issue the tunnel host's token and key, where you run one, with narrow scope, rotate them, and be able to revoke them without rebuilding the host."
       why: "They are the secrets this path depends on."
       note: >-
-        The tunnel token and TLS private key on this host are the load-bearing secrets on the path: issued
-        scoped, rotated like a service credential, and revocable without redeploying the host. The tunnel
-        carries traffic on them but never authenticates to our server; that is the gateway's job.
+        The tunnel token and TLS private key on the tunnel host are the load-bearing secrets on the path:
+        issued scoped, rotated like a service credential, and revocable without redeploying the host. The
+        tunnel carries traffic on them but never authenticates to our server; that is the gateway's job.
+        Without a tunnel, the secret is the OAuth client our public gateway endpoint admits.
     - mitigation: AML.M0028
       at: aiGateway->internalTools
       do: "At your gateway, decide which of your servers and tools the agent may reach, on access issued to that agent, read-mostly unless a write has a named owner."
@@ -854,12 +835,12 @@ walkthrough:
     - follow: vendorTools->managedRuntime
       label: consume records as data
       note: Returned records are task input, not instruction; record source and scope for anything retained.
-    - follow: managedRuntime->tunnel
-      label: tool call down the tunnel
-      note: The agent needs a record only our systems hold; its MCP client calls back through the connection our side opened.
-    - follow: tunnel->aiGateway
-      label: to our gateway
-      note: Admitted on a per-agent grant we issued, evaluated per call, scoped to a named server list.
+    - follow: managedRuntime->aiGateway
+      label: tool call to our gateway
+      note: >
+        The agent needs a record only our systems hold; its MCP client calls back to our gateway
+        (through the connection our side opened, where we run a tunnel), and is admitted on a
+        per-agent grant we issued, evaluated per call, scoped to a named server list.
     - follow: aiGateway->internalTools
       label: per-agent grant
       note: Admitted to a named server on a short-lived grant.
@@ -872,12 +853,9 @@ walkthrough:
     - follow: internalTools->aiGateway
       label: classified and recorded
       note: Through our gateway, where the read is classified and recorded against the agent's grant.
-    - follow: aiGateway->tunnel
-      label: into the tunnel
-      note: Back into the connector, bound for the vendor's cloud.
-    - follow: tunnel->managedRuntime
+    - follow: aiGateway->managedRuntime
       label: recorded result back
-      note: The record returns the same way, classified and recorded at our gateway, to the loop.
+      note: The record returns the way the call came, classified and recorded at our gateway, to the loop.
     - follow: nativeTools->openWeb
       label: fetch allowed public context
       note: The runtime dispatches its nested browser tool; this route has its own egress restrictions.
@@ -898,14 +876,14 @@ scenarios:
   - title: The agent works on our code base
     steps:
       - follow: managedRuntime->sourceControl
-        label: clone via the GitHub App
+        label: clone via the scoped install
         note: Admitted only from the vendor's published IPs, on an installation scoped to named repositories.
       - follow: sourceControl->managedRuntime
         label: code & instruction files
         note: Instruction files and threads arrive as instruction, unscreened by anything of ours; the repository host's access policy decides who could write them.
       - follow: managedRuntime->sourceControl
         label: push branch, open draft PR
-        note: The only writes the App installation allows; a person reviews and merges.
+        note: The only writes the installation allows; a person reviews and merges.
   - title: A consequential browser action needs approval
     steps:
       - follow: managedRuntime->vendorService
@@ -1000,6 +978,13 @@ deviations:
       on the Managed runtime block, with no Model provider block on this drawing. The gateway
       is drawn with its one real traffic class rather than the registered aiGatewayTraffic
       pack, following the SaaS siblings.
+  - subject: The tunnel is a note on the arrow, not a box
+    reason: >
+      The flow is the agent calling our tool servers through our gateway, and it happens
+      whatever carries it, so that arrow is drawn and the carriage is its crossing note, as on
+      the SaaS siblings. The secrets consumption (D3-CH) is pinned on that crossing, where the
+      tunnel host's token and key are used, with issuance and rotation in the governance
+      call-out.
 
 sources:
   - title: OpenAI — Introducing Dots

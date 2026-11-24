@@ -779,7 +779,7 @@ Highlights below are Google's original mapping, not ours.
 | Multi-agent workflow | Triggers & schedules | service | `componentAgentUserQuery` |
 | Multi-agent workflow | Agent harness | service | `componentReasoningCore` |
 | Multi-agent workflow | Native tools | service | `componentTools` |
-| Multi-agent workflow | Supervisor agent | service | `componentReasoningCore` |
+| Multi-agent workflow | Orchestrator | service | `componentReasoningCore` |
 | Multi-agent workflow | Subagents | service | `componentReasoningCore` |
 | Multi-agent workflow | Memory & state | service | `componentDataStorage` |
 | Multi-agent workflow | AI gateway | service | (none) |
@@ -889,7 +889,7 @@ Highlights below are Google's original mapping, not ours.
 | Browser AI agents & extensions | Native tools | service | `componentTools` |
 | Browser AI agents & extensions | Browser | service | `componentAgentUserQuery` |
 | Browser AI agents & extensions | Memory & state | service | `componentDataStorage` |
-| Browser AI agents & extensions | AI gateway | service | (none) |
+| Browser AI agents & extensions | Web inspection point | service | (none) |
 | Browser AI agents & extensions | Vendor service | provider | (none) |
 | Browser AI agents & extensions | Model provider | provider | `componentModelServing` |
 | Browser AI agents & extensions | Open web | external | `componentDataSources` |
@@ -966,7 +966,6 @@ Highlights below are Google's original mapping, not ours.
 | Enterprise AI chat with connectors | Browser | service | `componentAgentUserQuery` |
 | Enterprise AI chat with connectors | Vendor chat service | provider | `componentApplication` |
 | Enterprise AI chat with connectors | Tool services | service | `componentTools` |
-| Enterprise AI chat with connectors | Tunnel connector | service | `componentAgentUserQuery` |
 | Enterprise AI chat with connectors | AI gateway | service | (none) |
 | Enterprise AI chat with connectors | Tool services | service | `componentTools` |
 | Enterprise AI chat with connectors | Enterprise data | external | `componentDataSources` |
@@ -983,7 +982,6 @@ Highlights below are Google's original mapping, not ours.
 | Coding & desktop session managed agent runtime | Managed runtime | provider | `componentReasoningCore` |
 | Coding & desktop session managed agent runtime | Native tools | provider | `componentTools` |
 | Coding & desktop session managed agent runtime | Vendor service | provider | `componentApplication` |
-| Coding & desktop session managed agent runtime | Tunnel connector | service | `componentAgentUserQuery` |
 | Coding & desktop session managed agent runtime | AI gateway | service | (none) |
 | Coding & desktop session managed agent runtime | Tool services | service | `componentTools` |
 | Coding & desktop session managed agent runtime | Enterprise data | external | `componentDataSources` |
@@ -1000,7 +998,6 @@ Highlights below are Google's original mapping, not ours.
 | UI/low-code managed agent runtime | Tool services | service | `componentTools` |
 | UI/low-code managed agent runtime | AI gateway | service | (none) |
 | UI/low-code managed agent runtime | Tool services | service | `componentTools` |
-| UI/low-code managed agent runtime | Tunnel connector | service | `componentAgentUserQuery` |
 | UI/low-code managed agent runtime | Enterprise data | external | `componentDataSources` |
 | UI/low-code managed agent runtime | Model provider | provider | `componentModelServing` |
 | UI/low-code managed agent runtime | Open web | external | `componentDataSources` |
@@ -1014,7 +1011,6 @@ Highlights below are Google's original mapping, not ours.
 | API/SDK managed agent runtime | Native tools | provider | `componentTools` |
 | API/SDK managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
 | API/SDK managed agent runtime | Source control | service | `componentDataSources` |
-| API/SDK managed agent runtime | Tunnel connector | service | `componentAgentUserQuery` |
 | API/SDK managed agent runtime | AI gateway | service | (none) |
 | API/SDK managed agent runtime | Tool services | service | `componentTools` |
 | API/SDK managed agent runtime | Enterprise data | external | `componentDataSources` |
@@ -1033,7 +1029,6 @@ Highlights below are Google's original mapping, not ours.
 | Persistent managed agents | Native tools | provider | `componentTools` |
 | Persistent managed agents | Tool services | service | `componentTools` |
 | Persistent managed agents | Source control | service | `componentDataSources` |
-| Persistent managed agents | Tunnel connector | service | `componentAgentUserQuery` |
 | Persistent managed agents | AI gateway | service | (none) |
 | Persistent managed agents | Tool services | service | `componentTools` |
 | Persistent managed agents | Enterprise data | external | `componentDataSources` |

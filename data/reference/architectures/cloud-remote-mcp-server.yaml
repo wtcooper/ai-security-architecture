@@ -13,8 +13,8 @@ summary:
 
 overview: >-
   Your server rechecks the token on every request from agents acting for users, checks scope and
-  tenant on every record, and calls upstream systems on its own credential, never the caller's
-  token. Unlike an MCP server you consume, the scopes, tenancy and tool descriptions are yours to
+  tenant on every record, and calls upstream systems on a credential issued for that upstream, never
+  the caller's token. Unlike an MCP server you consume, the scopes, tenancy and tool descriptions are yours to
   design, and the descriptions run as instructions in the caller's model, so treat rewording one as
   an API change.
 
@@ -337,15 +337,16 @@ blocks:
   - id: govSecrets
     kind: governance
     title: Secrets & key management
-    summary: "one vaulted credential per upstream, rotated"
+    summary: "one credential per upstream, short-lived or rotated"
     icon: key
     zone: zoneGovernance
     col: 1
     row: 3
     mitigations: [ D3-CH, D3-CTS ]
     note: >
-      The upstream credentials this service's handlers call on: issued, scoped and rotated by
-      a secrets manager, one per upstream, never the caller's token forwarded.
+      The upstream credentials this service's handlers call on, one per upstream, short-lived or
+      rotated, never the caller's token forwarded: an on-behalf-of token from a token exchange, the
+      server's own workload identity, or a stored secret per upstream in a secrets manager.
 
   - id: govPolicy
     kind: governance
@@ -449,7 +450,7 @@ edges:
       Audience, scope, expiry and subject are verified per request, because there is no session
       left to verify them once. Drawn as introspection: the deliberate choice here, because it is
       also how revocation reaches a token that has not yet expired; the common alternative is local
-      JWT validation against the issuer's keys, which is faster and blind to revocation. The same
+      JWT validation against the issuer's keys, which is faster and blind to revocation: a revoked user's token keeps working until it expires, so local validation needs lifetimes of minutes. The same
       edge carries the on-behalf-of exchange: a handler that must call an upstream system swaps
       the inbound token for one whose audience is the upstream, scoped down, so the caller's token
       never leaves this service.
@@ -580,16 +581,24 @@ pins:
         Behind the protocol this is a published application, and its handlers are ordinary attack surface.
     - mitigation: cap-data-access-governance
       at: service->orgData
-      do: "Separate each customer's data in your own code, on every query."
+      do: "Separate each customer's data on every query, in a layer the caller's arguments cannot get round, for example row-level security keyed to the token's tenant."
       why: "The protocol has no notion of customers, so nothing else does it."
-      note: Per-tenant scoping enforced in our own code, because the protocol has no tenants.
+      note: >-
+        Per-tenant scoping enforced on our side on every query, because the protocol has no tenants: a tenant
+        check in the handler against the tenant on the token, row-level security in the database keyed to the
+        token's tenant, or a separate database, schema or store per tenant.
     - mitigation: D3-CH
       at: service->orgData
-      do: "Use a separate stored credential for each system the server calls, short-lived, rotated and limited to that system."
+      do: "Use a separate credential for each system the server calls, short-lived and limited to that system, for example a token exchanged for that system that still names the user."
       why: "One leaked credential then opens one system, not all of them."
       note: >-
-        A separate, vaulted credential for each upstream we call, short-lived and rotated, scoped to
-        that upstream alone.
+        A separate credential for each upstream we call, short-lived or rotated, scoped to that
+        upstream alone: an on-behalf-of token from a token exchange (RFC 8693) that still names the
+        user, the server's own workload identity (cloud identity, SPIFFE/SPIRE), or a stored secret
+        per upstream in a secrets manager, rotated. Prefer on-behalf-of where the upstream accepts
+        it, so the upstream applies its own authorization to the real user (the on-behalf-of
+        scenario); passing the caller's token through is forbidden by the MCP authorization
+        specification either way.
     - mitigation: AML.M0024
       at: govObservability
       do: "Log every tool call with its inputs, its customer and who it acted for, and keep the log where you can search it in an incident."
@@ -599,12 +608,16 @@ pins:
         query it.
     - mitigation: D3-CR
       at: authServer
-      do: "Make revoking access stop tokens that are already issued, and measure how long that takes."
+      do: "Make revoking access stop tokens that are already issued, including tokens exchanged from them, and measure how long that takes."
       why: "A revocation that only blocks new tokens leaves the old ones working."
       note: >-
-        Revocation that reaches tokens already issued, not merely future ones (introspection, short lifetimes
-        and refresh tokens revoked with the grant), with the delay until they stop working measured, not
-        assumed. A call already executing completes.
+        Revocation that reaches tokens already issued, not merely future ones, and the tokens
+        exchanged from them too: an exchanged token is a new token, so revoking the one it came from
+        does not stop it. A resource server that validates tokens locally (signature, issuer,
+        audience) keeps accepting a revoked user's token until it expires, so revocation reaches
+        issued tokens only through short lifetimes (exchanged tokens included, with refresh tokens
+        revoked with the grant) or a per-call check with the authorization server, such as
+        introspection. The delay until they stop working is measured, not assumed. A call already executing completes.
     - mitigation: D3-AVE
       at: govSupplyChain
       do: "List the server's software components, its gateway and their dependencies, and check them against known-flaw feeds, most exposed first."
@@ -615,11 +628,14 @@ pins:
         through the release gate.
     - mitigation: D3-APA
       at: callers->idp
-      do: "Manage who may reach the server in your identity provider: its list of approved servers, the groups allowed to use each, and conditional-access rules."
+      do: "Decide who may reach the server where each caller's organisation manages access: in its identity provider (approved servers, groups, conditional access) for enterprise-managed sign-in, and by consent at your authorization server otherwise."
       why: "People joining get access by group, and people leaving lose every new token at once."
       note: >-
-        Identity governance where it already lives: the IdP's registry of approved MCP servers, the groups and
-        roles that may reach each, and the conditional-access rules, evaluated at every ID-JAG exchange.
+        Identity governance where it already lives. Where clients use enterprise-managed
+        authorization, the calling organisation's IdP holds the registry of approved MCP servers,
+        the groups and roles that may reach each, and the conditional-access rules, evaluated at
+        every ID-JAG exchange. Public clients get per-user OAuth consent at our authorization
+        server, and workload clients are pre-registered with fixed scopes.
         Joiners get access by group; leavers lose every new token at once.
     - mitigation: D3-OTF
       at: authServer
@@ -686,8 +702,11 @@ walkthrough:
     - follow: callers->authServer
       label: authorization request (PKCE)
       note: >
-        The authorization request through the user's browser: `client_id` is the HTTPS URL of the
-        client's metadata document, `redirect_uri` one of those it lists, PKCE `S256`, `resource`
+        The authorization request through the user's browser. Here the client identifies itself with
+        a client ID metadata document (`client_id` is the HTTPS URL of that document); a
+        pre-registered client, or one registered dynamically (a route the 2026-07-28 revision
+        deprecates), sends its issued `client_id` instead. `redirect_uri` is one of those the client
+        lists, PKCE `S256`, `resource`
         naming this server, `state`, and the challenged scopes. The authorization server fetches the
         metadata document (private ranges blocked), checks `client_id` matches the URL and the
         redirect URI matches exactly, applies its domain trust policy, and shows a consent screen
@@ -1034,10 +1053,11 @@ scenarios:
         note: >
           Routed like any call.
       - follow: service->authServer
-        label: introspection
+        label: token check
         note: >
-          Introspection, not local validation: the authorization server revoked the grant itself, so it
-          knows at once. The group change at the IdP reaches it only through a revocation signal, where
+          Revocation reaches this call at once where the server introspects tokens, as drawn: the
+          authorization server revoked the grant itself, so it knows at once. Where it validates
+          them locally, the grant stops at the token's expiry. The group change at the IdP reaches it only through a revocation signal, where
           one is wired, or at the next exchange.
       - follow: authServer->service
         label: revoked
@@ -1094,7 +1114,7 @@ scenarios:
       - follow: service->orgData
         label: tenant check
         note: >
-          The tenant check in our own application code is the only thing left standing, because
+          The tenant check (in our handler or our data layer) is the only thing left standing, because
           the protocol has no notion of a tenant at all. This architecture's defining failure
           happens on this hop or nowhere.
       - follow: service->gateway
@@ -1117,8 +1137,9 @@ scenarios:
         label: token forwarded (forbidden)
         note: >
           Forwarding it is the confused deputy the spec forbids outright: audit, rate limits
-          and the trust boundary all break in one move. The handler calls as itself, on a
-          credential the secrets manager issued to this service, or the design is wrong.
+          and the trust boundary all break in one move. The handler calls on a credential issued for
+          that upstream (its own service credential, or an on-behalf-of token from a token
+          exchange), never the caller's.
 
   - title: The header lies about the body
     steps:
