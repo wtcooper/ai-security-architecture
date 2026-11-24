@@ -20,6 +20,7 @@ import type {
   ProductStatusEntry,
   CloudPlatform,
   ProductSetting,
+  ThreatModel,
 } from "./types";
 
 export const dataset = raw as unknown as Dataset;
@@ -55,6 +56,8 @@ export const {
   productStatus,
   clouds,
   enablement,
+  threatModels,
+  atlasTechniques,
   meta,
 } = dataset;
 
@@ -207,6 +210,10 @@ export const mitigationsInOrder: Mitigation[] = controlCategories.flatMap((cat) 
 // --- Reference architectures -----------------------------------------------------
 
 export const archetypeById = index(archetypes);
+
+/** A pattern's threat model, where one has been written (data/reference/threat-models/). */
+const threatModelByPattern = new Map(threatModels.map((m) => [m.pattern, m]));
+export const threatModelFor = (archetypeId: string): ThreatModel | undefined => threatModelByPattern.get(archetypeId);
 
 /**
  * Stable short codes for the risk tags on the diagrams, F5's LLM01 treatment applied to CoSAI:

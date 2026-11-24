@@ -165,7 +165,7 @@ function RoleOptions({ archetype, platform, stack }: { archetype: Archetype; pla
                       const on = inEffect.includes(o);
                       return (
                         <li key={o.name} className={`inline-flex flex-wrap items-baseline gap-1 ${on ? "rounded bg-chip-soft/40 px-1 ring-1 ring-ink" : ""}`} data-option={o.name} data-in-effect={on || undefined}>
-                          <a href={o.url} target="_blank" rel="noreferrer" title={o.note} className={`${on ? "font-bold" : "font-semibold"} text-ink hover:text-introduced hover:underline`}>
+                          <a href={o.url} target="_blank" rel="noreferrer" title={[o.note, ...(o.watch ?? []).map((w) => `Watch: ${w.text}`)].filter(Boolean).join(" ") || undefined} className={`${on ? "font-bold" : "font-semibold"} text-ink hover:text-introduced hover:underline`}>
                             {o.name} <span className="text-introduced">↗</span>
                           </a>
                           <KindTag kind={o.kind} />

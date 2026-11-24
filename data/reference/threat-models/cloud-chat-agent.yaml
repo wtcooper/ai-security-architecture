@@ -1,0 +1,201 @@
+pattern: archChatAgent
+reviewed: "2026-11-24"
+summary: >-
+  A chat agent the organisation builds and runs: a person talks to it, it reads records, files
+  and web pages, and it changes systems of record for that person once they approve in the
+  thread. At stake is everything the conversing user may touch, the stored conversations and
+  the instructions the agent follows. The worst outcomes come from text someone else wrote
+  steering an action the user approves without reading it, and from tools that act with the
+  service's reach rather than the user's.
+concentrates: >-
+  Where content an outsider can write (a record, an upload, a web page) reaches the same
+  context as a write tool, and the approval is a yes to text the steered model wrote. A
+  scheduled run with nobody in the thread removes the gate altogether.
+scope: >-
+  An internal or customer-facing chat agent with signed-in users, a hosted model behind an AI
+  gateway, retrieval over shared records, web search, at least one write tool on a system of
+  record, native tools with a code sandbox, and scheduled runs set up from a conversation.
+lists: [owasp-llm-2026, owasp-agentic, owasp-mcp]
+assets:
+  - "The systems of record the agent can change for a user"
+  - "Records and documents reachable through retrieval and tools"
+  - "Conversation history, memory and the retrieval index"
+  - "Each user's session grant and the agent's own workload identity"
+  - "Provider keys and tool credentials the gateway brokers"
+  - "The system instruction, the tool list and the approval rules"
+actors:
+  - who: "Outside author of content the agent reads"
+    access: "Writes a record, ticket, shared file, upload or web page that a conversation later reads"
+    wants: "Steer an action, or carry data out through the agent"
+  - who: "Signed-in user acting in bad faith"
+    access: "A legitimate session and the conversation itself"
+    wants: "Data or actions beyond their own permissions"
+  - who: "Supplier of a tool, skill or package"
+    access: "Publishes to the hubs and registries the package mirror admits from"
+    wants: "Code or tool text running inside the agent's workload"
+  - who: "Attacker on the internet"
+    access: "Probes the chat service's front end, APIs and stores from outside"
+    wants: "Stored conversations, system prompts and provider keys"
+  - who: "The agent itself, with no adversary"
+    access: "Its tools, the user's grant and any scheduled job it was given"
+    wants: "To finish the task, whatever it costs or changes on the way"
+threats:
+  - id: T1
+    title: "Planted text in a record, file or web page steers the agent's next action"
+    rating: critical
+    evidence: disclosed
+    story: >-
+      Someone writes instructions into a ticket, a shared document, an upload or a web page. A
+      lookup or a search returns it into the thread, where it sits beside the system instruction
+      and stays in memory for the rest of the session. The agent then proposes, or a read-only
+      tool carries out, what the planted text asked.
+    at: [internalTools->orgData, gateway->openWeb, memory, user->entry]
+    risks: [riskPromptInjection, riskRetrievalVectorStorePoisoning]
+    atlas: [AML.T0051.001, AML.T0070, AML.T0080.001, AML.T0093]
+    owasp: [LLM01:2026, LLM05:2026, LLM09:2026, ASI01, ASI06, MCP06:2025]
+    controls: [cap-input-guardrails, cap-retrieval-grounding-checks, AML.M0031, cap-agent-action-policy-enforcement, AML.M0029]
+    incidents: [prompt-injection-lineage, salesbleed-agentforce]
+  - id: T2
+    title: "A tool call acts with the service's reach instead of the user's"
+    rating: high
+    evidence: disclosed
+    story: >-
+      A tool server runs on its own service account, takes the user's identity from the model,
+      or is handed the user's own token. A steered or curious conversation then reads or changes
+      records this user may not touch, and the record of who did it names the service.
+    at: [agent, gateway->internalTools, internalTools->orgData]
+    risks: [riskAgenticDelegationConfusedDeputy]
+    atlas: [AML.T0053, AML.T0085.001, AML.T0012]
+    owasp: [LLM02:2026, LLM03:2026, ASI03, MCP02:2025, MCP07:2025]
+    controls: [AML.M0028, D3-CTS, D3-APA, cap-data-access-governance, D3-AA]
+    refs:
+      - title: "AppOmni: BodySnatcher, a shared secret that let anyone drive ServiceNow's AI agent (CVE-2025-12420)"
+        url: https://appomni.com/ao-labs/bodysnatcher-agentic-ai-security-vulnerability-in-servicenow/
+  - id: T3
+    title: "The approval gate fails: a vague proposal is approved, or nobody is asked"
+    rating: high
+    evidence: disclosed
+    story: >-
+      The proposal a user approves is text the model wrote, so a steered model can describe a
+      harmful write as routine, and someone approving their tenth proposal stops reading. A
+      scheduled run has nobody in the thread at all. Either way a write reaches a system of
+      record that no person really chose.
+    at: [user->entry, events->agent, internalTools->orgData]
+    risks: [riskRogueActions]
+    atlas: [AML.T0053, AML.T0067, AML.T0101]
+    owasp: [LLM03:2026, ASI02, ASI09]
+    controls: [AML.M0029, cap-agent-action-policy-enforcement, D3-APA, cap-agent-tracing]
+    refs:
+      - title: "SafeBreach: calendar invitations made Gemini take actions nobody asked for"
+        url: https://www.safebreach.com/blog/invitation-is-all-you-need-hacking-gemini/
+  - id: T4
+    title: "A poisoned tool, skill or package is admitted and runs in the workload"
+    rating: high
+    evidence: observed
+    story: >-
+      A tool description written to steer the model, a server whose name shadows an approved
+      one, or a package release carrying a credential stealer arrives through the package
+      mirror or the tool list. Once admitted it is offered to every conversation, or runs in the
+      sandbox with the workload's network reach.
+    at: [sources->registry, registry, gateway->internalTools, agent->gateway]
+    risks: [riskToolSourceProvenance, riskToolRegistryTampering]
+    atlas: [AML.T0010.005, AML.T0010.001, AML.T0110.000, AML.T0109]
+    owasp: [LLM04:2026, ASI04, MCP03:2025, MCP04:2025, MCP09:2025]
+    controls: [cap-agent-tool-registry, cap-mcp-tool-integrity, D3-FA, cap-staged-rollout-gate]
+    incidents: [mcp-supply-chain, litellm-release-hijack]
+  - id: T5
+    title: "A reply's links or markup carry data out when the front end renders them"
+    rating: high
+    evidence: disclosed
+    story: >-
+      A steered model writes a link or an image whose address carries data from the
+      conversation, or markup that runs in the reader's browser. The front end renders it and
+      the browser makes the request: no tool call, no approval, and nothing for the gateway to
+      see.
+    at: [gateway->provider, entry, user->entry]
+    risks: [riskInsecureModelOutput]
+    atlas: [AML.T0077, AML.T0136]
+    owasp: [LLM10:2026, LLM02:2026]
+    controls: [cap-output-encoding, cap-sensitive-data-redaction, cap-input-guardrails]
+    refs:
+      - title: "Zenity Labs: AgentFlayer, a zero-click leak through a rendered image in ChatGPT connectors"
+        url: https://labs.zenity.io/p/agentflayer-chatgpt-connectors-0click-attack-5b41
+  - id: T6
+    title: "An exposed endpoint of the chat service hands over conversations and prompts"
+    rating: high
+    evidence: disclosed
+    story: >-
+      The chat service is web software: its APIs, its session store and the database that holds
+      conversations and system prompts. One unauthenticated endpoint with an injection flaw can
+      expose every stored conversation and let an attacker rewrite the instructions every user's
+      agent follows.
+    at: [entry, memory, agent]
+    risks: [riskInsecureIntegratedComponent, riskSensitiveDataDisclosure]
+    atlas: [AML.T0049, AML.T0085.002, AML.T0085.003]
+    owasp: [LLM08:2026, LLM02:2026]
+    controls: [D3-APA, AML.M0031, cap-sensitive-data-redaction, cap-staged-rollout-gate]
+    incidents: [mckinsey-lilli]
+  - id: T7
+    title: "Code the agent writes, or a native tool, runs with the loop's secrets and reach"
+    rating: high
+    evidence: disclosed
+    story: >-
+      Native tools run in the agent's own process, with its identity, secrets and network, and
+      pass no chokepoint. If generated code runs there rather than in a sandbox thrown away after
+      the task, a steered conversation gets a shell holding the workload's credentials and a
+      route out.
+    at: [localTools, localTools->registry]
+    risks: [riskInsecureIntegratedComponent]
+    atlas: [AML.T0050, AML.T0098]
+    owasp: [ASI05, MCP05:2025, MCP01:2025]
+    controls: [D3-EI, cap-agent-egress-control, D3-CH]
+    incidents: [agentcore-token-theft]
+    refs:
+      - title: "JFrog: prompt injection to code execution in Vanna.AI (CVE-2024-5565)"
+        url: https://jfrog.com/blog/prompt-injection-attack-code-execution-in-vanna-ai-cve-2024-5565/
+  - id: T8
+    title: "A tool loop inside one turn, or an endless conversation, runs up the bill"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      One turn can run many tool calls before anything renders, and a scheduled run can loop
+      with nobody watching. Rate limits at the front end count requests, not the calls inside a
+      turn, so a loop or a hostile user spends tokens and tool quota with no ceiling.
+    at: [entry, agent, gateway->provider]
+    risks: [riskEconomicDenialOfWallet, riskRunawayAgentToolLoops]
+    atlas: [AML.T0034.002, AML.T0034.000, AML.T0029]
+    owasp: [LLM06:2026]
+    controls: [AML.M0004, AML.M0036, cap-agent-kill-switch, cap-agent-tracing]
+  - id: T9
+    title: "A late question surfaces records the session gathered for other topics"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      Context builds up over the turns: everything retrieved earlier stands beside the next
+      question. A reply can surface records the current task never needed, and memory kept
+      across conversations would hand one user's material to another.
+    at: [localTools->memory, memory]
+    risks: [riskExcessiveDataHandlingDuringInference]
+    atlas: [AML.T0085.002]
+    owasp: [LLM02:2026, MCP10:2025]
+    controls: [cap-sensitive-data-redaction, AML.M0031, cap-data-access-governance]
+coverage:
+  - id: "LLM07:2026"
+    why: "A wrong answer matters here mainly when it drives a write, which is the approval threat; answers that commit the organisation need their own review."
+  - id: ASI07
+    why: "One agent loop: no messages pass between agents in this pattern."
+  - id: ASI08
+    why: "No chain of agents for a failure to cascade through; a bad write stops at one system of record and its approval."
+  - id: ASI10
+    why: "Each turn is a bounded loop the application runs; a run that drifts is the cost and approval threats, and the stop ends it."
+  - id: "MCP08:2025"
+    why: "Not a threat on its own: the thread is not the audit trail, so where actions are recorded is a design review question."
+questions:
+  - "Which records, uploads and web pages reach the conversation, who outside the organisation can write to each, and is what returns screened like user input?"
+  - "Does every tool call carry the conversing user's own narrowed access, decided per call, and can the model supply or change whose access it is?"
+  - "What does an approval show: the exact action and its arguments, or a summary the model wrote? Is it bound to that action and checked outside the agent?"
+  - "What may a scheduled run do with the thread closed, on whose access, and when does that access expire?"
+  - "Who can add a tool, skill or package, how is its description pinned, and what happens when it changes after approval?"
+  - "Does the front end render remote images, links or markup from replies, and to which domains?"
+  - "Can anyone reach the chat service's APIs, session store or prompt store without signing in, and who can edit the system instruction?"
+  - "Where are proposals, approvals and actions recorded, can the agent write there, and how fast can every session be stopped?"

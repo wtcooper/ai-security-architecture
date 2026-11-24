@@ -1426,6 +1426,91 @@ export interface Incident {
   sources: IncidentSource[];
 }
 
+/**
+ * ------------------------------------------------------------------ Threat models
+ *
+ * One short threat model per pattern (data/reference/threat-models/<slug>.yaml), read as the
+ * pattern page's Threat model tab from the executive summary down. Each threat is placed on the
+ * pattern's own boxes and arrows, names the risks it is, the MITRE ATLAS techniques and OWASP
+ * items it maps to, and the controls pinned on the pattern that break it. Text names things;
+ * ids go only in the id fields.
+ */
+export const THREAT_RATINGS = ["critical", "high", "medium", "low"] as const;
+/** Inherent, for the deployment the model's `scope` describes. */
+export type ThreatRating = (typeof THREAT_RATINGS)[number];
+/** What shows the threat is real: an incident, a CVE or advisory, research, or nothing yet. */
+export const THREAT_EVIDENCE = ["observed", "disclosed", "research", "theoretical"] as const;
+export type ThreatEvidence = (typeof THREAT_EVIDENCE)[number];
+/** The OWASP lists a threat model may name. The LLM Top 10 applies to every pattern. */
+export const THREAT_LISTS = ["owasp-llm-2026", "owasp-agentic", "owasp-mcp"] as const;
+
+export interface ThreatActor {
+  who: string;
+  /** What they can reach, at most 120 characters. */
+  access: string;
+  /** What they are after, at most 80 characters. */
+  wants: string;
+}
+
+export interface Threat {
+  /** T1, T2, ... in order, most severe first. */
+  id: string;
+  title: string;
+  rating: ThreatRating;
+  evidence: ThreatEvidence;
+  /** How it happens on this pattern, at most 320 characters. */
+  story: string;
+  /** One to four boxes or arrows of the pattern where it happens: block ids or "from->to" (either direction). */
+  at: string[];
+  /** Risk catalogue ids. */
+  risks: string[];
+  /** MITRE ATLAS technique or sub-technique ids, in the vendored release. */
+  atlas: string[];
+  /** OWASP ids, from the lists the model names. */
+  owasp: string[];
+  /** One to five controls pinned on the pattern that break it. */
+  controls: string[];
+  incidents?: string[];
+  /** At most two: evidence no catalogued incident covers. */
+  refs?: { title: string; url: string }[];
+}
+
+/** An item of a named OWASP list that no threat names, and why. */
+export interface ThreatCoverage {
+  id: string;
+  why: string;
+}
+
+export interface ThreatModel {
+  /** The pattern's id. */
+  pattern: string;
+  /** "YYYY-MM-DD". */
+  reviewed: string;
+  /** The executive summary, at most 600 characters. */
+  summary: string;
+  /** Where risk concentrates, at most 300 characters. */
+  concentrates: string;
+  /** The deployment the ratings assume, at most 300 characters. */
+  scope: string;
+  /** The OWASP lists that apply, in THREAT_LISTS; the LLM Top 10 always. */
+  lists: string[];
+  assets: string[];
+  actors: ThreatActor[];
+  threats: Threat[];
+  coverage: ThreatCoverage[];
+  /** Design review questions. */
+  questions: string[];
+}
+
+/** A MITRE ATLAS technique a threat model uses, as the vendored release names it. */
+export interface AtlasTechnique {
+  id: string;
+  /** "LLM Prompt Injection: Indirect" for a sub-technique. */
+  name: string;
+  /** The tactics it achieves, by name. */
+  tactics: string[];
+}
+
 /** Everything the app renders, emitted by scripts/build-data.ts. */
 export interface Dataset {
   meta: {
@@ -1481,4 +1566,8 @@ export interface Dataset {
   /** The clouds and the on-premises data centre, and how each hosted pattern is built on them, from data/clouds/. */
   clouds: CloudPlatform[];
   enablement: Enablement;
+  /** One per pattern that has one (data/reference/threat-models/), in pattern order. */
+  threatModels: ThreatModel[];
+  /** The ATLAS techniques the threat models use: id -> name and tactics, from the vendored release. */
+  atlasTechniques: Record<string, AtlasTechnique>;
 }

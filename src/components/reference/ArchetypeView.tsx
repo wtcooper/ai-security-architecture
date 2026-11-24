@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * One pattern on the page: the drawing at full width, then one tab strip beneath it — enable,
- * how it works, risks, flows, incidents — and the tab's panel under that. A tab governs both
- * what the drawing carries and which panel shows: control chips at rest, the coded risk tags on
- * Risks, a walk's step numbers on Flows. The strip sticks under the site header once the page
- * has scrolled past it, and choosing a tab from there brings the drawing back into view, so a
- * tab never changes something the reader cannot see. On Enable every row is one of the chips:
- * opening a row lights its chip, and picking a chip opens its row.
+ * One pattern on the page: the drawing at full width, then one tab strip beneath it (how it
+ * works, threat model, enable, data flows, incidents) and the tab's panel under that. A tab
+ * governs both what the drawing carries and which panel shows: control chips at rest, a risk's
+ * coded tags while one is open under How it works (or every risk's, with Show risks pressed in
+ * the drawing's toolbar), the places an open threat happens, a walk's step numbers on Data
+ * flows. The strip sticks under the site header once the page has scrolled past it. On Enable
+ * every row is one of the chips: opening a row lights its chip, and picking a chip opens its row.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -16,8 +16,8 @@ import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawi
 import { CrossingsRegister } from "@/components/drawing/CrossingsRegister";
 import { CloudSwitch } from "@/components/cloud/CloudSwitch";
 import { boxProduct, cloudProductFor, cloudProductsFor, drawnOn, hostedAs, hostingInEffect, packsFor, platformWords, stackChosen, stackedAs, NO_STACK, type CloudProduct, type Stack } from "@/components/cloud/model";
-import { cloudById, componentChoiceFor, fillsOn, incidents, toolById } from "@/lib/data";
-import { walkOn } from "@/lib/shape";
+import { cloudById, componentChoiceFor, fillsOn, incidents, threatModelFor, toolById } from "@/lib/data";
+import { placesOn, walkOn } from "@/lib/shape";
 import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
@@ -25,6 +25,7 @@ import type { BlockService, Highlight } from "@/components/drawing/types";
 import { FlowSequence } from "./FlowSequence";
 import { WalkList } from "./rail-lists";
 import { PatternIncidents, PatternRisks } from "@/components/patterns/PatternPanels";
+import { ThreatModelPanel } from "@/components/patterns/ThreatModel";
 
 /**
  * Block id -> the cloud service drawn in it, cached per cloud, architecture, hosting and stack so
@@ -89,9 +90,15 @@ interface ArchetypeViewProps {
   /** Where the platform has packs: the pack and add-ons chosen, as the address names them. */
   stack?: Stack;
   onStack?: (stack: Stack) => void;
+  /** The threat open on the Threat model tab, whose places the drawing lights there. */
+  threat?: string | null;
+  onThreat?: (id: string | null) => void;
+  /** Whether the drawing tags every pinned risk (the toolbar's Show risks toggle). */
+  showRisks?: boolean;
+  onShowRisks?: (on: boolean) => void;
 }
 
-export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud, host = null, onHost, stack: chosenStack = NO_STACK, onStack }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud, host = null, onHost, stack: chosenStack = NO_STACK, onStack, threat: threatId = null, onThreat, showRisks = false, onShowRisks }: ArchetypeViewProps) {
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const drawingRef = useRef<HTMLDivElement>(null);
   const open = highlight?.kind === "mitigation" ? highlight.id : null;
@@ -114,6 +121,23 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   // of shape, and the hosting option's after them, applied before layout. The walk on it follows.
   const drawn = hostedProduct ? drawnOn(archetype, hostedProduct, hosting && !hosting.mapped ? hosting.id : null) : archetype;
   const drawnWalk = activeWalk ? walkOn(drawn, activeWalk) : null;
+  // An open threat lights where it happens, as drawn on this platform, and the controls that
+  // break it (or, with every risk tagged, the risks it is). Only on its own tab.
+  const threatModel = threatModelFor(archetype.id);
+  const openThreat = tab === "threats" && threatId ? threatModel?.threats.find((t) => t.id === threatId) ?? null : null;
+  const places = openThreat ? placesOn(drawn, openThreat.at) : null;
+  const tagged = showRisks || highlight?.kind === "risk";
+  const drawnHighlight: Highlight | null = openThreat
+    ? tagged
+      ? { kind: "risk", id: openThreat.risks[0], with: openThreat.risks.slice(1) }
+      : { kind: "mitigation", id: openThreat.controls[0], with: openThreat.controls.slice(1) }
+    : highlight;
+  // A risk tag picked on the drawing lights that risk, as opening it under Risks does (and lets
+  // go of it if it is the one lit). An open threat gives way to it.
+  const pickRisk = (id: string) => {
+    if (openThreat) onThreat?.(null);
+    onHighlight(highlight?.kind === "risk" && highlight.id === id ? null : { kind: "risk", id });
+  };
   const shapeCount = cloudProduct?.implementation.shape?.length ?? 0;
   const placedFor = drawn.drawn && Object.keys(drawn.drawn.boxes).length ? (hosting && !hosting.mapped ? hosting.name : cloudProduct?.cloud.short) : undefined;
   // The stack in a few words: the platform pack, then any add-ons.
@@ -192,6 +216,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "overview", label: "How it works" },
+    { id: "threats", label: "Threat model", count: threatModel?.threats.length },
     { id: "enable", label: "Enable", count: archetype.mitigations.length },
     { id: "flows", label: "Data flows", count: walks.length },
     { id: "incidents", label: "Incidents", count: incidents.filter((i) => i.archetype === archetype.id).length },
@@ -270,10 +295,14 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
             <PatternDrawing
               archetype={drawn}
               walk={drawnWalk}
-              highlight={highlight}
+              highlight={drawnHighlight}
               onHighlight={onHighlight}
-              // One kind of marker at a time: a risk's tags while one is open under How it works, a walk's steps on Data flows, control chips otherwise.
-              pins={highlight?.kind === "risk" ? "risks" : "controls"}
+              onPickRisk={pickRisk}
+              places={places}
+              // One kind of marker at a time: risk tags while one is open under How it works or Show risks is pressed, a walk's steps on Data flows, control chips otherwise.
+              pins={tagged ? "risks" : "controls"}
+              showRisks={showRisks}
+              onShowRisks={onShowRisks}
               onPickMitigation={pickChip}
               services={services}
               ownBoundary={cloudProduct?.cloud.boundary ?? null}
@@ -281,7 +310,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               className="w-full"
             />
           </div>
-          <DrawingLegend className="mt-3 px-1" risks={highlight?.kind === "risk"} cloud={cloudProduct?.cloud.short} own={Boolean(cloudProduct?.cloud.selfManaged)} roles={hasPacks} placedFor={placedFor} />
+          <DrawingLegend className="mt-3 px-1" risks={tagged} places={Boolean(places?.length)} cloud={cloudProduct?.cloud.short} own={Boolean(cloudProduct?.cloud.selfManaged)} roles={hasPacks} placedFor={placedFor} />
         </>
       )}
 
@@ -313,8 +342,8 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           <ArchetypeDetail
             archetype={archetype}
             cloud={cloudProduct}
-            stack={stack}
             onEnable={() => go("enable")}
+            riskOpen={highlight?.kind === "risk" ? highlight.id : null}
             risks={
               <PatternRisks
                 archetype={archetype}
@@ -324,6 +353,10 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               />
             }
           />
+        )}
+
+        {tab === "threats" && (
+          <ThreatModelPanel archetype={archetype} open={openThreat?.id ?? null} onOpen={(id) => onThreat?.(id)} onPickControl={pickChip} onShowDrawing={narrow ? scrollToDrawing : undefined} />
         )}
 
         {tab === "incidents" && <PatternIncidents archetype={archetype} />}

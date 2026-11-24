@@ -3,7 +3,8 @@
 /**
  * The drawing of a pattern: trust boundaries, plain boxes, numbered controls. The layout is
  * computed from the pattern's data (layout.ts); this component adds what a reader does with it:
- * zoom and pan, a hover card, expanding to the window, and export.
+ * zoom and pan, a hover card, expanding to the window, export and, where the page offers it, a
+ * toggle that draws every risk the pattern pins where it is pinned.
  *
  * The mouse belongs to the page until the reader clicks the drawing. From then the wheel zooms
  * about the pointer and a drag pans, and a click anywhere else (or Esc) hands the wheel back to
@@ -33,13 +34,17 @@ export function PatternDrawing({
   walk = null,
   highlight = null,
   onHighlight,
+  onPickRisk,
   overlay = null,
+  places = null,
   pins = "controls",
   onPickMitigation,
   services = null,
   ownBoundary = null,
   builtWith = null,
   minScale = MIN_SCALE,
+  showRisks = false,
+  onShowRisks,
   className,
 }: {
   archetype: Archetype;
@@ -47,8 +52,12 @@ export function PatternDrawing({
   walk?: Scenario | null;
   highlight?: Highlight | null;
   onHighlight?: (h: Highlight | null) => void;
+  /** What a risk tag does when picked; by default it lights that risk, or lets go of it if lit. */
+  onPickRisk?: (id: string) => void;
   /** An incident step replayed on the drawing. */
   overlay?: StepOverlay | null;
+  /** Where an open threat happens: boxes and arrows lit and outlined, the rest faded. */
+  places?: string[] | null;
   /** Which pins show: the numbered controls, the coded risk tags, or both. */
   pins?: DrawingPins;
   onPickMitigation?: (id: string) => void;
@@ -60,6 +69,10 @@ export function PatternDrawing({
   builtWith?: Map<string, string> | null;
   /** The smallest share of natural size to draw at inline before scrolling sideways. Lower where seeing the whole drawing matters more than reading it. */
   minScale?: number;
+  /** Whether the toolbar's Show risks toggle is pressed; the page decides what that draws (`pins`). */
+  showRisks?: boolean;
+  /** Offers the Show risks toggle in the toolbar. */
+  onShowRisks?: (on: boolean) => void;
   className?: string;
 }) {
   const spec = useMemo(() => boundaryLayout(archetype), [archetype]);
@@ -197,6 +210,18 @@ export function PatternDrawing({
             ? "Scroll to zoom · drag to pan · click outside the drawing to release"
             : "Click the drawing to zoom and pan with the mouse"}
       </span>
+      {onShowRisks && (
+        <button
+          type="button"
+          className={showRisks ? "rounded-md border border-exposed-ink bg-exposed-ink px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90" : `${button} font-semibold`}
+          onClick={() => onShowRisks(!showRisks)}
+          aria-pressed={showRisks}
+          title={showRisks ? "Hide the risk tags and show the control chips again" : "Tag every risk this pattern pins where it enters the drawing"}
+          data-show-risks
+        >
+          Show risks
+        </button>
+      )}
       <button type="button" className={button} onClick={() => zoom(1 / 1.3)} disabled={view.k <= 1} aria-label="Zoom out" title="Zoom out">
         −
       </button>
@@ -228,12 +253,13 @@ export function PatternDrawing({
       walk={walk}
       highlight={highlight}
       overlay={overlay}
+      places={places}
       pins={pins}
       services={services}
       ownBoundary={ownBoundary}
       builtWith={builtWith}
       onPickMitigation={onPickMitigation}
-      onPickRisk={(id) => onHighlight?.(highlight?.kind === "risk" && highlight.id === id ? null : { kind: "risk", id })}
+      onPickRisk={onPickRisk ?? ((id) => onHighlight?.(highlight?.kind === "risk" && highlight.id === id ? null : { kind: "risk", id }))}
       onHover={setCard}
       transform={view.k === 1 ? undefined : `translate(${view.x} ${view.y}) scale(${view.k})`}
       svgRef={svgRef}
@@ -340,6 +366,7 @@ export function PatternDrawing({
 export function DrawingLegend({
   className = "",
   risks = false,
+  places = false,
   cloud,
   own = false,
   roles = false,
@@ -348,6 +375,8 @@ export function DrawingLegend({
   className?: string;
   /** True where the coded risk tags are showing instead of the controls. */
   risks?: boolean;
+  /** True while an open threat outlines where it happens. */
+  places?: boolean;
   /** The cloud the drawing is shown as built on, by its short name. */
   cloud?: string;
   /** True when the chosen platform is the organisation's own data centre: it runs software, not a provider's services. */
@@ -376,11 +405,11 @@ export function DrawingLegend({
         Outside content &amp; actions
       </span>
       {risks ? (
-        <span className="flex items-center gap-1.5">
-          <span aria-hidden className="ident rounded-[3px] border px-1 text-[9px] font-bold" style={{ background: "var(--exposed-soft)", borderColor: "var(--exposed)", color: "var(--exposed)" }}>
+        <span className="flex items-center gap-1.5" data-legend-risks>
+          <span aria-hidden className="ident rounded-[3px] border px-1 text-[9px] font-bold" style={{ background: "var(--exposed-soft)", borderColor: "var(--exposed-ink)", color: "var(--exposed-ink)" }}>
             R01
           </span>
-          Risk · select to light it
+          Risk, tagged where it enters · hover to name it, select to light it
         </span>
       ) : (
         <span className="flex items-center gap-1.5">
@@ -388,6 +417,12 @@ export function DrawingLegend({
             1
           </span>
           Control · select to open it on Enable
+        </span>
+      )}
+      {places && (
+        <span className="flex items-center gap-1.5" data-legend-places>
+          <span aria-hidden className="inline-block h-3 w-5 rounded-[3px] bg-paper" style={{ border: "2px solid var(--exposed-ink)" }} />
+          Where the open threat happens
         </span>
       )}
       <span className="flex items-center gap-1.5">

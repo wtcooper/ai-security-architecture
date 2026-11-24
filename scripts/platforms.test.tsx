@@ -81,6 +81,11 @@ test("a platform states where it does not follow the drawing under How it works;
       assert.equal([...section.matchAll(/data-difference="/g)].length, differences.length, `${where}: every difference is listed`);
       assert.equal([...section.matchAll(/data-also-needed="/g)].length, product.implementation.alsoNeeded?.length ?? 0, `${where}: every supporting service is listed`);
       for (const d of differences) assert.ok(section.includes(esc(d.text)), `${where}: "${d.text.slice(0, 40)}" is shown`);
+      // Each service named in a box links to the page it was checked against, and each limit to watch is said.
+      for (const b of product.implementation.bindings) {
+        if (b.url && !(b.options && product.cloud.selfManaged)) assert.ok(section.includes(`href="${esc(b.url)}"`), `${where}: ${b.block} links to the page it was checked against`);
+        for (const w of b.watch ?? []) assert.ok(section.includes(esc(w.text)), `${where}: ${b.block}'s watch note`);
+      }
       // The overview tab carries the section when a platform is chosen, and only then.
       assert.match(page(a.id, `tab=overview&cloud=${cloudSlug(product.id)}`), /id="on-cloud"/, `${where}: How it works has the section`);
     }
@@ -395,7 +400,7 @@ test("pages show names, never identifiers: no control id reaches the text of a p
     return ids.filter((id) => new RegExp(`(^|[^A-Za-z0-9.-])${id.replace(/[.]/g, "\\.")}([^A-Za-z0-9-]|$)`).test(text));
   };
   for (const a of dataset.archetypes) {
-    for (const q of ["", "tab=overview", "tab=risks", "tab=flows", "tab=incidents"]) {
+    for (const q of ["", "tab=overview", "tab=risks", "tab=threats", "tab=threats&threat=T1", "tab=flows", "tab=incidents", "risks=1"]) {
       assert.deepEqual(leak(page(a.id, q)), [], `${a.id} ${q || "enable"}: shows a control id`);
     }
     const open = renderToStaticMarkup(<ControlTable groups={controlGroups(a)} archetype={a} open={a.mitigations[0]} onOpen={() => {}} />);

@@ -28,7 +28,7 @@ export function CloudSwitch({
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5" data-cloud-switch>
       <span className={`font-semibold text-ink ${size === "md" ? "text-[13px]" : "text-[12px]"}`}>{label}</span>
-      <div className="flex gap-1 rounded-lg border border-line bg-paper p-1" role="group" aria-label={label}>
+      <div className="flex flex-wrap gap-1 rounded-lg border border-line bg-paper p-1" role="group" aria-label={label}>
         {options.map((o) => {
           const on = o.id === cloud;
           return (

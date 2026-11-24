@@ -2,7 +2,8 @@
 
 /**
  * ⌘K over everything with a name: patterns (by title, product, cloud and everyday words), tools,
- * clouds, controls, incidents, risks (with their R-codes), CoSAI controls, components and personas. The dataset is
+ * clouds, controls, incidents, the threats of each pattern's threat model (by title), risks (with
+ * their R-codes), CoSAI controls, components and personas. The dataset is
  * already in the bundle, so the index is built once and matched in the browser; a result is
  * a plain link into the page that owns the entity, so navigation works under the GitHub
  * Pages base path exactly as every other link does.
@@ -24,10 +25,12 @@ import {
   incidents,
   riskCode,
   risksInOrder,
+  threatModels,
   toolsInOrder,
   vendorById,
 } from "@/lib/data";
 import { SURFACE_SITUATION } from "@/components/patterns/labels";
+import { RATING_STYLE } from "@/components/patterns/threat-style";
 import { cloudsFor } from "@/components/patterns/model";
 import { cloudHref, patternHref, controlHref, cosaiControlHref, incidentHref, riskHref, componentHref, personaHref } from "@/lib/routes";
 
@@ -40,7 +43,7 @@ interface Entry {
   text: string;
 }
 
-function buildIndex(): Entry[] {
+export function buildIndex(): Entry[] {
   const norm = (...parts: (string | undefined)[]) => parts.filter(Boolean).join(" ").toLowerCase();
   return [
     ...risksInOrder.map((r) => ({
@@ -97,6 +100,16 @@ function buildIndex(): Entry[] {
       href: cloudHref(c.id),
       text: norm(c.name, c.short, c.id),
     })),
+    // A threat opens its row on its pattern's Threat model tab.
+    ...threatModels.flatMap((m) =>
+      m.threats.map((t) => ({
+        kind: "Threat",
+        title: t.title,
+        hint: `${RATING_STYLE[t.rating].label} · ${archetypeById.get(m.pattern)?.abbrev ?? archetypeById.get(m.pattern)?.title ?? ""}`,
+        href: patternHref(m.pattern, { threat: t.id }),
+        text: norm(t.title),
+      })),
+    ),
     ...incidents.map((i) => ({
       kind: "Incident",
       title: i.title,
@@ -107,7 +120,7 @@ function buildIndex(): Entry[] {
   ];
 }
 
-const KIND_ORDER = ["Pattern", "Tool", "Cloud", "Control", "Incident", "Risk", "CoSAI control", "Component", "Persona"];
+const KIND_ORDER = ["Pattern", "Tool", "Cloud", "Control", "Incident", "Threat", "Risk", "CoSAI control", "Component", "Persona"];
 
 export function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const index = useMemo(() => buildIndex(), []);
