@@ -341,6 +341,12 @@ around it (gateway, network, identity, keys, policy, logs, stores) in the platfo
       - rename: { at: managedRuntime->aiGateway, label: "tool, model and API calls" }
         why: "…"
         url: https://…
+      - add: { from: gateway, to: localGateway, label: "cluster-local calls" }
+        # an arrow the pattern does not draw: both ends are boxes of the pattern or boxes an
+        # earlier change inserts (and a later insert may sit on it); across a trust boundary it
+        # says what it passes through on our side, crossing: { via: "…" }, and only there
+        why: "…"
+        url: https://…
     alsoNeeded:                     # services that are not boxes on the drawing
       - { service: "…", role: network, why: "…", url: https://… }
         # role: identity | network | ingress | keys | secrets | registry | logging | other

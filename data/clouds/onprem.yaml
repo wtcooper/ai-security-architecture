@@ -16,8 +16,11 @@
 # 2026-11-24: the difference notes moved to where each belongs. A product's limit, edition or quirk
 # is a watch note on its option (or on a hosting option's box) or its row's requires; a setting is a
 # row (ten added, each checked on the vendor's page that day); an opinion is options in a box's note.
-# What stays under differences is a change of shape on this platform's drawing, and its `change`
-# says what to draw. Summaries, also-needed services and links name roles, with products as examples.
+# Summaries, also-needed services and links name roles, with products as examples.
+#
+# 2026-11-24: the changes of shape those notes described are drawn (`shape` on a hosting option):
+# Knative's activator, local gateway and ingress hops, and Slurm's bundle staging. Where the model
+# provider sits is the organisation's choice, not the platform's, so it is the provider box's note.
 id: cloudOnPrem
 name: On-premises data centre
 short: On-premises
@@ -2395,7 +2398,7 @@ implementations:
           - { name: "Agent Router (formerly Envoy AI Gateway)", kind: open, url: "https://theagentrouter.ai/", note: "Envoy-based, now an Agentic AI Foundation project: LLM routing and one MCP tool catalogue; A2A is not listed." }
       - block: provider
         service: "Open-weight models you host, or a hosted model API"
-        note: "Either open-weight models served on GPU servers you run, or a hosted model API under your agreement with its provider. The pattern reaches it through the gateway either way."
+        note: "Either open-weight models served on GPU servers you run (the self-hosted inference pattern), where prompts and completions stay in the data centre, or a hosted model API under your agreement with its provider, reached through your egress control. The gateway reaches it either way; the box is drawn outside, as a hosted API is."
         options:
           - { name: "vLLM", kind: open, url: "https://docs.vllm.ai/en/latest/", note: "Open-source inference server with an OpenAI-compatible API.", packs: [upstreamOpenSource], watch: [{ text: "Called by LiteLLM as a hosted_vllm provider; KServe is the common alternative.", url: "https://docs.litellm.ai/docs/providers/vllm" }, { text: "Your own open-weights models, in the same data centre. Tool calling needs --enable-auto-tool-choice and a --tool-call-parser. KServe is the alternative.", url: "https://docs.vllm.ai/en/latest/" }, { text: "No authentication unless --api-key is set, and the key then covers only /v1, /v2, /inference and /cohere: /invocations, /tokenize and other paths answer without it, so only the gateway should reach it at the network.", url: "https://docs.vllm.ai/en/latest/usage/security/" }, { text: "Sends anonymous usage data to its maintainers unless VLLM_NO_USAGE_STATS=1 or DO_NOT_TRACK=1 is set on every serving pod; the self-hosted inference pattern lists the serving settings.", url: "https://docs.vllm.ai/en/latest/usage/usage_stats/" }] }
           - { name: "KServe", kind: open, url: "https://kserve.github.io/website/", note: "Kubernetes model serving through InferenceService resources, with vLLM and llm-d backends." }
@@ -2466,10 +2469,6 @@ implementations:
       internalTools: https://docs.litellm.ai/docs/mcp
       orgData: https://www.postgresql.org/docs/current/ddl-rowsecurity.html
       sources: https://pypi.org/
-    differences:
-      - at: gateway->provider
-        text: "Where the organisation serves its own models (the self-hosted inference pattern), the model provider sits inside the data centre and prompts and completions do not leave it. Where it calls an external model API instead, the provider stays outside and the call leaves through the organisation's egress control."
-        change: "Conditional on the organisation's choice, not on the platform: when models are self-hosted, move the provider box from the external zone into the Enterprise data centre boundary and link it to archSelfHostedInference, so gateway->provider no longer crosses the boundary; when an external model API is used, leave the drawing as it is."
     alsoNeeded:
       - service: "Identity provider and authorisation server, highly available"
         role: identity
@@ -2604,7 +2603,8 @@ implementations:
           - { block: agent, service: "Your agent as a Knative Service (Knative Serving)", build: true, note: "Any framework that serves HTTP. Pods scale with the turns in flight and to zero when idle. A worker that polls for approval waits, if the design uses a durable workflow engine, is a separate Deployment, because it serves no requests.", url: https://knative.dev/docs/serving/, watch: [{ text: "A streamed reply is one request and ends at timeoutSeconds (default 300, at most 600 unless max-revision-timeout-seconds is raised). An idle instance may be reclaimed, so nothing may live only in the pod's memory; a component that polls for work instead of serving requests, such as a durable-workflow worker that holds approval waits, runs as an ordinary Deployment beside it.", url: "https://knative.dev/docs/serving/configuration/config-defaults/" }] }
           - { block: entry, service: "Front door with single sign-on, wired in through Knative's networking layer", note: "Knative generates the routes on the Gateway named in config-gateway, so the sign-in and rate-limit policies target that Gateway (with Envoy Gateway, its OIDC SecurityPolicy). The Gateway API plugin is beta; Knative tests it against the Istio, Contour and Envoy Gateway implementations.", url: https://knative.dev/docs/serving/config-network-adapters/ }
         addSettings: [k8sRbacLeastPrivilege, harborProxyCache, knativeScaleBounds, knativeRequestLimits, knativeTrafficSplit, knativeGatewayApiIngress, knativeClusterLocalVisibility, knativeActivatorIngress, knativeLocalGatewayAccess]
-        # Drawn, not described: a turn passes Knative's own hop between the front door and the agent.
+        # Drawn, not described: a turn passes Knative's own hop between the front door and the agent,
+        # and a scheduled run comes in through Knative's cluster-local gateway.
         shape:
           - insert:
               id: knativeActivator
@@ -2613,11 +2613,13 @@ implementations:
               on: entry->agent
             why: "At low or zero traffic Knative routes each turn through the activator, a component every Knative Service shares in the knative-serving namespace, and always through the queue-proxy beside the agent. Default-deny policy must admit that namespace, and the first turn after idle waits for a pod to start."
             url: https://knative.dev/docs/serving/request-flow/
-        differences:
-          - at: events->agent
-            text: "Knative also serves each Service on a cluster-local address through the shared local gateway, with no front-door sign-in. A scheduled run arrives that way, and so can any pod that can reach the local gateway. Limit which workloads reach it; the agent treats such a call as a run with no user (as the events->agent arrow already says)."
+          - insert:
+              id: knativeLocalGateway
+              title: "Knative local gateway"
+              summary: "Cluster-local way in, with no front-door sign-in"
+              on: events->agent
+            why: "Knative also serves each Service on a cluster-local address through a shared local gateway, with no front-door sign-in: a scheduled run arrives that way, and so can any pod that can reach that gateway. Limit which workloads reach it; the agent treats such a call as a run with no user."
             url: https://knative.dev/docs/serving/services/private-services/
-            change: "Knative option only: insert the 'Knative local gateway' on events->agent, and mark it as a second way into the agent that does not pass the front end."
         alsoNeeded:
           - service: "Knative Serving (controller, autoscaler, activator)"
             role: other
@@ -2741,7 +2743,7 @@ implementations:
       - { block: internalTools, service: "Your action services, behind the gateway", build: true, note: "Each action validates its input and ships with a compensating action. Registered on the gateway and reachable from the gateway only." }
       - block: provider
         service: "Open-weight models you host, or a hosted model API"
-        note: "Either open-weight models served on GPU servers you run, or a hosted model API under your agreement with its provider. The pattern reaches it through the gateway either way."
+        note: "Either open-weight models served on GPU servers you run (the self-hosted inference pattern), where prompts and completions stay in the data centre, or a hosted model API under your agreement with its provider, reached through your egress control. The gateway reaches it either way; the box is drawn outside, as a hosted API is."
         options:
           - { name: "vLLM", kind: open, url: "https://docs.vllm.ai/en/latest/", note: "Open-source inference server with an OpenAI-compatible API.", packs: [upstreamOpenSource], watch: [{ text: "Called by LiteLLM as a hosted_vllm provider; KServe is the common alternative.", url: "https://docs.litellm.ai/docs/providers/vllm" }, { text: "Your own open-weights models, in the same data centre. Tool calling needs --enable-auto-tool-choice and a --tool-call-parser. KServe is the alternative.", url: "https://docs.vllm.ai/en/latest/" }, { text: "No authentication unless --api-key is set, and the key then covers only /v1, /v2, /inference and /cohere: /invocations, /tokenize and other paths answer without it, so only the gateway should reach it at the network.", url: "https://docs.vllm.ai/en/latest/usage/security/" }, { text: "Sends anonymous usage data to its maintainers unless VLLM_NO_USAGE_STATS=1 or DO_NOT_TRACK=1 is set on every serving pod; the self-hosted inference pattern lists the serving settings.", url: "https://docs.vllm.ai/en/latest/usage/usage_stats/" }] }
           - { name: "KServe", kind: open, url: "https://kserve.github.io/website/", note: "Kubernetes model serving through InferenceService resources, with vLLM and llm-d backends." }
@@ -2808,10 +2810,6 @@ implementations:
       internalTools: https://docs.litellm.ai/docs/mcp
       orgData: https://www.postgresql.org/docs/current/ddl-rowsecurity.html
       sources: https://pypi.org/
-    differences:
-      - at: gateway->provider
-        text: "Where the organisation serves its own models (the self-hosted inference pattern), the model provider sits inside the data centre and prompts and completions do not leave it. Where it calls an external model API instead, the provider stays outside and the call leaves through the organisation's egress control."
-        change: "Conditional on the organisation's choice, not on the platform: when models are self-hosted, move the provider box from the external zone into the Enterprise data centre boundary and link it to archSelfHostedInference, so gateway->provider no longer crosses the boundary; when an external model API is used, leave the drawing as it is."
     alsoNeeded:
       - service: "Identity provider and authorisation server, highly available"
         role: identity
@@ -3008,7 +3006,7 @@ implementations:
           - { name: "Agent Router (formerly Envoy AI Gateway)", kind: open, url: "https://theagentrouter.ai/", note: "Envoy-based, now an Agentic AI Foundation project: LLM routing and one MCP tool catalogue; A2A is not listed." }
       - block: provider
         service: "Open-weight models you host, or a hosted model API"
-        note: "Either open-weight models served on GPU servers you run, or a hosted model API under your agreement with its provider. The pattern reaches it through the gateway either way."
+        note: "Either open-weight models served on GPU servers you run (the self-hosted inference pattern), where prompts and completions stay in the data centre and you carry capacity, patching and the weights, with the hop only as trusted as the server's key and network rules; or a hosted model API under your agreement with its provider, reached through your egress control. The gateway reaches it either way; the box is drawn outside, as a hosted API is."
         options:
           - { name: "vLLM", kind: open, url: "https://docs.vllm.ai/en/latest/", note: "Open-source inference server with an OpenAI-compatible API.", packs: [upstreamOpenSource], watch: [{ text: "Called by LiteLLM as a hosted_vllm provider; KServe is the common alternative.", url: "https://docs.litellm.ai/docs/providers/vllm" }, { text: "Your own open-weights models in the same data centre, called by LiteLLM as hosted_vllm/. KServe is the alternative.", url: "https://docs.vllm.ai/en/latest/" }, { text: "--api-key protects only /v1, /v2, /inference and /cohere; other endpoints such as /invocations and /classify answer without it. Treat the key as one layer and limit at the network who reaches the server.", url: "https://docs.vllm.ai/en/latest/usage/security/" }] }
           - { name: "KServe", kind: open, url: "https://kserve.github.io/website/", note: "Kubernetes model serving through InferenceService resources, with vLLM and llm-d backends." }
@@ -3076,10 +3074,6 @@ implementations:
       internalTools: https://docs.litellm.ai/docs/mcp
       orgData: https://developer.hashicorp.com/vault/docs/secrets/databases
       sources: https://pypi.org/
-    differences:
-      - at: gateway->provider
-        text: "Where you serve your own models (the self-hosted inference pattern), the provider sits inside the data centre: prompts and completions stay in, and you carry capacity, patching and the weights, with the hop only as trusted as the server's key and network rules. Where you call an external model API, the provider stays outside and the call leaves through your egress control."
-        change: "Conditional on the organisation's choice, not on the platform: when models are self-hosted, move the provider box from the external zone into the Enterprise data centre boundary and link it to archSelfHostedInference, so gateway->provider no longer crosses the boundary; when an external model API is used, leave the drawing as it is."
     alsoNeeded:
       - service: "The container platform's control plane on your own servers"
         role: other
@@ -3402,11 +3396,15 @@ implementations:
         bindings:
           - { block: service, service: "Your MCP server as a Knative Service", build: true, note: "One Revision per release. Set min-scale to 1 or more if cold starts matter. The server must still check issuer, audience, expiry and scope on every call itself.", url: https://knative.dev/docs/serving/, watch: [{ text: "Scales a Service to zero by default (enable-scale-to-zero is true and min-scale 0 with the default autoscaler), so the first call after an idle period waits for a pod; a published server that must answer at once sets autoscaling.knative.dev/min-scale to 1 or more.", url: "https://knative.dev/docs/serving/autoscaling/scale-to-zero/" }, { text: "Every request ends at timeoutSeconds (default 300, at most max-revision-timeout-seconds, 600 by default). In MCP revision 2026-07-28 a long tool call and a subscriptions/listen stream are each one HTTP request, so they end at that limit unless the platform team raises it together with the activator's termination grace period.", url: "https://knative.dev/docs/serving/configuration/config-defaults/" }] }
         addSettings: [knativeScaleBounds, knativeRequestLimits, knativeGatewayApiIngress, knativeTrafficSplit, knativeClusterLocalVisibility, knativeTagDigestResolution, knativeActivatorIngress]
-        differences:
-          - at: gateway->service
-            text: "On Knative Serving, calls from the gateway enter Knative's networking layer and, at low or zero traffic, the shared activator, which holds them until a pod is ready. A rule that admits only the gateway's pods to the service must also admit those hops, and the service can in addition accept only gateway-signed requests."
+        shape:
+          - insert:
+              id: knativeIngress
+              title: "Knative ingress & activator"
+              summary: "The networking layer, and the shared activator at low traffic"
+              on: gateway->service
+            pins: knativeIngress->service
+            why: "On Knative Serving, calls from the gateway enter Knative's networking layer and, at low or zero traffic, the shared activator, which holds them until a pod is ready. A rule that admits only the gateway's pods to the service must also admit those hops, and the service can in addition accept only gateway-signed requests."
             url: https://knative.dev/docs/serving/request-flow/
-            change: "Knative option only: insert a 'Knative ingress and activator' hop on gateway->service."
         alsoNeeded:
           - service: "Knative Serving (controller, autoscaler, activator, webhook)"
             role: other
@@ -4005,11 +4003,16 @@ implementations:
           - { block: trainJob, service: "Slurm batch job in an OCI container on GPU nodes", note: "Submitted with sbatch --container or through slurmrestd; GPUs are requested with --gpus, and each pipeline submits under its own Unix account.", url: https://slurm.schedmd.com/containers.html }
         dropSettings: [kubeflowTrainJobServiceAccount, k8sRuntimeClassSandbox]
         addSettings: [slurmAuthPlugin, slurmRestdJwt, slurmAccountingEnforce, slurmCgroupConstraints, slurmOciContainers, slurmNamespaceTmpfs, slurmPamAdopt, computeNodeEgressFirewall, slurmBundleDigestProlog, slurmPerRunStorageCredentials]
-        differences:
-          - at: pkgRegistry->trainJob
-            text: "Slurm does not pull or copy images: the OCI bundle must already exist on the execution node, and without oci.conf --container has no effect. A staging step unpacks the approved image, at its digest, onto every GPU node or shared storage before the job is submitted, and nothing verifies it again at start unless you add a check."
+        shape:
+          - insert:
+              id: bundleStaging
+              title: "OCI bundle staging"
+              summary: "Unpacks the approved image onto the nodes or shared storage"
+              on: pkgRegistry->trainJob
+              labels: ["approved artifacts", "staged bundle"]
+            pins: bundleStaging->trainJob
+            why: "Slurm does not pull or copy images: the OCI bundle must already be on the execution node, so a staging step unpacks the approved image, at its digest, onto every GPU node or shared storage before the job is submitted. Nothing checks it again when the job starts unless a check is added."
             url: https://slurm.schedmd.com/containers.html
-            change: "Slurm option only: insert a 'bundle staging' step on pkgRegistry->trainJob (mirror, then unpack onto the nodes or shared storage, then the job)."
         alsoNeeded:
           - service: "SlurmDBD with MySQL or MariaDB"
             role: logging
@@ -4465,7 +4468,7 @@ implementations:
       - { block: peerVendor, service: "Vendor platform agent (A2A), outside", note: "Stays outside. Registered on the gateway; reached through your egress control; trusts your identity provider for the users you approved." }
       - block: provider
         service: "Open-weight models you host, or a hosted model API"
-        note: "Either open-weight models served on GPU servers you run, or a hosted model API under your agreement with its provider. The pattern reaches it through the gateway either way."
+        note: "Either open-weight models served on GPU servers you run (the self-hosted inference pattern), where prompts and completions stay in the data centre, or a hosted model API under your agreement with its provider, reached through your egress control. The gateway reaches it either way; the box is drawn outside, as a hosted API is."
         options:
           - { name: "vLLM", kind: open, url: "https://docs.vllm.ai/en/latest/", note: "Open-source inference server with an OpenAI-compatible API.", packs: [upstreamOpenSource], watch: [{ text: "Called by LiteLLM as a hosted_vllm provider; KServe is the common alternative.", url: "https://docs.litellm.ai/docs/providers/vllm" }, { text: "Your own open-weights models in the same data centre, called by LiteLLM as hosted_vllm/. KServe is the alternative.", url: "https://docs.vllm.ai/en/latest/" }] }
           - { name: "KServe", kind: open, url: "https://kserve.github.io/website/", note: "Kubernetes model serving through InferenceService resources, with vLLM and llm-d backends." }
@@ -4515,10 +4518,6 @@ implementations:
       orgData: https://developer.hashicorp.com/vault/docs/secrets/databases
       peerVendor: https://a2a-protocol.org/latest/specification/
       partner: https://a2a-protocol.org/latest/specification/
-    differences:
-      - at: gateway->provider
-        text: "Where the organisation serves its own models (the self-hosted inference pattern), the model provider sits inside the data centre and prompts and completions do not leave it. Where it calls an external model API instead, the provider stays outside and the call leaves through the organisation's egress control."
-        change: "Conditional on the organisation's choice, not on the platform: when models are self-hosted, move the provider box from the external zone into the Enterprise data centre boundary and link it to archSelfHostedInference, so gateway->provider no longer crosses the boundary; when an external model API is used, leave the drawing as it is."
     alsoNeeded:
       - service: "The container platform's control plane on your own servers"
         role: other
@@ -4646,18 +4645,19 @@ implementations:
           - https://gateway.envoyproxy.io/docs/tasks/security/oidc/
         summary: "The A2A agent is a Knative Service on your cluster, behind your front door wired in through Knative's networking layer (the Gateway API plugin is beta). Serving scales its pods with requests and to zero when no user or peer is calling. Task state already lives in external stores, which matters more here: an idle instance can be reclaimed, so a task that runs for days moves on only when a request arrives. You install and upgrade Knative, and you still operate everything."
         bindings:
-          - { block: harness, service: "Your A2A agent as a Knative Service (Knative Serving)", build: true, note: "A2A server and client over HTTP. Pods scale with requests and to zero when idle, so task state must be written to an external store before each response is sent.", url: https://knative.dev/docs/serving/, watch: [{ text: "An instance may be killed when no request is active and should use CPU only during requests, so an A2A task that stays open for days moves on only when a user, peer or timer calls, and each step writes its state to an external store before it responds.", url: "https://github.com/knative/specs/blob/main/specs/serving/runtime-contract.md" }, { text: "A call to a peer through the gateway runs inside the inbound request that caused it, and that request ends at timeoutSeconds (default 300, at most 600 unless raised); a peer task that outlasts it is picked up by a later request, with its task id kept in the store.", url: "https://knative.dev/docs/serving/configuration/config-defaults/" }] }
+          - { block: harness, service: "Your A2A agent as a Knative Service (Knative Serving)", build: true, note: "A2A server and client over HTTP. Pods scale with requests and to zero when idle, so task state must be written to an external store before each response is sent.", url: https://knative.dev/docs/serving/, watch: [{ text: "An instance may be killed when no request is active and should use CPU only during requests, so an A2A task that stays open for days moves on only when a user, peer or timer calls, and each step writes its state to an external store before it responds.", url: "https://github.com/knative/specs/blob/main/specs/serving/runtime-contract.md" }, { text: "A call to a peer through the gateway runs inside the inbound request that caused it, and that request ends at timeoutSeconds (default 300, at most 600 unless raised); a peer task that outlasts it is picked up by a later request, with its task id kept in the store.", url: "https://knative.dev/docs/serving/configuration/config-defaults/" }, { text: "Knative also serves the agent on a cluster-local address through the shared local gateway, which has no front-door sign-in, so any pod that can reach it can call the agent without passing the front end. Limit which workloads reach it.", url: "https://knative.dev/docs/serving/config-network-adapters/" }] }
           - { block: entry, service: "Front door with single sign-on, wired in through Knative's networking layer", note: "Knative generates the routes on the Gateway named in config-gateway, so the sign-in policy targets that Gateway (with Envoy Gateway, its OIDC SecurityPolicy). The Gateway API plugin is beta; Knative tests it against the Istio, Contour and Envoy Gateway implementations.", url: https://knative.dev/docs/serving/config-network-adapters/ }
         addSettings: [knativeScaleBounds, knativeRequestLimits, knativeGatewayApiIngress, k8sRbacLeastPrivilege, harborProxyCache, knativeActivatorIngress, knativeLocalGatewayAccess]
-        differences:
-          - at: entry->harness
-            text: "On Knative Serving, a request reaches the agent through the queue-proxy sidecar and, at low or zero traffic, the activator, a component shared by every Knative Service in the knative-serving namespace. Network rules must admit that hop, and the first request after idle waits for a pod to start."
+        shape:
+          - insert:
+              id: knativeActivator
+              title: "Knative activator"
+              summary: "Shared hop at low traffic, then the queue-proxy beside the agent"
+              on: entry->harness
+              col: 2   # above the agent, in its column, so the drawing stays as wide as the pattern's
+              row: 0
+            why: "On Knative Serving, a request reaches the agent through the queue-proxy beside it and, at low or zero traffic, through the activator, a component every Knative Service shares in the knative-serving namespace. A network rule that admits only the front end must also admit that hop, and the first request after idle waits for a pod to start."
             url: https://knative.dev/docs/serving/request-flow/
-            change: "Knative option only: insert a 'Knative activator (shared) and queue-proxy' hop on entry->harness, drawn inside the cluster."
-          - at: harness
-            text: "Knative also serves the agent on a cluster-local address through the shared local gateway, which has no front-door sign-in, so it is a second way into the agent from inside the cluster. Limit which workloads reach it."
-            url: https://knative.dev/docs/serving/config-network-adapters/
-            change: "Knative option only: draw the 'Knative local gateway' as a second entrance into the harness from inside the cluster, beside entry->harness, that does not pass the front end."
         alsoNeeded:
           - service: "Knative Serving (controller, autoscaler, activator)"
             role: other
@@ -4985,11 +4985,16 @@ implementations:
         bindings:
           - { block: harness, service: "Your agent loop as a Knative Service (Knative Serving)", build: true, note: "Calls the gateway and drives each build's sandbox claim through the sandbox client; containerConcurrency 1, cluster-local, its own serviceAccountName.", url: https://knative.dev/docs/serving/, watch: [{ text: "A build is one request and ends at timeoutSeconds (default 300, at most 600 unless max-revision-timeout-seconds is raised together with the activator's terminationGracePeriodSeconds); a longer build is split into steps the intake drives, or uses the Kubernetes option.", url: "https://knative.dev/docs/serving/configuration/config-defaults/" }, { text: "Pods scale with traffic, not per build: with containerConcurrency 1 a pod takes one request at a time and then the next, and an idle container may be killed or have its CPU withheld, so nothing may live only in the pod between builds.", url: "https://raw.githubusercontent.com/knative/specs/main/specs/serving/runtime-contract.md" }] }
         addSettings: [knativeRequestLimits, knativeScaleBounds, knativeClusterLocalVisibility, knativeActivatorIngress]
-        differences:
-          - at: intake->harness
-            text: "On Knative Serving, a build request reaches the agent through the queue-proxy sidecar and, at low or zero traffic, the activator, a component shared by every Knative Service in the knative-serving namespace. Network rules must admit that hop, and the first request after idle waits for a pod to start."
+        shape:
+          - insert:
+              id: knativeActivator
+              title: "Knative activator"
+              summary: "Shared hop at low traffic, then the queue-proxy beside the agent"
+              on: intake->harness
+              col: 3   # beside the agent, in a column the pattern already has
+              row: 0
+            why: "On Knative Serving, a build request reaches the agent through the queue-proxy beside it and, at low or zero traffic, through the activator, a component every Knative Service shares in the knative-serving namespace. A network rule that admits only the intake must also admit that hop, and the first request after idle waits for a pod to start."
             url: https://knative.dev/docs/serving/request-flow/
-            change: "Knative option only: insert a 'Knative activator (shared) and queue-proxy' hop on intake->harness, drawn inside the cluster."
         alsoNeeded:
           - service: "Knative Serving (controller, autoscaler, activator)"
             role: other

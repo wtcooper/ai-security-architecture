@@ -8,8 +8,8 @@
  *   npm run drawing:audit -- <slug>    one pattern, with every finding spelled out
  *
  * Where a platform draws a pattern with another shape (an inserted hop, a box outside your
- * network, an arrow that is not there), its copy is listed under the pattern and held to the same
- * layout rules: a finding there is a finding like any other.
+ * network, an arrow that is not there, an arrow only it has), its copy is listed under the pattern
+ * and held to the same layout rules: a finding there is a finding like any other.
  */
 import { boundaryLayout, labelRect, ownedControls, summaryOf, wrap, type Rect, type ViewLine, type ViewSpec } from "../src/components/drawing/layout";
 import { crossingsOf } from "../src/components/drawing/crossings";

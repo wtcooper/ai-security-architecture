@@ -634,7 +634,8 @@ export interface Archetype {
  * A hosted pattern has one drawing, shared by every platform it is mapped onto: choosing a
  * platform changes the words in the boxes, not the shape. Where a platform's own documentation
  * shows a different shape (an extra hop, a component that runs outside your network, an arrow
- * that does not exist there, a flow that starts from another box), its mapping records the change
+ * that does not exist there, a flow that starts from another box, a flow the pattern does not
+ * draw), its mapping records the change
  * and the platform's drawing is the pattern with the changes applied to a copy, before layout. A
  * hosting option's changes apply on top of its mapping's. Everything else a platform does
  * differently stays prose (`differences`).
@@ -678,6 +679,21 @@ export interface ShapeMove {
   call?: string;
 }
 
+/**
+ * An arrow the pattern does not draw: a flow that exists on this platform alone. Both ends are
+ * boxes of the pattern or boxes an earlier change in the same list inserts.
+ */
+export interface ShapeAdd {
+  from: string;
+  to: string;
+  label: string;
+  /**
+   * For an arrow whose ends stand in different trust zones, and only there: what it passes
+   * through on our side, as a pattern's own crossing says. Its kind is derived from the ends.
+   */
+  crossing?: { via: string };
+}
+
 interface ShapeChangeBase {
   /** One or two plain sentences: why it is drawn so here. Shown under How it works and in the drawing's hover help. */
   why: string;
@@ -701,9 +717,10 @@ export type ShapeChange = ShapeChangeBase &
     /** A flow that starts (or ends) at another box: the arrow `from` is drawn as `to`, which shares one end with it. */
     | { reroute: { from: string; to: string } }
     | { rename: { at: string; label: string } }
+    | { add: ShapeAdd }
   );
 
-export const SHAPE_KINDS = ["insert", "move", "drop", "reroute", "rename"] as const;
+export const SHAPE_KINDS = ["insert", "move", "drop", "reroute", "rename", "add"] as const;
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
 
 /** What a copy of a pattern drawn for one platform carries about how it was changed. */
@@ -714,7 +731,7 @@ export interface DrawnShape {
   on: string;
   /** Block id -> why it is drawn so here: a box inserted, or moved to another zone. */
   boxes: Record<string, string>;
-  /** Arrow key -> why: an arrow an insert, a reroute, a move or a rename drew. */
+  /** Arrow key -> why: an arrow an insert, a reroute, a move, a rename or an add drew. */
   arrows: Record<string, string>;
   /** Each of the pattern's own arrows -> the arrows it is drawn as here, in order; empty where it is not drawn. */
   follows: Record<string, string[]>;
@@ -1065,9 +1082,10 @@ export const CLOUD_ROLES = ["identity", "network", "keys", "secrets", "registry"
 export type CloudRole = (typeof CLOUD_ROLES)[number];
 
 /**
- * A place where a cloud does not follow the pattern's drawing: a flow the vendor routes another
- * way, one that does not exist there, or one that holds only if the builder makes it so. The
- * drawing is shared by every cloud, so a difference is stated, never hidden.
+ * A place where a cloud does not follow the pattern's drawing in a way the drawing cannot show: a
+ * flow that holds only if the builder makes it so, or behaves otherwise there. A difference the
+ * drawing can show (an extra hop, a box elsewhere, an arrow that is not there, or one only that
+ * platform has) is drawn instead, with `shape`. A difference is stated, never hidden.
  */
 export interface CloudDifference {
   /** A flow as "from->to", or a block id. */
@@ -1075,11 +1093,6 @@ export interface CloudDifference {
   /** What happens on this cloud instead, and what the builder does about it, in plain words. */
   text: string;
   url?: string;
-  /**
-   * How the platform's drawing differs from the base drawing here, in plain words: a box inserted
-   * on an arrow, a box moved across a boundary, an arrow dropped or renamed. A later step draws it.
-   */
-  change?: string;
 }
 
 /** A service a builder must also stand up on this cloud that is not a box on the drawing. */
