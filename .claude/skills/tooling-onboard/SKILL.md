@@ -29,6 +29,9 @@ architectures with their surface).
 
 ## Why the rules are strict
 
+- **Neutral.** Present a product as one option among those an organisation chooses from, never as
+  the implementation; settings that belong to one product say so. See `docs/NEUTRALITY.md`.
+
 - **Dated and sourced.** Product configuration ages in weeks. Every entity carries `asOf`, every
   control row `verified`, and every step a URL you fetched today. `npm run audit` flags entries
   older than six months. A fact recalled from memory is a fact that will be wrong soon; fetch

@@ -17,7 +17,9 @@ same day, each row from the project's own documentation, and is listed at the en
   drawing shows unless the builder makes a deliberate choice: the model call goes direct by
   default, web search is a feature of the model platform that bypasses the gateway, the code
   sandbox is a separate service with no outbound network. Each mapping now lists these as
-  `differences`; the drawing marks each with ≠ and How it works lists them.
+  `differences`. (2026-11-24: these are no longer marked on the drawing. Each was moved to where
+  a reader acts on it: a setting, a product's `watch` note, an option, or a `shape:` change that
+  draws the platform's real shape. See docs/NEUTRALITY.md.)
 - **A builder needs more than the boxes.** Identity, network and egress, keys, secrets,
   registries, logging and ingress are listed per mapping as `alsoNeeded`.
 - **Settings drift.** Rows verified three weeks earlier had already moved: products renamed,

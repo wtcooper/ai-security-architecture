@@ -439,15 +439,19 @@ choose. The build checks that pack ids are unique, every pack fills a box, a com
 one product per pack, and every row's product is one of the options. Record what you run in
 `data/org/products.yaml`.
 
-**One drawing, and each platform says where it differs.** The drawing is the same on every
-platform, because the trust boundaries and the controls do not change with the vendor. What
-does change is stated, not hidden: each mapping lists the places where that platform does not
-follow the drawing (a model call that goes direct by default, a search feature that bypasses
-the gateway, a sandbox with no outbound network). They are written out under How it works, in
-a section for the chosen platform headed **How it differs on …**, with the supporting services
-you also need (identity, network, keys, registries, logging) that are not boxes on the drawing,
-and the vendor's own quickstart to start building from; the drawing itself carries no mark for
-them. Every named component links to the vendor page it was checked against, with the date.
+**One pattern, drawn as each platform really runs it.** The trust boundaries and the controls do
+not change with the vendor, so every platform starts from the pattern's drawing. Where a platform
+really has a different shape, its mapping says so as data (`shape:`, on the mapping or on one
+hosting option) and the drawing shows it when that platform is chosen: a box inserted on an arrow
+(Knative's activator in front of the agent), a box moved across a boundary (a managed code sandbox
+in the provider's account), an arrow added, dropped, rerouted or renamed. Each change carries the
+reason and the vendor page, listed under How it works in **How it differs on …**, and the drawing
+audit checks every changed drawing against the same layout rules. Everything else a platform note
+used to say lives where a reader acts on it: a default that leaves a gap is a setting on Enable
+with the gap in its default; a limit, edition or preview status is a `watch` note on that product;
+a design choice is an option, not a rule. No mark on the drawing stands for "careful here". How it
+works also lists the supporting services you need (identity, network, keys, registries, logging)
+that are not boxes, and the vendor's own quickstart. Every named component links to the vendor page it was checked against, with the date.
 [`docs/CLOUD-VERIFICATION.md`](docs/CLOUD-VERIFICATION.md) records what was checked, what was
 corrected and what is still open.
 

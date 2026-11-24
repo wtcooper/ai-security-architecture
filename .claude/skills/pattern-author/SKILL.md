@@ -113,10 +113,15 @@ A pattern is not complete with its drawing alone. In the same change:
    in `data/clouds/aws.yaml`, `azure.yaml`, `gcp.yaml` and `onprem.yaml` (the organisation's own
    data centre): which service or software plays each box, and a setting that delivers every
    pinned control. Read the vendor's current page for every service and setting you name, and
-   record what you read: `verified` (the day), `sources` (block id to the page), `differences`
-   (each flow or box where that platform does not follow the drawing, in plain words, with the
-   page that shows it: does the model call really pass the gateway, is search a feature of the
-   model platform, does the sandbox have a network at all), `alsoNeeded` (identity, network,
+   record what you read: `verified` (the day), `sources` (block id to the page). Where the
+   platform does not follow the drawing, put what you found where a reader acts on it, never as a
+   bare note: a real difference in shape (an extra hop, a service outside your network, a flow
+   that starts elsewhere) as `shape:` changes the drawing applies; a default that leaves a gap as
+   a settings row whose default states it; a limit, edition or preview as a `watch` note on that
+   product; a design choice as `options` on the box (and `packs` where products are documented
+   to work together). Follow `docs/NEUTRALITY.md`: name roles and offer options where the
+   organisation chooses, state controls as outcomes, keep every flow that happens in any design.
+   Then `alsoNeeded` (identity, network,
    keys, secrets, registry, logging and ingress services that are not boxes) and `quickstart`
    (the vendor's own starting point). Do not write commands that create or change anything; a
    setting may carry a read-only `check` taken from the vendor's command reference. If the
@@ -159,9 +164,9 @@ together; no label is ambiguous about which arrow it belongs to; every tab works
 a chip for every control, Risks a tag for every risk, Flows numbers each walk); the pattern
 appears on the home page finder and is found by its own title and by the words a reader would
 use. If the pattern has platform mappings, set **Built on** to each cloud and to On-premises
-and confirm: no service name is cut on the drawing, every ≠ mark sits on the flow or box it is
-about, How it works lists the differences and the supporting services, and every control row
-names an option for that platform.
+and confirm: no service name is cut on the drawing, every `shape:` change draws cleanly and How
+it works lists it with its reason, choosing a pack on Enable puts its products in the boxes and
+narrows the settings, and every control row names an option for that platform.
 
 ## 6. Finish the paperwork
 
