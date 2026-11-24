@@ -1075,6 +1075,11 @@ export interface CloudDifference {
   /** What happens on this cloud instead, and what the builder does about it, in plain words. */
   text: string;
   url?: string;
+  /**
+   * How the platform's drawing differs from the base drawing here, in plain words: a box inserted
+   * on an arrow, a box moved across a boundary, an arrow dropped or renamed. A later step draws it.
+   */
+  change?: string;
 }
 
 /** A service a builder must also stand up on this cloud that is not a box on the drawing. */
