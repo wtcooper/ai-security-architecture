@@ -317,10 +317,30 @@ around it (gateway, network, identity, keys, policy, logs, stores) in the platfo
       - { block: tools, service: "Your tool servers", build: true }     # nothing managed fills it
     sources:                        # block id -> the vendor page that service was checked on
       gateway: https://…
-    differences:                    # where this platform does not follow the drawing
-      - at: harness->gateway        # a flow or a block of the pattern; the drawing marks it ≠
+    differences:                    # where this platform does not follow the drawing, in prose
+      - at: harness->gateway        # a flow or a block of the pattern; listed under How it works
         text: "Plain words: what happens here instead, and what the builder does about it."
         url: https://…              # the page that shows it
+    shape:                          # optional: where the platform's drawing has another shape (src/lib/shape.ts)
+      - insert: { id: frontEnd, title: "Front-end code", summary: "…", on: entry->harness }
+        # a box on an arrow, which becomes entry->frontEnd->harness. zone defaults to the zone of
+        # `from`; labels: [first leg, second leg] (the first keeps the arrow's label unless given);
+        # parent, col and row where the derived place is not the right one
+        why: "One or two plain sentences, shown under How it works and on hover."
+        url: https://…
+      - move: { block: gateway, zone: zoneExternal }    # drawn in another zone; call: "label" adds
+        why: "…"                                         # the arrow from the box that held it
+        url: https://…
+      - drop: idp->authServer       # an arrow that does not exist here
+        pins: authServer            # required when the arrow carries pins: where they are drawn instead
+        why: "…"
+        url: https://…
+      - reroute: { from: gateway->openWeb, to: provider->openWeb }   # its pins and walk steps go with it
+        why: "…"
+        url: https://…
+      - rename: { at: managedRuntime->aiGateway, label: "tool, model and API calls" }
+        why: "…"
+        url: https://…
     alsoNeeded:                     # services that are not boxes on the drawing
       - { service: "…", role: network, why: "…", url: https://… }
         # role: identity | network | ingress | keys | secrets | registry | logging | other
@@ -342,6 +362,7 @@ around it (gateway, network, identity, keys, policy, logs, stores) in the platfo
         dropSettings: [idsThatNoLongerApply]
         addSettings: [idsFromTheLibrary]   # every pinned control must still be delivered
         differences: [ { at: harness->gateway, text: "…", url: https://… } ]
+        shape: [ { insert: { … }, why: "…", url: https://… } ]   # applied after the mapping's
         alsoNeeded: [ { service: "…", role: network, why: "…" } ]
       - id: managedService
         kind: managed               # the vendor runs it for you: not a variant, so no bindings or settings
@@ -358,7 +379,12 @@ around it (gateway, network, identity, keys, policy, logs, stores) in the platfo
 - Test each flow against the vendor's documentation before you accept the drawing for that
   platform: is the gateway really in the path, or does the default call direct; is search a
   feature of the model platform; does the sandbox have a network. What does not hold is a
-  `differences` entry, not a quiet omission.
+  `differences` entry, not a quiet omission. Where the vendor's own pages show a different shape
+  (an extra hop, a component outside your network, an arrow that is not there, a flow that starts
+  at another box), draw it with `shape` instead, and drop the prose difference it replaces. The
+  build applies the changes and refuses one that names what is not there; `npm run
+  drawing:audit` lists the platform's drawing under the pattern and holds it to the same layout
+  rules.
 - A setting row that is really a framework's or a server's own (a tool-approval hook in an agent
   SDK, a flag of the inference server) carries `builtWith: <its name>`, so the page says it
   applies if the box is built with that.

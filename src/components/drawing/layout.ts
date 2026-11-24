@@ -123,6 +123,7 @@ const MARGIN = 26;
 /** Clear space above the boundaries, for arrows that go over the top. */
 const TOP = 62;
 const EXT_BOX_GAP = 40;
+const EXT_LABEL_GAP = 112;
 const GOV_GAP = 34;
 const CHIP_PITCH = 19;
 
@@ -338,11 +339,17 @@ class Heap {
 
 const cache = new Map<string, ViewSpec>();
 
+/**
+ * The drawing of a pattern, or of its copy as drawn for one platform (lib/shape.ts): a platform's
+ * changes are applied to the pattern before it reaches here, so both are laid out by the same
+ * rules and each is cached under its own key.
+ */
 export function boundaryLayout(archetype: Archetype): ViewSpec {
-  const hit = cache.get(archetype.id);
+  const key = archetype.drawn?.key ?? archetype.id;
+  const hit = cache.get(key);
   if (hit) return hit;
   const spec = compute(archetype);
-  cache.set(archetype.id, spec);
+  cache.set(key, spec);
   return spec;
 }
 
@@ -537,18 +544,25 @@ function compute(a: Archetype): ViewSpec {
       // the outside, where it can run up beside the boundary; the nearer one goes straight in.
       .sort((p, q) => p.want - q.want || p.depth - q.depth || rowOf(p.b) - rowOf(q.b) || colOf(p.b) - colOf(q.b));
     const bandX = trustLeft;
+    // Two parties joined by a labelled arrow stand far enough apart for its words between them.
+    // No pattern draws one; a platform's drawing can (a search the model provider runs).
+    const gapAfter = (i: number) => {
+      const p = wanted[i]?.b.id;
+      const q = wanted[i + 1]?.b.id;
+      return a.edges.some((e) => e.label && ((e.from === p && e.to === q) || (e.from === q && e.to === p))) ? EXT_LABEL_GAP : EXT_BOX_GAP;
+    };
     const xs: number[] = [];
     let cursor = bandX + PAD_X;
-    for (const p of wanted) {
+    wanted.forEach((p, i) => {
       const x = Math.max(cursor, Number.isFinite(p.want) ? p.want - p.s.w / 2 : cursor);
       xs.push(x);
-      cursor = x + p.s.w + EXT_BOX_GAP;
-    }
+      cursor = x + p.s.w + gapAfter(i);
+    });
     // Pull back anything pushed past the trust row's right edge, as far as its neighbours allow.
-    let limit = Math.max(trustRight, bandX + PAD_X + wanted.reduce((s, p) => s + p.s.w + EXT_BOX_GAP, 0)) - PAD_X;
+    let limit = Math.max(trustRight, bandX + PAD_X + wanted.reduce((s, p, i) => s + p.s.w + gapAfter(i), 0)) - PAD_X;
     for (let i = wanted.length - 1; i >= 0; i--) {
       xs[i] = Math.min(xs[i], limit - wanted[i].s.w);
-      limit = xs[i] - EXT_BOX_GAP;
+      limit = xs[i] - gapAfter(i - 1);
     }
     const bandY = trustBottom + template.externalGap;
     const boxH = Math.max(...wanted.map((p) => p.s.h));

@@ -6,9 +6,14 @@
  *
  *   npm run drawing:audit              every pattern
  *   npm run drawing:audit -- <slug>    one pattern, with every finding spelled out
+ *
+ * Where a platform draws a pattern with another shape (an inserted hop, a box outside your
+ * network, an arrow that is not there), its copy is listed under the pattern and held to the same
+ * layout rules: a finding there is a finding like any other.
  */
 import { boundaryLayout, labelRect, ownedControls, summaryOf, wrap, type Rect, type ViewLine, type ViewSpec } from "../src/components/drawing/layout";
 import { crossingsOf } from "../src/components/drawing/crossings";
+import { drawnVariants } from "../src/components/cloud/model";
 import { dataset } from "../src/lib/data";
 import type { Archetype } from "../src/lib/types";
 
@@ -37,7 +42,12 @@ const through = (p: [number, number], q: [number, number], r: Rect, m = 3) => {
   const x1 = Math.min(p[0], q[0]), x2 = Math.max(p[0], q[0]), y1 = Math.min(p[1], q[1]), y2 = Math.max(p[1], q[1]);
   return x1 < r.x + r.w - m && x2 > r.x + m && y1 < r.y + r.h - m && y2 > r.y + m;
 };
-export function audit(a: Archetype): { spec: ViewSpec; findings: Finding[]; open: Finding[]; stats: Record<string, number> } {
+/**
+ * One drawing measured against the standard. `content: false` checks the layout rules alone (L1 to
+ * L7): a platform's copy of a pattern (lib/shape.ts) is laid out by the same rules, while its
+ * authored content is the pattern's own and is measured there.
+ */
+export function audit(a: Archetype, { content = true }: { content?: boolean } = {}): { spec: ViewSpec; findings: Finding[]; open: Finding[]; stats: Record<string, number> } {
   const spec = boundaryLayout(a);
   const findings: Finding[] = [];
   const add = (rule: string, detail: string) => findings.push({ rule, detail });
@@ -149,33 +159,35 @@ export function audit(a: Archetype): { spec: ViewSpec; findings: Finding[]; open
     }
   }
 
-  // C1 every box has an authored one-liner that fits
-  for (const b of a.blocks) {
-    if (!b.summary) add("C1 one-liner", `${b.title} (${b.id}) has no authored summary`);
-    else if (b.summary.length > STANDARD.summaryMax) add("C1 one-liner", `${b.title}: ${b.summary.length} characters (limit ${STANDARD.summaryMax})`);
-  }
-  // C2 every boundary we or a vendor run says what it is on this pattern
-  for (const z of a.zones ?? []) if (["endpoint", "cloud", "vendor"].includes(z.owner) && a.blocks.some((b) => b.zone === z.id) && !z.gloss) add("C2 gloss", `${z.title ?? z.id} has no gloss`);
-  for (const b of spec.boundaries) if ((b.stretched ?? 0) > STANDARD.glossStretch && b.gloss) add("C2 gloss", `"${b.gloss}" is too long for ${b.title}: it widens the boundary by ${Math.round(b.stretched!)}px`);
-  // C3 every boundary crossing is authored
-  for (const c of crossingsOf(a)) if (!c.authored) add("C3 crossing", `${c.key} is derived, not authored`);
-
-  // Open questions: gaps in the pattern itself that only its author can settle. Reported, not failed.
   const open: Finding[] = [];
-  const ask = (rule: string, detail: string) => open.push({ rule, detail });
-  // A long product name a pack puts in a box: worth a look, not a fault of the pattern.
-  for (const s of shortened) ask("C10 pack product shortened", s);
-  const owner = new Map((a.zones ?? []).map((z) => [z.id, z.owner]));
-  const plane = a.blocks.filter((b) => owner.get(b.zone ?? "") === "governance");
-  for (const b of plane) if (!ownedControls(a, b).length) ask("C5 empty control-plane box", `${b.title} owns no control this pattern pins`);
-  for (const b of a.blocks) if (!b.note?.trim()) ask("C6 note", `block ${b.title} (${b.id}) has no note`);
-  for (const e of a.edges) if (!e.note?.trim()) ask("C6 note", `flow ${e.from}->${e.to} has no note`);
-  for (const w of [a.walkthrough, ...(a.scenarios ?? [])]) for (const [i, st] of (w?.steps ?? []).entries()) if (!st.note?.trim()) ask("C6 note", `walk "${w!.title}" step ${i + 1} (${st.follow}) has no note`);
-  if ((a.scenarios ?? []).length < 2) ask("C7 walks", `${(a.scenarios ?? []).length} scenario walks (the standard asks for two)`);
-  const products = dataset.tools.filter((t) => t.architecture === a.id);
-  if (!products.length) ask("C9 tools", "no product is catalogued for this pattern");
-  for (const t of products) if (!(t.settings ?? []).length) ask("C9 tools", `${t.name} has no settings catalogued`);
-  if (a.surface === "surfaceCloud" && !dataset.clouds.some((c) => c.implementations.some((i) => i.architecture === a.id))) ask("C9 tools", "not mapped onto any cloud");
+  if (content) {
+    // C1 every box has an authored one-liner that fits
+    for (const b of a.blocks) {
+      if (!b.summary) add("C1 one-liner", `${b.title} (${b.id}) has no authored summary`);
+      else if (b.summary.length > STANDARD.summaryMax) add("C1 one-liner", `${b.title}: ${b.summary.length} characters (limit ${STANDARD.summaryMax})`);
+    }
+    // C2 every boundary we or a vendor run says what it is on this pattern
+    for (const z of a.zones ?? []) if (["endpoint", "cloud", "vendor"].includes(z.owner) && a.blocks.some((b) => b.zone === z.id) && !z.gloss) add("C2 gloss", `${z.title ?? z.id} has no gloss`);
+    for (const b of spec.boundaries) if ((b.stretched ?? 0) > STANDARD.glossStretch && b.gloss) add("C2 gloss", `"${b.gloss}" is too long for ${b.title}: it widens the boundary by ${Math.round(b.stretched!)}px`);
+    // C3 every boundary crossing is authored
+    for (const c of crossingsOf(a)) if (!c.authored) add("C3 crossing", `${c.key} is derived, not authored`);
+
+    // Open questions: gaps in the pattern itself that only its author can settle. Reported, not failed.
+    const ask = (rule: string, detail: string) => open.push({ rule, detail });
+    // A long product name a pack puts in a box: worth a look, not a fault of the pattern.
+    for (const s of shortened) ask("C10 pack product shortened", s);
+    const owner = new Map((a.zones ?? []).map((z) => [z.id, z.owner]));
+    const plane = a.blocks.filter((b) => owner.get(b.zone ?? "") === "governance");
+    for (const b of plane) if (!ownedControls(a, b).length) ask("C5 empty control-plane box", `${b.title} owns no control this pattern pins`);
+    for (const b of a.blocks) if (!b.note?.trim()) ask("C6 note", `block ${b.title} (${b.id}) has no note`);
+    for (const e of a.edges) if (!e.note?.trim()) ask("C6 note", `flow ${e.from}->${e.to} has no note`);
+    for (const w of [a.walkthrough, ...(a.scenarios ?? [])]) for (const [i, st] of (w?.steps ?? []).entries()) if (!st.note?.trim()) ask("C6 note", `walk "${w!.title}" step ${i + 1} (${st.follow}) has no note`);
+    if ((a.scenarios ?? []).length < 2) ask("C7 walks", `${(a.scenarios ?? []).length} scenario walks (the standard asks for two)`);
+    const products = dataset.tools.filter((t) => t.architecture === a.id);
+    if (!products.length) ask("C9 tools", "no product is catalogued for this pattern");
+    for (const t of products) if (!(t.settings ?? []).length) ask("C9 tools", `${t.name} has no settings catalogued`);
+    if (a.surface === "surfaceCloud" && !dataset.clouds.some((c) => c.implementations.some((i) => i.architecture === a.id))) ask("C9 tools", "not mapped onto any cloud");
+  }
 
   let cross = 0;
   const all = spec.lines.flatMap((l) => segs(l).map((s) => ({ ...s, key: l.key })));
@@ -209,6 +221,16 @@ if (process.argv[1]?.endsWith("drawing-audit.ts")) {
     );
     if (only) for (const f of findings) console.log(`   ${f.rule.padEnd(22)} ${f.detail}`);
     if (only) for (const f of open) console.log(`   open: ${f.rule.padEnd(28)} ${f.detail}`);
+    for (const v of drawnVariants(a)) {
+      const shaped = audit(v.archetype, { content: false });
+      total += shaped.findings.length;
+      const n = (r: string) => shaped.findings.filter((f) => f.rule.startsWith(r)).length;
+      const s = shaped.stats;
+      console.log(
+        `${`  └ ${v.short}`.padEnd(36)} ${`${s.width}×${s.height}`.padEnd(10)} ${String(s.boxes).padStart(3)} ${String(s.arrows).padStart(3)} ${String(s.crossings).padStart(2)}  ${rules.map((r) => (r.startsWith("C") ? "–" : String(n(r) || "·")).padStart(2)).join("  ")}`,
+      );
+      if (only) for (const f of shaped.findings) console.log(`     ${f.rule.padEnd(20)} ${f.detail}`);
+    }
   }
   console.log(`\n${total} findings, ${asked} open questions`);
 }

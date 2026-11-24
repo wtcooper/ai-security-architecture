@@ -72,10 +72,12 @@ export function PatternDrawing({
   const rootRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; view: View } | null>(null);
 
-  // A different pattern starts fitted. Adjusted during render, as the page's other resets are.
-  const [shown, setShown] = useState(archetype.id);
-  if (shown !== archetype.id) {
-    setShown(archetype.id);
+  // A different pattern, or the same one drawn for another platform, starts fitted. Adjusted
+  // during render, as the page's other resets are.
+  const drawingKey = archetype.drawn?.key ?? archetype.id;
+  const [shown, setShown] = useState(drawingKey);
+  if (shown !== drawingKey) {
+    setShown(drawingKey);
     setView(FIT);
     setActive(false);
   }
@@ -341,6 +343,7 @@ export function DrawingLegend({
   cloud,
   own = false,
   roles = false,
+  placedFor,
 }: {
   className?: string;
   /** True where the coded risk tags are showing instead of the controls. */
@@ -351,6 +354,8 @@ export function DrawingLegend({
   own?: boolean;
   /** True when the boxes name their role, with the products that can play it in the hover help. */
   roles?: boolean;
+  /** Where the drawing has boxes the chosen platform adds or draws elsewhere: that platform, as the legend names it. */
+  placedFor?: string;
 }) {
   const swatch = (tone: keyof typeof BOUNDARY_TONE) => {
     const t = BOUNDARY_TONE[tone];
@@ -417,6 +422,12 @@ export function DrawingLegend({
               ? "The software that plays the box in your data centre"
               : `The ${cloud} service that plays the box`}{" "}
           · <span className="text-[9.5px] font-bold tracking-[0.06em] text-ink-3">YOU BUILD THIS</span> where none does
+        </span>
+      )}
+      {placedFor && (
+        <span className="flex items-center gap-1.5" data-legend-placed>
+          <span aria-hidden className="inline-block h-3 w-5 rounded-[3px] bg-paper" style={{ border: "1.2px dashed var(--ink-3)" }} />
+          Placed for {placedFor}; hover it for why
         </span>
       )}
       <span className="text-ink-3">Hover anything for detail</span>

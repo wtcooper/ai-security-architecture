@@ -2484,10 +2484,16 @@ implementations:
           - { block: agent, service: "Your agent as a Knative Service (Knative Serving)", build: true, note: "Any framework that serves HTTP. Pods scale with the turns in flight and to zero when idle. The Temporal Worker for approval waits is a separate Deployment, because Workers poll and serve no requests.", url: https://knative.dev/docs/serving/ }
           - { block: entry, service: "Envoy Gateway via Knative net-gateway-api, Keycloak OIDC", note: "Knative generates the routes on the Gateway named in config-gateway, so the OIDC SecurityPolicy targets that Gateway. Gateway API support is beta; Knative tests it against Envoy Gateway.", url: https://knative.dev/docs/serving/config-network-adapters/ }
         addSettings: [k8sRbacLeastPrivilege, harborProxyCache, knativeScaleBounds, knativeRequestLimits, knativeTrafficSplit, knativeGatewayApiIngress]
-        differences:
-          - at: entry->agent
-            text: "A turn does not go straight from Envoy Gateway to the agent. At low or zero traffic Knative routes it through the activator, a shared component in the knative-serving namespace, and always through the queue-proxy beside the agent. Default-deny policy must admit that namespace, and the first turn after idle waits for a pod to start."
+        # Drawn, not described: a turn passes Knative's own hop between the front door and the agent.
+        shape:
+          - insert:
+              id: knativeActivator
+              title: "Knative activator"
+              summary: "Shared hop at low traffic, then the queue-proxy beside the agent"
+              on: entry->agent
+            why: "At low or zero traffic Knative routes each turn through the activator, a component every Knative Service shares in the knative-serving namespace, and always through the queue-proxy beside the agent. Default-deny policy must admit that namespace, and the first turn after idle waits for a pod to start."
             url: https://knative.dev/docs/serving/request-flow/
+        differences:
           - at: entry
             text: "Knative, not you, writes the routes: net-gateway-api (beta) creates them on the Gateway named in config-gateway. The Keycloak sign-in and the rate limit hold only if their policies target that Gateway. Once a domain name is configured, every Knative Service is public there unless it carries the cluster-local label."
             url: https://knative.dev/docs/serving/config-network-adapters/

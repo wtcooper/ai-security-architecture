@@ -7,6 +7,7 @@
 import { ownedControls } from "@/components/drawing/layout";
 import { archetypesInOrder, clouds, productsForArchetype, tools, type Product } from "@/lib/data";
 import { cloudSlug } from "@/lib/routes";
+import { applyShape, describeShape, type ShapeLine } from "@/lib/shape";
 import { HOSTING_COMPARE, namesProduct, type Archetype, type ArchBlock, type CloudBinding, type CloudPlatform, type HostingCompareKey, type HostingOption, type ProductSetting, type TechOption, type TechPack, type Tool } from "@/lib/types";
 
 export type CloudProduct = Extract<Product, { kind: "cloud" }>;
@@ -84,11 +85,53 @@ export function hostedAs(product: CloudProduct, optionId: string | null): CloudP
       differences: [...(impl.differences ?? []).filter((d) => !gone.has(d.at)), ...(option.differences ?? [])],
       alsoNeeded: [...(impl.alsoNeeded ?? []), ...(option.alsoNeeded ?? [])],
       quickstart: option.quickstart?.length ? option.quickstart : impl.quickstart,
+      // A variant's changes of shape apply on top of the mapping's.
+      shape: [...(impl.shape ?? []), ...(option.shape ?? [])],
     },
     settings: [...ids.map((id) => byId.get(id)!).filter(Boolean), ...(product.service?.settings ?? [])],
   };
   resolved.set(key, next);
   return next;
+}
+
+/**
+ * The pattern as drawn on a platform (and hosting option), where the platform's own documentation
+ * shows another shape: its changes applied to a copy, cached so a page gets the same object on
+ * every render. The pattern itself where the platform draws it as it is. `product` is the
+ * platform as hosted (hostedAs), which carries the mapping's changes and the option's after them.
+ */
+const drawnCache = new Map<string, Archetype>();
+export function drawnOn(archetype: Archetype, product: CloudProduct, hostId: string | null = null): Archetype {
+  const changes = product.implementation.shape ?? [];
+  if (!changes.length) return archetype;
+  const option = hostId ? hostingOptionsFor(product).find((o) => o.id === hostId && !o.mapped && o.kind !== "managed") : undefined;
+  const key = `${archetype.id}|${product.id}|${option?.id ?? ""}`;
+  const hit = drawnCache.get(key);
+  if (hit) return hit;
+  const on = option ? `${platformWords(product.cloud).on}, hosted on ${option.name}` : platformWords(product.cloud).on;
+  const drawn = applyShape(archetype, changes, { key, on }).archetype;
+  drawnCache.set(key, drawn);
+  return drawn;
+}
+
+/** Every drawing of a pattern that differs from its own: each mapping with changes of shape, and each hosting option that adds its own. */
+export function drawnVariants(archetype: Archetype): { label: string; short: string; product: CloudProduct; host: string | null; archetype: Archetype }[] {
+  return cloudProductsFor(archetype.id).flatMap((p) => [
+    ...(p.implementation.shape?.length ? [{ label: platformWords(p.cloud).on, short: p.cloud.short, product: p, host: null, archetype: drawnOn(archetype, p, null) }] : []),
+    ...hostingOptionsFor(p)
+      .filter((o) => !o.mapped && o.kind !== "managed" && o.shape?.length)
+      .map((o) => {
+        const hosted = hostedAs(p, o.id);
+        return { label: `${platformWords(p.cloud).on}, hosted on ${o.name}`, short: `${p.cloud.short} · ${o.name}`, product: hosted, host: o.id, archetype: drawnOn(archetype, hosted, o.id) };
+      }),
+  ]);
+}
+
+/** A platform's changes of shape as How it works lists them, the organisation's own boundary named as the drawing names it. */
+export function shapeLinesFor(archetype: Archetype, product: CloudProduct): ShapeLine[] {
+  const boundary = product.cloud.boundary;
+  const zoneTitle = (id: string) => (boundary && archetype.zones?.find((z) => z.id === id)?.owner === "cloud" ? boundary : undefined);
+  return describeShape(archetype, product.implementation.shape ?? [], zoneTitle);
 }
 
 export const HOSTING_KIND_LABEL: Record<string, string> = {

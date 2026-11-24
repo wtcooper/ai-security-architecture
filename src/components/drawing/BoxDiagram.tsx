@@ -121,16 +121,22 @@ export function BoxDiagram({
       (p) => (p.at === at || p.at === reverse(at)) && (p.mitigation ?? p.risk) === id,
     )?.note;
 
-  // A walk: step numbers per drawn arrow, and the boxes it touches.
+  // A walk: step numbers per drawn arrow, and the boxes it touches. On a platform's own drawing
+  // (lib/shape.ts) a step keeps the pattern's number: the later legs of a step split by an
+  // inserted box are lit with it but unnumbered, and a step whose arrow is not drawn there is not.
   const lineKeys = new Set(spec.lines.map((l) => l.key));
   const steps = new Map<string, number[]>();
   const touched = new Set<string>();
   walk?.steps.forEach((s, i) => {
+    if (s.skipped) return;
     const k = lineKeys.has(s.follow) ? s.follow : reverse(s.follow);
-    steps.set(k, [...(steps.get(k) ?? []), i + 1]);
+    steps.set(k, [...(steps.get(k) ?? []), ...(s.continues ? [] : [s.n ?? i + 1])]);
     for (const id of s.follow.split("->")) touched.add(id);
   });
   for (const id of [...touched]) for (let p = blocks.get(id)?.parent; p; p = blocks.get(p)?.parent) touched.add(p);
+  // What this platform draws differently, and why: said in the hover help of the box or arrow.
+  const shaped = archetype.drawn;
+  const because = (why: string | undefined, note: string | undefined) => [why, note?.trim()].filter((t, n, all): t is string => Boolean(t) && all.indexOf(t) === n).join(" ") || undefined;
   // An incident step: the boxes it marks (and what holds them) and the arrows it rides.
   const marked = new Set<string>(Object.keys(overlay?.marks ?? {}));
   for (const id of [...marked]) for (let p = blocks.get(id)?.parent; p; p = blocks.get(p)?.parent) marked.add(p);
@@ -362,16 +368,19 @@ export function BoxDiagram({
             const hit = Boolean(phase && overlay && bx.id in overlay.marks);
             const fill = hit ? phase!.fill : bx.tone === "actor" ? "var(--mist)" : "var(--paper)";
             const stroke = hit ? phase!.stroke : bx.tone === "container" ? "var(--ink-3)" : bx.tone === "governance" ? "#B9C7BE" : "var(--line-strong)";
+            // A box this platform adds, or draws in another zone: a dashed outline, and the reason in its hover help.
+            const placed = shaped?.boxes[bx.id];
             return (
               <g
                 key={bx.id}
                 data-block={bx.id}
+                data-shaped={placed ? "box" : undefined}
                 style={{ opacity: dim(boxLit(bx.id)), transition: "opacity 150ms" }}
-                {...hover(block.title, (bound?.note ?? block.note)?.trim(), (block.items ?? []).map((i) => i.label), bound?.options?.length ? { role: bound.role, options: bound.options } : undefined)}
+                {...hover(block.title, because(placed, bound?.note ?? block.note), (block.items ?? []).map((i) => i.label), bound?.options?.length ? { role: bound.role, options: bound.options } : undefined)}
                 data-box-options={bound?.options?.length || undefined}
                 aria-description={bound?.options?.length ? `Options: ${bound.options.map((o) => `${o.name} (${o.kind === "open" ? "open source" : "commercial"}${o.on ? ", in effect" : ""})`).join(" · ")}` : undefined}
               >
-                <rect x={bx.x} y={bx.y} width={bx.w} height={bx.h} rx={6} fill={fill} stroke={stroke} strokeWidth={hit ? 2 : bx.tone === "container" ? 1.3 : 1} />
+                <rect x={bx.x} y={bx.y} width={bx.w} height={bx.h} rx={6} fill={fill} stroke={placed && !hit ? "var(--ink-3)" : stroke} strokeWidth={hit ? 2 : bx.tone === "container" ? 1.3 : 1} strokeDasharray={placed && !hit ? "4 3" : undefined} />
                 {accent && <rect x={bx.x + 1} y={bx.y + 7} width={3} height={Math.min(bx.h - 14, 54)} rx={1.5} fill={accent} />}
                 {titleLines.map((t, i) => (
                   <text key={i} x={bx.x + 12} y={bx.y + 20 + i * 14} fontSize={12.5} fontWeight={650} fill="var(--ink)">
@@ -409,7 +418,13 @@ export function BoxDiagram({
           const head = onStep ? "url(#pd-arrow-step)" : inWalk ? "url(#pd-arrow-walk)" : "url(#pd-arrow)";
           const d = l.pts.map((p, i) => `${i ? "L" : "M"} ${p[0]} ${p[1]}`).join(" ");
           return (
-            <g key={l.key} data-edge={l.key} style={{ opacity: dim(lineLit(l.key)), transition: "opacity 150ms" }} {...hover(e.label ?? l.key.replace("->", " → "), e.note?.trim())}>
+            <g
+              key={l.key}
+              data-edge={l.key}
+              data-shaped={shaped?.arrows[l.key] ? "arrow" : undefined}
+              style={{ opacity: dim(lineLit(l.key)), transition: "opacity 150ms" }}
+              {...hover(e.label ?? `${blocks.get(e.from)?.title ?? e.from} → ${blocks.get(e.to)?.title ?? e.to}`, because(shaped?.arrows[l.key], e.note))}
+            >
               {/* A wide invisible stroke so the arrow is easy to hover. */}
               <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
               <path
