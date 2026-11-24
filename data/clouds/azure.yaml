@@ -4436,14 +4436,17 @@ implementations:
         summary: "Each rollout's sandbox becomes a session in a custom container session pool: your image in a Hyper-V sandbox that the platform allocates, isolates and destroys. The Kata node pools and their sizing go away. Because a session has no outbound network by default and only an on-or-off switch, the harness moves outside and drives a tool server in the session over HTTP; the orchestrator, graders, inference and offline web stay on AKS."
         bindings:
           - { block: sandbox, service: "Container Apps custom container session pool", note: "One Hyper-V isolated session per rollout, allocated from prewarmed instances by a session identifier the orchestrator generates, and destroyed by stopSession, cooldown or container exit.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container }
-          - { block: harness, service: "Your episode harness on AKS, driving the session over HTTP", build: true, note: "Runs beside the orchestrator, not in the sandbox, because a session with outbound traffic disabled cannot call the inference runtime; it sends each action through the pool management endpoint.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage }
+          - { block: harness, service: "Your episode harness on AKS, outside the session", build: true, note: "Runs beside the orchestrator, not in the sandbox, because a session with outbound traffic disabled cannot call the inference runtime; it sends each action through the pool management endpoint.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage }
           - { block: localTools, service: "Shell, file and browser tool server in the session image", build: true, note: "An HTTP server in your image on the pool's target port; anything after the management endpoint in the request path is forwarded to it.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage, watch: [{ text: "Session networking has two values, EgressDisabled and EgressEnabled (code can reach the internet), and no destination list or route is documented, so a browsing task cannot be held to the offline web on session pools.", url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool" }, { text: "With egress disabled nothing installs at run time: everything is built into the session image from the private feed, the pool caches it, and changes reach sessions only when the pool moves to a new, unique image tag.", url: "https://learn.microsoft.com/en-us/azure/container-apps/session-pool" }] }
           - { block: platform, service: "Azure Monitor session logs (Log Analytics)", note: "Console output and session lifecycle events reach Log Analytics through the environment's logging. Sessions get no identity by default, and no shared volume is documented.", url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-custom-container }
         dropSettings: [aksPodSandboxing, aksFqdnFiltering, aksFirewallEgress, aksImdsRestriction]
         addSettings: [sessionPoolEgress, sessionExecutorRole, sessionPoolIdentityLifecycle, sessionPoolLifecycle, sessionStopApi, sessionPoolLogs]
-        differences:
-          - at: harness->inference
-            text: "A session cannot make outbound requests by default, so a harness inside it cannot sample from the inference runtime; the documented way in is the pool management endpoint, so the harness runs outside and sends each action in. Enabling egress to reach inference would open the internet too."
+        shape:
+          - move: { block: localTools, zone: zoneCloud, call: "each action" }
+            why: "The tool server stays in the session and is reached only through the pool management endpoint, with an Entra token and the Session Executor role: the harness sends each action in that way."
+            url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
+          - move: { block: harness, zone: zoneCloud }   # under the session, so its call into the tools reads straight up
+            why: "A session cannot make outbound requests by default, so a harness inside it could not sample from the inference runtime: it runs outside the session, on AKS. Enabling egress to reach inference would open the internet too."
             url: https://learn.microsoft.com/en-us/azure/container-apps/sessions-usage
         alsoNeeded:
           - service: "Container Apps environment with workload profiles"
@@ -4559,15 +4562,17 @@ implementations:
       internalTools: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
       peerVendor: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/what-is-single-sign-on
       provider: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure
-    differences:
-      - at: gateway->authServer
-        text: "API Management only validates incoming Entra tokens; exchanging a user's token for the agent's own peer-bound token is done by the agent, or its auth sidecar, calling Entra directly, so the agent process holds those tokens, not the gateway."
-        url: https://learn.microsoft.com/en-us/entra/agent-id/agent-on-behalf-of-oauth-flow
     shape:
       - drop: idp->authServer
         pins: idp
         why: "The identity provider and the authorization server are one Microsoft Entra tenant, so there is no federation link between them to build or secure: the vendor platform is an enterprise application in that tenant, and a partner's own authorization server sits outside Entra."
         url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/what-is-single-sign-on
+      - rename: { at: gateway->authServer, label: "validate / signing keys" }
+        why: "API Management only validates incoming Entra tokens, against the tenant's signing keys; it does not exchange them."
+        url: https://learn.microsoft.com/en-us/azure/api-management/validate-azure-ad-token-policy
+      - add: { from: harness, to: authServer, label: "token exchange / peer-bound token" }
+        why: "Exchanging a user's token for the agent's own peer-bound token is done by the agent, or its auth sidecar, calling Entra directly, so the agent process holds those tokens, not the gateway."
+        url: https://learn.microsoft.com/en-us/entra/agent-id/agent-on-behalf-of-oauth-flow
     alsoNeeded:
       - service: "Azure Key Vault"
         role: secrets
@@ -5133,7 +5138,9 @@ implementations:
       sources: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources?view=azure-devops
     differences:
       - at: nativeTools->registry
-        text: "Azure Artifacts is a public Azure DevOps service, and Microsoft's allow list for it includes *.blob.core.windows.net, *.visualstudio.com and *.dedup.microsoft.com, so allowing the feed in the egress policy also opens every Azure Storage account. Either run a package proxy in your own network, or accept the opening and watch the egress decisions."
+        # Kept as a note: a move of the registry outside your network is the honest drawing, but every
+        # place the external band gives it bends the agent's install arrow five times (drawing audit L7).
+        text: "Azure Artifacts is a public Azure DevOps service whose allow list includes *.blob.core.windows.net, *.visualstudio.com and *.dedup.microsoft.com, so allowing the feed opens every Azure Storage account. Either run a package proxy in your network, or accept the opening and watch it. It stays a note: drawn outside your network, its install arrow cannot be laid out readably."
         url: https://learn.microsoft.com/en-us/azure/devops/organizations/security/allow-list-ip-url?view=azure-devops
     alsoNeeded:
       - service: "Microsoft Entra ID (Enterprise Managed Users OIDC, Conditional Access, an enterprise app per generated app)"

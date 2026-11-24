@@ -4,8 +4,10 @@
  * hosting option on top of it) records the changes, and the platform's drawing is the pattern
  * with those changes applied to a copy, before layout:
  *
- *   insert    a box on an existing arrow, which becomes from->box->to
- *   move      a box drawn in another zone (a component that runs outside your network)
+ *   insert    a box on an existing arrow, which becomes from->box->to (inside or outside the
+ *             box the arrow leaves)
+ *   move      a box drawn in another zone (a component that runs outside your network), or taken
+ *             out of the box that holds it within its own zone (a service the agent calls)
  *   drop      an arrow that does not exist there
  *   reroute   a flow that starts, or ends, at another box
  *   rename    an arrow that carries something else there
@@ -15,6 +17,9 @@
  * along, an inserted box leaves them on its first leg and splits a step into legs that share the
  * step's number, and a step on a dropped arrow is listed with a note and not drawn. An added arrow
  * carries no pins and no step: the pattern's walks are the pattern's.
+ *
+ * A change may carry an `id`, so that a hosting option on which it does not hold can name it in
+ * `dropShape` and be drawn without it (components/cloud/model.ts).
  *
  * Pure and deterministic, like the layout: the build checks a platform's changes with it, and the
  * pages, the drawing audit and the tests draw with it.
@@ -151,6 +156,22 @@ export function applyShape(base: Archetype, changes: ShapeChange[], where: { key
     return Array.from({ length: 12 }, (_, n): [number, number] => [col, row + n]);
   };
   const number = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+  const changeIds = new Set<string>();
+  /** A box's own cell and the cells beside it on the grid it is drawn on: under it first, then either side, then above. */
+  const besideCells = (b: ArchBlock): [number, number][] => {
+    const [c, r, n] = [colOf(b), rowOf(b), spanOf(b)];
+    return [[c, r + n], [c + 0.5, r + n - 1], [c - 0.5, r + n - 1], [c, r - 1], [c + 0.5, r], [c - 0.5, r], [c, r + n + 1]];
+  };
+  /** The arrow from the box that held a box to it, now that being held no longer shows that it is called. */
+  const callFrom = (where: string, held: ArchBlock, b: ArchBlock, label: string, why: string) => {
+    if (held.kind === "boundary") problems.push(`${where}: ${held.title} only holds; it does not call ${b.title}`);
+    const k = `${held.id}->${b.id}`;
+    if (edgeAt(k) >= 0 || edgeAt(reverse(k)) >= 0) problems.push(`${where}: ${k} is already an arrow`);
+    else {
+      edges.push({ from: held.id, to: b.id, path: "primary", outbound: true, label, note: why });
+      drawn.arrows[k] = why;
+    }
+  };
 
   changes.forEach((c, i) => {
     const at = `shape change ${i + 1}`;
@@ -163,8 +184,14 @@ export function applyShape(base: Archetype, changes: ShapeChange[], where: { key
       problems.push(`${at}: names exactly one of ${SHAPE_KINDS.join(", ")}`);
       return;
     }
-    const extra = Object.keys(c).filter((k) => !(SHAPE_KINDS as readonly string[]).includes(k) && !["why", "url", "pins"].includes(k));
+    const extra = Object.keys(c).filter((k) => !(SHAPE_KINDS as readonly string[]).includes(k) && !["id", "why", "url", "pins"].includes(k));
     if (extra.length) problems.push(`${at}: unknown field ${extra.join(", ")}`);
+    // An id names the change for a hosting option on which it does not hold (dropShape).
+    if (c.id !== undefined) {
+      if (typeof c.id !== "string" || !CAMEL.test(c.id)) problems.push(`${at}: id must be camelCase`);
+      else if (changeIds.has(c.id)) problems.push(`${at}: id ${c.id} is already used by another change`);
+      else changeIds.add(c.id);
+    }
     const why = typeof c.why === "string" ? c.why.trim() : "";
     textOk(at, c.why, "why: one or two plain sentences", SHAPE_LIMITS.why);
     if (why && sentences(why) > 2) problems.push(`${at}: why is ${sentences(why)} sentences; it is one or two`);
@@ -197,16 +224,20 @@ export function applyShape(base: Archetype, changes: ShapeChange[], where: { key
       const t = blockOf(edge.to)!;
       const zone = ins.zone ?? f.zone ?? "";
       if (!zoneOk(where, zone)) return;
-      // Inside what holds both ends, else beside whichever end shares its zone.
+      // Inside what holds both ends, else beside whichever end shares its zone; on its own where
+      // the author says so, for an arrow that leaves a box.
       const inZone = (p?: string) => !p || blockOf(p)?.zone === zone;
       const parents: (string | undefined)[] = [];
       if (f.parent === t.parent) parents.push(f.parent);
       if (f.zone === zone) parents.push(f.parent);
       if (t.zone === zone) parents.push(t.parent);
-      const parent = ins.parent ?? parents.find(inZone);
-      if (ins.parent !== undefined) {
-        const p = blockOf(ins.parent);
-        if (!p) problems.push(`${where}: parent ${ins.parent} is not a box of ${base.id}`);
+      const onItsOwn = ins.parent === null;
+      const parent = onItsOwn ? undefined : ins.parent ?? parents.find(inZone);
+      if (onItsOwn) {
+        if (!f.parent && !t.parent) problems.push(`${where}: parent null draws it outside the box an arrow leaves, and neither end of ${ins.on} is drawn inside one`);
+      } else if (ins.parent !== undefined) {
+        const p = typeof ins.parent === "string" ? blockOf(ins.parent) : undefined;
+        if (!p) problems.push(`${where}: parent ${ins.parent} is not a box of ${base.id}; null draws it outside every box`);
         else if (p.zone !== zone) problems.push(`${where}: parent ${ins.parent} is in ${p.zone}, not ${zone}`);
       }
       const box: ArchBlock = { id: ins.id, kind: ins.kind ?? "service", title: ins.title, zone, parent, col: 0, row: 0, note: why };
@@ -283,27 +314,30 @@ export function applyShape(base: Archetype, changes: ShapeChange[], where: { key
         return;
       }
       if (!zoneOk(where, mv.zone)) return;
-      if (mv.zone === b.zone) {
-        problems.push(`${where}: ${b.title} is already in ${mv.zone}`);
+      const held = blockOf(b.parent);
+      if (mv.zone === b.zone && !held) {
+        problems.push(`${where}: ${b.title} is already in ${mv.zone} and stands on its own; a move within its own zone takes a box out of the box that holds it`);
         return;
       }
       textOk(where, mv.call, "call: the label of the arrow from the box that held it", SHAPE_LIMITS.label, true);
-      const held = blockOf(b.parent);
+      const explicit = number(mv.col) && number(mv.row);
+      // A box that leaves the box that held it takes one cell where it goes: its span was for its place there.
+      if (held) delete b.rowSpan;
+      if (mv.zone === b.zone) {
+        // Taken out of the box that holds it, within its zone: drawn beside that box, inside whatever
+        // holds that one, and called by it where the author labels the call.
+        b.parent = held!.parent;
+        if (mv.call) callFrom(where, held!, b, mv.call, why);
+        settle(where, b, explicit ? [[mv.col!, mv.row!]] : besideCells(held!), explicit);
+        drawn.boxes[b.id] = why;
+        return;
+      }
       for (const x of [b, ...descendants(b.id)]) x.zone = mv.zone;
       const top = topOf(b);
-      const explicit = number(mv.col) && number(mv.row);
       if (held && held.zone !== mv.zone) {
         // It stands outside what held it now, so it is called rather than held.
         b.parent = undefined;
-        if (mv.call) {
-          if (held.kind === "boundary") problems.push(`${where}: ${held.title} only holds; it does not call ${b.title}`);
-          const k = `${held.id}->${b.id}`;
-          if (edgeAt(k) >= 0 || edgeAt(reverse(k)) >= 0) problems.push(`${where}: ${k} is already an arrow`);
-          else {
-            edges.push({ from: held.id, to: b.id, path: "primary", outbound: true, label: mv.call, note: why });
-            drawn.arrows[k] = why;
-          }
-        }
+        if (mv.call) callFrom(where, held, b, mv.call, why);
       } else if (mv.call !== undefined) problems.push(`${where}: call is for a box that was drawn inside another`);
       if (!b.parent && TRUST.has(ownerOf.get(mv.zone) ?? "")) {
         const row = rowOf(top);
@@ -496,6 +530,9 @@ export interface ShapeLine {
 export function describeShape(base: Archetype, changes: ShapeChange[], zoneTitle?: (zoneId: string) => string | undefined): ShapeLine[] {
   const titles = new Map(base.blocks.map((b) => [b.id, b.title]));
   const zones = new Map((base.zones ?? []).map((z) => [z.id, z.title ?? z.owner]));
+  // Where each box stands as the changes go, so a move within a zone names the box it leaves.
+  const zoneOf = new Map(base.blocks.map((b) => [b.id, b.zone]));
+  const parentOf = new Map(base.blocks.map((b) => [b.id, b.parent]));
   const t = (id: string) => titles.get(id) ?? id;
   const flow = (k: string) => {
     const [a, b] = k.split("->");
@@ -508,9 +545,17 @@ export function describeShape(base: Archetype, changes: ShapeChange[], zoneTitle
     if ("insert" in c) {
       const [a, b] = c.insert.on.split("->");
       titles.set(c.insert.id, c.insert.title);
+      zoneOf.set(c.insert.id, c.insert.zone ?? zoneOf.get(a));
       return line(c.insert.id, `${c.insert.title}, between ${t(a)} and ${t(b)}`);
     }
-    if ("move" in c) return line(c.move.block, `${t(c.move.block)}, in ${zoneTitle?.(c.move.zone) ?? zones.get(c.move.zone) ?? c.move.zone}`);
+    if ("move" in c) {
+      const { block, zone } = c.move;
+      const held = parentOf.get(block);
+      const within = zone === zoneOf.get(block) && held;
+      parentOf.set(block, within ? parentOf.get(held) : undefined);
+      zoneOf.set(block, zone);
+      return line(block, within ? `${t(block)}, taken out of ${t(held)}` : `${t(block)}, in ${zoneTitle?.(zone) ?? zones.get(zone) ?? zone}`);
+    }
     if ("drop" in c) return line(c.drop, `${flow(c.drop)}, not drawn`);
     if ("reroute" in c) {
       const [a, b] = c.reroute.from.split("->");
