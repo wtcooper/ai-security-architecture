@@ -1,0 +1,196 @@
+pattern: archEnterpriseAiChat
+reviewed: "2026-11-24"
+summary: >-
+  Staff give the vendor's assistant their questions, pasted text and files, and it reads mail,
+  documents and business SaaS through connectors, the web through search and, where wired, our
+  own tool servers through our gateway. Anything it reads can instruct it, and it acts with every
+  grant it holds. The attacks disclosed on this pattern were zero-click and one-click exfiltration
+  through planted mail and documents; the breaches with named victims came through stolen
+  integration tokens and a paste into a personal account.
+concentrates: >-
+  Where the assistant indexes mail and files that outsiders can write to, holds connector grants
+  that read before anyone confirms, and can render a link or call a connector that leaves the
+  tenant; and in the personal accounts and third-party grants nobody has inventoried.
+scope: >-
+  Staff on managed devices use the vendor's enterprise tenant behind single sign-on, with web
+  search, file upload, user- and administrator-granted connectors to mail, files and SaaS (some
+  able to write) and an optional link to our tool servers through our gateway. Vendor defaults
+  elsewhere.
+lists: [owasp-llm-2026, owasp-agentic, owasp-mcp]
+assets:
+  - "Mail, files and SaaS records the assistant reads through connectors"
+  - "Records behind our own tool servers, reached through our gateway"
+  - "What staff paste and upload, and the conversations the vendor keeps"
+  - "Connector grants, OAuth tokens and the gateway's client or tunnel credential"
+  - "Tenant settings: accounts, connectors, confirmations, retention and export"
+actors:
+  - who: "Outside writer"
+    access: "Sends staff an email, shares a document or invite, or publishes a page the assistant will read"
+    wants: "Tenant data out, or an answer steered their way"
+  - who: "Token thief"
+    access: "Steals or finds a connector's or a third-party AI tool's OAuth token, often at a less defended vendor"
+    wants: "Direct API access to the connected SaaS"
+  - who: "Employee, without malice"
+    access: "Pastes and uploads what the task seems to need, sometimes while signed in personally"
+    wants: "A quick, good answer"
+  - who: "Curious insider"
+    access: "A licensed user asking for records that source permissions or sensitivity labels should hide"
+    wants: "Data beyond their role"
+  - who: "Vendor and its sub-processors"
+    access: "Run the assistant, its sandbox and the store of conversations under their own terms"
+    wants: "To operate the product; trusted, but outside our control"
+threats:
+  - id: T1
+    title: "Planted mail or documents make the assistant send data out"
+    rating: critical
+    evidence: disclosed
+    story: >-
+      An outsider emails staff or shares a document with hidden instructions. The assistant
+      retrieves it for an unrelated question, follows it, and sends what it can read out through a
+      rendered image or link. EchoLeak needed no click and SearchLeak one, and each got past that
+      vendor's own output defences.
+    at: [vendor->vendorTools, vendor, browser->vendor]
+    risks: [riskPromptInjection, riskRetrievalVectorStorePoisoning]
+    atlas: [AML.T0051.001, AML.T0099, AML.T0077]
+    owasp: [LLM01:2026, LLM05:2026, LLM10:2026, ASI01, MCP06:2025]
+    controls: [cap-input-guardrails, cap-data-access-governance, cap-ai-vendor-assessment, cap-agent-tracing, AML.M0028]
+    incidents: [prompt-injection-lineage]
+  - id: T2
+    title: "Staff paste sensitive data into a personal account or an unapproved tool"
+    rating: high
+    evidence: observed
+    story: >-
+      The same client under a personal login carries none of the enterprise terms, and no tenant
+      control sees it. A bank filed the first SEC disclosure naming AI as the cause after an
+      employee pasted customer records into an unapproved tool from a personal account, while an
+      approved one existed.
+    at: [employee->browser, browser->consumerTenant]
+    risks: [riskShadowAndUnknownAgents, riskExcessiveDataHandlingDuringInference]
+    atlas: []
+    owasp: [LLM02:2026]
+    controls: [D3-OTF, D3-APA, cap-shadow-ai-discovery, cap-sensitive-data-redaction]
+    incidents: [identity-and-shadow-ai]
+  - id: T3
+    title: "A connector or AI tool's OAuth grant is stolen, unreviewed or never revoked"
+    rating: high
+    evidence: observed
+    story: >-
+      A grant to the chat vendor, a user-added connector or a small AI tool is standing access to
+      mail, files or CRM, and the token is the authentication. In 2026 a forgotten credential at
+      an AI vendor let attackers harvest customers' CRM tokens, and a compromised AI tool's
+      workspace grant led to a customer account takeover.
+    at: [vendor->vendorTools, vendorTools, govSupplyChain]
+    risks: [riskShadowAndUnknownAgents, riskCrossTenantCredentialPropagation]
+    atlas: [AML.T0091.000, AML.T0085.001]
+    owasp: [LLM04:2026, ASI03, ASI04, MCP01:2025, MCP09:2025]
+    controls: [D3-APA, cap-agent-tool-registry, D3-CH, cap-shadow-ai-discovery, cap-agent-kill-switch]
+    incidents: [identity-and-shadow-ai]
+  - id: T4
+    title: "A hidden task reads connected mail and leaks it through the vendor's sandbox"
+    rating: high
+    evidence: disclosed
+    story: >-
+      A shared chat, pasted prompt or custom assistant carries an instruction that runs a second,
+      unseen task each turn. Connector reads needed no approval by default, so it read the
+      victim's Gmail and left it on a package server in one vendor's sandbox that another account
+      could read. The vendor removed the server.
+    at: [browser->vendor, vendor, vendor->vendorTools]
+    risks: [riskAgenticDelegationConfusedDeputy, riskInsecureIntegratedComponent]
+    atlas: [AML.T0051.001, AML.T0085.001, AML.T0086]
+    owasp: [LLM03:2026, ASI02, ASI05]
+    controls: [AML.M0029, AML.M0028, cap-ai-vendor-assessment, cap-agent-tracing]
+    incidents: [chatgpt-shared-clipboard]
+  - id: T5
+    title: "Retrieval surfaces overshared or labelled content to the wrong people"
+    rating: high
+    evidence: disclosed
+    story: >-
+      The assistant answers from everything a user can technically open, so old oversharing
+      becomes findable in plain language, and a defect can skip the labels meant to keep content
+      out. In early 2026 one vendor confirmed a bug that let its assistant summarise mail labelled
+      Confidential despite data-loss policies.
+    at: [vendor->vendorTools, vendor]
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+    atlas: [AML.T0085.000]
+    owasp: [LLM02:2026, LLM09:2026, MCP10:2025]
+    controls: [cap-data-access-governance, D3-DI, cap-ai-vendor-assessment]
+    refs:
+      - title: "BleepingComputer: Microsoft says bug causes Copilot to summarize confidential emails"
+        url: https://www.bleepingcomputer.com/news/microsoft/microsoft-says-bug-causes-copilot-to-summarize-confidential-emails/
+  - id: T6
+    title: "The vendor reads and writes our systems on a grant wider than the employee's"
+    rating: high
+    evidence: theoretical
+    story: >-
+      Where our gateway admits the vendor on one client or a service identity, every conversation,
+      and any instruction planted in one, reaches what that identity can, and writes land in
+      systems of record from a chat nobody else read. No incident on this path is public; rated on
+      the mechanism.
+    at: [vendor->aiGateway, aiGateway->internalTools, internalTools->orgData]
+    risks: [riskAgenticDelegationConfusedDeputy, riskRogueActions]
+    atlas: [AML.T0053, AML.T0085.001]
+    owasp: [ASI03, MCP02:2025, MCP07:2025]
+    controls: [AML.M0028, AML.M0029, D3-CH, cap-input-guardrails, cap-agent-tracing]
+  - id: T7
+    title: "The vendor or a sub-processor exposes the conversations it keeps"
+    rating: medium
+    evidence: observed
+    story: >-
+      Prompts, uploads and connector results live with the vendor under its retention terms, and
+      with any model provider it uses. In October 2026 an AI vendor said chat transcripts were
+      exposed in an inference provider's breach because the provider kept data despite a
+      zero-retention commitment.
+    at: [browser->vendor, vendor]
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+    atlas: [AML.T0085.002]
+    owasp: [LLM02:2026]
+    controls: [cap-ai-vendor-assessment, cap-sensitive-data-redaction, D3-APA]
+    refs:
+      - title: "Notion: security incident involving a third-party AI vendor"
+        url: https://notion.com/help/security-incident-involving-a-third-party-ai-vendor
+      - title: "Fireworks AI: security bulletins"
+        url: https://fireworks.ai/security/bulletins
+  - id: T8
+    title: "Planted web content and crafted links bias answers and the assistant's memory"
+    rating: medium
+    evidence: observed
+    story: >-
+      Search results and fetched pages are read with the same standing as the question. Microsoft
+      found over 50 prompts from 31 companies hidden in "Summarize with AI" links, telling
+      assistants to remember the company as a trusted source. The operators were ordinary
+      businesses, not attackers.
+    at: [vendor->openWeb, vendor]
+    risks: [riskPromptInjection]
+    atlas: [AML.T0131, AML.T0080.000, AML.T0130]
+    owasp: [LLM07:2026, ASI06, ASI09]
+    controls: [cap-input-guardrails, AML.M0028, cap-ai-vendor-assessment]
+    refs:
+      - title: "Microsoft Security: AI Recommendation Poisoning"
+        url: https://www.microsoft.com/en-us/security/blog/2026/02/10/ai-recommendation-poisoning/
+coverage:
+  - id: "LLM06:2026"
+    why: "Seats are licensed per user and the vendor bears compute and its limits, so cost abuse lands on the vendor rather than on us here."
+  - id: "LLM08:2026"
+    why: "System prompts are the vendor's; tenant instructions and custom assistants hold no secrets in the reference deployment."
+  - id: "ASI07"
+    why: "No agent-to-agent messages are drawn; custom agents and agent modes belong to the builder and persistent agent patterns."
+  - id: "ASI08"
+    why: "One assistant serves one person per conversation; there is no chain of agents for an error to cascade through."
+  - id: "ASI10"
+    why: "The vendor runs a bounded loop per request; no continuing agent with its own schedule or goals is drawn here."
+  - id: "MCP03:2025"
+    why: "Tool descriptions come from the vendor's connectors and our own reviewed servers, not from a registry staff browse."
+  - id: "MCP04:2025"
+    why: "The vendor's software supply chain is assessed with the vendor; our tool servers' own supply chain belongs to their pattern."
+  - id: "MCP05:2025"
+    why: "Nothing drawn here runs model output as commands on our side; command handling in our tool servers belongs to their pattern."
+  - id: "MCP08:2025"
+    why: "Not a threat on its own: whether the vendor's audit export covers every connector call is a design-review question below."
+questions:
+  - "Can a personal account reach the vendor's consumer product from a managed device, and would we know if it did?"
+  - "Which connectors did staff grant on their own authority, who reviews them, and when do those grants expire?"
+  - "Are write-capable connectors set to ask before any change, and are reads of sensitive sources set to always ask?"
+  - "Does the assistant render remote images and links in answers, and how has the vendor tested that path since its last fix?"
+  - "Does our gateway admit the vendor per user, with that user's own permissions, or on one client for everyone?"
+  - "Does the vendor's audit export record each connector call and what it touched, and do we keep a copy on our side?"
+  - "Which retention and training terms bind the vendor's model providers and sub-processors, and how is zero retention verified?"

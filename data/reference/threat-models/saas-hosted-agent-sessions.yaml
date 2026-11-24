@@ -1,0 +1,188 @@
+pattern: archHostedAgentSessions
+reviewed: "2026-11-24"
+summary: >-
+  Engineers hand a task to a vendor-hosted agent from its web app, a phone, a team channel or a
+  repository event. The session clones our code through a scoped app install, installs packages
+  and fetches pages under an allowlist we write, calls our tool servers through our gateway and
+  returns a draft pull request. Part of its prompt is written by whoever can file an issue, it
+  runs unwatched while holding tokens, and the 2026 incidents in this class used exactly that.
+  Review before merge is the gate, but it approves the output, not the calls made on the way.
+concentrates: >-
+  Where a repository that takes outside issues can start or steer a session holding a write token
+  and secrets, under an allowlist that permits write-capable package registries, and where
+  automations re-run sessions or approve their own pull requests with nobody watching.
+scope: >-
+  Engineers start sessions from the vendor's app, phones, channels and repository events.
+  Sessions run in a per-session vendor sandbox, clone private repositories through a scoped app,
+  install packages under our allowlist and call our tools via our gateway. Some
+  repositories take outside issues.
+lists: [owasp-llm-2026, owasp-agentic, owasp-mcp]
+assets:
+  - "Private source code, and the integrity of what merges to the default branch"
+  - "The repository token, setup secrets and the gateway tunnel credential"
+  - "Records behind our tool servers, and the SaaS the vendor's connectors reach"
+  - "Transcripts, snapshots and memory the vendor keeps after a session ends"
+  - "The release path, and every machine that later runs what a session committed"
+actors:
+  - who: "Outside contributor"
+    access: "Files issues, comments or pull requests on a repository a session reads"
+    wants: "Secrets, a backdoored change or a hijacked release"
+  - who: "Malicious package publisher"
+    access: "Publishes or takes over a package or skill the setup script or the agent installs"
+    wants: "Code running beside the session's secrets"
+  - who: "Channel member"
+    access: "Gives a session work through a team channel, often under a shared identity"
+    wants: "Work done with access they do not have"
+  - who: "The agent itself, no adversary"
+    access: "Holds a token, a shell and network; reads its own threads and can re-trigger itself"
+    wants: "To finish the task, whatever that takes"
+  - who: "Vendor"
+    access: "Runs the loop, the sandbox, the git proxy and the stores of transcripts and snapshots"
+    wants: "To operate the product; trusted, but outside our control"
+threats:
+  - id: T1
+    title: "An outsider's issue or comment steers a session that holds a token"
+    rating: critical
+    evidence: observed
+    story: >-
+      Issues, comments, review threads and instruction files enter the session as instruction,
+      and most are writable by people with no commit access; tickets and fetched pages join them.
+      In 2026 such text made hosted and CI agents leak keys, and one exposed publishing token was
+      later used for an unauthorised release.
+    at: [managedRuntime->sourceControl, managedRuntime->vendorTools, nativeTools->openWeb, managedRuntime]
+    risks: [riskPromptInjection, riskAgenticDelegationConfusedDeputy]
+    atlas: [AML.T0051.001, AML.T0093]
+    owasp: [LLM01:2026, ASI01, MCP06:2025]
+    controls: [D3-APA, AML.M0028, cap-agent-egress-control, cap-input-guardrails, AML.M0029]
+    incidents: [hosted-agent-hijack]
+  - id: T2
+    title: "Secrets in the sandbox leave through a host the allowlist permits"
+    rating: high
+    evidence: observed
+    story: >-
+      What the sandbox holds (environment variables, setup secrets, the clone) can leave through a
+      write-capable host every allowlist permits, or through the runtime's own bugs. Stolen tokens
+      have left through public repositories and package indexes, and a crafted branch name once
+      became a command in a vendor's container.
+    at: [nativeTools->sources, nativeTools->openWeb, managedRuntime, nativeTools]
+    risks: [riskSensitiveDataDisclosure]
+    atlas: [AML.T0055, AML.T0086]
+    owasp: [LLM02:2026, ASI05, MCP01:2025]
+    controls: [D3-CTS, cap-agent-egress-control, D3-EI, cap-ai-vendor-assessment]
+    incidents: [hosted-agent-hijack]
+  - id: T3
+    title: "A malicious or compromised package or skill runs in the setup phase"
+    rating: high
+    evidence: observed
+    story: >-
+      Setup scripts and the agent install from public registries and skill hubs, and the code runs
+      in the sandbox, often as root and with network. Hijacked releases of a widely used AI
+      library carried credential stealers twice in 2026. Pinning and hash checks stop a changed
+      artifact, not a malicious reviewed one.
+    at: [nativeTools->sources, nativeTools]
+    risks: [riskInsecureIntegratedComponent]
+    atlas: [AML.T0010.001, AML.T0011.001]
+    owasp: [LLM04:2026, ASI04, MCP04:2025]
+    controls: [D3-EI, cap-agent-egress-control, D3-CTS, cap-ai-vendor-assessment]
+    incidents: [litellm-release-hijack]
+  - id: T4
+    title: "The session commits hooks or workflow changes that run later, past review"
+    rating: high
+    evidence: observed
+    story: >-
+      A steered session writes a hook, task file, workflow or instruction file into a
+      routine-looking draft, or replies on a thread that fires automation; an automation set to
+      approve low-risk pull requests can approve its own. Agent configuration is executable: a
+      2026 npm worm wrote its persistence into exactly these files.
+    at: [managedRuntime->sourceControl, developer->sourceControl]
+    risks: [riskRogueActions, riskPromptInjection]
+    atlas: [AML.T0081, AML.T0142]
+    owasp: [LLM10:2026, ASI08, ASI09]
+    controls: [AML.M0029, AML.M0028, D3-APA, cap-agent-tracing]
+    incidents: [coding-agent-hijack]
+  - id: T5
+    title: "A session acts on our tool servers with authority broader than its task"
+    rating: high
+    evidence: research
+    story: >-
+      The runtime calls our gateway steered by whatever the session read. If the gateway admits
+      the vendor's service identity, or a grant wider than the session needs, an injected
+      instruction reaches those systems. In a cloud agent runtime, researchers read an agent's MCP
+      service token from memory and replayed it.
+    at: [managedRuntime->aiGateway, aiGateway->internalTools, internalTools->orgData]
+    risks: [riskAgenticDelegationConfusedDeputy, riskRogueActions]
+    atlas: [AML.T0053, AML.T0085.001, AML.T0091.000]
+    owasp: [LLM03:2026, ASI02, ASI03, MCP02:2025, MCP07:2025]
+    controls: [AML.M0028, D3-CH, cap-input-guardrails, cap-agent-tracing]
+    incidents: [agentcore-token-theft]
+  - id: T6
+    title: "Channels and schedules start sessions nobody owns or watches"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      A team channel raises sessions for anyone it admits, often on a shared identity, and a
+      routine keeps running for an owner who has left, on a grant nobody revoked. None of it is in
+      our inventory unless the vendor's export is queried, and a session already running stops
+      only when the vendor's cancel takes effect.
+    at: [remoteDevice->vendorService, vendorService, vendorService->managedRuntime]
+    risks: [riskShadowAndUnknownAgents, riskAgenticDelegationConfusedDeputy]
+    atlas: [AML.T0051.000]
+    owasp: [ASI10]
+    controls: [D3-APA, cap-agent-tool-registry, cap-agent-kill-switch, cap-agent-tracing]
+  - id: T7
+    title: "Automations re-trigger sessions in a loop that bills by the minute"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      Automations that re-run on every CI failure or review comment, and sessions that reply to
+      their own threads, form a loop with no natural end and no person in it, bounded only by the
+      budgets the tenant sets. No public incident shows it; rated on the mechanism.
+    at: [vendorService->managedRuntime, managedRuntime->sourceControl]
+    risks: [riskRunawayAgentToolLoops]
+    atlas: [AML.T0034.002]
+    owasp: [LLM06:2026]
+    controls: [AML.M0036, cap-agent-kill-switch, cap-agent-tracing]
+  - id: T8
+    title: "Transcripts, snapshots and memory keep private code after the session ends"
+    rating: medium
+    evidence: observed
+    story: >-
+      The clone, transcript, tool output and environment live on the vendor's side under its
+      terms; snapshots outlive the run, sessions can be shared, and agent-written memory feeds
+      later sessions. In 2026 a coding-agent vendor's stored traces were copied through a key
+      exposed at its inference provider.
+    at: [managedRuntime]
+    risks: [riskSensitiveDataDisclosure]
+    atlas: [AML.T0085.002, AML.T0080.000]
+    owasp: [LLM02:2026, ASI06, MCP10:2025]
+    controls: [AML.M0031, cap-ai-vendor-assessment, cap-agent-kill-switch]
+    refs:
+      - title: "Cursor: security incident update"
+        url: https://cursor.com/blog/security-incident-update
+coverage:
+  - id: "LLM05:2026"
+    why: "No model is trained or tuned here; content planted in repositories or memory is handled as injection and as retained state."
+  - id: "LLM07:2026"
+    why: "Output is a draft pull request a person reviews; a plausible but wrong change is a review-quality matter, not an attack path here."
+  - id: "LLM08:2026"
+    why: "Environment instructions and tool schemas carry no secrets in the reference deployment; credentials are kept out of the sandbox instead."
+  - id: "LLM09:2026"
+    why: "No retrieval index is drawn; sessions read repositories, tools and pages directly."
+  - id: "ASI07"
+    why: "One session per task; sessions do not message one another in the reference deployment."
+  - id: "MCP03:2025"
+    why: "Administrators fix the MCP servers in a locked environment, listed by our gateway's catalogue; sessions do not pick servers from a registry."
+  - id: "MCP05:2025"
+    why: "Shell commands run inside the vendor's sandbox by design; injection reaching them is covered as content steering the session."
+  - id: "MCP08:2025"
+    why: "Not a threat on its own: whether the vendor's session export covers the hosted surface is a design-review question below."
+  - id: "MCP09:2025"
+    why: "Only administrators add MCP servers to an environment in the reference deployment, so no unregistered server sits on a session's path."
+questions:
+  - "Who can start or steer a session: only people with write access, or also outside commenters, Apps and channel members?"
+  - "Does the repository credential ever enter the sandbox, and are setup secrets removed before the agent phase starts?"
+  - "Which hosts does the agent-phase allowlist permit, and are write methods restricted on the package registries it must reach?"
+  - "Are the agent's configuration files, hooks and workflows under required code-owner review, and do workflows wait for approval?"
+  - "Can any automation approve or merge a pull request that a session opened?"
+  - "Does our gateway admit each session on a short-lived grant for its initiator, or on the vendor's service identity?"
+  - "How long do transcripts, snapshots and shared sessions persist, and what does the vendor's cancel stop, and how fast?"

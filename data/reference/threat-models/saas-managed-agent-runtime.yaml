@@ -1,0 +1,184 @@
+pattern: archManagedAgentRuntime
+reviewed: "2026-11-24"
+summary: >-
+  Our own application calls a provider-run agent through its API: the provider runs the loop, the
+  model and a sandbox per session, and our code binds each session to a user, answers approval
+  events and runs custom tools. Sessions fetch pages and install packages under an allowlist we
+  write, call MCP servers the agent definition names, and reach our code host and tool servers
+  through crossings we control. How far a steered session goes depends on the credentials it can
+  reach and on whose identity it runs; the definition is the one artifact there is to review.
+concentrates: >-
+  Where a session reads pages, repository threads or connector results that others wrote, can
+  reach a credential in its sandbox or a vault shared across users, and calls tools on a service
+  identity rather than the person's, with no approval bound to the exact action.
+scope: >-
+  Our application invokes the provider's agent API for signed-in users and on schedules. Sessions
+  run in the provider's sandbox with web fetch and package installs under our allowlist, MCP
+  servers named in the definition, vault credentials, custom tools our app runs, and reach-back
+  to our gateway.
+lists: [owasp-llm-2026, owasp-agentic, owasp-mcp]
+assets:
+  - "Records behind our tool servers, and the SaaS the provider's connectors reach"
+  - "Private repositories, and what sessions push to them"
+  - "Vault credentials, the tunnel credential and the per-user grants our gateway issues"
+  - "The agent definition, its versions and the tools and servers it declares"
+  - "Session history and memory the provider keeps"
+actors:
+  - who: "Outside writer"
+    access: "Writes a page, issue, ticket or record that a session will fetch or be handed"
+    wants: "A session that acts or sends data out for them"
+  - who: "Malicious publisher"
+    access: "Publishes or takes over a package, skill or MCP server a definition names or a session installs"
+    wants: "Code or instructions running inside the session"
+  - who: "End user"
+    access: "Signs in to our front end and can push a session past its purpose"
+    wants: "Records or actions beyond their role"
+  - who: "Holder of the API key"
+    access: "Can create and deploy agent definitions directly, outside the reviewed pipeline"
+    wants: "To ship quickly; or, with a stolen key, an agent of their own"
+  - who: "Provider"
+    access: "Runs the loop, sandbox, vault, connectors and session store under its own terms"
+    wants: "To operate the platform; trusted, but outside our control"
+threats:
+  - id: T1
+    title: "Fetched pages, repository threads and connector results steer the session"
+    rating: critical
+    evidence: research
+    story: >-
+      Fetched pages, issue and review text from the code host, and records the provider's
+      connectors return all enter the loop as instruction; nothing of ours classifies the
+      provider-side ones. In a cloud agent runtime, a hidden comment in a support ticket made an
+      agent fetch a script and run it in its default shell.
+    at: [nativeTools->openWeb, managedRuntime->vendorTools, managedRuntime->sourceControl, managedRuntime]
+    risks: [riskPromptInjection]
+    atlas: [AML.T0051.001, AML.T0099, AML.T0086]
+    owasp: [LLM01:2026, ASI01, ASI05, MCP06:2025]
+    controls: [cap-agent-action-policy-enforcement, cap-agent-egress-control, cap-input-guardrails, AML.M0028, AML.M0029]
+    incidents: [agentcore-token-theft, hosted-agent-hijack]
+  - id: T2
+    title: "A credential the sandbox can reach acts for whoever steers it"
+    rating: high
+    evidence: research
+    story: >-
+      Credentials kept in the sandbox, or resolved into memory a shell can read, go with the first
+      injected command, and a vault attached to every session is one credential for all users.
+      Researchers read a managed runtime's MCP service token from its memory and replayed it from
+      a laptop to look up customer data.
+    at: [managedRuntime, nativeTools, managedRuntime->aiGateway]
+    risks: [riskSensitiveDataDisclosure, riskAgenticDelegationConfusedDeputy]
+    atlas: [AML.T0055, AML.T0098, AML.T0091.000]
+    owasp: [LLM02:2026, ASI03, MCP01:2025]
+    controls: [D3-CTS, D3-EI, D3-CH, cap-ai-vendor-assessment, AML.M0028]
+    incidents: [agentcore-token-theft]
+  - id: T3
+    title: "The session runs on a service identity, a stale grant or a loose approval"
+    rating: high
+    evidence: theoretical
+    story: >-
+      If our front end invokes the runtime on a service credential, every downstream grant is the
+      service's, not the person's. Schedules run on grants stored long ago, a vault entry outlives
+      its owner, and an approval answered hours later can release a changed call unless bound to
+      the exact action. Rated on the mechanism.
+    at: [endUser->entry, entry->managedRuntime, entry->aiGateway, aiGateway->internalTools]
+    risks: [riskAgenticDelegationConfusedDeputy, riskStaleAgentIdentityBinding]
+    atlas: [AML.T0053, AML.T0012]
+    owasp: [LLM03:2026, ASI03, ASI09, MCP02:2025, MCP07:2025]
+    controls: [D3-APA, AML.M0028, AML.M0029, cap-agent-tracing, cap-agent-kill-switch]
+  - id: T4
+    title: "Packages, skills or MCP servers the session loads are malicious or change"
+    rating: high
+    evidence: observed
+    story: >-
+      The sandbox installs packages and skills with network, and the definition names MCP servers
+      whose descriptions enter the loop as instruction and can change after review. A look-alike
+      email MCP package copied every message to its author after 15 clean releases; hijacked AI
+      library releases carried credential stealers.
+    at: [nativeTools->sources, managedRuntime->vendorTools, agentDef->managedRuntime]
+    risks: [riskInsecureIntegratedComponent, riskToolSourceProvenance]
+    atlas: [AML.T0010.001, AML.T0010.005, AML.T0110.000, AML.T0109]
+    owasp: [LLM04:2026, ASI04, MCP03:2025, MCP04:2025]
+    controls: [cap-agent-egress-control, cap-agent-tool-registry, cap-staged-rollout-gate, D3-EI, AML.M0028]
+    incidents: [mcp-supply-chain]
+  - id: T5
+    title: "Writes land before anyone reviews them"
+    rating: high
+    evidence: observed
+    story: >-
+      A steered session pushes code, replies on a thread that fires automation, or writes to
+      systems of record through our gateway. Review approves the code, not the actions taken to
+      produce it, and auto-approving low-risk pull requests removes even that. In 2026 an injected
+      triage run poisoned a cache a release job trusted.
+    at: [managedRuntime->sourceControl, aiGateway->internalTools, internalTools->orgData]
+    risks: [riskRogueActions]
+    atlas: [AML.T0053, AML.T0101]
+    owasp: [LLM10:2026, ASI02, ASI08]
+    controls: [AML.M0029, cap-agent-action-policy-enforcement, AML.M0028, D3-APA]
+    incidents: [hosted-agent-hijack]
+  - id: T6
+    title: "Agents deployed by an API call escape review and inventory"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      Anyone with the API key can create and deploy a definition, so the population is unbounded
+      unless registered, and the definition is the only artifact that exists for review. A stolen
+      key deploys an agent with our tools and vault references, and an alias rollback stops only
+      new sessions. Rated on the mechanism.
+    at: [agentDef->managedRuntime, engineer->agentDef]
+    risks: [riskShadowAndUnknownAgents]
+    atlas: [AML.T0103]
+    owasp: [ASI10, MCP09:2025]
+    controls: [cap-agent-tool-registry, cap-staged-rollout-gate, cap-agent-kill-switch, D3-CH]
+  - id: T7
+    title: "Memory scope and provider retention expose one user's content to another"
+    rating: medium
+    evidence: observed
+    story: >-
+      Requests, context and tool results live on the provider's side, and managed memory's scope is
+      a flag: set wide, one user's content shapes another's turn and a planted instruction
+      persists. In 2026 a coding-agent vendor's stored traces were copied through a key exposed at
+      its inference provider.
+    at: [managedRuntime]
+    risks: [riskSensitiveDataDisclosure]
+    atlas: [AML.T0085.002, AML.T0080.000]
+    owasp: [LLM02:2026, ASI06, MCP10:2025]
+    controls: [AML.M0031, cap-ai-vendor-assessment, cap-agent-tracing]
+    refs:
+      - title: "Cursor: security incident update"
+        url: https://cursor.com/blog/security-incident-update
+  - id: T8
+    title: "Unattended sessions and schedules run up cost"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      Each session has its own limits, but a fresh session resets them, schedules and events start
+      runs with nobody present, and a loop that retries its tools bills until the cap. A
+      per-session budget is not an organisation-wide ceiling. No public incident shows this on such
+      a runtime; rated on the mechanism.
+    at: [entry->managedRuntime, managedRuntime]
+    risks: [riskRunawayAgentToolLoops]
+    atlas: [AML.T0034.002]
+    owasp: [LLM06:2026]
+    controls: [AML.M0036, cap-agent-tracing, cap-agent-kill-switch]
+coverage:
+  - id: "LLM05:2026"
+    why: "The application trains and tunes no model; content and memory planted for later sessions are handled as injection and retained state."
+  - id: "LLM07:2026"
+    why: "Answers return to our front end and writes are gated; output that commits the organisation is reviewed as a write, not drawn as its own path."
+  - id: "LLM08:2026"
+    why: "The definition's instructions and tool schemas hold no secrets in the reference deployment; credentials sit in the vault, outside the sandbox."
+  - id: "LLM09:2026"
+    why: "No retrieval index is drawn; sessions read tools, repositories and pages directly."
+  - id: "ASI07"
+    why: "One agent per session; multi-agent hand-offs are not drawn in the reference deployment."
+  - id: "MCP05:2025"
+    why: "Commands run in the provider's sandbox by design; injection reaching them is covered as content steering the session."
+  - id: "MCP08:2025"
+    why: "Not a threat on its own: whether the provider's session log, exported and fused with our gateway's record, is complete is a design-review question."
+questions:
+  - "Does our front end carry each user's own identity into the session, or does the runtime act on one service credential?"
+  - "Is the egress policy set explicitly on every environment, and are write methods restricted on the registries it permits?"
+  - "Are vault credentials attached per user, and can anything a session runs read their resolved values?"
+  - "Is every agent definition registered and reviewed before deploy, and who can deploy with the API key?"
+  - "Which MCP servers does each definition declare, who reviewed them, and what alerts on a changed tool description?"
+  - "Is each approval bound to the exact call and arguments, with an expiry, and checked again before the held call runs?"
+  - "What memory scope does each agent use, and how long does the provider keep session history?"
