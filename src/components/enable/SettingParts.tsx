@@ -6,6 +6,9 @@
 import type { ProductSetting } from "@/lib/types";
 import { SETTING_VIA_META } from "./labels";
 
+/** How a row that belongs to one product says so, where the organisation chooses the product. */
+export const productTag = (product: string) => `If you use ${product}`;
+
 /** The recommended value in a few words, and how to apply it where that takes a sentence. */
 export function recommendedOf(s: ProductSetting): { value: string | null; how: string | null } {
   const rec = s.recommended.trim();
@@ -77,7 +80,7 @@ export function SettingLink({ setting }: { setting: ProductSetting }) {
 }
 
 /** One setting in a few lines: its name and page, how it is set, where, and the value to set. */
-export function SettingCard({ setting, tag }: { setting: ProductSetting; tag?: string }) {
+export function SettingCard({ setting, tag = setting.product ? productTag(setting.product) : undefined }: { setting: ProductSetting; tag?: string }) {
   return (
     <div className="rounded-lg border border-line bg-paper px-3 py-2.5" data-setting-card={setting.id}>
       <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[13px] leading-snug">

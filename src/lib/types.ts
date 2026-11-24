@@ -784,6 +784,12 @@ export interface ProductSetting {
    * not the platform's own setting. It applies if that box is built with it.
    */
   builtWith?: string;
+  /**
+   * On a platform whose boxes carry options (on-premises): the product this row belongs to, as
+   * the options name it ("LiteLLM" for the option "LiteLLM Proxy"). It is shown as "If you use
+   * LiteLLM". Absent: the row applies whatever is chosen (your own code, a process).
+   */
+  product?: string;
 }
 
 /**
@@ -873,6 +879,79 @@ export interface CloudBinding {
    * builder's choice.
    */
   builtWith?: string;
+  /**
+   * The products an organisation chooses between for this box on this platform, open source and
+   * commercial, none ranked. Where a platform has options, `service` names the role, not a product.
+   */
+  options?: TechOption[];
+  /** Notes on the bound service itself: its limits, edition requirements, preview status, quirks. */
+  watch?: WatchNote[];
+}
+
+/** A limit, an edition requirement, a preview status or a quirk, with the page that says so. */
+export interface WatchNote {
+  text: string;
+  url?: string;
+}
+
+/** A product that can fill a role on a platform. None is ranked. */
+export interface TechOption {
+  /** As its vendor or project names it. */
+  name: string;
+  kind: "open" | "commercial";
+  /** Its own page. */
+  url: string;
+  /** What sets it apart, in one line of at most 160 characters. */
+  note?: string;
+  /** Ids of the platform's packs it is part of: the pack's product for this box. */
+  packs?: string[];
+  /** Its limits, edition requirements, preview status and quirks. */
+  watch?: WatchNote[];
+}
+
+/** Words of a name, for comparing names that differ only in case and punctuation. */
+const words = (s: string) => ` ${s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+
+/**
+ * True when an option's name names a product: it is the product ("LiteLLM Proxy"), or carries the
+ * product's name as whole words ("Envoy Gateway in front of LiteLLM" names LiteLLM; "Red Hat build
+ * of Keycloak" names Keycloak). A setting's `product` is matched to the options this way.
+ */
+export const namesProduct = (optionName: string, product: string): boolean => words(optionName).includes(words(product));
+
+export const PACK_COMPARE = [
+  ["licence", "Licence"],
+  ["support", "Support"],
+  ["covers", "What it covers"],
+  ["bringYourOwn", "What you bring"],
+  ["integration", "What comes integrated"],
+  ["effort", "What your team operates"],
+] as const;
+export type PackCompareKey = (typeof PACK_COMPARE)[number][0];
+
+/**
+ * A set of technologies their vendor or project documents as working together, that
+ * organisations adopt together. A platform pack fills most roles; an add-on replaces some roles of
+ * any platform pack. A pack's product for a box is the box's option whose `packs` names it.
+ */
+export interface TechPack {
+  /** camelCase, unique on the platform; the key in the address (`stack=`, `addons=`). */
+  id: string;
+  name: string;
+  kind: "open" | "commercial" | "mixed";
+  scope: "platform" | "addon";
+  vendor?: string;
+  url?: string;
+  asOf: string;
+  status: "ga" | "preview" | "mixed";
+  /** Two sentences: what it is and who runs it. */
+  summary: string;
+  /** One sentence: when an organisation chooses it. */
+  fits: string;
+  compare: Record<PackCompareKey, string>;
+  /** Where its vendor documents two of its products working together. */
+  integrations?: { between: string[]; what: string; url: string }[];
+  sources: string[];
 }
 
 /** What a supporting service is for, in the words a builder would look for it under. */
@@ -1003,6 +1082,11 @@ export interface CloudPlatform {
   notOffered?: { architecture: string; why: string; instead?: string }[];
   /** How the organisation's own boundary is titled on the drawing when this platform is chosen. */
   boundary?: string;
+  /**
+   * Where the organisation chooses the products itself (its own data centre): the sets of products
+   * documented to work together. The options on each box say which pack each belongs to.
+   */
+  packs?: TechPack[];
   settings: ProductSetting[];
   implementations: CloudImplementation[];
 }

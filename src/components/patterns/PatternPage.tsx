@@ -4,8 +4,9 @@
  * One pattern: what it is and when it applies, its drawing, then the tabs beneath. Enable comes
  * first because it is what a reader came for; how the pattern works, where risk enters, how
  * data flows and the incidents that happened on it sit behind it. The pattern itself is fixed by the address
- * (`/patterns/<slug>/`); the tab, the cloud it is shown as built on and the open product ride in
- * the query, the open control in the anchor, so every view of a pattern can be shared.
+ * (`/patterns/<slug>/`); the tab, the cloud it is shown as built on, how it is hosted there, the
+ * stack chosen (`stack=`, `addons=`) and the open product ride in the query, the open control in
+ * the anchor, so every view of a pattern can be shared and comes back with Back.
  */
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -14,7 +15,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArchetypeView } from "@/components/reference/ArchetypeView";
 import { ArchPicker } from "@/components/reference/ArchPicker";
 import type { Highlight } from "@/components/drawing/types";
-import { cloudFromSlug, cloudProductFor, cloudSlug } from "@/components/cloud/model";
+import { cloudFromSlug, cloudProductFor, cloudSlug, hostedAs, NO_STACK, stackFrom, type Stack } from "@/components/cloud/model";
 import { archetypeById, archetypesInOrder, cloudById, productsForArchetype, surfaces, toolById, toolsForArchetype } from "@/lib/data";
 import { PATTERN_TABS, ROUTES, patternHref, type PatternTab } from "@/lib/routes";
 
@@ -44,6 +45,14 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
   // How the pattern is hosted on that cloud (`?host=aks`); null is the option its mapping describes.
   const linkedHost = linkedCloud ? params.get("host") : null;
   const [host, setHost] = useState<string | null>(linkedHost);
+  // Where the platform has packs, the products chosen (`?stack=<pack>&addons=<id,id>`), as hosted.
+  const hostedFor = (cloudId: string | null, hostId: string | null) => {
+    const p = cloudProductFor(archetype.id, cloudId);
+    return p ? hostedAs(p, hostId) : null;
+  };
+  const linkedStackKey = `${params.get("stack") ?? ""}|${params.get("addons") ?? ""}`;
+  const linkedStack = stackFrom(hostedFor(linkedCloud, linkedHost), params.get("stack"), params.get("addons"));
+  const [stack, setStack] = useState<Stack>(linkedStack);
   // Index into the walk list, or null for the resting drawing. The flows tab opens on the
   // complete walk; every other tab shows the whole pattern, nothing faded.
   const [walkIndex, setWalkIndex] = useState<number | null>(tab === "flows" ? 0 : null);
@@ -52,7 +61,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
 
   // A link to this page from this page (search, say) changes the URL but not the mounted view:
   // adopt what it names. Our own replaceState echoes back here too, but matches the state already.
-  const linkKey = `${linkedTab}|${linkedTool}|${linkedCloud}|${linkedHost}`;
+  const linkKey = `${linkedTab}|${linkedTool}|${linkedCloud}|${linkedHost}|${linkedStackKey}`;
   const [seenKey, setSeenKey] = useState(linkKey);
   if (linkKey !== seenKey) {
     setSeenKey(linkKey);
@@ -61,6 +70,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     if (linkedToolOnly !== (selected?.tool ?? null)) setSelected(linkedToolOnly ? { tool: linkedToolOnly } : null);
     if (linkedCloud !== cloud) setCloud(linkedCloud);
     if (linkedHost !== host) setHost(linkedHost);
+    if (linkedStack.pack !== stack.pack || linkedStack.addons.join(",") !== stack.addons.join(",")) setStack(linkedStack);
   }
 
   // A product of another pattern in the address belongs on that pattern's page (a platform's own
@@ -106,12 +116,14 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     if (tab !== "overview") query.set("tab", tab);
     if (cloud) query.set("cloud", cloudSlug(cloud));
     if (cloud && host) query.set("host", host);
+    if (cloud && stack.pack) query.set("stack", stack.pack);
+    if (cloud && stack.addons.length) query.set("addons", stack.addons.join(","));
     // The open product stays in the address, a cloud included: the address is read back into
     // this page's state, so leaving it out would fold the step the reader just opened.
     if (tab === "enable" && selected) query.set("tool", selected.tool);
     const open = tab === "enable" && highlight?.kind === "mitigation" ? `#control-${highlight.id}` : "";
     window.history.replaceState(null, "", `${window.location.pathname}${query.size ? `?${query}` : ""}${open}`);
-  }, [arrived, elsewhere, tab, selected, highlight, cloud, host]);
+  }, [arrived, elsewhere, tab, selected, highlight, cloud, host, stack]);
 
   const onWalk = (i: number | null) => {
     setWalkIndex(i);
@@ -175,12 +187,21 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
           onPickTool={(id) => setSelected(id ? { tool: id } : null)}
           cloud={cloud}
           onCloud={(id) => {
-            // A hosting option belongs to one platform: changing the platform lets go of it.
-            if (id !== cloud) setHost(null);
+            // A hosting option and a stack belong to one platform: changing the platform lets go of them.
+            if (id !== cloud) {
+              setHost(null);
+              setStack(NO_STACK);
+            }
             setCloud(id);
           }}
           host={host}
-          onHost={setHost}
+          onHost={(id) => {
+            setHost(id);
+            // A pack that fills no box once hosted another way is let go of.
+            setStack((s) => stackFrom(hostedFor(cloud, id), s.pack, s.addons));
+          }}
+          stack={stack}
+          onStack={setStack}
         />
       </div>
     </>

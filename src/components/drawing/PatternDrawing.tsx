@@ -37,7 +37,6 @@ export function PatternDrawing({
   pins = "controls",
   onPickMitigation,
   services = null,
-  differs = null,
   ownBoundary = null,
   builtWith = null,
   minScale = MIN_SCALE,
@@ -55,8 +54,6 @@ export function PatternDrawing({
   onPickMitigation?: (id: string) => void;
   /** Block id -> the cloud service that plays it; null draws the generic components. */
   services?: Map<string, BlockService> | null;
-  /** Flow key or block id -> how the chosen cloud differs there. */
-  differs?: Map<string, string> | null;
   /** The title of the organisation's own boundary, when the chosen platform is not a cloud. */
   ownBoundary?: string | null;
   /** Block id -> the framework or server the reader chose to build that box with. */
@@ -231,7 +228,6 @@ export function PatternDrawing({
       overlay={overlay}
       pins={pins}
       services={services}
-      differs={differs}
       ownBoundary={ownBoundary}
       builtWith={builtWith}
       onPickMitigation={onPickMitigation}
@@ -287,7 +283,23 @@ export function PatternDrawing({
           {card.holds.join(" · ")}
         </p>
       )}
+      {card.role && <p className="mt-1 text-ink"><span className="text-ink-3">Role: </span>{card.role}</p>}
       {card.body && <p className="mt-1">{card.body.length > 360 ? `${card.body.slice(0, 357).trimEnd()}…` : card.body}</p>}
+      {card.options && card.options.length > 0 && (
+        <div className="mt-1.5 border-t border-line pt-1.5" data-hover-options>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-ink-3">Options, none ranked</p>
+          <ul className="mt-0.5 space-y-0.5">
+            {card.options.slice(0, 9).map((o) => (
+              <li key={o.name} className={o.on ? "font-semibold text-ink" : undefined}>
+                {o.name}
+                <span className="text-ink-3"> · {o.kind === "open" ? "open source" : "commercial"}</span>
+                {o.on && <span className="ml-1 rounded bg-ink px-1 text-[10px] font-bold text-white">in effect</span>}
+              </li>
+            ))}
+            {card.options.length > 9 && <li className="text-ink-3">and {card.options.length - 9} more under How it works</li>}
+          </ul>
+        </div>
+      )}
     </div>
   );
 
@@ -327,18 +339,18 @@ export function DrawingLegend({
   className = "",
   risks = false,
   cloud,
-  differs = false,
   own = false,
+  roles = false,
 }: {
   className?: string;
   /** True where the coded risk tags are showing instead of the controls. */
   risks?: boolean;
   /** The cloud the drawing is shown as built on, by its short name. */
   cloud?: string;
-  /** True when the chosen cloud differs from the drawing somewhere, so the mark is explained. */
-  differs?: boolean;
   /** True when the chosen platform is the organisation's own data centre: it runs software, not a provider's services. */
   own?: boolean;
+  /** True when the boxes name their role, with the products that can play it in the hover help. */
+  roles?: boolean;
 }) {
   const swatch = (tone: keyof typeof BOUNDARY_TONE) => {
     const t = BOUNDARY_TONE[tone];
@@ -396,18 +408,15 @@ export function DrawingLegend({
         <span aria-hidden className="inline-block h-3 w-[3px] rounded-sm" style={{ background: "var(--ink-2)" }} />
         {REF_LAYERS.map((l) => l.label).join(" · ")} · Control point
       </span>
-      {cloud && differs && (
-        <span className="flex items-center gap-1.5" data-legend-differs>
-          <span aria-hidden className="inline-flex h-[15px] w-[16px] items-center justify-center rounded-[4px] border text-[11px] font-bold" style={{ background: "#FFF4D6", borderColor: "#B7791F", color: "#8A5A0B" }}>
-            ≠
-          </span>
-          {own ? "Differs when run on-premises" : `Differs on ${cloud}`} · hover for how
-        </span>
-      )}
       {cloud && (
         <span className="flex items-center gap-1.5" data-legend-cloud>
-          <span aria-hidden className="text-[11px] font-semibold text-ink">{own ? "Software name" : "Service name"}</span>
-          {own ? "The software that plays the box in your data centre" : `The ${cloud} service that plays the box`} · <span className="text-[9.5px] font-bold tracking-[0.06em] text-ink-3">YOU BUILD THIS</span> where none does
+          <span aria-hidden className="text-[11px] font-semibold text-ink">{roles ? "Role or product" : own ? "Software name" : "Service name"}</span>
+          {roles
+            ? "The role, or the product your stack puts there; hover a box for its options"
+            : own
+              ? "The software that plays the box in your data centre"
+              : `The ${cloud} service that plays the box`}{" "}
+          · <span className="text-[9.5px] font-bold tracking-[0.06em] text-ink-3">YOU BUILD THIS</span> where none does
         </span>
       )}
       <span className="text-ink-3">Hover anything for detail</span>

@@ -18,8 +18,8 @@
 import { useState, type ReactNode } from "react";
 
 import { controlName, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
-import type { Archetype, Mitigation } from "@/lib/types";
-import { hostingInEffect, productShort, type CloudProduct } from "@/components/cloud/model";
+import type { Archetype, Mitigation, ProductSetting } from "@/lib/types";
+import { hostingInEffect, MIX, NO_STACK, productShort, type CloudProduct, type Stack } from "@/components/cloud/model";
 import { anyControlStatus, BASELINE_HELP, ControlTable } from "./ControlTable";
 import { baselineNotPinned, controlGroups } from "./model";
 import { ChooseBuild } from "./ChooseBuild";
@@ -99,6 +99,9 @@ export function EnablePanel({
   cloud = null,
   host = null,
   onHost,
+  stack = NO_STACK,
+  onStack,
+  hiddenSettings = [],
 }: {
   archetype: Archetype;
   /** The control row that is open, and lit on the drawing. */
@@ -116,6 +119,11 @@ export function EnablePanel({
   /** The hosting option chosen on that platform, or null for the one its mapping describes. */
   host?: string | null;
   onHost?: (optionId: string | null) => void;
+  /** Where the platform has packs: the pack and add-ons chosen. */
+  stack?: Stack;
+  onStack?: (stack: Stack) => void;
+  /** The platform's settings rows the stack leaves out: their products are not in it. */
+  hiddenSettings?: ProductSetting[];
 }) {
   const groups = controlGroups(archetype);
   const controls = groups.flatMap((g) => g.controls);
@@ -134,6 +142,9 @@ export function EnablePanel({
   const frameworkCount = products.length - platformCount;
   // How it is hosted on the chosen platform, where its options have been compared.
   const inEffect = platform ? hostingInEffect(platform, host) : undefined;
+  // The stack chosen, where the platform has packs, in a few words.
+  const packs = platform?.kind === "cloud" ? platform.cloud.packs ?? [] : [];
+  const stackWords = [stack.pack === MIX ? "Your own mix" : packs.find((p) => p.id === stack.pack)?.name, ...stack.addons.map((id) => packs.find((p) => p.id === id)?.name)].filter(Boolean).join(" + ");
 
   // Every step starts folded. A step also stands open while it holds the lit control or the
   // opened product, so a chip picked on the drawing or a product link lands on a visible row.
@@ -217,6 +228,7 @@ export function EnablePanel({
             [
               platform ? platform.cloud.short : `${platformCount} platforms`,
               inEffect ? inEffect.name : null,
+              stackWords || null,
               framework ? framework.name : frameworkCount ? `${frameworkCount} ${frameworkCount === 1 ? "framework" : "frameworks"}` : null,
             ]
               .filter(Boolean)
@@ -224,7 +236,7 @@ export function EnablePanel({
           )}
           expanded={isOpen("choose")}
           onToggle={() => toggle("choose")}
-          lead="Where it runs, how it is hosted there, and what you build it with."
+          lead={packs.length ? "Where it runs, how it is hosted there, the products that fill its boxes, and what you build it with." : "Where it runs, how it is hosted there, and what you build it with."}
         >
           <ChooseBuild
             archetype={archetype}
@@ -232,6 +244,8 @@ export function EnablePanel({
             platform={platform}
             framework={framework}
             host={host}
+            stack={stack}
+            onStack={(s) => onStack?.(s)}
             onPickPlatform={(id) => onPickTool(id)}
             onPickHost={(id) => onHost?.(id)}
             onPickFramework={(id) => {
@@ -265,6 +279,8 @@ export function EnablePanel({
             products={products}
             selected={picked?.id ?? platform?.id ?? null}
             platform={platform}
+            hidden={hiddenSettings}
+            stackName={stackWords || null}
             onPick={(id) => onPickTool(id ?? platform?.id ?? null)}
             lit={open}
             onLight={(id) => {

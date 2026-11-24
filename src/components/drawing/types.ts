@@ -33,4 +33,10 @@ export type BlockService = {
   note?: string;
   /** True when this is the organisation's own recorded choice, drawn in place of the reference service. */
   ours?: boolean;
+  /** Where the organisation chooses the product: the role the box plays, and the products that can play it. */
+  role?: string;
+  options?: BoxOption[];
 };
+
+/** One product that can play a box, as its hover help lists it; `on` marks the one in effect. */
+export type BoxOption = { name: string; kind: "open" | "commercial"; on?: boolean };

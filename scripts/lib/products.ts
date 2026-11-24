@@ -6,18 +6,97 @@ import {
   CLOUD_ROLES,
   HOSTING_COMPARE,
   HOSTING_KINDS,
+  PACK_COMPARE,
   SETTING_AREAS,
   SETTING_VIAS,
   checkCommandProblem,
+  namesProduct,
   type Archetype,
+  type CloudBinding,
   type CloudImplementation,
   type CloudPlatform,
   type ProductSetting,
   type ProductStatusEntry,
+  type TechPack,
   type Tool,
+  type WatchNote,
 } from "../../src/lib/types";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const HTTPS = /^https:\/\//;
+
+/** A platform's packs: ids unique, every field there, the comparison on the same rows for each. Returns the ids. */
+export function checkPacks(where: string, packs: TechPack[] | undefined, fail: (msg: string) => void): Set<string> {
+  const ids = new Set<string>();
+  for (const p of packs ?? []) {
+    const at = `${where} pack ${p.id}`;
+    if (!/^[a-z][A-Za-z0-9]*$/.test(p.id ?? "")) fail(`${at}: id must be camelCase`);
+    if (ids.has(p.id)) fail(`${at}: pack ids are unique on a platform`);
+    ids.add(p.id);
+    if (!p.name?.trim()) fail(`${at}: needs a name`);
+    if (!["open", "commercial", "mixed"].includes(p.kind)) fail(`${at}: kind is open, commercial or mixed`);
+    if (!["platform", "addon"].includes(p.scope)) fail(`${at}: scope is platform (fills most roles) or addon (replaces some roles of any platform pack)`);
+    if (!["ga", "preview", "mixed"].includes(p.status)) fail(`${at}: status is ga, preview or mixed`);
+    if (!String(p.asOf ?? "").trim()) fail(`${at}: needs asOf`);
+    if (p.url !== undefined && !HTTPS.test(p.url)) fail(`${at}: url must be https`);
+    const summary = String(p.summary ?? "").trim();
+    if (!summary || summary.length > 600) fail(`${at}: summary is two sentences, at most 600 characters`);
+    const fits = String(p.fits ?? "").trim();
+    if (!fits || fits.length > 240) fail(`${at}: fits is one sentence, at most 240 characters`);
+    for (const [key, label] of PACK_COMPARE) {
+      const text = String(p.compare?.[key] ?? "").trim();
+      if (!text) fail(`${at}: compare needs "${key}" (${label}); every pack answers the same rows`);
+      else if (text.length > 420) fail(`${at}: compare.${key} is ${text.length} characters; keep it to 420`);
+    }
+    const unknown = Object.keys(p.compare ?? {}).filter((k) => !PACK_COMPARE.some(([key]) => key === k));
+    if (unknown.length) fail(`${at}: unknown compare row ${unknown.join(", ")}`);
+    for (const i of p.integrations ?? []) {
+      if (!Array.isArray(i.between) || i.between.length < 2 || !i.what?.trim()) fail(`${at}: an integration names two products and what is integrated`);
+      if (!HTTPS.test(i.url ?? "")) fail(`${at}: an integration needs the https page that documents it`);
+    }
+    if (!p.sources?.length) fail(`${at}: needs the pages it rests on`);
+    for (const u of p.sources ?? []) if (!HTTPS.test(u)) fail(`${at}: a source must be an https address`);
+  }
+  return ids;
+}
+
+function checkWatch(at: string, watch: WatchNote[] | undefined, fail: (msg: string) => void) {
+  for (const w of watch ?? []) {
+    if (!String(w.text ?? "").trim()) fail(`${at}: a watch note needs text`);
+    if (w.url !== undefined && !HTTPS.test(w.url)) fail(`${at}: a watch note's url must be https`);
+  }
+}
+
+/**
+ * A box's options: names unique, each open or commercial with its own page and a one-line note,
+ * each pack it names one of the platform's. On a component box a pack has one product, so it is
+ * named by one option at most; a control-plane box is several products at once.
+ */
+function checkOptions(at: string, b: CloudBinding, packIds: Set<string>, control: boolean, fail: (msg: string) => void) {
+  checkWatch(at, b.watch, fail);
+  if (b.options === undefined) return;
+  if (!Array.isArray(b.options) || !b.options.length) fail(`${at}: options is a list of the products that can fill the box`);
+  if (!packIds.size) fail(`${at}: options are offered on a platform with packs`);
+  const names = new Set<string>();
+  const perPack = new Map<string, number>();
+  for (const o of b.options ?? []) {
+    const oat = `${at} option ${o.name}`;
+    if (!o.name?.trim()) fail(`${at}: an option needs a name`);
+    if (names.has(o.name)) fail(`${oat}: option names are unique within a box`);
+    names.add(o.name);
+    const extra = Object.keys(o).filter((k) => !["name", "kind", "url", "note", "packs", "watch"].includes(k));
+    if (extra.length) fail(`${oat}: unknown field ${extra.join(", ")}`);
+    if (!["open", "commercial"].includes(o.kind)) fail(`${oat}: kind is open or commercial`);
+    if (!HTTPS.test(o.url ?? "")) fail(`${oat}: needs its own https page`);
+    if (o.note !== undefined && (!o.note.trim() || o.note.length > 160)) fail(`${oat}: note is one line of at most 160 characters`);
+    for (const p of o.packs ?? []) {
+      if (!packIds.has(p)) fail(`${oat}: unknown pack ${p}`);
+      perPack.set(p, (perPack.get(p) ?? 0) + 1);
+    }
+    checkWatch(oat, o.watch, fail);
+  }
+  if (!control) for (const [p, n] of perPack) if (n > 1) fail(`${at}: ${n} options name pack ${p}; a pack has one product for a box`);
+}
 
 /**
  * One product's (or one cloud's) settings, checked to the rubric in data/tooling/BASELINE.md:
@@ -50,6 +129,7 @@ export function checkSettings(
     if (s.url && !/^https:\/\//.test(s.url)) ctx.fail(`${at}: url must be https`);
     if (!SETTING_AREAS.includes(s.area)) ctx.fail(`${at}: area must be one of ${SETTING_AREAS.join(", ")}`);
     if (s.builtWith !== undefined && (typeof s.builtWith !== "string" || !s.builtWith.trim() || s.builtWith.length > 40)) ctx.fail(`${at}: builtWith names a framework or server in 1 to 40 characters`);
+    if (s.product !== undefined && (typeof s.product !== "string" || !s.product.trim() || s.product.length > 60)) ctx.fail(`${at}: product names the product the row belongs to in 1 to 60 characters`);
     if (s.check) {
       // A check reads and never changes: this catalogue does not tell an organisation how to deploy.
       const problem = checkCommandProblem(String(s.check.command ?? ""));
@@ -99,6 +179,9 @@ export async function loadClouds(
     cloud.settings ??= [];
     cloud.implementations ??= [];
     checkSettings(where, cloud.settings, { mitigationIds: ctx.mitigationIds, fail: ctx.fail });
+    const packIds = checkPacks(where, cloud.packs, ctx.fail);
+    const filled = new Set<string>();
+    const optionNames = new Set<string>();
     const settingById = new Map(cloud.settings.map((s) => [s.id, s]));
     const used = new Set<string>();
     const implemented = new Set<string>();
@@ -124,10 +207,18 @@ export async function loadClouds(
         if (bound.has(b.block)) ctx.fail(`${at}: block ${b.block} bound twice`);
         bound.add(b.block);
         if (!b.service?.trim()) ctx.fail(`${at} ${b.block}: needs a service`);
-        const extra = Object.keys(b).filter((k) => !["block", "service", "note", "build", "builtWith", "url", "verified"].includes(k));
+        const extra = Object.keys(b).filter((k) => !["block", "service", "note", "build", "builtWith", "url", "verified", "options", "watch"].includes(k));
         // A comma inside an unquoted service splits it into a stray key: quote the value.
         if (extra.length) ctx.fail(`${at} ${b.block}: unknown field "${extra.join('", "')}" — quote a service or note that contains a comma`);
         if (b.builtWith !== undefined && (typeof b.builtWith !== "string" || !b.builtWith.trim() || b.builtWith.length > 40)) ctx.fail(`${at} ${b.block}: builtWith names a framework or server in 1 to 40 characters`);
+        // Where the organisation chooses the products, what a box is built with is one of its options.
+        if (packIds.size && b.builtWith !== undefined) ctx.fail(`${at} ${b.block}: a platform with packs lists what a box is built with as an option, not builtWith`);
+        const control = arch.blocks.find((x) => x.id === b.block)?.kind === "governance";
+        checkOptions(`${at} ${b.block}`, b, packIds, control, ctx.fail);
+        for (const o of b.options ?? []) {
+          optionNames.add(o.name);
+          for (const p of o.packs ?? []) filled.add(p);
+        }
         // The platform names where the box runs; the framework is recorded beside it, not inside the name.
         if (/\((Strands|ADK|Microsoft Agent Framework|LangGraph)\)\s*$/.test(b.service ?? "")) ctx.fail(`${at} ${b.block}: name the framework in builtWith, not in brackets after the service`);
       }
@@ -199,6 +290,7 @@ export async function loadClouds(
             seenBlocks.add(b.block);
             if (!b.service?.trim()) ctx.fail(`${oat} ${b.block}: needs a service`);
             if (b.url && !/^https:\/\//.test(b.url)) ctx.fail(`${oat} ${b.block}: url must be https`);
+            if (packIds.size && b.builtWith !== undefined) ctx.fail(`${oat} ${b.block}: a platform with packs lists what a box is built with as an option, not builtWith`);
           }
           for (const id of o.dropSettings ?? []) if (!(impl.settings ?? []).includes(id)) ctx.fail(`${oat}: drops ${id}, which the mapping does not list`);
           for (const id of o.addSettings ?? []) {
@@ -238,6 +330,13 @@ export async function loadClouds(
       for (const id of arch.mitigations) if (!delivered.has(id)) ctx.fail(`${at}: pinned control ${id} has no setting or code row`);
     }
     for (const s of cloud.settings) if (!used.has(s.id)) ctx.fail(`${where}: setting ${s.id} is used by no implementation`);
+    // Every pack is the product of at least one box, and every row's product is one of the options.
+    for (const id of packIds) if (!filled.has(id)) ctx.fail(`${where}: pack ${id} fills no box: no option lists it`);
+    for (const s of cloud.settings) {
+      if (s.product === undefined) continue;
+      if (!packIds.size) ctx.fail(`${where} setting ${s.id}: product tags a row on a platform whose boxes carry options; this one has no packs`);
+      else if (![...optionNames].some((n) => namesProduct(n, s.product!))) ctx.fail(`${where} setting ${s.id}: product "${s.product}" names no option on this platform`);
+    }
     for (const n of cloud.notOffered ?? []) {
       const arch = archById.get(n.architecture);
       if (!arch || arch.surface !== "surfaceCloud") ctx.fail(`${where}: notOffered names ${n.architecture}, which is not a hosted pattern`);

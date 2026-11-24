@@ -14,7 +14,7 @@ import { blockTab, chipColors, OVERLAY_STYLE } from "@/components/reference/flow
 import { controlName, riskById, riskCode, statusFor } from "@/lib/data";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ownedControls, summaryOf, wrap, type BoundaryTone, type ViewBox, type ViewLine, type ViewSpec } from "./layout";
-import { isLit, type BlockService, type Highlight, type StepOverlay } from "./types";
+import { isLit, type BlockService, type BoxOption, type Highlight, type StepOverlay } from "./types";
 
 export type DrawingPins = "risks" | "controls" | "all";
 
@@ -24,6 +24,9 @@ export interface HoverCard {
   body?: string;
   /** What a box holds: its sub-components, which the box itself sums up in one line. */
   holds?: string[];
+  /** Where the organisation chooses the product: the box's role and the products that can play it. */
+  role?: string;
+  options?: BoxOption[];
   x: number;
   y: number;
 }
@@ -53,7 +56,6 @@ export function BoxDiagram({
   overlay = null,
   pins = "controls",
   services = null,
-  differs = null,
   ownBoundary = null,
   builtWith = null,
   onPickMitigation,
@@ -74,8 +76,6 @@ export function BoxDiagram({
   pins?: DrawingPins;
   /** Block id -> the cloud service that plays it; null draws the generic components. */
   services?: Map<string, BlockService> | null;
-  /** Flow key or block id -> how the chosen cloud differs there. Each is marked on the drawing. */
-  differs?: Map<string, string> | null;
   /** The title of the organisation's own boundary when the pattern is shown somewhere other than a cloud ("Enterprise data centre"). */
   ownBoundary?: string | null;
   /** Block id -> the framework or server the reader chose to build that box with. */
@@ -140,13 +140,13 @@ export function BoxDiagram({
   const lineLit = (k: string) => (overlay ? ridden.has(k) : !walk || steps.has(k));
   const dim = (lit: boolean) => (lit ? 1 : 0.22);
 
-  const hover = (title: string, body?: string, holds?: string[]) => ({
-    onMouseEnter: (e: MouseEvent) => onHover?.({ title, body, holds, x: e.clientX, y: e.clientY }),
-    onMouseMove: (e: MouseEvent) => onHover?.({ title, body, holds, x: e.clientX, y: e.clientY }),
+  const hover = (title: string, body?: string, holds?: string[], choice?: { role?: string; options?: BoxOption[] }) => ({
+    onMouseEnter: (e: MouseEvent) => onHover?.({ title, body, holds, ...choice, x: e.clientX, y: e.clientY }),
+    onMouseMove: (e: MouseEvent) => onHover?.({ title, body, holds, ...choice, x: e.clientX, y: e.clientY }),
     onMouseLeave: () => onHover?.(null),
     onFocus: (e: FocusEvent) => {
       const r = (e.target as Element).getBoundingClientRect();
-      onHover?.({ title, body, holds, x: r.left + r.width / 2, y: r.bottom });
+      onHover?.({ title, body, holds, ...choice, x: r.left + r.width / 2, y: r.bottom });
     },
     onBlur: () => onHover?.(null),
   });
@@ -216,20 +216,10 @@ export function BoxDiagram({
     );
   };
 
-  /** The mark for a flow or box the chosen cloud does not follow: an amber "not equal" tag. */
   // The organisation's own boundary is named for where the pattern runs: a pattern shown in its
   // own data centre is not in "our cloud", so the title changes and the gloss drops those words.
   const named = (b: { owner: string; title: string; gloss?: string }) =>
     ownBoundary && b.owner === "cloud" ? { title: ownBoundary, gloss: b.gloss?.replace(/^our cloud[:,]?\s*/i, "") || undefined } : { title: b.title, gloss: b.gloss };
-
-  const differMark = (key: string, text: string, cx: number, cy: number) => (
-    <g key={`d-${key}`} data-differs={key} tabIndex={0} aria-label={`Differs here: ${text}`} style={{ cursor: "help" }} {...hover("Differs from the drawing here", text)}>
-      <rect x={cx - 9} y={cy - 8.5} width={18} height={17} rx={4} fill="#FFF4D6" stroke="#B7791F" strokeWidth={1.2} />
-      <text x={cx} y={cy + 4} textAnchor="middle" fontSize={12} fontWeight={700} fill="#8A5A0B">
-        ≠
-      </text>
-    </g>
-  );
 
   const stepDisc = (n: number, key: string, cx: number, cy: number, fill: string = STEP) => (
     <g key={`s-${key}-${n}`} aria-label={`Step ${n}`} data-step={n}>
@@ -350,7 +340,9 @@ export function BoxDiagram({
           .map((bx) => {
             const block = blocks.get(bx.id);
             if (!block) return null;
-            const service = services?.get(bx.id);
+            const bound = services?.get(bx.id);
+            // A control-plane box is a function several products play: it keeps its one-liner, and its options are in the hover help.
+            const service = bound && bx.tone !== "governance" ? bound : undefined;
             const sub = service ? service.service : summaryOf(block);
             // A long title takes a second line and the one-liner gives one up.
             const titleLines = wrap(block.title, bx.w - 22, 13.2, 2);
@@ -375,7 +367,9 @@ export function BoxDiagram({
                 key={bx.id}
                 data-block={bx.id}
                 style={{ opacity: dim(boxLit(bx.id)), transition: "opacity 150ms" }}
-                {...hover(block.title, (service?.note ?? block.note)?.trim(), (block.items ?? []).map((i) => i.label))}
+                {...hover(block.title, (bound?.note ?? block.note)?.trim(), (block.items ?? []).map((i) => i.label), bound?.options?.length ? { role: bound.role, options: bound.options } : undefined)}
+                data-box-options={bound?.options?.length || undefined}
+                aria-description={bound?.options?.length ? `Options: ${bound.options.map((o) => `${o.name} (${o.kind === "open" ? "open source" : "commercial"}${o.on ? ", in effect" : ""})`).join(" · ")}` : undefined}
               >
                 <rect x={bx.x} y={bx.y} width={bx.w} height={bx.h} rx={6} fill={fill} stroke={stroke} strokeWidth={hit ? 2 : bx.tone === "container" ? 1.3 : 1} />
                 {accent && <rect x={bx.x + 1} y={bx.y + 7} width={3} height={Math.min(bx.h - 14, 54)} rx={1.5} fill={accent} />}
@@ -462,9 +456,7 @@ export function BoxDiagram({
         {/* Pins on boxes */}
         {spec.boxes.map((bx) => {
           const mark = overlay?.marks[bx.id];
-          const differ = !overlay ? differs?.get(bx.id) : undefined;
           const items = [
-            ...(differ ? [{ w: 21, draw: (cx: number, cy: number) => differMark(bx.id, differ, cx, cy) }] : []),
             ...(mark !== undefined && phase ? [{ w: 19, draw: (cx: number, cy: number) => stepDisc(mark, bx.id, cx, cy, phase.stroke) }] : []),
             ...(showControls ? (controlsAt.get(bx.id) ?? []).map((id) => ({ w: 19, draw: (cx: number, cy: number) => chip(id, bx.id, cx, cy) })) : []),
             ...(showRisks ? (risksAt.get(bx.id) ?? []).map((id) => ({ w: TAG_W, draw: (cx: number, cy: number) => tag(id, bx.id, cx, cy, !boxLit(bx.id)) })) : []),
@@ -474,9 +466,7 @@ export function BoxDiagram({
 
         {/* Pins and step numbers on arrows */}
         {spec.lines.map((l) => {
-          const differ = !overlay ? differs?.get(l.key) : undefined;
           const items = [
-            ...(differ ? [{ w: 21, draw: (cx: number, cy: number) => differMark(l.key, differ, cx, cy) }] : []),
             ...(overlay ? [] : steps.get(l.key) ?? []).map((n) => ({ w: 19, draw: (cx: number, cy: number) => stepDisc(n, l.key, cx, cy) })),
             ...(showControls ? (controlsAt.get(l.key) ?? []).map((id) => ({ w: 19, draw: (cx: number, cy: number) => chip(id, l.key, cx, cy) })) : []),
             ...(showRisks ? (risksAt.get(l.key) ?? []).map((id) => ({ w: TAG_W, draw: (cx: number, cy: number) => tag(id, l.key, cx, cy, !lineLit(l.key)) })) : []),

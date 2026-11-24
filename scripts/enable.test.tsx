@@ -366,7 +366,9 @@ test("an open control gives each cloud option's place, value and reason; How it 
     const list = renderToStaticMarkup(<ComponentList archetype={a} cloud={products[0]} />);
     assert.equal([...list.matchAll(/data-component-service/g)].length, products[0].implementation.bindings.length, `${a.id}: every named component shows its service`);
     const table = renderToStaticMarkup(<CloudComparison archetype={a} products={products} />);
-    for (const p of products) for (const b of p.implementation.bindings) assert.ok(table.includes(esc(b.service)), `${a.id}: ${p.cloud.short} ${b.block}`);
+    // A control-plane box is compared by the settings that deliver its controls, wherever a platform also lists its options.
+    const control = new Set(a.blocks.filter((b) => b.kind === "governance").map((b) => b.id));
+    for (const p of products) for (const b of p.implementation.bindings) if (!control.has(b.block)) assert.ok(table.includes(esc(b.service)), `${a.id}: ${p.cloud.short} ${b.block}`);
   }
 });
 
