@@ -29,7 +29,8 @@ export function NativeOptions({ id, name, options }: { id: string; name: string;
 }
 
 export function CloudComparison({ archetype, products }: { archetype: Archetype; products: CloudProduct[] }) {
-  const blocks = archetype.blocks.filter((b) => products.some((p) => bindingFor(p, b.id)));
+  // Control-plane boxes are compared by their settings below, wherever a platform also lists their options.
+  const blocks = archetype.blocks.filter((b) => b.kind !== "governance" && products.some((p) => bindingFor(p, b.id)));
   const governance = archetype.blocks.filter((b) => b.kind === "governance" && products.some((p) => controlPlaneOptions(archetype, p, b).length));
   return (
     <div className="overflow-x-auto" data-cloud-comparison>
@@ -54,6 +55,11 @@ export function CloudComparison({ archetype, products }: { archetype: Archetype;
                       <>
                         <span className="text-ink">{binding.service}</span>
                         {binding.build && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-3">You build this</span>}
+                        {binding.options?.length ? (
+                          <span className="block text-[11.5px] text-ink-3" data-comparison-options>
+                            {binding.options.length} options, for example {binding.options.slice(0, 2).map((o) => o.name).join(" or ")}
+                          </span>
+                        ) : null}
                         {binding.builtWith && !binding.service.includes(binding.builtWith) && (
                           <span className="block text-[11.5px] text-ink-3" data-built-with>
                             built with {binding.builtWith} in {p.cloud.selfManaged ? "this mapping" : `${p.cloud.short}'s guides`}
@@ -104,7 +110,7 @@ export function OnCloud({ archetype, product }: { archetype: Archetype; product:
       {impl.summary && <Prose blocks={impl.summary} size="sm" />}
 
       <div>
-        <p className="eyebrow">Where {own ? "running it on-premises" : cloud.short} differs from the drawing</p>
+        <p className="eyebrow" data-differs-heading>How it differs {words.on}</p>
         {differences.length ? (
           <>
             <ul className="mt-2 space-y-2.5">

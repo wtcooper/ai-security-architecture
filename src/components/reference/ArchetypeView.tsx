@@ -15,7 +15,7 @@ import { EnablePanel } from "@/components/enable/EnablePanel";
 import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
 import { CrossingsRegister } from "@/components/drawing/CrossingsRegister";
 import { CloudSwitch } from "@/components/cloud/CloudSwitch";
-import { cloudProductFor, cloudProductsFor, differenceMarks, hostedAs, hostingInEffect, platformWords, type CloudProduct } from "@/components/cloud/model";
+import { boxProduct, cloudProductFor, cloudProductsFor, hostedAs, hostingInEffect, packsFor, platformWords, stackChosen, stackedAs, NO_STACK, type CloudProduct, type Stack } from "@/components/cloud/model";
 import { cloudById, componentChoiceFor, fillsOn, incidents, toolById } from "@/lib/data";
 import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
@@ -26,14 +26,16 @@ import { WalkList } from "./rail-lists";
 import { PatternIncidents, PatternRisks } from "@/components/patterns/PatternPanels";
 
 /**
- * Block id -> the cloud service drawn in it, cached per cloud and architecture so the drawing
- * receives the same Map on every render and does not rebuild its nodes.
+ * Block id -> the cloud service drawn in it, cached per cloud, architecture, hosting and stack so
+ * the drawing receives the same Map on every render and does not rebuild its nodes. Where the
+ * platform has packs, a box names its role, or the product the chosen stack puts there, and its
+ * options ride along for the hover help.
  */
 const serviceMaps = new Map<string, Map<string, BlockService> | null>();
-function servicesFor(product: CloudProduct, hostId: string | null) {
+function servicesFor(archetype: Archetype, product: CloudProduct, hostId: string | null, stack: Stack) {
   const cloudId = product.id;
   const archetypeId = product.implementation.architecture;
-  const key = `${cloudId}|${archetypeId}|${hostId ?? ""}`;
+  const key = `${cloudId}|${archetypeId}|${hostId ?? ""}|${stack.pack ?? ""}|${stack.addons.join(",")}`;
   if (!serviceMaps.has(key)) {
     const impl = product.implementation;
     serviceMaps.set(
@@ -43,11 +45,13 @@ function servicesFor(product: CloudProduct, hostId: string | null) {
             impl.bindings.map((b): [string, BlockService] => {
               // What the organisation recorded it runs there is drawn in place of the reference service.
               const ours = componentChoiceFor(cloudId, archetypeId, b.block);
+              const { text, inEffect } = boxProduct(archetype, b, stack);
+              const options = b.options?.map((o) => ({ name: o.name, kind: o.kind, on: inEffect.includes(o) }));
               return [
                 b.block,
                 ours
-                  ? { service: ours.uses, ours: true, note: [ours.note, `Your organisation's choice. The reference here is ${b.service}.`].filter(Boolean).join(" ") }
-                  : { service: b.service, build: b.build, note: b.note },
+                  ? { service: ours.uses, ours: true, note: [ours.note, `Your organisation's choice. The reference here is ${text}.`].filter(Boolean).join(" "), role: b.options ? b.service : undefined, options }
+                  : { service: text, build: b.build, note: b.note, role: b.options ? b.service : undefined, options },
               ];
             }),
           )
@@ -81,9 +85,12 @@ interface ArchetypeViewProps {
   /** How it is hosted on that platform, or null for the option the mapping describes. */
   host?: string | null;
   onHost?: (optionId: string | null) => void;
+  /** Where the platform has packs: the pack and add-ons chosen, as the address names them. */
+  stack?: Stack;
+  onStack?: (stack: Stack) => void;
 }
 
-export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud, host = null, onHost }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud, host = null, onHost, stack: chosenStack = NO_STACK, onStack }: ArchetypeViewProps) {
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const drawingRef = useRef<HTMLDivElement>(null);
   const open = highlight?.kind === "mitigation" ? highlight.id : null;
@@ -94,11 +101,20 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   const cloudProducts = cloudProductsFor(archetype.id);
   // The platform as hosted on the chosen option: a variant changes some components and settings.
   const mappedProduct = cloudProductFor(archetype.id, cloud);
-  const cloudProduct = mappedProduct ? hostedAs(mappedProduct, host) : null;
-  const hosting = cloudProduct ? hostingInEffect(cloudProduct, host) : undefined;
-  const services = cloudProduct ? servicesFor(cloudProduct, hosting && !hosting.mapped ? hosting.id : null) : null;
-  // Where the chosen cloud does not follow the drawing: marked on the drawing, listed under How it works.
-  const differs = useMemo(() => (cloudProduct ? differenceMarks(archetype, cloudProduct) : null), [archetype, cloudProduct]);
+  const hostedProduct = mappedProduct ? hostedAs(mappedProduct, host) : null;
+  const hosting = hostedProduct ? hostingInEffect(hostedProduct, host) : undefined;
+  // The products chosen where the platform has packs: the box text, and the settings that apply.
+  const stack = chosenStack;
+  const stacked = hostedProduct ? stackedAs(archetype, hostedProduct, stack) : null;
+  const cloudProduct = stacked?.product ?? null;
+  const hasPacks = Boolean(hostedProduct && packsFor(hostedProduct).platform.length + packsFor(hostedProduct).addons.length);
+  const services = hostedProduct ? servicesFor(archetype, hostedProduct, hosting && !hosting.mapped ? hosting.id : null, stack) : null;
+  // The stack in a few words: the platform pack, then any add-ons.
+  const packName =
+    [stack.pack, ...stack.addons]
+      .map((id) => hostedProduct?.cloud.packs?.find((p) => p.id === id)?.name)
+      .filter(Boolean)
+      .join(" + ") || undefined;
   // The framework or server chosen in the settings step, named in the box it fills.
   const builtWith = useMemo(() => {
     const chosen = tool ? toolById.get(tool) : undefined;
@@ -195,7 +211,15 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           <p className="text-[12.5px] leading-snug text-ink-3" data-cloud-caption>
             {cloudProduct ? (
               <>
-                Each box names the {platformWords(cloudProduct.cloud).service} that plays it{hosting ? `, hosted on ${hosting.name}` : ""}.
+                {hasPacks && !stackChosen(stack) ? (
+                  <>Each box names its role{hosting ? `, hosted on ${hosting.name}` : ""}; hover a box for the {platformWords(cloudProduct.cloud).service} that can play it, or choose a stack on Enable.</>
+                ) : hasPacks ? (
+                  <>
+                    Each box names the {platformWords(cloudProduct.cloud).service} {packName ? `${packName} puts there` : "your stack puts there"}, or its role where you bring your own{hosting ? `, hosted on ${hosting.name}` : ""}.
+                  </>
+                ) : (
+                  <>Each box names the {platformWords(cloudProduct.cloud).service} that plays it{hosting ? `, hosted on ${hosting.name}` : ""}.</>
+                )}
                 {(differCount > 0 || moreCount > 0) && (
                   <>
                     {" "}
@@ -234,13 +258,12 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               pins={highlight?.kind === "risk" ? "risks" : "controls"}
               onPickMitigation={pickChip}
               services={services}
-              differs={differs}
               ownBoundary={cloudProduct?.cloud.boundary ?? null}
               builtWith={builtWith}
               className="w-full"
             />
           </div>
-          <DrawingLegend className="mt-3 px-1" risks={highlight?.kind === "risk"} cloud={cloudProduct?.cloud.short} differs={Boolean(differs?.size)} own={Boolean(cloudProduct?.cloud.selfManaged)} />
+          <DrawingLegend className="mt-3 px-1" risks={highlight?.kind === "risk"} cloud={cloudProduct?.cloud.short} own={Boolean(cloudProduct?.cloud.selfManaged)} roles={hasPacks} />
         </>
       )}
 
@@ -272,6 +295,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           <ArchetypeDetail
             archetype={archetype}
             cloud={cloudProduct}
+            stack={stack}
             onEnable={() => go("enable")}
             risks={
               <PatternRisks
@@ -339,6 +363,9 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
             host={host}
             onHost={onHost}
             cloud={cloudProduct}
+            stack={stack}
+            onStack={onStack}
+            hiddenSettings={stacked?.hidden ?? []}
           />
         )}
       </div>

@@ -25,7 +25,7 @@ import type { AdoptionStatus, Archetype, ProductSetting } from "@/lib/types";
 import { ADOPTION_META } from "./labels";
 import { controlGroups, controlsDelivered, settingGroups } from "./model";
 import { ToolRecord } from "./ToolRecord";
-import { Recommended, recommendedOf, SetVia } from "./SettingParts";
+import { productTag, Recommended, recommendedOf, SetVia } from "./SettingParts";
 
 export function AdoptionPill({ status, title }: { status: AdoptionStatus; title?: string }) {
   const m = ADOPTION_META[status];
@@ -161,19 +161,21 @@ export function SettingsTable({
                 const a = settingAdoptionFor(product.id, s.id);
                 const ourLink = settingLinkFor(product.id, s.id);
                 const { value, how } = recommendedOf(s);
-                const source = (tagged || s.builtWith) && (
+                const source = (tagged || s.builtWith || s.product) && (
                   <span
                     className="ml-2 inline-block rounded border border-line bg-mist px-1.5 py-px align-[1px] text-[10.5px] font-semibold text-ink-2"
-                    data-setting-source={s.builtWith ? "framework" : product.kind}
+                    data-setting-source={s.product ? "product" : s.builtWith ? "framework" : product.kind}
                     title={
-                      s.builtWith
-                        ? `Applies if you build this with ${s.builtWith}, as ${shortOf(product) === "On-premises" ? "this mapping does" : `${shortOf(product)}'s own guides do`}; with another framework, use its own setting for the same control`
-                        : product.kind === "cloud"
-                          ? `A setting of ${product.cloud.name}: where it runs`
-                          : `A setting of ${product.tool.name}`
+                      s.product
+                        ? `A setting of ${s.product}. It applies if you use ${s.product}; with another product in its place, use that product's own setting for the same control`
+                        : s.builtWith
+                          ? `Applies if you build this with ${s.builtWith}, as ${shortOf(product)}'s own guides do; with another framework, use its own setting for the same control`
+                          : product.kind === "cloud"
+                            ? `A setting of ${product.cloud.name}: where it runs`
+                            : `A setting of ${product.tool.name}`
                     }
                   >
-                    {s.builtWith ?? shortOf(product)}
+                    {s.product ? productTag(s.product) : s.builtWith ?? shortOf(product)}
                   </span>
                 );
                 return (
@@ -356,6 +358,8 @@ export function ProductSettings({
   products,
   selected,
   platform = null,
+  hidden = [],
+  stackName = null,
   onPick,
   lit,
   onLight,
@@ -366,6 +370,9 @@ export function ProductSettings({
   selected: string | null;
   /** On a hosted pattern: the cloud or data centre the pattern is shown as built on. */
   platform?: Product | null;
+  /** The platform's rows the chosen stack leaves out, and the stack in a few words. */
+  hidden?: ProductSetting[];
+  stackName?: string | null;
   /** Picks a product; null lets go of the framework on a hosted pattern. */
   onPick: (id: string | null) => void;
   lit: string | null;
@@ -387,6 +394,9 @@ export function ProductSettings({
         </p>
       );
     }
+    // Where the platform has packs, a row that belongs to one product says so, and a stack narrows them.
+    const tagged = where?.kind === "cloud" && where.settings.some((s) => s.product);
+    const hiddenProducts = [...new Set(hidden.map((s) => s.product).filter(Boolean))];
     return (
       <div data-hosted-settings>
         <div className="space-y-2.5">
@@ -394,6 +404,18 @@ export function ProductSettings({
             <ProductHeader key={p.id} product={p} archetype={archetype} />
           ))}
         </div>
+        {tagged && (
+          <p className="mt-2 max-w-3xl text-[12px] leading-snug text-ink-3" data-stack-settings-hint>
+            {hidden.length ? (
+              <>
+                Showing the rows for {stackName ?? "your stack"}, and those that apply whatever you choose. {hidden.length} {hidden.length === 1 ? "row belongs" : "rows belong"} to products it puts something else in place of ({hiddenProducts.join(", ")}): choose{" "}
+                <span className="font-semibold text-ink-2">Mix your own</span> in the step above to see every row.
+              </>
+            ) : (
+              <>A row tagged &ldquo;If you use&rdquo; belongs to that product; with another in its place, use that product&rsquo;s own setting for the same control. Choose a stack in the step above to see only the rows for it.</>
+            )}
+          </p>
+        )}
         {chosen.some((p) => p.settings.length) && (
           <div className="mt-3">
             <SettingsTable key={chosen.map((p) => `${p.id}:${p.settings.length}`).join("+")} products={chosen.filter((p) => p.settings.length)} archetype={archetype} lit={lit} onLight={onLight} />

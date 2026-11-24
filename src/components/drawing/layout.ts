@@ -360,6 +360,8 @@ function compute(a: Archetype): ViewSpec {
   const degree = (id: string) => a.edges.filter((e) => e.from === id || e.to === id).length;
 
   // Everything a box may have to show under its title: its one-liner, and each cloud's service for it.
+  // A pack's product shown in place of a role takes the room the box already has; its full name is
+  // in the hover help, so a long one does not make every platform's drawing taller.
   const wordsOf = (b: ArchBlock): { text: string; build?: boolean }[] => [
     ...(summaryOf(b) ? [{ text: summaryOf(b) }] : []),
     ...clouds.flatMap((c) =>
@@ -1045,14 +1047,7 @@ function label(a: Archetype, paths: Map<string, Pt[]>, boxes: ViewBox[], boundar
     const chosen = best as { score: number; pin: ViewLine["pin"] } | null;
     pins.set(key, chosen?.pin ?? { x: pts[0][0], y: pts[0][1], horizontal: true, room: 0 });
   }
-  // A flow that some platform marks as different carries one more mark there, so its words keep further off.
-  const marked = new Set(
-    clouds.flatMap((c) => (c.implementations.find((i) => i.architecture === a.id)?.differences ?? []).flatMap((d) => (d.at.includes("->") ? [d.at, d.at.split("->").reverse().join("->")] : []))),
-  );
-  const pinRects = [...pins].map(([key, p]) => {
-    const more = marked.has(key) ? 20 : 0;
-    return { key, r: p.horizontal ? { x: p.x - 30 - more / 2, y: p.y - 10, w: 60 + more, h: 20 } : { x: p.x - 14 - more / 2, y: p.y - 26 - more / 2, w: 28 + more, h: 52 + more } };
-  });
+  const pinRects = [...pins].map(([key, p]) => ({ key, r: p.horizontal ? { x: p.x - 30, y: p.y - 10, w: 60, h: 20 } : { x: p.x - 14, y: p.y - 26, w: 28, h: 52 } }));
 
   const placed: Rect[] = [];
   const out: ViewLine[] = [];

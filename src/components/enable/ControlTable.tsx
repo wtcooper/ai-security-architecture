@@ -23,6 +23,7 @@ import type { Archetype, ProductSetting } from "@/lib/types";
 import { NativeOptions } from "@/components/cloud/CloudViews";
 import { optionsFor, productShort } from "@/components/cloud/model";
 import { placementsFor, type ControlGroup } from "./model";
+import { productTag } from "./SettingParts";
 import { controlHref } from "@/lib/routes";
 
 /** True once the organisation has recorded a status for any control (data/org/controls.yaml). */
@@ -35,8 +36,9 @@ function SettingNames({ short, options }: { short: string; options: ProductSetti
   if (!options.length) return null;
   const shown = options.slice(0, 2).map((s) => s.name);
   const more = options.length - shown.length;
+  // A row that belongs to one product says so, where the organisation chooses the product.
   return (
-    <span className="block truncate" data-option-names title={options.map((s) => s.name).join(" · ")}>
+    <span className="block truncate" data-option-names title={options.map((s) => (s.product ? `${s.name} (${productTag(s.product).toLowerCase()})` : s.name)).join(" · ")}>
       <span className="font-semibold text-ink-2">{short}: </span>
       {shown.join(" · ")}
       {more > 0 && <span className="text-ink-3"> +{more}</span>}

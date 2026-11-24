@@ -106,14 +106,19 @@ export function audit(a: Archetype): { spec: ViewSpec; findings: Finding[]; open
   }
   for (const l of spec.lines) if (l.label?.lines.at(-1)?.endsWith("…")) add("L5 label cut", l.key);
   // ...including when the pattern is drawn as one cloud and each box shows the service that plays it.
+  const shortened: string[] = [];
   for (const cloud of dataset.clouds) {
     const impl = cloud.implementations.find((i) => i.architecture === a.id);
     for (const binding of impl?.bindings ?? []) {
       const b = box.get(binding.block);
-      if (!b) continue;
+      // A control-plane box keeps its one-liner whatever plays it; its options are in the hover help.
+      if (!b || b.tone === "governance") continue;
       const title = wrap(block.get(b.id)!.title, b.w - 22, 13.2, 2);
-      const room = b.tone === "container" ? b.lines : b.tone === "governance" ? 3 : Math.max(1, b.lines - (title.length - 1) - (binding.build ? 1 : 0));
+      const room = b.tone === "container" ? b.lines : Math.max(1, b.lines - (title.length - 1) - (binding.build ? 1 : 0));
       if (wrap(binding.service, b.w - 24, 10.5, room).at(-1)?.endsWith("…")) add("L5 service cut", `${cloud.short}: ${block.get(b.id)!.title} is "${binding.service}"`);
+      // A pack's product shown in place of the role takes the same room; its full name is in the hover help.
+      const cut = (binding.options ?? []).filter((o) => o.packs?.length && wrap(o.name, b.w - 24, 10.5, room).at(-1)?.endsWith("…"));
+      if (cut.length) shortened.push(`${cloud.short}: ${block.get(b.id)!.title} shortens ${cut.map((o) => `"${o.name}"`).join(", ")} to fit; the hover help has it in full`);
     }
   }
 
@@ -158,6 +163,8 @@ export function audit(a: Archetype): { spec: ViewSpec; findings: Finding[]; open
   // Open questions: gaps in the pattern itself that only its author can settle. Reported, not failed.
   const open: Finding[] = [];
   const ask = (rule: string, detail: string) => open.push({ rule, detail });
+  // A long product name a pack puts in a box: worth a look, not a fault of the pattern.
+  for (const s of shortened) ask("C10 pack product shortened", s);
   const owner = new Map((a.zones ?? []).map((z) => [z.id, z.owner]));
   const plane = a.blocks.filter((b) => owner.get(b.zone ?? "") === "governance");
   for (const b of plane) if (!ownedControls(a, b).length) ask("C5 empty control-plane box", `${b.title} owns no control this pattern pins`);

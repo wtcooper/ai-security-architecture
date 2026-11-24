@@ -3,8 +3,10 @@
 /**
  * Step 2 of Enable on a hosted pattern: the choices a builder makes before any setting, in the
  * order they are made. Where it runs (a cloud, or the organisation's own data centre); how it is
- * hosted there (your own cluster, the platform's own runtime, or a managed service);
- * and what the boxes you build are built with (a framework or a server).
+ * hosted there (your own cluster, the platform's own runtime, or a managed service); where the
+ * organisation chooses the products itself, which ones fill the boxes (Your stack: a pack, add-ons
+ * or its own mix, in ChooseStack); and what the boxes you build are built with (a framework or a
+ * server).
  *
  * The hosting options of a platform are compared on the same rows, each a sentence taken from the
  * vendor's own pages, with no ranking. Two of the three kinds keep the same pattern and change
@@ -16,11 +18,12 @@
  */
 import Link from "next/link";
 
-import { HOSTING_KIND_LABEL, cloudSlug, hostingInEffect, hostingOptionsFor, hostingRows, hostingWords, isManagedTarget, notOfferedFor, selfRunPatternsFor, type CloudProduct, type HostingWords } from "@/components/cloud/model";
+import { HOSTING_KIND_LABEL, NO_STACK, cloudSlug, hostingInEffect, hostingOptionsFor, hostingRows, hostingWords, isManagedTarget, notOfferedFor, packsFor, selfRunPatternsFor, type CloudProduct, type HostingWords, type Stack } from "@/components/cloud/model";
 import { adoptionFor, archetypeById, fillsOn, hostingAdoptionFor, type Product } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
 import type { Archetype, BuilderKind, HostingOption } from "@/lib/types";
 import { AdoptionPill, ChoiceRow, ProductPills } from "./ProductSettings";
+import { ChooseStack } from "./ChooseStack";
 
 const BUILDER_GROUPS: { kind: BuilderKind; label: string }[] = [
   { kind: "framework", label: "Open-source frameworks, any model" },
@@ -248,6 +251,8 @@ export function ChooseBuild({
   platform,
   framework,
   host,
+  stack = NO_STACK,
+  onStack = () => {},
   onPickPlatform,
   onPickHost,
   onPickFramework,
@@ -259,6 +264,9 @@ export function ChooseBuild({
   framework: Product | null;
   /** The hosting option chosen, or null for the one the mapping describes. */
   host: string | null;
+  /** Where the platform has packs: the pack and add-ons chosen. */
+  stack?: Stack;
+  onStack?: (stack: Stack) => void;
   onPickPlatform: (id: string) => void;
   onPickHost: (id: string | null) => void;
   onPickFramework: (id: string | null) => void;
@@ -274,6 +282,9 @@ export function ChooseBuild({
   const options = platform ? hostingOptionsFor(platform) : [];
   const words = hostingWords(archetype.id);
   const short = platform ? (platform.cloud.selfManaged ? "This mapping" : `${platform.cloud.short}'s own guides`) : "";
+  // Where the organisation chooses the products, which ones fill the boxes is a choice of its own.
+  const stacks = platform ? packsFor(platform) : { platform: [], addons: [] };
+  const withStack = Boolean(platform && stacks.platform.length + stacks.addons.length);
   return (
     <div className="space-y-4" data-choose-build>
       <ChoiceRow n="a" label="Where it runs" hint="a cloud, or your own data centre">
@@ -327,8 +338,14 @@ export function ChooseBuild({
         )}
       </ChoiceRow>
 
+      {withStack && platform && (
+        <ChoiceRow n="c" label="Your stack" hint="the products that fill the boxes: a pack its makers document together, add-ons, or your own mix">
+          <ChooseStack archetype={archetype} platform={platform} stack={stack} onStack={onStack} />
+        </ChoiceRow>
+      )}
+
       {frameworks.length > 0 && (
-        <ChoiceRow n="c" label="What you build it with" hint={`fills ${filled.length === 1 ? "the" : "these boxes:"} ${filled.join(", ")}${filled.length === 1 ? " box" : ""}`}>
+        <ChoiceRow n={withStack ? "d" : "c"} label="What you build it with" hint={`fills ${filled.length === 1 ? "the" : "these boxes:"} ${filled.join(", ")}${filled.length === 1 ? " box" : ""}`}>
           <FrameworkCards
             frameworks={frameworks}
             selected={framework?.id ?? null}

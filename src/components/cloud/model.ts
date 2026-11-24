@@ -7,7 +7,7 @@
 import { ownedControls } from "@/components/drawing/layout";
 import { archetypesInOrder, clouds, productsForArchetype, tools, type Product } from "@/lib/data";
 import { cloudSlug } from "@/lib/routes";
-import { HOSTING_COMPARE, type Archetype, type ArchBlock, type CloudBinding, type CloudPlatform, type HostingCompareKey, type HostingOption, type ProductSetting, type Tool } from "@/lib/types";
+import { HOSTING_COMPARE, namesProduct, type Archetype, type ArchBlock, type CloudBinding, type CloudPlatform, type HostingCompareKey, type HostingOption, type ProductSetting, type TechOption, type TechPack, type Tool } from "@/lib/types";
 
 export type CloudProduct = Extract<Product, { kind: "cloud" }>;
 
@@ -296,12 +296,110 @@ export function differencesFor(archetype: Archetype, product: CloudProduct): Pla
   });
 }
 
-/** The marker text for each flow or box that differs: what the drawing shows on hover. */
-export function differenceMarks(archetype: Archetype, product: CloudProduct): Map<string, string> {
-  const marks = new Map<string, string>();
-  for (const d of differencesFor(archetype, product)) marks.set(d.key, marks.has(d.key) ? `${marks.get(d.key)} ${d.text}` : d.text);
-  return marks;
+// --- Technology packs: which products fill the boxes, where the organisation chooses them ------
+
+/**
+ * The products a reader has chosen on a platform with packs: one platform pack (or "mix", their
+ * own choice per box), and any add-ons, each of which replaces the platform pack's product on the
+ * boxes it covers. Nothing chosen is `{ pack: null, addons: [] }`.
+ */
+export interface Stack {
+  pack: string | null;
+  addons: string[];
 }
+export const MIX = "mix";
+export const NO_STACK: Stack = { pack: null, addons: [] };
+
+/** True when a stack puts a product on some box: a platform pack, or an add-on. */
+export const stackChosen = (stack: Stack) => Boolean((stack.pack && stack.pack !== MIX) || stack.addons.length);
+
+/** A control-plane box is a function, played by several products at once. */
+export const isControlBox = (archetype: Archetype, blockId: string) => archetype.blocks.find((b) => b.id === blockId)?.kind === "governance";
+
+/** The packs that fill at least one box of this pattern as hosted, platform packs and add-ons apart. */
+export function packsFor(product: CloudProduct): { platform: TechPack[]; addons: TechPack[] } {
+  const listed = new Set(product.implementation.bindings.flatMap((b) => (b.options ?? []).flatMap((o) => o.packs ?? [])));
+  const packs = (product.cloud.packs ?? []).filter((p) => listed.has(p.id));
+  return { platform: packs.filter((p) => p.scope === "platform"), addons: packs.filter((p) => p.scope === "addon") };
+}
+
+/** The stack an address names, keeping only what this pattern as hosted offers. */
+export function stackFrom(product: CloudProduct | null, pack: string | null | undefined, addons: string | string[] | null | undefined): Stack {
+  if (!product) return NO_STACK;
+  const { platform, addons: offered } = packsFor(product);
+  const ids = (Array.isArray(addons) ? addons : (addons ?? "").split(",")).map((x) => x.trim()).filter(Boolean);
+  return {
+    pack: pack === MIX || platform.some((p) => p.id === pack) ? (pack as string) : null,
+    addons: [...new Set(ids)].filter((id) => offered.some((p) => p.id === id)),
+  };
+}
+
+/**
+ * The products in effect on a box for a stack: the last chosen add-on that covers it, else the
+ * platform pack's. A component box has one; a control-plane box can have several. None: the
+ * stack does not fill the box, so its options are what you bring.
+ */
+export function productsInEffect(binding: CloudBinding, stack: Stack, control = false): TechOption[] {
+  const options = binding.options ?? [];
+  const of = (id: string) => options.filter((o) => o.packs?.includes(id));
+  for (const id of [...stack.addons].reverse()) {
+    const hit = of(id);
+    if (hit.length) return control ? hit : hit.slice(0, 1);
+  }
+  if (stack.pack && stack.pack !== MIX) {
+    const hit = of(stack.pack);
+    if (hit.length) return control ? hit : hit.slice(0, 1);
+  }
+  return [];
+}
+
+/** The boxes of this pattern a pack puts a product on, by block id. */
+export const boxesFilledBy = (product: CloudProduct, packId: string): string[] =>
+  product.implementation.bindings.filter((b) => b.options?.some((o) => o.packs?.includes(packId))).map((b) => b.block);
+
+/**
+ * Whether a settings row applies to the stack chosen. A row with no product applies whatever is
+ * chosen, and with nothing chosen every row is shown. Otherwise a row is shown when its product is
+ * in effect on some box, or when no box the stack fills offers something else in its place: a
+ * product that is an option only on boxes the stack leaves to you, or on no box at all, may be the
+ * one you run.
+ */
+export function settingApplies(archetype: Archetype, product: CloudProduct, stack: Stack, setting: ProductSetting): boolean {
+  const name = setting.product;
+  if (!name || !stackChosen(stack)) return true;
+  const bound = product.implementation.bindings.filter((b) => b.options?.length);
+  if (bound.some((b) => productsInEffect(b, stack, isControlBox(archetype, b.block)).some((o) => namesProduct(o.name, name)))) return true;
+  const offering = bound.filter((b) => !isControlBox(archetype, b.block) && b.options!.some((o) => namesProduct(o.name, name)));
+  return !offering.length || offering.some((b) => !productsInEffect(b, stack).length);
+}
+
+// Cached per platform as hosted, so a page receives the same object on every render.
+const stacked = new WeakMap<CloudProduct, Map<string, { product: CloudProduct; hidden: ProductSetting[] }>>();
+/**
+ * A platform as built with a stack: the same mapping, with the settings rows of products the
+ * stack puts something else in place of left out. They are counted, so a page can say so.
+ */
+export function stackedAs(archetype: Archetype, product: CloudProduct, stack: Stack): { product: CloudProduct; hidden: ProductSetting[] } {
+  if (!stackChosen(stack)) return { product, hidden: [] };
+  const key = `${archetype.id}|${stack.pack}|${stack.addons.join(",")}`;
+  const byStack = stacked.get(product) ?? new Map();
+  stacked.set(product, byStack);
+  const hit = byStack.get(key);
+  if (hit) return hit;
+  const keep = product.settings.filter((s) => settingApplies(archetype, product, stack, s));
+  const out = { product: { ...product, settings: keep }, hidden: product.settings.filter((s) => !keep.includes(s)) };
+  byStack.set(key, out);
+  return out;
+}
+
+/** What a box shows on a platform with packs, and its options as hover help marks them. */
+export function boxProduct(archetype: Archetype, binding: CloudBinding, stack: Stack): { text: string; inEffect: TechOption[] } {
+  const inEffect = productsInEffect(binding, stack, isControlBox(archetype, binding.block));
+  return { text: !isControlBox(archetype, binding.block) && inEffect[0] ? inEffect[0].name : binding.service, inEffect };
+}
+
+export const KIND_LABEL: Record<string, string> = { open: "Open source", commercial: "Commercial", mixed: "Open and commercial" };
+export const STATUS_LABEL: Record<string, string> = { ga: "Generally available", preview: "Preview", mixed: "Some parts in preview" };
 
 export const ROLE_LABEL: Record<string, string> = {
   identity: "Identity",

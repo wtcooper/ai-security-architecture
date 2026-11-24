@@ -11,11 +11,12 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { CloudComparison, OnCloud } from "@/components/cloud/CloudViews";
-import { bindingFor, cloudProductsFor, type CloudProduct } from "@/components/cloud/model";
+import { bindingFor, cloudProductsFor, isControlBox, KIND_LABEL, NO_STACK, productsInEffect, stackChosen, type CloudProduct, type Stack } from "@/components/cloud/model";
 import { summaryOf } from "@/components/drawing/layout";
+import { packShort } from "@/components/enable/ChooseStack";
 import { componentChoiceFor, fillsOn, toolsForArchetype } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
-import type { Archetype, ComponentChoice } from "@/lib/types";
+import type { Archetype, CloudBinding, ComponentChoice, WatchNote } from "@/lib/types";
 
 /**
  * What a box is built with, kept apart from where it runs: the catalogued frameworks and servers
@@ -71,12 +72,15 @@ function OurChoice({ choice }: { choice?: ComponentChoice }) {
 export function ArchetypeDetail({
   archetype,
   cloud = null,
+  stack = NO_STACK,
   onEnable,
   risks,
 }: {
   archetype: Archetype;
   /** The cloud the pattern is shown as built on. */
   cloud?: CloudProduct | null;
+  /** Where the platform has packs: the pack and add-ons chosen, which put a product on each box. */
+  stack?: Stack;
   /** Opens the Enable tab, where the pattern is put in place. */
   onEnable?: () => void;
   /** The risks that enter the pattern, as a folded section. */
@@ -108,7 +112,7 @@ export function ArchetypeDetail({
       )}
 
       <Section key={`components-${cloud?.id ?? "generic"}`} title="Components" count={archetype.blocks.length} defaultOpen={Boolean(cloud)}>
-        <ComponentList archetype={archetype} cloud={cloud} />
+        <ComponentList archetype={archetype} cloud={cloud} stack={stack} />
       </Section>
 
       {cloud && (
@@ -164,7 +168,63 @@ export function ArchetypeDetail({
   );
 }
 
-export function ComponentList({ archetype, cloud = null }: { archetype: Archetype; cloud?: CloudProduct | null }) {
+/** Notes on a product or a bound service: its limits, edition requirements, preview status and quirks. */
+function Watch({ notes }: { notes?: WatchNote[] }) {
+  if (!notes?.length) return null;
+  return (
+    <ul className="mt-0.5 space-y-0.5 text-[11.5px] text-ink-3" data-watch>
+      {notes.map((w, i) => (
+        <li key={i}>
+          <span className="font-semibold text-ink-2">Watch: </span>
+          {w.text}
+          {w.url && (
+            <>
+              {" "}
+              <a href={w.url} target="_blank" rel="noreferrer" className="font-semibold text-introduced hover:underline">
+                Source ↗
+              </a>
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Where the organisation chooses the product: the role, the product the chosen stack puts there,
+ * and every option with its kind and the packs it is part of, none ranked.
+ */
+function ComponentOptions({ archetype, cloud, binding, stack }: { archetype: Archetype; cloud: CloudProduct; binding: CloudBinding; stack: Stack }) {
+  const packs = new Map((cloud.cloud.packs ?? []).map((p) => [p.id, p]));
+  const inEffect = productsInEffect(binding, stack, isControlBox(archetype, binding.block));
+  return (
+    <div className="mt-1" data-component-options={binding.block}>
+      {stackChosen(stack) && (
+        <p className="text-ink" data-component-in-effect>
+          <span className="font-semibold">In your stack: </span>
+          {inEffect.length ? inEffect.map((o) => o.name).join(" · ") : <span className="text-ink-3">nothing: you bring your own</span>}
+        </p>
+      )}
+      <p className="mt-0.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-3">Options, none ranked</p>
+      <ul className="mt-0.5 space-y-1">
+        {binding.options!.map((o) => (
+          <li key={o.name} className="text-[12.5px]" data-component-option={o.name} data-in-effect={inEffect.includes(o) || undefined}>
+            <a href={o.url} target="_blank" rel="noreferrer" className={`${inEffect.includes(o) ? "font-bold" : "font-semibold"} text-ink hover:text-introduced hover:underline`}>
+              {o.name} <span className="text-[11px] text-introduced">↗</span>
+            </a>
+            <span className="text-ink-3"> · {KIND_LABEL[o.kind]}</span>
+            {(o.packs ?? []).length > 0 && <span className="text-ink-3"> · in {(o.packs ?? []).map((id) => (packs.get(id) ? packShort(packs.get(id)!) : id)).join(", ")}</span>}
+            {o.note && <span className="block text-[12px] text-ink-2">{o.note}</span>}
+            <Watch notes={o.watch} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function ComponentList({ archetype, cloud = null, stack = NO_STACK }: { archetype: Archetype; cloud?: CloudProduct | null; stack?: Stack }) {
   return (
       <div className="space-y-5">
         {componentGroups(archetype).map((g) => (
@@ -176,9 +236,9 @@ export function ComponentList({ archetype, cloud = null }: { archetype: Archetyp
                   <span className="font-semibold text-ink">{b.title}</span>
                   {summaryOf(b) && <span className="text-ink-3"> · {summaryOf(b)}</span>}
                 {cloud && bindingFor(cloud, b.id) && (
-                  <span className="mt-0.5 block text-ink" data-component-service>
-                    <span className="font-semibold">{cloud.cloud.selfManaged ? "On-premises: " : `On ${cloud.cloud.short}: `}</span>
-                    {bindingFor(cloud, b.id)!.url ? (
+                  <div className="mt-0.5 text-ink" data-component-service>
+                    <span className="font-semibold">{bindingFor(cloud, b.id)!.options ? (cloud.cloud.selfManaged ? "Role on-premises: " : `Role on ${cloud.cloud.short}: `) : cloud.cloud.selfManaged ? "On-premises: " : `On ${cloud.cloud.short}: `}</span>
+                    {bindingFor(cloud, b.id)!.url && !bindingFor(cloud, b.id)!.options ? (
                       <a href={bindingFor(cloud, b.id)!.url} target="_blank" rel="noreferrer" className="hover:text-introduced hover:underline">
                         {bindingFor(cloud, b.id)!.service}
                       </a>
@@ -186,9 +246,11 @@ export function ComponentList({ archetype, cloud = null }: { archetype: Archetyp
                       bindingFor(cloud, b.id)!.service
                     )}
                     {bindingFor(cloud, b.id)!.build && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-3">You build this</span>}
-                    {bindingFor(cloud, b.id)!.url && <span className="ml-1 text-[11px] text-introduced">↗</span>}
+                    {bindingFor(cloud, b.id)!.url && !bindingFor(cloud, b.id)!.options && <span className="ml-1 text-[11px] text-introduced">↗</span>}
                     {bindingFor(cloud, b.id)!.note && <span className="block text-[12px] text-ink-3">{bindingFor(cloud, b.id)!.note}</span>}
-                  </span>
+                    <Watch notes={bindingFor(cloud, b.id)!.watch} />
+                    {bindingFor(cloud, b.id)!.options && <ComponentOptions archetype={archetype} cloud={cloud} binding={bindingFor(cloud, b.id)!} stack={stack} />}
+                  </div>
                 )}
                 {cloud && <OurChoice choice={componentChoiceFor(cloud.id, archetype.id, b.id)} />}
                 <BuiltWith archetype={archetype} blockId={b.id} cloud={cloud} />

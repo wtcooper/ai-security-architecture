@@ -9,7 +9,7 @@ import { SURFACE_SITUATION } from "../src/components/patterns/labels";
 import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { OnCloud } from "../src/components/cloud/CloudViews";
 import { IncidentWalkthrough } from "../src/components/incidents/IncidentWalkthrough";
-import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor, hostedAs, hostingOptionsFor, hostingWords, isManagedTarget, notOfferedFor } from "../src/components/cloud/model";
+import { cloudProductsFor, cloudSlug, differencesFor, hostedAs, hostingOptionsFor, hostingWords, isManagedTarget, notOfferedFor } from "../src/components/cloud/model";
 import { SettingCheck } from "../src/components/enable/SettingCheck";
 import { ControlTable } from "../src/components/enable/ControlTable";
 import { controlGroups } from "../src/components/enable/model";
@@ -57,23 +57,27 @@ test("every mapping is dated, and every named service carries the page it was ch
       const ownerOf = (blockId: string) => (arch.zones ?? []).find((z) => z.id === arch.blocks.find((b) => b.id === blockId)?.zone)?.owner;
       const named = impl.bindings.filter((b) => !b.build && ownerOf(b.block) === "cloud");
       const sourced = impl.bindings.filter((b) => b.url);
-      for (const b of named) assert.ok(b.url, `${at}: ${b.block} (${b.service}) links to the page it was checked against`);
+      // Where the box names a role, each of its options carries its own page instead.
+      for (const b of named) {
+        if (b.options?.length) for (const o of b.options) assert.match(o.url, /^https:\/\//, `${at}: ${b.block} option ${o.name} links to its own page`);
+        else assert.ok(b.url, `${at}: ${b.block} (${b.service}) links to the page it was checked against`);
+      }
       for (const b of sourced) assert.equal(b.verified, impl.verified, `${at}: ${b.block} carries the date`);
       assert.ok((impl.differences ?? []).length + (impl.alsoNeeded ?? []).length > 0, `${at}: says where it differs or what else is needed`);
     }
   }
 });
 
-test("a platform states where it does not follow the drawing: marked on the drawing, listed under How it works", () => {
+test("a platform states where it does not follow the drawing under How it works; the drawing carries no mark for it", () => {
   for (const a of hosted) {
     for (const product of cloudProductsFor(a.id)) {
       const where = `${a.id} on ${product.cloud.short}`;
       const differences = differencesFor(a, product);
-      const marks = differenceMarks(a, product);
       const html = page(a.id, `cloud=${cloudSlug(product.id)}`);
-      assert.equal([...html.matchAll(/data-differs="/g)].length, marks.size, `${where}: one mark for each place that differs`);
-      if (marks.size) assert.match(html, /data-legend-differs/, `${where}: the legend explains the mark`);
+      // The differences are prose, not marks on boxes and arrows.
+      assert.doesNotMatch(html, /data-differs=|data-legend-differs|≠/, `${where}: no difference mark on the drawing or in its legend`);
       const section = renderToStaticMarkup(<OnCloud archetype={a} product={product} />);
+      assert.match(section, new RegExp(`data-differs-heading="true">How it differs ${product.cloud.selfManaged ? "on-premises" : `on ${product.cloud.short}`}<`), `${where}: headed "How it differs"`);
       assert.equal([...section.matchAll(/data-difference="/g)].length, differences.length, `${where}: every difference is listed`);
       assert.equal([...section.matchAll(/data-also-needed="/g)].length, product.implementation.alsoNeeded?.length ?? 0, `${where}: every supporting service is listed`);
       for (const d of differences) assert.ok(section.includes(esc(d.text)), `${where}: "${d.text.slice(0, 40)}" is shown`);
@@ -99,7 +103,8 @@ test("shown on-premises, the organisation's boundary is its data centre and the 
     assert.match(html, new RegExp(`aria-pressed="true"[^>]*data-cloud="${product.id}"`), `${a.id}: the switch shows on-premises`);
     assert.ok(html.includes(product.cloud.boundary!.toUpperCase()), `${a.id}: the boundary is titled ${product.cloud.boundary}`);
     assert.doesNotMatch(html, />ENTERPRISE CLOUD</, `${a.id}: no boundary reads Enterprise cloud`);
-    assert.match(html, /Each box names the software that plays it/, `${a.id}: software, not a provider's service`);
+    // On-premises nobody's product is the answer: a box names its role until a stack is chosen.
+    assert.match(html, /Each box names its role[^.]*; hover a box for the software that can play it/, `${a.id}: a role, not a product or a provider's service`);
     assert.doesNotMatch(page(a.id), new RegExp(esc(product.cloud.boundary!.toUpperCase())), `${a.id}: the generic drawing keeps its own boundary title`);
   }
 });
