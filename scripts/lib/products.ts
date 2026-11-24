@@ -241,7 +241,13 @@ export async function loadClouds(
       if (impl.verified) for (const b of impl.bindings) if (b.url) b.verified = impl.verified;
       // A difference names a real flow or box of the pattern; the drawing marks it there.
       const edgeKeys = new Set(arch.edges.flatMap((e) => [`${e.from}->${e.to}`, `${e.to}->${e.from}`]));
+      // A difference is prose: one the drawing can show is drawn with `shape` instead.
+      const proseOnly = (where: string, d: object & { at?: string }) => {
+        const extra = Object.keys(d).filter((k) => !["at", "text", "url"].includes(k));
+        if (extra.length) ctx.fail(`${where}: difference at ${d.at}: unknown field ${extra.join(", ")}${extra.includes("change") ? "; a change of shape is drawn, under shape" : ""}`);
+      };
       for (const d of impl.differences ?? []) {
+        proseOnly(at, d);
         if (!arch.blocks.some((x) => x.id === d.at) && !edgeKeys.has(d.at)) ctx.fail(`${at}: difference at "${d.at}" is neither a block nor a flow of ${arch.id}`);
         const text = d.text?.trim() ?? "";
         if (!text) ctx.fail(`${at}: difference at ${d.at} needs text`);
@@ -320,6 +326,7 @@ export async function loadClouds(
           const covered = new Set(kept.flatMap((id) => settingById.get(id)?.mitigations ?? []));
           for (const id of arch.mitigations) if (!covered.has(id)) ctx.fail(`${oat}: pinned control ${id} has no setting once the dropped ones are gone`);
           for (const d of o.differences ?? []) {
+            proseOnly(oat, d);
             if (!arch.blocks.some((x) => x.id === d.at) && !edgeKeys.has(d.at)) ctx.fail(`${oat}: difference at "${d.at}" is neither a block nor a flow of ${arch.id}`);
             if (!d.text?.trim() || d.text.length > 380) ctx.fail(`${oat}: difference at ${d.at} needs text of at most 380 characters`);
           }

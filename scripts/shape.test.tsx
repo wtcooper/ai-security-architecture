@@ -15,7 +15,8 @@ import { FlowSequence } from "../src/components/reference/FlowSequence";
 import { OnCloud } from "../src/components/cloud/CloudViews";
 import { boundaryLayout } from "../src/components/drawing/layout";
 import { cloudProductFor, cloudSlug, drawnOn, drawnVariants, hostedAs, shapeLinesFor } from "../src/components/cloud/model";
-import { applyShape, walkOn } from "../src/lib/shape";
+import { applyShape, describeShape, walkOn } from "../src/lib/shape";
+import { crossingsOf } from "../src/components/drawing/crossings";
 import { dataset } from "../src/lib/data";
 import type { Archetype, ShapeChange } from "../src/lib/types";
 import { audit } from "./drawing-audit";
@@ -70,6 +71,11 @@ test("a pattern with a change draws the changed shape when its platform is chose
     const own = page(v.pattern.id);
     const added = v.archetype.blocks.filter((b) => !v.pattern.blocks.some((x) => x.id === b.id));
     const gone = v.pattern.edges.map(keyOf).filter((k) => !v.archetype.edges.some((e) => keyOf(e) === k));
+    const arrows = v.archetype.edges.map(keyOf).filter((k) => !v.pattern.edges.some((e) => keyOf(e) === k));
+    for (const k of arrows) {
+      assert.ok(chosen.includes(`data-edge="${k.replace(">", "&gt;")}"`), `${at}: draws ${k}`);
+      assert.ok(!own.includes(`data-edge="${k.replace(">", "&gt;")}"`), `${at}: the pattern's own drawing has no ${k}`);
+    }
     for (const b of added) {
       assert.ok(chosen.includes(`data-block="${b.id}"`), `${at}: draws ${b.id}`);
       assert.ok(!own.includes(`data-block="${b.id}"`), `${at}: the pattern's own drawing has no ${b.id}`);
@@ -120,7 +126,7 @@ test("walks follow the platform's shape: a split step shares its number, the pat
       for (const id of Object.keys(v.archetype.drawn!.boxes)) {
         const title = v.archetype.blocks.find((b) => b.id === id)!.title;
         const passes = drawn.steps.some((s) => !s.skipped && s.follow.split("->").includes(id));
-        assert.equal(seq.includes(`>${title}<`), passes, `${at}: ${title} is in the sequence only where the walk passes it`);
+        assert.equal(seq.includes(`>${title.replace(/&/g, "&amp;")}<`), passes, `${at}: ${title} is in the sequence only where the walk passes it`);
       }
     }
   }
@@ -133,6 +139,9 @@ test("the Knative option draws the activator between the front door and the agen
   assert.ok(drawn.edges.some((e) => keyOf(e) === "entry->knativeActivator") && drawn.edges.some((e) => keyOf(e) === "knativeActivator->agent"), "the arrow is split");
   assert.ok(!drawn.edges.some((e) => keyOf(e) === "entry->agent"), "the direct arrow is gone");
   assert.equal(drawn.blocks.find((b) => b.id === "knativeActivator")!.zone, "zoneCloud", "drawn inside the organisation's boundary");
+  // A scheduled run comes in through Knative's cluster-local gateway, a second way in that does not pass the front end.
+  assert.ok(drawn.edges.some((e) => keyOf(e) === "events->knativeLocalGateway") && drawn.edges.some((e) => keyOf(e) === "knativeLocalGateway->agent"), "the scheduled run passes the local gateway");
+  assert.ok(!drawn.edges.some((e) => e.from === "entry" && e.to === "knativeLocalGateway"), "the front end does not");
   // The mapping itself (plain Kubernetes) and every cloud keep the pattern's shape.
   assert.equal(drawnOn(chat, cloudProductFor(chat.id, "cloudOnPrem")!, null), chat);
   for (const id of ["cloudAws", "cloudAzure", "cloudGcp"]) assert.equal(drawnOn(chat, cloudProductFor(chat.id, id)!, null), chat, id);
@@ -188,6 +197,44 @@ test("each kind of change applies to a copy, and pins and walk steps follow what
   assert.deepEqual(renamed.problems, []);
   assert.equal(renamed.archetype.edges.find((e) => keyOf(e) === "agent->gateway")!.label, "every model and tool call");
   assert.ok(boundaryLayout(renamed.archetype).lines.find((l) => l.key === "agent->gateway")!.label!.lines.join(" ").includes("every model"));
+
+  // add: an arrow the pattern does not draw, labelled, with the why on hover; no pin and no step moves
+  const add = apply([{ add: { from: "events", to: "gateway", label: "scheduled prompt" }, why: "Schedules call the gateway themselves.", url: DOCS }]);
+  assert.deepEqual(add.problems, []);
+  const extra = add.archetype.edges.find((e) => keyOf(e) === "events->gateway")!;
+  assert.deepEqual([extra.label, extra.path, extra.note, Boolean(extra.outbound)], ["scheduled prompt", "primary", "Schedules call the gateway themselves.", false]);
+  assert.equal(add.archetype.drawn!.arrows["events->gateway"], "Schedules call the gateway themselves.");
+  assert.deepEqual(add.archetype.drawn!.follows, Object.fromEntries(chat.edges.map((e) => [keyOf(e), [keyOf(e)]])), "the pattern's own arrows are drawn as they are");
+  assert.deepEqual(add.archetype.pins, chat.pins, "the pins stay where they were");
+  assert.deepEqual(walkOn(add.archetype, chat.walkthrough!).steps.map((s) => s.follow), chat.walkthrough!.steps.map((s) => s.follow), "the walk is the pattern's");
+  assert.ok(boundaryLayout(add.archetype).lines.find((l) => l.key === "events->gateway")!.label!.lines.join(" ").includes("scheduled"), "drawn with its label");
+  audit(add.archetype, { content: false });
+  const addLines = describeShape(chat, [{ add: { from: "events", to: "gateway", label: "scheduled prompt" }, why: "Why.", url: DOCS }]);
+  assert.deepEqual(addLines.map((l) => [l.key, l.kind, l.where]), [["events->gateway", "add", "Triggers & schedules → AI gateway, added"]]);
+
+  // across a trust boundary it says what it passes through, and its kind is the one its ends give it
+  const out = apply([{ add: { from: "agent", to: "openWeb", label: "direct fetch", crossing: { via: "Nothing of ours: the harness opens it itself" } }, why: "The harness fetches pages itself.", url: DOCS }]);
+  assert.deepEqual(out.problems, []);
+  const fetch = out.archetype.edges.find((e) => keyOf(e) === "agent->openWeb")!;
+  assert.deepEqual([fetch.path, fetch.outbound, fetch.crossing], ["external", true, { kind: "direct", via: "Nothing of ours: the harness opens it itself" }], "dashed, called, and crossing directly");
+  const crossing = crossingsOf(out.archetype).find((c) => c.key === "agent->openWeb")!;
+  assert.deepEqual([crossing.authored, crossing.via], [true, "Nothing of ours: the harness opens it itself"], "the crossings register lists it as authored");
+  const brokered = apply([{ add: { from: "gateway", to: "sources", label: "package lookups", crossing: { via: "AI gateway: allowlisted index only" } }, why: "Why.", url: DOCS }]);
+  assert.equal(brokered.archetype.edges.find((e) => keyOf(e) === "gateway->sources")!.crossing!.kind, "brokered", "a control point at one end brokers it");
+
+  // to a box an earlier change inserts, and as an arrow a later change inserts a box on
+  const chain = apply([
+    { insert: { id: "localGateway", title: "Local gateway", on: "events->agent" }, why: "Scheduled runs come in through a local gateway.", url: DOCS },
+    { add: { from: "gateway", to: "localGateway", label: "cluster-local calls" }, why: "The gateway reaches the agent the same way.", url: DOCS },
+    { add: { from: "memory", to: "provider", label: "embeddings", crossing: { via: "Nothing of ours in the path" } }, why: "The store calls the model for embeddings.", url: DOCS },
+    { insert: { id: "proxy", title: "Egress proxy", on: "memory->provider" }, why: "Its calls leave through the proxy.", url: DOCS },
+  ]);
+  assert.deepEqual(chain.problems, []);
+  assert.ok(chain.archetype.edges.some((e) => keyOf(e) === "gateway->localGateway"), "an arrow to an inserted box");
+  const legs = chain.archetype.edges.filter((e) => keyOf(e) === "memory->proxy" || keyOf(e) === "proxy->provider");
+  assert.deepEqual(legs.map((e) => [keyOf(e), e.label, e.path, e.crossing?.kind]), [["memory->proxy", "embeddings", "primary", undefined], ["proxy->provider", undefined, "external", "direct"]], "the leg that crosses keeps the crossing");
+  assert.ok(!chain.archetype.edges.some((e) => keyOf(e) === "memory->provider"), "the added arrow is split");
+  audit(chain.archetype, { content: false });
 });
 
 test("the build refuses a change that names what is not there, reuses an id, or says too much", () => {
@@ -201,4 +248,25 @@ test("the build refuses a change that names what is not there, reuses an id, or 
   assert.match(problems({ rename: { at: "agent->gateway", label: "calls" }, why: "One. Two. Three.", url: DOCS }), /3 sentences/);
   assert.match(problems({ rename: { at: "agent->gateway", label: "calls" }, why: "Why.", url: "http://x" } as ShapeChange), /needs url/);
   assert.match(problems({ drop: "agent->gateway", reroute: { from: "a->b", to: "c->b" }, why: "Why.", url: DOCS } as unknown as ShapeChange), /exactly one/);
+  // add: both ends exist (or are inserted earlier), it is a new arrow, and a crossing is said exactly where there is one
+  assert.match(problems({ add: { from: "nothing", to: "agent", label: "calls" }, why: "Why.", url: DOCS }), /nothing is not a box of archChatAgent, nor one an earlier change inserts/);
+  assert.match(
+    apply([
+      { add: { from: "localGateway", to: "agent", label: "calls" }, why: "Why.", url: DOCS },
+      { insert: { id: "localGateway", title: "Local gateway", on: "events->agent" }, why: "Why.", url: DOCS },
+    ]).problems.join(" | "),
+    /localGateway is not a box/,
+    "a box inserted later in the list is not there yet",
+  );
+  assert.match(problems({ add: { from: "entry", to: "agent", label: "turn" }, why: "Why.", url: DOCS }), /entry->agent is already an arrow/);
+  assert.match(problems({ add: { from: "agent", to: "entry", label: "reply" }, why: "Why.", url: DOCS }), /already drawn as entry->agent/);
+  assert.match(problems({ add: { from: "agent", to: "agent", label: "loop" }, why: "Why.", url: DOCS }), /loops back/);
+  assert.match(problems({ add: { from: "agent", to: "localTools", label: "calls" }, why: "Why.", url: DOCS }), /drawn inside Agent harness/);
+  assert.match(problems({ add: { from: "gateway", to: "govPolicy", label: "policy" }, why: "Why.", url: DOCS }), /control-plane box/);
+  assert.match(problems({ add: { from: "agent", to: "openWeb", label: "fetch" }, why: "Why.", url: DOCS }), /different trust zones; say what the arrow passes through on our side with crossing/);
+  assert.match(problems({ add: { from: "events", to: "gateway", label: "prompt", crossing: { via: "AI gateway" } }, why: "Why.", url: DOCS }), /stand in one/);
+  assert.match(problems({ add: { from: "agent", to: "openWeb", label: "fetch", crossing: { via: "x", kind: "direct" } }, why: "Why.", url: DOCS } as unknown as ShapeChange), /crossing is \{ via \}/);
+  assert.match(problems({ add: { from: "events", to: "gateway", label: "" }, why: "Why.", url: DOCS }), /needs a label/);
+  assert.match(problems({ add: { from: "events", to: "gateway", label: "prompt" }, pins: "gateway", why: "Why.", url: DOCS }), /pins says where an arrow's pins go/);
+  assert.match(problems({ add: { from: "events", to: "gateway", label: "prompt", route: "hv" }, why: "Why.", url: DOCS } as unknown as ShapeChange), /add has unknown field route/);
 });

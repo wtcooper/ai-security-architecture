@@ -9,15 +9,18 @@
  *   drop      an arrow that does not exist there
  *   reroute   a flow that starts, or ends, at another box
  *   rename    an arrow that carries something else there
+ *   add       an arrow the pattern does not draw, between boxes it has or an earlier change inserts
  *
  * Pins and walk steps follow what they were on: a rerouted arrow takes its pins and its steps
  * along, an inserted box leaves them on its first leg and splits a step into legs that share the
- * step's number, and a step on a dropped arrow is listed with a note and not drawn.
+ * step's number, and a step on a dropped arrow is listed with a note and not drawn. An added arrow
+ * carries no pins and no step: the pattern's walks are the pattern's.
  *
  * Pure and deterministic, like the layout: the build checks a platform's changes with it, and the
  * pages, the drawing audit and the tests draw with it.
  */
-import { SHAPE_KINDS, type Archetype, type ArchBlock, type ArchEdge, type DrawnShape, type Scenario, type ScenarioStep, type ShapeChange, type ShapeInsert, type ShapeKind, type ShapeMove } from "./types";
+import { SHAPE_KINDS, type Archetype, type ArchBlock, type ArchEdge, type DrawnShape, type Scenario, type ScenarioStep, type ShapeAdd, type ShapeChange, type ShapeInsert, type ShapeKind, type ShapeMove } from "./types";
+import { crossingsOf, standIn } from "../components/drawing/crossings";
 
 const keyOf = (e: { from: string; to: string }) => `${e.from}->${e.to}`;
 const reverse = (k: string) => k.split("->").reverse().join("->");
@@ -31,9 +34,9 @@ const endsOf = (k: unknown): [string, string] | null => {
 const CAMEL = /^[a-z][A-Za-z0-9]*$/;
 const HTTPS = /^https:\/\//;
 /** Text a change puts on the drawing, held to what the drawing has room for. */
-export const SHAPE_LIMITS = { title: 40, summary: 78, label: 60, why: 380 };
+export const SHAPE_LIMITS = { title: 40, summary: 78, label: 60, why: 380, via: 200 };
 const TRUST = new Set(["user", "endpoint", "cloud", "vendor"]);
-const PLACED_KEYS = { insert: ["id", "title", "summary", "on", "zone", "kind", "labels", "parent", "col", "row"], move: ["block", "zone", "col", "row", "call"], reroute: ["from", "to"], rename: ["at", "label"] } as const;
+const PLACED_KEYS = { insert: ["id", "title", "summary", "on", "zone", "kind", "labels", "parent", "col", "row"], move: ["block", "zone", "col", "row", "call"], reroute: ["from", "to"], rename: ["at", "label"], add: ["from", "to", "label", "crossing"] } as const;
 
 /** How many sentences a short text runs to. */
 const sentences = (s: string) => s.trim().split(/(?<=[.!?])\s+(?=[A-Z0-9"“(])/).filter(Boolean).length;
@@ -63,6 +66,8 @@ export function applyShape(base: Archetype, changes: ShapeChange[], where: { key
   const risks = base.pins.risks.map((p) => ({ ...p }));
   const mitigations = base.pins.mitigations.map((p) => ({ ...p }));
   const ownerOf = new Map((base.zones ?? []).map((z) => [z.id, z.owner as string]));
+  /** The crossings added arrows author by what they pass through; their kind is derived once every change is in. */
+  const viaOnly = new Set<object>();
   const drawn: DrawnShape = {
     key: where.key,
     on: where.on,
@@ -356,6 +361,49 @@ export function applyShape(base: Archetype, changes: ShapeChange[], where: { key
       return;
     }
 
+    if (kind === "add") {
+      const ad = body as ShapeAdd;
+      const k = `${ad.from}->${ad.to}`;
+      const where = `${at} (add ${k})`;
+      const before = problems.length;
+      textOk(where, ad.label, "a label", SHAPE_LIMITS.label);
+      const f = blockOf(ad.from);
+      const t = blockOf(ad.to);
+      for (const [id, b] of [[ad.from, f], [ad.to, t]] as const) if (!b) problems.push(`${where}: ${id} is not a box of ${base.id}, nor one an earlier change inserts`);
+      if (!f || !t) return;
+      if (f.id === t.id) problems.push(`${where}: ${k} loops back on itself`);
+      for (const b of [f, t]) {
+        if (b.kind === "governance" || ownerOf.get(b.zone ?? "") === "governance") problems.push(`${where}: ${b.title} is a control-plane box, which no arrow reaches`);
+        else if (b.kind === "boundary") problems.push(`${where}: ${b.title} only holds; an arrow goes to what it holds`);
+      }
+      const [outer, inner] = descendants(f.id).includes(t) ? [f, t] : descendants(t.id).includes(f) ? [t, f] : [];
+      if (outer) problems.push(`${where}: ${inner!.title} is drawn inside ${outer.title}, which already shows that one holds the other`);
+      if (edgeAt(k) >= 0) problems.push(`${where}: ${k} is already an arrow`);
+      else if (edgeAt(reverse(k)) >= 0) problems.push(`${where}: ${k} is already drawn as ${reverse(k)}`);
+      // A flow across a trust boundary says what it passes through on our side, as a pattern's own does.
+      const crosses = standIn(f, ownerOf) !== standIn(t, ownerOf);
+      if (ad.crossing === undefined) {
+        if (crosses) problems.push(`${where}: ${f.title} and ${t.title} stand in different trust zones; say what the arrow passes through on our side with crossing: { via }`);
+      } else if (!ad.crossing || typeof ad.crossing !== "object" || Object.keys(ad.crossing).some((x) => x !== "via")) {
+        problems.push(`${where}: crossing is { via }: what the arrow passes through on our side`);
+      } else {
+        textOk(where, ad.crossing.via, "crossing.via: what the arrow passes through on our side", SHAPE_LIMITS.via);
+        if (!crosses) problems.push(`${where}: crossing is for an arrow across a trust boundary, and ${f.title} and ${t.title} stand in one`);
+      }
+      if (problems.length > before) return;
+      // Dashed where it reaches outside, and called rather than answered, as the pattern draws such a flow.
+      const outside = (b: ArchBlock) => ownerOf.get(b.zone ?? "") === "external";
+      const edge: ArchEdge = { from: f.id, to: t.id, path: outside(f) || outside(t) ? "external" : "primary", label: ad.label, note: why };
+      if (outside(t) && !outside(f)) edge.outbound = true;
+      if (ad.crossing) {
+        edge.crossing = { kind: "direct", via: ad.crossing.via };
+        viaOnly.add(edge.crossing);
+      }
+      edges.push(edge);
+      drawn.arrows[k] = why;
+      return;
+    }
+
     // rename
     const r = body as { at: string; label: string };
     const where = `${at} (rename ${r.at})`;
@@ -365,6 +413,16 @@ export function applyShape(base: Archetype, changes: ShapeChange[], where: { key
     edges[e] = { ...edges[e], label: r.label };
     drawn.arrows[r.at] = why;
   });
+
+  // An added arrow's crossing (or the leg of it an insert split off that crosses) takes the kind its
+  // ends give it, exactly as a pattern's derived crossing would (components/drawing/crossings.ts).
+  if (viaOnly.size) {
+    const bare = edges.map((e) => (e.crossing && viaOnly.has(e.crossing) ? { ...e, crossing: undefined } : e));
+    const derived = new Map(crossingsOf({ ...base, blocks, edges: bare, pins: { risks, mitigations } }).map((x) => [x.key, x.kind]));
+    edges.forEach((e, n) => {
+      if (e.crossing && viaOnly.has(e.crossing)) edges[n] = { ...e, crossing: { kind: derived.get(keyOf(e)) ?? "direct", via: e.crossing.via } };
+    });
+  }
 
   // Every pin still has a place, stored under the direction the arrow is drawn in.
   const edgeKeys = new Set(edges.map(keyOf));
@@ -459,6 +517,10 @@ export function describeShape(base: Archetype, changes: ShapeChange[], zoneTitle
       const [x, y] = c.reroute.to.split("->");
       const how = b === y ? `drawn from ${t(x)}` : a === x ? `drawn to ${t(y)}` : `drawn as ${flow(c.reroute.to)}`;
       return line(c.reroute.to, `${flow(c.reroute.from)}, ${how}`);
+    }
+    if ("add" in c) {
+      const k = `${c.add.from}->${c.add.to}`;
+      return line(k, `${flow(k)}, added`);
     }
     return line(c.rename.at, `${flow(c.rename.at)}, labelled “${c.rename.label}”`);
   });
