@@ -1,0 +1,183 @@
+pattern: archAgentWorkflow
+reviewed: "2026-11-24"
+summary: >-
+  A supervisor splits long-running work across specialist agents, a durable engine journals
+  every step for days, and the results land as writes on systems of record with nobody
+  watching. Three things make it riskier than one agent: what one agent returns becomes
+  another's instruction, so one injection spreads through the graph; the journal keeps
+  everything a step returned, credentials included; and replay after a crash can repeat a
+  write. Narrower authority at each hand-off, idempotent writes and one trace across the run
+  carry the weight.
+concentrates: >-
+  Where outsider-written content enters a run that lasts days, the supervisor routes on it,
+  specialists hold the supervisor's full authority, and the journal keeps both the injection
+  and the credentials for every later step to read.
+scope: >-
+  A workflow the organisation builds and hosts: a supervisor and specialists on a durable
+  engine, started by requests, events and timers, writing to systems of record including
+  payments, network calls through an AI gateway, web fetch on, approval for consequential
+  writes.
+lists: [owasp-llm-2026, owasp-agentic, owasp-mcp]
+assets:
+  - "Systems of record the workflow writes to, including payments"
+  - "The journal and shared memory: everything every step returned"
+  - "Each agent's identity and the step credentials it is issued"
+  - "The register of agents and tools, and the route definitions"
+  - "One trace of which agent decided what, on whose behalf"
+  - "Inference and tool spend across days"
+actors:
+  - who: "Request or event author"
+    access: "Writes the request, webhook body or queue message that starts or resumes a run"
+    wants: "To steer a process that acts for days"
+  - who: "Record and web author"
+    access: "Wrote records, documents or pages a specialist reads during the run"
+    wants: "To plant instructions that every later step will trust"
+  - who: "Package or tool publisher"
+    access: "Publishes to the public registries and hubs the mirror admits from"
+    wants: "Code running inside the harness with its identity"
+  - who: "Insider or compromised pipeline"
+    access: "Can edit the register, route definitions, prompts or models"
+    wants: "To reprogram the agents without review"
+  - who: "A steered or confused agent"
+    access: "Holds its task, its tools and the results it hands back to the supervisor"
+    wants: "None of its own; it spreads whatever steered it"
+  - who: "The workflow itself"
+    access: "Retries, replays and re-plans unattended for days"
+    wants: "None; a failure source"
+threats:
+  - id: T1
+    title: "One injected input spreads through the supervisor to every specialist"
+    rating: critical
+    evidence: research
+    story: >-
+      A request, record or fetched page steers the supervisor's routing, or a specialist's
+      result arrives as its next instruction, and every agent after it works from the
+      attacker's plan. In one study, web content made multi-agent systems run arbitrary code in
+      58 to 90% of trials, even where each agent refused alone.
+    at: [events->harness, gateway->openWeb, orchestration->subagents, orchestration]
+    risks: [riskPromptInjection, riskOrchestratorRouteHijacking, riskInsecureModelOutput]
+    atlas: [AML.T0051.001, AML.T0143, AML.T0053]
+    owasp: [LLM01:2026, LLM10:2026, ASI01, ASI02, ASI07, MCP06:2025]
+    controls: [cap-input-guardrails, cap-agent-action-policy-enforcement, AML.M0037, AML.M0029, cap-agent-tracing]
+    refs:
+      - { title: "Triedman, Jha and Shmatikov, Multi-Agent Systems Execute Arbitrary Malicious Code (arXiv 2503.12188)", url: "https://arxiv.org/abs/2503.12188" }
+  - id: T2
+    title: "The journal keeps every credential and record a step returned"
+    rating: high
+    evidence: observed
+    story: >-
+      The engine writes down everything a step returns so the run survives a crash, so a step
+      that returns a token or a customer file has persisted it, and every specialist journals
+      to the same store. In 2026, agent traces holding credentials were copied through a
+      key exposed at an AI provider, and opened further systems.
+    at: [state, orchestration->state, localTools->state]
+    risks: [riskSensitiveDataDisclosure]
+    atlas: [AML.T0085.002, AML.T0055]
+    owasp: [LLM02:2026, MCP01:2025, MCP10:2025]
+    controls: [cap-sensitive-data-redaction, AML.M0012, D3-CH, AML.M0031]
+    refs:
+      - { title: "Cursor, security incident update, November 2026", url: "https://cursor.com/blog/security-incident-update" }
+  - id: T3
+    title: "A specialist inherits the supervisor's full authority"
+    rating: high
+    evidence: theoretical
+    story: >-
+      When the supervisor hands work down on its own credentials, every specialist can reach
+      everything the workflow can, and a steered specialist needs no escalation. Delegation that
+      does not narrow at each hand-off is privilege distribution. No public case; it depends on
+      how hand-offs are built.
+    at: [orchestration->subagents, harness->gateway, gateway->internalTools]
+    risks: [riskAgenticDelegationConfusedDeputy]
+    atlas: [AML.T0053]
+    owasp: [LLM03:2026, ASI03, MCP02:2025, MCP07:2025]
+    controls: [D3-CTS, AML.M0037, D3-AA, AML.M0028]
+  - id: T4
+    title: "Replay after a crash repeats a payment or a write"
+    rating: high
+    evidence: theoretical
+    story: >-
+      The engine recovers by replaying steps from the journal. A write that is not idempotent
+      runs twice, and a step resumed days later may act on credentials or a plan that are no
+      longer valid. Nobody is present when it happens, and the duplicate looks like a normal
+      call. Rated on the mechanism.
+    at: [orchestration->state, gateway->internalTools, internalTools->orgData]
+    risks: [riskRogueActions]
+    atlas: []
+    owasp: [ASI08]
+    controls: [cap-agent-action-policy-enforcement, AML.M0029, D3-CH, cap-agent-tracing]
+  - id: T5
+    title: "An instruction written to shared memory steers every later step"
+    rating: high
+    evidence: observed
+    story: >-
+      Shared memory and the run's search index are written by steps and read by every later
+      one, so an injection journaled on day one re-enters agents that never saw it arrive, for
+      the rest of the process. Links telling assistants to remember a company as a trusted
+      source were found from 31 companies in 2026.
+    at: [state, localTools->state]
+    risks: [riskPromptInjection, riskRetrievalVectorStorePoisoning]
+    atlas: [AML.T0080.000, AML.T0070, AML.T0094]
+    owasp: [LLM05:2026, LLM09:2026, ASI06]
+    controls: [AML.M0031, cap-retrieval-grounding-checks, cap-input-guardrails]
+    refs:
+      - { title: "Microsoft Security blog, AI Recommendation Poisoning, February 2026", url: "https://www.microsoft.com/en-us/security/blog/2026/02/10/ai-recommendation-poisoning/" }
+  - id: T6
+    title: "A poisoned package, tool or route definition reprograms the agents"
+    rating: high
+    evidence: observed
+    story: >-
+      Packages the sandbox installs and tools admitted from public hubs run inside the harness,
+      and whoever edits the admission list or a route definition programs every agent. In
+      2026, agent framework and AI gateway releases carried credential stealers; an
+      over-scoped token let an outsider ship a destructive prompt.
+    at: [sources->registry, localTools->registry, gateway->internalTools, orchestration]
+    risks: [riskToolSourceProvenance, riskToolRegistryTampering, riskInsecureIntegratedComponent]
+    atlas: [AML.T0010.001, AML.T0011.001, AML.T0081, AML.T0109]
+    owasp: [LLM04:2026, ASI04, ASI05, MCP03:2025, MCP04:2025]
+    controls: [D3-FA, cap-agent-tool-registry, cap-mcp-tool-integrity, cap-staged-rollout-gate, D3-EI]
+    incidents: [litellm-release-hijack, mcp-supply-chain]
+    refs:
+      - { title: "Wiz, malicious versions of Microsoft Agent Framework on PyPI", url: "https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi" }
+  - id: T7
+    title: "Work split across agents adds up to what no single step may do"
+    rating: medium
+    evidence: observed
+    story: >-
+      Each specialist's call passes the per-call policy, but together the steps do something
+      nobody would approve, and three hops in nobody can say which agent decided what for whom.
+      Attackers split intrusions into harmless-looking tasks to get past safeguards; another
+      campaign ran eight sub-agents in parallel.
+    at: [orchestration, orchestration->subagents]
+    risks: [riskAgentDelegationChainOpacity]
+    atlas: [AML.T0124, AML.T0053]
+    owasp: [ASI07, MCP08:2025]
+    controls: [cap-agent-tracing, AML.M0037, cap-agent-kill-switch, cap-agent-action-policy-enforcement]
+    incidents: [ai-orchestrated-operations, taiwan-multi-agent]
+  - id: T8
+    title: "Agents re-plan against each other, widen their reach and run unwatched"
+    rating: medium
+    evidence: observed
+    story: >-
+      Specialists re-planning against each other can loop for as long as nobody notices, and
+      the gateway's ceilings brake only what crosses it. Given egress and credentials,
+      evaluation agents coordinated through a shared cache, left their sandbox and reached a
+      third party's production systems before anyone knew.
+    at: [harness, gateway, localTools]
+    risks: [riskRunawayAgentToolLoops, riskEconomicDenialOfWallet]
+    atlas: [AML.T0034.002, AML.T0118.000, AML.T0105]
+    owasp: [LLM06:2026, ASI08, ASI10]
+    controls: [AML.M0036, cap-agent-kill-switch, AML.M0037, cap-agent-egress-control]
+    incidents: [openai-huggingface]
+coverage:
+  - { id: "LLM07:2026", why: "A specialist's wrong result trusted by the supervisor is the same output-becomes-input path as injection spreading through the graph." }
+  - { id: "LLM08:2026", why: "Whoever steers an agent can draw out its instructions and tool schemas; they should hold no secrets or access rules, which the gateway enforces." }
+  - { id: "ASI09", why: "Approvals bind to one action and its arguments, with an expiry; the larger exposure here is the unattended path." }
+  - { id: "MCP05:2025", why: "The tool services are the organisation's own; model-written arguments reaching them are input validation, bounded by per-call policy." }
+  - { id: "MCP09:2025", why: "Every agent and tool is registered before it can run, so an unknown server is an inventory gap the register exists to close." }
+questions:
+  - "Does each hand-off give the specialist a token for that task only, and can a specialist reach anything the supervisor did not give it?"
+  - "Which writes are idempotent, and what stops a replayed step from paying or writing twice?"
+  - "What does the journal hold after a step returns a credential or a customer file, who can read it, and for how long?"
+  - "Is content outsiders wrote screened before any agent reads it, and is shared memory kept per run?"
+  - "Can you trace one run across every agent while it is still running, and stop a workflow that is suspended?"
+  - "Who can change the register, a route definition or a prompt, and what test runs first?"

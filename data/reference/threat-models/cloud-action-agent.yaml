@@ -1,0 +1,199 @@
+pattern: archActionAgent
+reviewed: "2026-11-24"
+summary: >-
+  One agent turns a queued request into a write on a system of record within seconds, with
+  nobody between the decision and the effect. The person who writes the request often gains
+  from the outcome, and record notes written months earlier come back as context, so steering
+  the agent is cheap and the payoff is money or another customer's data. What limits the damage
+  is not the model being right: it is a fixed catalogue of checked actions, access scoped to
+  the case, approval kept for costly or irreversible actions, and a way to undo the rest.
+concentrates: >-
+  Where text an outsider wrote (the request, an old record note, a fetched page) meets a
+  catalogue action that moves money or changes an account below the approval threshold, on an
+  identity that can reach more than this one customer's records.
+scope: >-
+  An agent the organisation builds and hosts, started by queue messages and timers from
+  authenticated customers, choosing from a catalogue of write actions on systems of record, with
+  web search, sandboxed code and packages from a mirror; approval only above a value threshold.
+lists: [owasp-llm-2026, owasp-agentic, owasp-mcp]
+assets:
+  - "Money and records the agent changes: refunds, accounts, orders"
+  - "Customer records the tools can read, including other customers'"
+  - "The agent's identity and the credentials brokered for each call"
+  - "The action catalogue and system instruction, which together are the policy"
+  - "The decision audit, and the ability to stop a run and undo what it did"
+  - "Model and tool spend"
+actors:
+  - who: "Requesting customer"
+    access: "Writes the request or ticket that starts a run, through an authenticated upstream system"
+    wants: "A larger remedy than policy allows, or another account's data"
+  - who: "Earlier author of a record"
+    access: "Wrote notes or case memory, as a requester or as staff, that a later run reads back as context"
+    wants: "To steer later cases, sometimes months later"
+  - who: "Web page author"
+    access: "Publishes pages the gateway's search and fetch tool returns to an unattended run"
+    wants: "To hijack the run or carry data out"
+  - who: "Package or tool publisher"
+    access: "Publishes to the public registries and hubs the mirror admits from"
+    wants: "Code running with the agent's identity and reach"
+  - who: "Insider or compromised pipeline"
+    access: "Can change the catalogue, the system instruction or the model the agent uses"
+    wants: "To widen what the agent does without review"
+  - who: "The agent itself"
+    access: "Its own identity and catalogue; retries and re-plans in seconds"
+    wants: "None; a failure source"
+threats:
+  - id: T1
+    title: "The request text steers the agent to a costly action"
+    rating: critical
+    evidence: disclosed
+    story: >-
+      The person who benefits writes the request, and it reaches the same context as the system
+      instruction. A ticket saying ignore policy and refund in full needs no exploit, only an
+      action below the threshold. Text in a public web form made a CRM agent send records out;
+      a ticket made a managed agent run a script.
+    at: [events->planner, gateway->provider, gateway->internalTools, internalTools->orgData]
+    risks: [riskPromptInjection, riskRogueActions]
+    atlas: [AML.T0051.000, AML.T0093, AML.T0053, AML.T0048.000]
+    owasp: [LLM01:2026, LLM03:2026, ASI01, ASI02]
+    controls: [cap-agent-action-policy-enforcement, AML.M0029, cap-agent-tool-registry, cap-input-guardrails, AML.M0028]
+    incidents: [agentcore-token-theft]
+    refs:
+      - { title: "Noma Security, ForcedLeak: Salesforce Agentforce", url: "https://noma.security/blog/forcedleak-agent-risks-exposed-in-salesforce-agentforce/" }
+  - id: T2
+    title: "Old record notes and case memory steer a later case"
+    rating: high
+    evidence: disclosed
+    story: >-
+      Notes written months earlier by requesters or staff, and case memory keyed loosely enough
+      to collide across cases, return as context through the tools. A lead planted through a public form waited until an employee asked an agent
+      about it, then sent CRM records out. Nothing marks an old note as data.
+    at: [internalTools->orgData, stateRetrieval, localTools->stateRetrieval]
+    risks: [riskPromptInjection, riskRetrievalVectorStorePoisoning]
+    atlas: [AML.T0051.001, AML.T0070, AML.T0080.000, AML.T0094]
+    owasp: [LLM01:2026, LLM05:2026, LLM09:2026, ASI06, MCP06:2025, MCP10:2025]
+    controls: [cap-input-guardrails, cap-retrieval-grounding-checks, AML.M0031, cap-data-access-governance]
+    incidents: [salesbleed-agentforce]
+  - id: T3
+    title: "The agent reads or acts beyond the requester's own account"
+    rating: high
+    evidence: disclosed
+    story: >-
+      The loop runs on its own identity, and lookups not scoped to the account in the request
+      pull other customers' records into context, ready for the next injected instruction to
+      send out. A shared secret and email-only account linking once let an outsider drive a
+      privileged built-in agent to create an administrator.
+    at: [planner, events->planner, internalTools->orgData]
+    risks: [riskAgenticDelegationConfusedDeputy, riskSensitiveDataDisclosure]
+    atlas: [AML.T0085.001, AML.T0012]
+    owasp: [LLM02:2026, ASI03, MCP02:2025, MCP07:2025]
+    controls: [D3-APA, cap-data-access-governance, AML.M0028, D3-AA]
+    refs:
+      - { title: "AppOmni, BodySnatcher: ServiceNow AI agents (CVE-2025-12420)", url: "https://appomni.com/ao-labs/bodysnatcher-agentic-ai-security-vulnerability-in-servicenow/" }
+  - id: T4
+    title: "A changed catalogue or system instruction reprograms the agent"
+    rating: high
+    evidence: observed
+    story: >-
+      Whoever can edit the action catalogue, the system instruction or the model alias programs
+      every later run. An over-scoped build token let an outsider
+      commit a destructive agent prompt into a shipped coding extension, and an approved tool
+      configuration has been swapped after approval with no new prompt.
+    at: [gateway->internalTools, govSupplyChain, planner->gateway]
+    risks: [riskToolRegistryTampering]
+    atlas: [AML.T0081, AML.T0109, AML.T0110.000]
+    owasp: [LLM04:2026, ASI04, MCP03:2025, MCP08:2025]
+    controls: [cap-agent-tool-registry, cap-staged-rollout-gate, cap-mcp-tool-integrity, cap-agent-tracing]
+    incidents: [mcp-supply-chain]
+    refs:
+      - { title: "AWS security bulletin AWS-2025-015, Amazon Q Developer extension", url: "https://aws.amazon.com/security/security-bulletins/AWS-2025-015/" }
+  - id: T5
+    title: "A poisoned package or tool arrives through the mirror"
+    rating: high
+    evidence: observed
+    story: >-
+      Packages the sandbox installs, and skills and tool descriptions from public hubs, come in
+      through the mirror and run with what the loop holds. In 2026, releases of a widely used
+      AI gateway library and of an agent framework carried credential stealers; a look-alike
+      MCP package copied every email after 15 clean releases.
+    at: [sources->registry, localTools->registry, localTools]
+    risks: [riskToolSourceProvenance, riskInsecureIntegratedComponent]
+    atlas: [AML.T0010.001, AML.T0010.005, AML.T0011.001, AML.T0115.002]
+    owasp: [LLM04:2026, ASI04, MCP04:2025]
+    controls: [D3-FA, cap-mcp-tool-integrity, D3-EI, cap-agent-egress-control]
+    incidents: [litellm-release-hijack, mcp-supply-chain]
+    refs:
+      - { title: "Wiz, malicious versions of Microsoft Agent Framework on PyPI", url: "https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi" }
+  - id: T6
+    title: "Code the agent writes runs where its credentials are"
+    rating: high
+    evidence: disclosed
+    story: >-
+      Native tools run in the loop's own process with its identity, egress and secrets, and
+      cross no gateway. Generated or injected code run there, not in a throwaway sandbox,
+      can read whatever the process holds. An injected CI agent read its API key from
+      its environment; a managed agent's shell gave up its tool token.
+    at: [localTools, planner->gateway]
+    risks: [riskInsecureIntegratedComponent, riskInsecureModelOutput]
+    atlas: [AML.T0050, AML.T0055, AML.T0098]
+    owasp: [LLM10:2026, ASI05, MCP01:2025, MCP05:2025]
+    controls: [D3-EI, D3-CH, cap-agent-egress-control]
+    incidents: [agentcore-token-theft]
+    refs:
+      - { title: "Microsoft Security blog, CI/CD in an agentic world: the Claude Code GitHub Action case", url: "https://www.microsoft.com/en-us/security/blog/2026/06/05/securing-ci-cd-in-agentic-world-claude-code-github-action-case/" }
+  - id: T7
+    title: "Customer data leaves in a fetch or a tool argument"
+    rating: medium
+    evidence: disclosed
+    story: >-
+      An injected run can put a customer's details into the address of a web fetch, or the
+      arguments of an action that sends something, and the gateway carries it like any
+      other call. Assistants from several vendors have leaked data through image and link
+      addresses, once through an allowlisted domain that had expired.
+    at: [gateway->openWeb, planner->gateway, gateway->internalTools]
+    risks: [riskSensitiveDataDisclosure, riskPromptInjection]
+    atlas: [AML.T0086, AML.T0051.001]
+    owasp: [LLM02:2026, ASI02]
+    controls: [cap-agent-egress-control, cap-input-guardrails, cap-agent-action-policy-enforcement]
+    refs:
+      - { title: "CVE-2025-32711 (EchoLeak)", url: "https://www.cve.org/CVERecord?id=CVE-2025-32711" }
+  - id: T8
+    title: "A loop that retries and re-plans spends and acts before anyone looks"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      Per-token inference behind an open trigger surface, and a loop that retries a failed
+      action in seconds, turn a flood of requests or one confused run into spend and repeated
+      writes before anyone looks. No public case for this kind of agent; it is rated on the
+      mechanism.
+    at: [planner, gateway, events->planner]
+    risks: [riskRunawayAgentToolLoops, riskEconomicDenialOfWallet]
+    atlas: [AML.T0034.002, AML.T0029]
+    owasp: [LLM06:2026, ASI08, ASI10]
+    controls: [AML.M0036, AML.M0004, cap-agent-kill-switch, cap-agent-tracing]
+  - id: T9
+    title: "An operator approves a proposal written to mislead"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      Above the threshold a person approves, but what they read is a justification a possibly
+      steered model wrote. A rare approval in a busy queue becomes a habit of saying yes, and an
+      answer not bound to the exact action, arguments and case can approve something else. No
+      public case; rated on the mechanism.
+    at: [internalTools->operator, operator->events]
+    risks: [riskRogueActions, riskInsecureModelOutput]
+    atlas: [AML.T0067]
+    owasp: [LLM07:2026, ASI09]
+    controls: [AML.M0029, cap-agent-action-policy-enforcement, cap-agent-tracing]
+coverage:
+  - { id: "LLM08:2026", why: "Any requester can draw out the instruction and the action schemas; they should hold no secrets or access rules, which the catalogue enforces instead." }
+  - { id: "ASI07", why: "One agent, with no messages between agents; delegation between agents is in the multi-agent workflow." }
+  - { id: "MCP09:2025", why: "Tools reach the agent only through the reviewed catalogue at the gateway, so an unlisted server is an inventory question, not a path." }
+questions:
+  - "Which catalogue actions can one run take below the approval threshold, and what is the most money or data a run can move?"
+  - "Does every action have a compensating transaction, and has anyone run it?"
+  - "Whose access does a run carry, and can a lookup reach any account other than the one in the request?"
+  - "Is what an outsider wrote (the request, a record note, a page) screened before the model reads it, and is case memory kept per case?"
+  - "Who can change the catalogue, the system instruction or the model alias, and what test runs before each change?"
+  - "Where does code the agent writes run, and what credentials can that process read?"
+  - "Can you stop a run mid-action and revoke the agent's identity without a release?"

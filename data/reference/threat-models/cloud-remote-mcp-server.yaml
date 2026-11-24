@@ -1,0 +1,200 @@
+pattern: archRemoteMcpServer
+reviewed: "2026-11-24"
+summary: >-
+  You publish a tool server that other people's agents call for their users. There is no
+  model inside, but the caller is one: its arguments were written by a model, its intent may
+  have been steered elsewhere, and the tool descriptions you publish run as instruction in its
+  context. What is at stake is your tenants' records and the systems your handlers reach. The
+  defining failure is one tenant's agent reaching another tenant's records, and the rule with
+  no exception is that a caller's token never travels upstream.
+concentrates: >-
+  Where a handler takes a model-written object id or argument and reaches tenant data or an
+  upstream system without checking the token's tenant and scope on that record, on a
+  credential broader than the caller's own.
+scope: >-
+  A multi-tenant remote MCP server reached over the internet by customers' agents, behind a
+  gateway tier, with its own authorization server federated to customers' identity providers;
+  handlers wrap internal APIs and records that third parties write to.
+lists: [owasp-llm-2026, owasp-agentic, owasp-mcp]
+assets:
+  - "Each tenant's records reached through the tools"
+  - "Separation between tenants on every read and write"
+  - "Tokens issued for this server, and the upstream credentials handlers use"
+  - "Tool descriptions, which run as instruction in callers' models"
+  - "Upstream systems, and the cost of the work handlers do"
+  - "Per-call audit, and revocation that reaches tokens already issued"
+actors:
+  - who: "Steered caller agent"
+    access: "Holds a valid token for a user; was steered by content it read elsewhere"
+    wants: "Whatever the person who steered it wants"
+  - who: "Malicious tenant or client"
+    access: "A registered client with its own valid tokens and scopes"
+    wants: "Other tenants' records, or more scope than it was granted"
+  - who: "Third-party content author"
+    access: "Writes issues, comments or documents that the tools return as results"
+    wants: "To steer the callers' agents that read them"
+  - who: "Token thief or network attacker"
+    access: "Lifts a bearer from a breached client, a log or a weak connection, or rebinds DNS"
+    wants: "To call the server as someone else"
+  - who: "Compromised supplier or pipeline"
+    access: "Ships the gateway, the MCP SDK or the release of the tool descriptions"
+    wants: "Code inside the server, or reworded tools"
+  - who: "Looping caller"
+    access: "Retries, loops and runs in parallel with a valid token"
+    wants: "None; a failure source"
+threats:
+  - id: T1
+    title: "One tenant's agent reaches another tenant's records"
+    rating: critical
+    evidence: observed
+    story: >-
+      A well-formed request names an object that belongs to someone else, and the protocol
+      does not check whose it is; the handler must compare the token's tenant with the
+      record's on every read and write. In 2025 a vendor pulled its new MCP server over a bug
+      that could show customers' data to other organisations.
+    at: [service->orgData, gateway->service]
+    risks: [riskSensitiveDataDisclosure]
+    atlas: [AML.T0085.001, AML.T0012]
+    owasp: [LLM02:2026, ASI03, MCP07:2025, MCP10:2025]
+    controls: [cap-data-access-governance, AML.M0028, D3-CTS, AML.M0024]
+    refs:
+      - { title: "The Register, Asana MCP server bug may have exposed data to other organisations, 18 June 2025", url: "https://theregister.com/2025/06/18/asana_mcp_server_bug/" }
+      - { title: "CVE-2026-111770, an MCP server package delivering one client's messages to another", url: "https://www.cve.org/CVERecord?id=CVE-2026-111770" }
+  - id: T2
+    title: "Tokens cross the server: wrong audience, stolen, or passed upstream"
+    rating: high
+    evidence: observed
+    story: >-
+      A token minted for another server, or lifted from a breached client and replayed, must
+      fail here; a handler that forwards the caller's token upstream makes one hijacked agent a
+      problem for every system that accepts it. An AI gateway's MCP sign-in bypass was
+      exploited in 2026; a stolen MCP token was replayed remotely.
+    at: [callers->gateway, service->authServer, service->orgData]
+    risks: [riskAgenticDelegationConfusedDeputy, riskMCPTransportHijacking]
+    atlas: [AML.T0091.000, AML.T0012]
+    owasp: [ASI03, MCP01:2025, MCP07:2025]
+    controls: [D3-CTS, D3-CH, D3-CR, D3-AA]
+    incidents: [agentcore-token-theft]
+    refs:
+      - { title: "Model Context Protocol, Security Best Practices (token passthrough, confused deputy)", url: "https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices" }
+      - { title: "CISA Known Exploited Vulnerabilities catalog", url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json" }
+  - id: T3
+    title: "Model-written arguments reach queries, paths and commands"
+    rating: high
+    evidence: disclosed
+    story: >-
+      Every argument comes from a model that may have been steered, so a handler that builds a
+      query, a file path or a command from it can be injected by whoever wrote the caller's
+      context. Reference MCP servers had path flaws an injected agent could drive; an AI
+      gateway's MCP test endpoints ran commands and were exploited.
+    at: [gateway->service, service->orgData]
+    risks: [riskInsecureIntegratedComponent, riskInsecureModelOutput]
+    atlas: [AML.T0049, AML.T0050, AML.T0053]
+    owasp: [LLM10:2026, ASI05, MCP05:2025]
+    controls: [D3-SYSVA, cap-data-access-governance, AML.M0028]
+    refs:
+      - { title: "CVE-2025-53109, path-validation bypass in the reference Filesystem MCP server", url: "https://www.cve.org/CVERecord?id=CVE-2025-53109" }
+      - { title: "CVE-2026-42271, command execution through an AI gateway's MCP test endpoints", url: "https://www.cve.org/CVERecord?id=CVE-2026-42271" }
+  - id: T4
+    title: "The gateway tier or the MCP SDK ships a flaw or a backdoor"
+    rating: high
+    evidence: observed
+    story: >-
+      The gateway in front and the SDK inside are someone else's code in front of everything
+      you publish. A hijacked release pipeline put a key stealer into an AI gateway's official
+      package for about two hours in 2026, and a design flaw in the official MCP SDKs put
+      thousands of reachable servers at risk of code execution.
+    at: [gateway, service, callers->gateway]
+    risks: [riskInsecureIntegratedComponent]
+    atlas: [AML.T0010.001, AML.T0049]
+    owasp: [LLM04:2026, ASI04, MCP04:2025]
+    controls: [D3-AVE, D3-SYSVA, D3-CH, AML.M0024]
+    incidents: [litellm-release-hijack, mcp-supply-chain]
+  - id: T5
+    title: "Records third parties wrote steer the agents that read them"
+    rating: high
+    evidence: disclosed
+    story: >-
+      Issue text, comments and documents come back through your tools as results, and a model
+      you do not run reads them as instruction while holding a token for your server. A
+      malicious public issue read through a code-hosting MCP server made an agent copy the
+      user's private repositories into a public pull request.
+    at: [service->orgData, callers->gateway]
+    risks: [riskPromptInjection]
+    atlas: [AML.T0051.001, AML.T0110.002, AML.T0099]
+    owasp: [LLM01:2026, ASI01, ASI02, MCP06:2025]
+    controls: [AML.M0028, cap-data-access-governance, AML.M0024]
+    refs:
+      - { title: "Invariant Labs, GitHub MCP server vulnerability", url: "https://invariantlabs.ai/blog/mcp-github-vulnerability" }
+  - id: T6
+    title: "A reworded tool description changes every caller's agent"
+    rating: medium
+    evidence: disclosed
+    story: >-
+      Descriptions are instruction in other organisations' models, and the protocol has no
+      integrity check or version field, so an edit that skipped review, or one slipped into a
+      release, silently changes systems you do not run and what their users approve. An approved tool configuration was once swapped with no new prompt.
+    at: [toolDefs->service, govSupplyChain]
+    risks: [riskToolRegistryTampering]
+    atlas: [AML.T0110.000, AML.T0109]
+    owasp: [ASI04, ASI09, MCP03:2025]
+    controls: [cap-mcp-tool-integrity, AML.M0024]
+    incidents: [mcp-supply-chain]
+  - id: T7
+    title: "Consent and scopes give a client more than the user meant"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      Omnibus scopes, consent remembered for a static client rather than per client, and
+      client details fetched from any address let a hijacked or impersonating client hold more
+      than its task needs, or make the authorization server fetch internal addresses. The
+      protocol's guidance describes these; rated on the mechanism.
+    at: [authServer, callers->authServer, callers->idp]
+    risks: [riskAgenticDelegationConfusedDeputy]
+    atlas: []
+    owasp: [LLM03:2026, ASI03, MCP02:2025]
+    controls: [D3-APA, D3-AA, D3-OTF, AML.M0028]
+    refs:
+      - { title: "Model Context Protocol, Security Best Practices (scope minimization, SSRF)", url: "https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices" }
+  - id: T8
+    title: "Looping and parallel agents run up upstream cost"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      Agents retry, loop and run in parallel far faster than people, and a tool whose handler
+      does billed work charges you for every repeat. Limits sized for human clients are not
+      limits here, and the protocol has no quotas or back-pressure. Rated on the mechanism.
+    at: [callers->gateway, service->orgData]
+    risks: [riskEconomicDenialOfWallet]
+    atlas: [AML.T0034.000, AML.T0034.002, AML.T0029]
+    owasp: [LLM06:2026, ASI08]
+    controls: [AML.M0004]
+  - id: T9
+    title: "A retired server keeps answering at an address callers know"
+    rating: low
+    evidence: theoretical
+    story: >-
+      A stale DNS name, registry entry or route keeps receiving tool calls after a server is
+      retired, with its grants still live and nobody watching its log; whoever claims the
+      address receives the callers' calls and tokens. Rated on the mechanism.
+    at: [service]
+    risks: [riskZombieShadowMCPServers]
+    atlas: [AML.T0132]
+    owasp: [MCP08:2025, MCP09:2025]
+    controls: [D3-CR, D3-AVE, AML.M0024]
+coverage:
+  - { id: "LLM05:2026", why: "No model is trained and no index is built here; records third parties wrote reach callers as tool results, treated as injection." }
+  - { id: "LLM07:2026", why: "The server writes no text of its own; a wrong record is ordinary data quality, not model output." }
+  - { id: "LLM08:2026", why: "Tool descriptions and schemas are published on purpose and should hold nothing secret; the list a caller sees is filtered by its scopes." }
+  - { id: "LLM09:2026", why: "No vector store or embeddings in this service." }
+  - { id: "ASI06", why: "The server keeps no memory between calls; state handles prove nothing and every request is checked again." }
+  - { id: "ASI07", why: "Callers reach the server as tool clients, not as agents messaging agents." }
+  - { id: "ASI10", why: "A rogue caller is bounded here only by its scopes, rate limits and revocation, which the threats above cover." }
+questions:
+  - "Does every handler check the token's tenant against the record's on every read and write, in a layer the arguments cannot get round?"
+  - "Which upstream systems do handlers reach, and on what credential: a token exchanged for that system, or the service's own?"
+  - "What happens to a token issued for another audience, and how fast does revoking a grant stop tokens already issued?"
+  - "Which handlers build queries, paths or commands from arguments, and how are they tested?"
+  - "Who can change a tool description, and how do callers learn that it changed?"
+  - "Are request limits set per client and per tenant, sized for callers that retry and run in parallel?"
+  - "When a server is retired, who removes its DNS names, registry entries, routes and live grants?"
