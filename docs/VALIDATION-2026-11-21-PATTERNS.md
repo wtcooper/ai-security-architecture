@@ -108,3 +108,26 @@ second reader where it set product facts) and a set of fixes followed:
   drawing). Two remain as prose because they cannot be drawn honestly: Apigee playing both
   gateway and authorisation server on Google Cloud federation, and Azure Artifacts outside the
   network on the software factory.
+
+## Threat models, 2026-11-24
+
+Every pattern now has a threat model (`data/reference/threat-models/<pattern>.yaml`), shown on
+its own **Threat model** tab. The threat models in the evaluation repository were used as a
+reference, not copied: each was rewritten for its pattern's boxes and arrows.
+
+- **Format:** an executive summary (at most 600 characters), where risk concentrates, then five
+  to ten threats, each with a rating, the evidence for it, a short story of how it happens
+  here, where on the drawing, the CoSAI risks it is, MITRE ATLAS techniques, OWASP items (LLM
+  Top 10 2026, Agentic Top 10, MCP Top 10), one to five controls pinned on the pattern that break
+  it, its incidents and at most two sources. Folded beneath: assets, threat actors, OWASP
+  coverage, design review questions and scope.
+- **Counts:** 156 threats across 20 patterns (21 critical, 87 high, 47 medium, 1 low); evidence
+  72 observed, 39 disclosed, 18 research, 27 theoretical; 87 ATLAS techniques and 30 OWASP items
+  used.
+- **Checks:** the build rejects an unknown box, arrow, risk, technique, OWASP item, incident or
+  a control not pinned on the pattern, and text over its length; every file also passed a
+  separate format check, and the tests cover the tab.
+- **How it works** is now the overview, the description and the risks; the component list,
+  platform comparison and examples fold were removed (their content is in the drawing's hover
+  help, the header and the platform fold). A **Show risks** toggle on the drawing tags each risk
+  where it is pinned.

@@ -83,7 +83,7 @@ export function OnCloud({ archetype, product }: { archetype: Archetype; product:
             ))}
           </ul>
         ) : (
-          <p className="mt-1 text-[13px] text-ink-2">Nothing recorded: the flows on the drawing hold {words.on} as drawn.</p>
+          <p className="mt-1 text-[13px] text-ink-2">None: the drawing holds {words.on} as shown.</p>
         )}
       </div>
 
