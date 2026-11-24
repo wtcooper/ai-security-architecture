@@ -1,0 +1,159 @@
+pattern: archLocalInference
+reviewed: "2026-11-24"
+summary: >-
+  A local runtime keeps prompts on the machine and removes the hosted provider's safety layer,
+  rate limits and abuse monitoring with it. It answers on a port that usually needs no sign-in, so
+  a web page, a neighbour on the network or anything running as the user can call it, and it opens
+  files from public hubs in formats that can run code or carry hidden templates. The device holds
+  the user's credentials, so a bad file or an exposed port compromises the machine, not only the
+  model. Nobody inventories it, so nobody patches or scans it either.
+concentrates: >-
+  A runtime nobody registered, bound beyond loopback with no token, pulling files from a public hub
+  straight into the folder it loads: one artifact or one stranger then has code or control on a
+  device that holds the user's keys.
+scope: >-
+  A developer installs a local runtime (for example Ollama, LM Studio or llama.cpp) and pulls open
+  weights from public hubs straight into it: no scan, no inventory, the port unauthenticated, cloud
+  features at their defaults, and editors and agents on the same machine calling it.
+lists: [owasp-llm-2026]
+assets:
+  - "The device, and the credentials, files and sessions of the user who runs the runtime"
+  - "Prompts and documents meant to stay on the machine"
+  - "The integrity of the model files the runtime loads"
+  - "The inference port and the compute behind it"
+  - "The applications that act on the model's answers"
+actors:
+  - who: "Publisher of a model on a public hub"
+    access: "An artifact the user downloads, from a verified, arbitrary or taken-over account"
+    wants: "Code execution on the device, or behaviour hidden in the model"
+  - who: "A web page in the user's browser"
+    access: "Requests to the local port through permissive CORS or DNS rebinding"
+    wants: "Free inference, model management, data from the port"
+  - who: "Someone on the network or the internet"
+    access: "A port bound to a routable interface, with the authentication it shipped, usually none"
+    wants: "Free compute, and models pulled, pushed or deleted"
+  - who: "Other software running as the user"
+    access: "The port and the model folder, with the user's file permissions"
+    wants: "To swap or copy a model"
+  - who: "The model itself, no adversary"
+    access: "Raw output to callers, with no hosted safety layer in between"
+    wants: "None; answers what the weights allow"
+threats:
+  - id: T1
+    title: "A model file runs code when the runtime opens it"
+    rating: high
+    evidence: observed
+    story: >-
+      Pickle-class formats execute code on load, and formats that cannot are still opened by native
+      parsers with heap-overflow advisories. A file fetched and opened in one step runs on a device
+      holding the user's keys; malicious models that evaded the hub's scanner were found in 2025.
+    at: [hub->weights, weights->runtime]
+    risks: [riskMaliciousLoaderDeserialization, riskModelSourceTampering]
+    atlas: [AML.T0011.000, AML.T0010.003, AML.T0018.002]
+    owasp: [LLM04:2026]
+    controls: [D3-FA, AML.M0014, D3-OTF, AML.M0023]
+    refs:
+      - { title: "ReversingLabs: malicious ML models on Hugging Face (nullifAI)", url: "https://www.reversinglabs.com/blog/rl-identifies-malware-ml-model-hosted-on-hugging-face" }
+      - { title: "CVE-2025-53630: integer overflow in the llama.cpp GGUF parser", url: "https://www.cve.org/CVERecord?id=CVE-2025-53630" }
+  - id: T2
+    title: "The local port answers anyone: a web page, a neighbour or the internet"
+    rating: high
+    evidence: observed
+    story: >-
+      The runtime trusts locality and usually ships without sign-in. Bound to a routable interface
+      it serves free inference and model management to whoever finds it: a 2025 scan found 1,139
+      exposed servers of one runtime, all unauthenticated. On loopback a web page can still reach it
+      through DNS rebinding or permissive CORS.
+    at: [localApps->api, api]
+    risks: [riskDenialOfMLService, riskInsecureIntegratedComponent]
+    atlas: [AML.T0132, AML.T0040, AML.T0034]
+    owasp: [LLM06:2026]
+    controls: [D3-AA, AML.M0004, D3-PA, cap-shadow-ai-discovery]
+    refs:
+      - { title: "Cisco: detecting exposed LLM servers, a Shodan case study on Ollama", url: "https://blogs.cisco.com/security/detecting-exposed-llm-servers-shodan-case-study-on-ollama" }
+      - { title: "CVE-2024-28224: DNS rebinding gives remote access to the Ollama API", url: "https://www.cve.org/CVERecord?id=CVE-2024-28224" }
+  - id: T3
+    title: "A model in the folder is swapped or copied without anyone noticing"
+    rating: medium
+    evidence: disclosed
+    story: >-
+      The runtime serves whatever sits in its model directory, which any process running as the
+      user can replace or read. On an exposed port a stranger can pull, push or delete models
+      through the API itself, and one runtime's handling of model digests allowed path traversal;
+      the next request is served from the swapped file.
+    at: [weights, weights->runtime, api]
+    risks: [riskModelDeploymentTampering, riskModelExfiltration]
+    atlas: [AML.T0018, AML.T0035]
+    owasp: [LLM04:2026]
+    controls: [AML.M0005, AML.M0014, D3-AA]
+    refs:
+      - { title: "CVE-2024-37032: Ollama does not validate model digests", url: "https://www.cve.org/CVERecord?id=CVE-2024-37032" }
+  - id: T4
+    title: "A chat template inside the model file changes behaviour at inference time"
+    rating: medium
+    evidence: research
+    story: >-
+      Formats such as GGUF carry a chat template that runs on every request. Researchers showed a
+      poisoned template can lie dormant until a trigger and then alter answers, without touching the
+      weights and past every static scan of them, so a file can pass every load-time gate.
+    at: [runtime, weights->runtime]
+    risks: [riskMaliciousLoaderDeserialization, riskModelSourceTampering]
+    atlas: [AML.T0018.003, AML.T0010.003]
+    owasp: [LLM04:2026, LLM05:2026]
+    controls: [cap-staged-rollout-gate, AML.M0023, D3-FA]
+  - id: T5
+    title: "Prompts leave the device through the runtime's own cloud features"
+    rating: medium
+    evidence: theoretical
+    story: >-
+      The reason to run locally fails quietly when a model-name suffix or a search option routes the
+      prompt to the runtime vendor's cloud through the same local API. The switch is the user's to
+      change, so it holds only if the vendor's cloud is also refused where outbound traffic is
+      filtered.
+    at: [runtime, api->runtime]
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+    atlas: [AML.T0085.002]
+    owasp: [LLM02:2026]
+    controls: [D3-OTF, D3-PA]
+  - id: T6
+    title: "Raw output with no hosted safety layer reaches callers built for one"
+    rating: medium
+    evidence: research
+    story: >-
+      A hosted API screens prompts and answers and watches for abuse; here only the refusals the
+      weights carry stand between a crafted prompt and the answer. Editors and agents calling the
+      port were built expecting a hosted floor and act on raw output, including generated code and
+      commands.
+    at: [api->runtime, runtime, localApps->api]
+    risks: [riskInsecureModelOutput, riskModelEvasion]
+    atlas: [AML.T0054, AML.T0015]
+    owasp: [LLM01:2026, LLM10:2026]
+    controls: [cap-output-guardrails, cap-staged-rollout-gate]
+  - id: T7
+    title: "A runtime nobody registered stays unpatched, unscanned and unseen"
+    rating: medium
+    evidence: disclosed
+    story: >-
+      The serving stack is fast-moving native code with its own advisories, run unsandboxed and
+      updated over its own channel. Installed by one person in an afternoon, it appears in no
+      inventory, so a parser advisory has no list of machines to patch and an exposed port is found
+      by scanning, not by asking.
+    at: [runtime, api]
+    risks: [riskInsecureIntegratedComponent]
+    atlas: [AML.T0049]
+    owasp: [LLM04:2026]
+    controls: [cap-shadow-ai-discovery, D3-PA, AML.M0023, cap-ai-threat-modeling]
+    refs:
+      - { title: "llama.cpp security advisories", url: "https://github.com/ggml-org/llama.cpp/security" }
+coverage:
+  - { id: "LLM03:2026", why: "Not an agent: with the runtime's tool and MCP features kept off it takes no actions; agency belongs to the harness that calls it." }
+  - { id: "LLM07:2026", why: "Answer quality is the calling application's concern; no threat here depends on it beyond the raw output in T6." }
+  - { id: "LLM08:2026", why: "The runtime holds no secret instructions worth taking; callers' prompts leaving the device are T2 and T5." }
+  - { id: "LLM09:2026", why: "No embedding store or retrieval in this drawing; an application that builds one on the port owns that risk." }
+questions:
+  - "May local models run at all: on which runtimes, from which sources and on which machines, and who reviews that decision?"
+  - "Which interface is the port bound to, does every caller present its own token, and are Origin and Host checked?"
+  - "Can any file reach the model folder without a scan and an approved fingerprint, and can ordinary programs write there?"
+  - "Are the runtime's cloud models and web search off by managed setting, and refused where outbound traffic is filtered?"
+  - "Could you list every runtime and its version on your fleet within a day of a parser advisory?"
+  - "What screens prompts and answers on the request path, and do the applications calling the port treat output as untrusted?"
