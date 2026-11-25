@@ -135,7 +135,7 @@ export function buildIndex(reports: FeedTitle[] = []): Entry[] {
     })),
     // An item opens the feed scrolled to it: an incident hints at its incident pattern, any other at its kind.
     ...reports.map((f) => ({
-      kind: "Feed",
+      kind: "Daily feed",
       title: f.title,
       hint: `${(f.kind === "incident" ? categoryById.get(f.category ?? "")?.label : kindById.get(f.kind)?.label) ?? ""} · ${formatDay(f.date)}`,
       href: feedHref({}, f.id),
@@ -144,7 +144,7 @@ export function buildIndex(reports: FeedTitle[] = []): Entry[] {
   ];
 }
 
-const KIND_ORDER = ["Pattern", "Tool", "Cloud", "Control", "Incident pattern", "Deep dive", "Feed", "Threat", "Risk", "CoSAI control", "Component", "Persona"];
+const KIND_ORDER = ["Pattern", "Tool", "Cloud", "Control", "Incident pattern", "Deep dive", "Daily feed", "Threat", "Risk", "CoSAI control", "Component", "Persona"];
 
 /**
  * The feed's titles, fetched the first time search opens (public/data/feed/titles.json): the feed

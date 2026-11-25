@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { OPEN_SEARCH_EVENT } from "./open-search";
 import { SearchPalette } from "./SearchPalette";
 
 /**
  * Patterns lead: what a reader is enabling, then the control catalogue behind them, the incident
- * patterns that show why and the feed, reviewed daily. A tool has no page of its own: it is
+ * patterns that show why and the daily feed. A tool has no page of its own: it is
  * reached on its pattern. The risk and framework material shares one Reference menu.
  */
 type NavItem =
@@ -18,7 +19,7 @@ export const NAV: NavItem[] = [
   { href: "/patterns", label: "Patterns" },
   { href: "/controls", label: "Controls" },
   { href: "/incidents", label: "Incidents" },
-  { href: "/feed", label: "Feed" },
+  { href: "/feed", label: "Daily feed" },
   {
     label: "Reference",
     children: [
@@ -59,7 +60,7 @@ export function SiteHeader() {
     if (dropdown) setDropdown(null);
   }
 
-  // ⌘K / Ctrl+K anywhere opens search.
+  // ⌘K / Ctrl+K anywhere opens search, as does a search box on the page (openSiteSearch).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -67,8 +68,13 @@ export function SiteHeader() {
         setSearch((s) => !s);
       }
     };
+    const onOpen = () => setSearch(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_SEARCH_EVENT, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_SEARCH_EVENT, onOpen);
+    };
   }, []);
 
   useEffect(() => {

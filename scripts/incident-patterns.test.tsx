@@ -351,15 +351,15 @@ test("a deep dive shows its breadcrumb, and its chip leads to its incident patte
   }
 });
 
-test("the nav shows Incidents and Feed, side by side, and marks the one shown", () => {
-  for (const [path, on] of [["/incidents", "Incidents"], ["/incidents/prompt-injection", "Incidents"], ["/feed", "Feed"]] as const) {
+test("the nav shows Incidents and the Daily feed, side by side, and marks the one shown", () => {
+  for (const [path, on] of [["/incidents", "Incidents"], ["/incidents/prompt-injection", "Incidents"], ["/feed", "Daily feed"]] as const) {
     const html = render(path, "", <SiteHeader />);
     const nav = html.slice(html.indexOf('<nav aria-label="Sections"'), html.indexOf("</nav>", html.indexOf('<nav aria-label="Sections"')));
     const labels = [...nav.matchAll(/<a [^>]*>([^<]+)<\/a>/g)].map((m) => m[1]);
-    assert.deepEqual(labels, ["Patterns", "Controls", "Incidents", "Feed"], "Reference is the menu after them");
-    assert.ok(nav.indexOf(">Feed<") < nav.indexOf("Reference"));
+    assert.deepEqual(labels, ["Patterns", "Controls", "Incidents", "Daily feed"], "Reference is the menu after them");
+    assert.ok(nav.indexOf(">Daily feed<") < nav.indexOf("Reference"));
     assert.match(nav, /href="\/incidents"[^>]*>Incidents</);
-    assert.match(nav, /href="\/feed"[^>]*>Feed</);
+    assert.match(nav, /href="\/feed"[^>]*>Daily feed</);
     assert.match(nav, new RegExp(`aria-current="page"[^>]*>${on}<`), path);
     assert.equal(nav.match(/aria-current="page"/g)?.length, 1, path);
   }
@@ -374,6 +374,6 @@ test("search finds incident patterns, deep dives and feed reports, each on its o
   assert.equal(dives.length, dataset.incidents.length);
   assert.equal(dives.find((e) => e.href === `/incidents/${A.id}`)!.title, incidentById.get(A.id)!.title);
   assert.ok(dives[0].hint!.includes(categoryById.get(dataset.incidents[0].category)!.label));
-  assert.equal(entries.filter((e) => e.kind === "Feed").length, FEED.length);
+  assert.equal(entries.filter((e) => e.kind === "Daily feed").length, FEED.length);
   assert.equal(entries.filter((e) => e.kind === "Incident").length, 0, "no kind says incident on its own");
 });

@@ -185,6 +185,7 @@ test("the RSS feed is valid XML with the newest 100 items: title, link to the it
   const xml = feedRss(RSS_FIXTURE, "https://example.org/site");
   assert.deepEqual(xmlProblems(xml), []);
   assert.match(xml, /<rss version="2.0"/);
+  assert.match(xml, /<channel>\s*<title>Daily feed · AI Security Architecture<\/title>/, "the channel is named as the page is");
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((m) => m[1]);
   assert.equal(items.length, RSS_ITEMS);
   const first = items[0];
@@ -288,6 +289,6 @@ test("in the built site no JavaScript chunk carries a feed item, and the months 
   for (const page of ["index.html", join("feed", "index.html")]) {
     const link = readFileSync(join(OUT, page), "utf8").match(/<link rel="alternate" type="application\/rss\+xml"[^>]*>/)?.[0] ?? "";
     assert.match(link, /href="[^"]*\/feed\.xml"/, page);
-    assert.match(link, /title="AI security daily"/, page);
+    assert.match(link, /title="Daily feed · AI Security Architecture"/, page);
   }
 });

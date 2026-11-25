@@ -365,8 +365,8 @@ test("the feed page lists every item newest first, under the week each came to l
   const sections = html.split(/<h2 [^>]*>Week of /).slice(1);
   assert.deepEqual(sections.map(listed), [["mcp-tokens", "package-hijack", "chat-injection"], ["open-gateway", "mcp-follow-up"], ["agent-intrusion"], ["sandbox-escape", "oldest-mcp"]]);
   // The header line: what the page is, how many items, the newest, and the RSS feed.
-  assert.match(html, /<h1[^>]*>AI security daily<\/h1>/);
-  assert.match(html, /Every AI security incident we track, and the product updates, security tools, launches and research that change how AI is secured, newest first/);
+  assert.match(html, /<h1[^>]*>Daily feed<\/h1>/);
+  assert.match(html, /The AI security daily: every AI security incident we track, and the product updates, security tools, launches and research that change how AI is secured, newest first/);
   assert.match(html, /data-feed-status[^>]*><span>8 items<\/span><span>Latest 20 November 2026<\/span>/);
   assert.match(html, /<a href="\/feed\.xml"[^>]*data-rss[^>]*>[\s\S]*?RSS<\/a>/);
   assert.doesNotMatch(html, /Incidents views|>Catalogue </);
@@ -613,14 +613,14 @@ test("site search finds a feed item by its title, from the compact index of titl
   const titles = feedTitles(MIXED);
   assert.deepEqual(Object.keys(titles.find((t) => t.id === "claude-tracing")!), ["id", "kind", "date", "title"], "no more than search needs");
   assert.deepEqual(Object.keys(titles.find((t) => t.id === "mcp-tokens")!), ["id", "kind", "date", "title", "category"]);
-  const entries = buildIndex(titles).filter((e) => e.kind === "Feed");
+  const entries = buildIndex(titles).filter((e) => e.kind === "Daily feed");
   assert.equal(entries.length, MIXED.length);
   const first = entries.find((e) => e.href === "/feed#mcp-tokens")!;
   assert.equal(first.title, FIXTURE[0].title);
   assert.ok(first.text.includes("session tokens"));
   assert.match(first.hint!, new RegExp(`^${incidentPatternById.get("identity")!.name} · 20 Nov 2026`));
   assert.equal(entries.find((e) => e.href === "/feed#skills-scanner")!.hint, "Tool · 21 Nov 2026");
-  assert.equal(buildIndex([]).filter((e) => e.kind === "Feed").length, 0, "until the titles arrive, search finds the rest");
+  assert.equal(buildIndex([]).filter((e) => e.kind === "Daily feed").length, 0, "until the titles arrive, search finds the rest");
 });
 
 test("a page that shows a few items reads the same given only those as given the whole feed", () => {

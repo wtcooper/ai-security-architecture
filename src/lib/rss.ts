@@ -48,7 +48,7 @@ export function feedRss(items: FeedItem[], site: string, limit = RSS_ITEMS): str
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
     "  <channel>",
-    "    <title>AI security daily</title>",
+    "    <title>Daily feed · AI Security Architecture</title>",
     `    <link>${xmlEscape(feedPage)}</link>`,
     `    <atom:link href="${xmlEscape(`${site}/feed.xml`)}" rel="self" type="application/rss+xml" />`,
     "    <description>AI security incidents, product updates, security tools, launches and research, newest first, reviewed daily.</description>",

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The feed (/feed/): the AI security daily. Five kinds of item, newest first, each in two or three
+ * The daily feed (/feed/): the AI security daily. Five kinds of item, newest first, each in two or three
  * lines under the week it came to light: incidents (filed under an incident pattern, naming the
  * patterns they would replay on), product updates, security tools, launches and research. Each
  * says why it matters, who announced it, the products, controls and patterns it touches and the
@@ -208,9 +208,9 @@ export function IncidentFeed({
   return (
     <>
       <PageHeader
-        eyebrow="Feed"
-        title="AI security daily"
-        lead="Every AI security incident we track, and the product updates, security tools, launches and research that change how AI is secured, newest first: what happened, why it matters and what it changes on this site. Reviewed daily."
+        eyebrow="Daily feed"
+        title="Daily feed"
+        lead="The AI security daily: every AI security incident we track, and the product updates, security tools, launches and research that change how AI is secured, newest first, with what happened, why it matters and what it changes on this site."
       >
         <p className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px] text-ink-3" data-feed-status>
           <span>{plural(index.total, "item")}</span>

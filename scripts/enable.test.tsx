@@ -9,6 +9,9 @@ import { PatternPage } from "../src/components/patterns/PatternPage";
 import { PatternRisks } from "../src/components/patterns/PatternPanels";
 import { PatternFinder } from "../src/components/patterns/PatternFinder";
 import HomePage from "../src/app/page";
+import PatternsPage from "../src/app/patterns/page";
+import { toHeadline } from "../src/components/home/headlines";
+import { feedItems } from "../src/lib/feed-server";
 import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { cloudOptionsForControl, cloudProductsFor, cloudSlug, optionsFor } from "../src/components/cloud/model";
 import { ControlDetail } from "../src/components/controls/ControlDetail";
@@ -302,10 +305,51 @@ test("what a box holds is in its hover help and its accessible description, now 
   }
 });
 
-test("the landing page explains how to read a pattern before the finder, and the finder shows one situation with a preview", () => {
+test("the home page is a briefing: the headline, the site search, four cards into the site and the Reference links", () => {
   const home = renderToStaticMarkup(<HomePage />);
-  assert.ok(home.indexOf("How to read a pattern") > 0 && home.indexOf("How to read a pattern") < home.indexOf('role="tablist"'), "how to read comes first");
+  assert.match(home, /<h1[^>]*>Enabling AI securely<\/h1>/);
+  assert.doesNotMatch(home, /kept current every day/);
+  assert.match(home, /<button[^>]*data-site-search[^>]*>[\s\S]*?Search patterns, products, controls, incidents…/, "the site search");
+  assert.ok(home.indexOf("data-site-search") < home.indexOf("Today in AI security"), "under the headline, before the list");
+  const cards = section(home, '<nav aria-label="Parts of the site"', "</nav>");
+  assert.deepEqual([...cards.matchAll(/data-section="([^"]+)"/g)].map((m) => m[1]), ["/patterns", "/incidents", "/controls", "/feed"]);
+  for (const title of ["Patterns", "Incidents", "Controls", "Daily feed"]) assert.ok(cards.includes(`>${title} →<`), title);
+  assert.doesNotMatch(cards, />Feed →</, "the card says Daily feed");
+  const reference = section(home, '<nav aria-label="Reference"', "</nav>");
+  assert.match(reference, /href="\/reference"[^>]*>Reference →</);
+  for (const href of ["/reference/risk-map", "/reference/risks", "/reference/cosai-controls", "/reference/components", "/reference/frameworks", "/reference/clouds"]) {
+    assert.ok(reference.includes(`href="${href}"`), href);
+  }
+  // The finder and how to read a pattern are on /patterns/; the prototypes' switcher never came.
+  assert.doesNotMatch(home, /role="tablist"|How to read a pattern/, "the pattern finder is on the Patterns page");
+  assert.doesNotMatch(home, /prototype|href="\/preview/i);
   assert.doesNotMatch(home, /href="\/tools/, "there is no tools page");
+});
+
+test("the home page lists the 12 newest daily feed items, built in, each opening the item on the feed", () => {
+  const home = renderToStaticMarkup(<HomePage />);
+  const newest = feedItems.slice(0, 12);
+  assert.equal(newest.length, 12, "the shipped feed has at least twelve items");
+  const list = section(home, "data-headlines", "</ul>");
+  assert.deepEqual([...list.matchAll(/data-headline="([^"]+)"/g)].map((m) => m[1]), newest.map((f) => f.id), "newest first, twelve of them");
+  for (const f of newest) {
+    assert.ok(list.includes(`href="/feed#${f.id}"`), `${f.id} opens on the feed`);
+    assert.ok(list.includes(`>${esc(f.title)}<`), `${f.id}: its title`);
+    assert.ok(list.includes(esc(toHeadline(f).line)), `${f.id}: one line on why it matters`);
+  }
+  assert.match(home, /<h2[^>]*>Today in AI security<\/h2>/);
+  assert.match(home, /href="\/feed"[^>]*>The whole daily feed →</);
+  assert.match(home, /The 12 newest items in the daily feed/);
+  // An incident has no why: its line is the first sentence of what happened, and "gpt-5.4" does not end one.
+  const incident = newest.find((f) => f.kind === "incident") ?? feedItems.find((f) => f.kind === "incident")!;
+  assert.equal(toHeadline({ ...incident, why: undefined, summary: "An agent on gpt-5.4 leaked a key. Then more happened." }).line, "An agent on gpt-5.4 leaked a key.");
+  assert.equal(toHeadline({ ...incident, why: "Why it matters." }).line, "Why it matters.");
+});
+
+test("the Patterns page explains how to read a pattern before the finder, and the finder shows one situation with a preview", () => {
+  const patterns = renderToStaticMarkup(<PatternsPage />);
+  assert.ok(patterns.indexOf("How to read a pattern") > 0 && patterns.indexOf("How to read a pattern") < patterns.indexOf('role="tablist"'), "how to read comes first");
+  for (const step of ["Pick the pattern", "Put the controls in place", "Configure the tool"]) assert.ok(patterns.includes(step), step);
   const finder = renderToStaticMarkup(<PatternFinder />);
   const listed = [...finder.matchAll(/data-pattern="([^"]+)"/g)].map((m) => m[1]);
   const first = dataset.archetypes.filter((a) => a.surface === "surfaceEndpoint").map((a) => a.id);
@@ -317,6 +361,8 @@ test("the landing page explains how to read a pattern before the finder, and the
 });
 
 const esc = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+/** The markup from `start` to the first `end` after it. */
+const section = (html: string, start: string, end: string) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
 
 test("a pattern read as built on a cloud names every component's service and that cloud's option for every control", () => {
   for (const arch of dataset.archetypes) {

@@ -3,7 +3,7 @@ import { IncidentFeed } from "@/components/incidents/IncidentFeed";
 import { initialWindow } from "@/lib/feed";
 import { feedIndex, feedItems } from "@/lib/feed-server";
 
-export const metadata = { title: "Feed · AI Security Architecture" };
+export const metadata = { title: "Daily feed · AI Security Architecture" };
 
 /**
  * The daily review: every item, newest first, under its week. Built with the newest days only;

@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   description:
     "Patterns for securely enabling AI: for each kind of AI tool or application, the enterprise controls to put in place and the settings of the product you chose.",
   // Every page names the feed, so a feed reader given any address finds it.
-  alternates: { types: { "application/rss+xml": [{ url: fileHref(FEED_XML), title: "AI security daily" }] } },
+  alternates: { types: { "application/rss+xml": [{ url: fileHref(FEED_XML), title: "Daily feed · AI Security Architecture" }] } },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
