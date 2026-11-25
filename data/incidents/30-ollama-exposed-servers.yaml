@@ -1,0 +1,165 @@
+id: ollama-exposed-servers
+title: "Exposed Ollama servers: more than half already carry models someone else put there"
+subtitle: >
+  Rapid7 checked internet-facing Ollama servers on 10 November 2026. 4,209 of 7,675 carried
+  traces of strangers: marker models, pulls from raw IP addresses, copy tests, premium-named
+  aliases and, on 55, model names that decode to file paths.
+date: 2026-11
+dateRange: June – November 2026 (scan 10 November, published 18 November)
+category: exposed
+perspective: target
+# Ollama is the single-machine runtime this pattern draws; about 65% of hosts were rented cloud servers, but with no gateway, identity or network policy, the local runtime's reality, not the serving cluster self-hosted inference draws.
+archetype: archLocalInference
+caveat: >
+  Every figure comes from one Rapid7 snapshot, on 10 November 2026, of 20,354 pre-selected
+  addresses; Rapid7 does not say how they were chosen and calls its totals a sample, not a
+  census. The third-party activity is read from model names alone: Rapid7 sent no inference,
+  write or exploit requests, and nobody else has confirmed the figures. The page's own totals do
+  not reconcile: it counts 7,675 exposed Ollama servers but 7,627 hosts in all where an AI or
+  notebook API answered without authentication (its headline prints "7,6270").
+breaks:
+  - control: D3-AA
+    how: "An authenticating proxy in front of the API: Ollama has no sign-in of its own, so every list, pull and copy here was anonymous."
+  - control: D3-OTF
+    how: "Hold the runtime's outbound traffic to approved registries, so a pull from a raw IP:port or a tunnel fails and never calls back."
+  - control: cap-shadow-ai-discovery
+    how: "Scan your own public ranges and every cloud account, including ones paid on personal cards, for runtimes nobody registered."
+  - control: D3-PA
+    how: "Record which interface the serving process listens on; a runtime bound to every interface is the one strangers find."
+  - control: AML.M0023
+    how: "A record of approved models makes a beacon, a -copy-test or a gpt-4o alias stand out in the model list."
+summary:
+  - >
+    Ollama has no built-in authentication, so bound to a routable interface its API answers
+    anyone who reaches the port. On 10 November 2026 Rapid7 sent one unauthenticated request to
+    each service on 20,354 pre-selected IPv4 addresses, and 7,675 Ollama servers held up as
+    exposed. Roughly 65% sat in hosting or cloud networks.
+  - >
+    In Rapid7's words, more than half "have already been touched by someone who is not the
+    owner": 4,209 (54.8%) carried at least one third-party artifact. Marker models were on
+    3,091, pulls from a raw IP:port on 1,817, gpt-4o and claude-3-opus aliases on 1,190. On 55,
+    model names decoded to file paths such as `/etc/shadow`, `/proc/self/environ` and, on 10,
+    the Ollama private key.
+  - >
+    Timestamped markers ran from 10 June to 3 November 2026, and some June markers were still
+    there on 10 November. The evidence sat in the servers' own model lists; Rapid7 notes that a
+    clean list does not prove a clean host, since names can be deleted.
+risks:
+  - riskInsecureIntegratedComponent
+  - riskModelSourceTampering
+  - riskModelDeploymentTampering
+steps:
+  - n: 1
+    title: The runtime answers the internet
+    phase: introduced
+    narrative: >
+      Ollama has no built-in authentication. Set to listen on every interface, as
+      `OLLAMA_HOST=0.0.0.0` does, its API answers any address that reaches the port. Rapid7's
+      snapshot found 7,675 such servers answering `/api/tags` with their model lists (8,193
+      flagged before filtering). Roughly 65% were in hosting or cloud networks, and 79% listed at
+      least one `:cloud` model, which Rapid7 says may expose the owner's paid account if the
+      server is signed in to ollama.com.
+    path: [api]
+    risks:
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "Open by default. Already occupied."
+        url: https://www.rapid7.com/blog/post/tr-self-hosted-ai-renting-compute-exposed-servers/
+        publisher: Rapid7
+        date: 2026-11-18
+  - n: 2
+    title: Strangers make it pull from their own addresses
+    phase: exposed
+    narrative: >
+      1,817 hosts (23.7%) held models pulled from a raw IP:port, and 1,721 (22.4%) from free
+      tunnels or throwaway registries. When a server pulls from an address someone controls, it
+      calls them back: in Rapid7's reading, a reliable way to confirm a target is reachable,
+      writable and able to make outbound connections.
+    path: [hub->weights]
+    risks:
+      - riskModelSourceTampering
+    sources:
+      - title: "Open by default. Already occupied."
+        url: https://www.rapid7.com/blog/post/tr-self-hosted-ai-renting-compute-exposed-servers/
+        publisher: Rapid7
+        date: 2026-11-18
+  - n: 3
+    title: They leave markers, copies and borrowed names
+    phase: exposed
+    narrative: >
+      3,091 hosts (40.3%) carried marker models with names like beacon, verify, probe or pwn,
+      and 712 model names embedded the server's own IP address. Names ending in `-copy-test`
+      showed someone checking that the copy endpoint worked. 1,190 hosts (15.5%) carried
+      `gpt-4o` and `claude-3-opus` aliases, which Rapid7 hypothesises are small local models
+      copied under premium names. Whatever sits in the model directory is what the runtime
+      serves next.
+    path: [api->runtime, weights]
+    risks:
+      - riskModelDeploymentTampering
+    sources:
+      - title: "Open by default. Already occupied."
+        url: https://www.rapid7.com/blog/post/tr-self-hosted-ai-renting-compute-exposed-servers/
+        publisher: Rapid7
+        date: 2026-11-18
+  - n: 4
+    title: Model names that decode to file paths
+    phase: exposed
+    narrative: >
+      On 55 hosts (0.7%), model names held Base64 or hex strings that decode to file paths:
+      `/etc/shadow`, `/etc/passwd`, `/proc/self/environ`, SSH `authorized_keys`, AWS config, an
+      Oracle Cloud metadata endpoint, and on 10 hosts the Ollama private key. Rapid7 links the
+      technique to Probllama (CVE-2024-37032), a path traversal Wiz published in 2024 and Ollama
+      fixed in 0.1.34; the lists cannot show whether any target was vulnerable.
+    path: [api->runtime, runtime]
+    cves:
+      - CVE-2024-37032
+    risks:
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "Open by default. Already occupied."
+        url: https://www.rapid7.com/blog/post/tr-self-hosted-ai-renting-compute-exposed-servers/
+        publisher: Rapid7
+        date: 2026-11-18
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Bind the runtime to localhost or a private network and put an authenticating proxy in
+      front of any remote access, because Ollama has none of its own. Hold its outbound traffic
+      to approved registries, so a pull from a raw IP address or a tunnel fails and the callback
+      never comes. Find the servers before strangers do: scan your own public ranges and every
+      cloud account, including those paid on personal cards, and record which interfaces the
+      serving process listens on. Review every model list against the record of approved
+      models, and treat a host carrying someone else's models as compromised: rotate its secrets
+      and rebuild it.
+    path: [hub->weights, weights->runtime, api->runtime, govSupplyChain, govObservability]
+    sources:
+      - title: "Open by default. Already occupied."
+        url: https://www.rapid7.com/blog/post/tr-self-hosted-ai-renting-compute-exposed-servers/
+        publisher: Rapid7
+        date: 2026-11-18
+alsoSeen:
+  - title: "CVE-2026-103663: an unauthenticated Ollama model pull writes a file that runs as root on restart"
+    date: October 2026
+    note: >
+      CERT Polska: a path traversal in the layer digest sent to `/api/pull` lets an
+      unauthenticated remote attacker write a malicious binary outside the model store, into
+      `/usr/lib/ollama` where the server can write there (the default in most Ollama Docker
+      images), and it runs as root on the next restart. Versions from 0.14.3 are affected until
+      0.35.0, which fixed it; the open port above is the way in.
+    sources:
+      - title: "Vulnerability in Ollama software"
+        url: https://cert.pl/en/posts/2026/10/CVE-2026-103663/
+        publisher: CERT Polska
+        date: 2026-10-08
+cves:
+  - CVE-2024-37032
+sources:
+  - title: "Open by default. Already occupied."
+    url: https://www.rapid7.com/blog/post/tr-self-hosted-ai-renting-compute-exposed-servers/
+    publisher: Rapid7
+    date: 2026-11-18
+  - title: "Vulnerability in Ollama software"
+    url: https://cert.pl/en/posts/2026/10/CVE-2026-103663/
+    publisher: CERT Polska
+    date: 2026-10-08
