@@ -6,7 +6,17 @@
  * (one entry per paragraph); the build step normalises them to Paragraph[].
  */
 
-import type { FeedEvidence, FeedFit, IncidentPerspective } from "./feed-vocabulary";
+import type {
+  FeedDecisionValue,
+  FeedEvidence,
+  FeedFit,
+  FeedKind,
+  FeedUpdateAction,
+  FeedUpdateStatus,
+  IncidentPerspective,
+  SecurityToolKind,
+  SecurityToolStatus,
+} from "./feed-vocabulary";
 
 /** An incident pattern's id (data/incident-patterns/): the `category` every deep dive and feed item carries. */
 export type IncidentCategory = string;
@@ -1430,36 +1440,141 @@ export interface Incident {
 }
 
 /**
- * ------------------------------------------------------------------ The incident feed
+ * ------------------------------------------------------------------ The feed
  *
- * Every real AI security incident tracked, in two or three lines each (data/feed/<YYYY-MM>.yaml).
- * The incident files above are the deep dives: the few that teach something new, told step by
- * step. A feed item points at the deep dive that tells it, when there is one.
+ * The AI security daily (data/feed/<YYYY-MM>.yaml): every real AI security incident tracked, and
+ * the product updates, security tools, launches and research that change how AI is secured, in
+ * two or three lines each. The incident files above are the deep dives: the few incidents that
+ * teach something new, told step by step. An incident points at the deep dive that tells it,
+ * when there is one. The feed is not in the dataset every page loads: the build writes it apart
+ * (src/data/generated/feed.json, read at build time by the pages that show a few items, and one
+ * file per month under public/data/feed/, which /feed/ loads as the reader goes back in time).
  */
+
+/** The change to the site an item implies, and where it stands. */
+export interface FeedUpdate {
+  action: FeedUpdateAction;
+  status: FeedUpdateStatus;
+  /** The file it changes ("data/tooling/anthropic/claude-code.yaml") or the id it names. */
+  target: string;
+  /** At most 200 characters: what changes. */
+  note: string;
+}
+
+/** The owner's answer to a proposed change (data/feed/decisions.yaml). */
+export interface FeedDecision {
+  /** The feed item whose `update` it answers. */
+  id: string;
+  decision: FeedDecisionValue;
+  /** At most 200 characters. */
+  note?: string;
+}
+
+/** A security tool as the item that announced it shows it. */
+export interface SecurityToolRef {
+  id: string;
+  name: string;
+  by: string;
+  kind: SecurityToolKind;
+  status: SecurityToolStatus;
+  url: string;
+}
+
 export interface FeedItem {
   /** Unique across every feed file; kebab-case. Also the item's anchor on the feed page. */
   id: string;
-  /** "YYYY-MM-DD": the day it came to light. Inside the month its file is named for. */
+  /** What kind of item it is. An item written before kinds existed is an incident. */
+  kind: FeedKind;
+  /** "YYYY-MM-DD": the day it came to light (its first announcement). Inside the month its file is named for. */
   date: string;
   /** At most 120 characters. */
   title: string;
-  /** At most 420 characters: one to three plain past-tense sentences. */
+  /** At most 420 characters: the TL;DR, one to three plain sentences. */
   summary: string;
-  /** The incident pattern it is filed under: an id in data/incident-patterns/. */
-  category: IncidentCategory;
-  perspective: IncidentPerspective;
-  evidence: FeedEvidence;
-  /** Set when the item only loosely fits its incident pattern; `fitNote` says why. */
+  /** At most 200 characters: why it matters for security, in one line. Every kind but an incident has one. */
+  why?: string;
+  /** Who announced it. */
+  vendor?: string;
+  /** Products on the site it touches: tooling ids (data/tooling/). */
+  products?: string[];
+  /** Controls it delivers or changes: catalogue ids (a MITRE mitigation or a cap-* specialisation). */
+  controls?: string[];
+  /** Incidents only: the incident pattern it is filed under, an id in data/incident-patterns/. */
+  category?: IncidentCategory;
+  /** Incidents only. */
+  perspective?: IncidentPerspective;
+  /** Incidents only. */
+  evidence?: FeedEvidence;
+  /** Incidents only: set when the item only loosely fits its incident pattern; `fitNote` says why. */
   fit?: FeedFit;
   /** At most 160 characters: what about it the incident pattern does not cover. */
   fitNote?: string;
-  /** Zero to three patterns it would replay on. */
+  /** Zero to three patterns it touches; for an incident, the patterns it would replay on. */
   patterns: string[];
-  /** The deep dive that tells it, as its own file or as one of its "also seen" entries. */
+  /** Incidents only: the deep dive that tells it, as its own file or as one of its "also seen" entries. */
   incident?: string;
   cves?: string[];
+  /** The change to the site it implies. */
+  update?: FeedUpdate;
+  /** Derived: the owner's answer to `update`, from data/feed/decisions.yaml. */
+  decision?: Omit<FeedDecision, "id">;
+  /** Derived: the security tools (data/security-tools/) that name this item as their announcement. */
+  securityTools?: SecurityToolRef[];
   /** One to three, the primary first. */
   sources: IncidentSource[];
+}
+
+/** An incident: the kind of item that is filed under an incident pattern and carries evidence. */
+export type IncidentFeedItem = FeedItem & { kind: "incident"; category: IncidentCategory; perspective: IncidentPerspective; evidence: FeedEvidence };
+
+export const isIncidentItem = (f: FeedItem): f is IncidentFeedItem => f.kind === "incident";
+
+/** An item as site search reads it: its title, kind and day, and its incident pattern if it is an incident. */
+export interface FeedTitle {
+  id: string;
+  kind: FeedKind;
+  date: string;
+  title: string;
+  category?: IncidentCategory;
+}
+
+/**
+ * What /feed/ knows before it has loaded a month: the months there are and how many items each
+ * holds, the counts its filters start from, and every proposed site update (the panel lists them
+ * all). Written by the build as public/data/feed/index.json.
+ */
+export interface FeedIndex {
+  /** Every item, of every kind. */
+  total: number;
+  /** The newest item's day; empty for an empty feed. */
+  latest: string;
+  /** Newest first: "YYYY-MM" and how many items it holds. */
+  months: { month: string; count: number }[];
+  /** Items of each kind. */
+  kinds: Record<string, number>;
+  /** Incidents under each incident pattern, of each evidence, and naming each pattern. */
+  incidents: { category: Record<string, number>; evidence: Record<string, number>; pattern: Record<string, number> };
+  /** The items whose update is proposed, newest first. */
+  proposed: FeedItem[];
+}
+
+/**
+ * ------------------------------------------------------------------ Security tools
+ *
+ * Open-source and commercial tools that protect AI systems (data/security-tools/<id>.yaml), each
+ * listed under the catalogue controls it helps deliver. Shown on each control's page as "Tools
+ * that deliver it", and on the feed item that announced it. Kept out of the dataset every page
+ * loads: the controls page is given them when it is built.
+ */
+export interface SecurityTool extends SecurityToolRef {
+  /** At most 160 characters. */
+  what: string;
+  /** One to four catalogue controls it helps deliver. */
+  controls: string[];
+  /** "YYYY-MM-DD". */
+  released: string;
+  /** The feed item that announced it. */
+  feed?: string;
 }
 
 /**
@@ -1529,8 +1644,8 @@ export interface IncidentPatternAuthored {
 export interface IncidentPattern extends IncidentPatternAuthored {
   /** Derived: the deep dives filed under it, newest first. */
   deepDives: string[];
-  /** Derived: the feed items filed under it, newest first. */
-  feed: string[];
+  /** Derived: how many feed items are filed under it. The items stay out of the dataset every page loads. */
+  feedCount: number;
   /** Derived: the patterns it lands on, most often first. */
   landsOn: IncidentPatternLanding[];
 }
@@ -1651,8 +1766,6 @@ export interface Dataset {
   overlays: RiskOverlay[];
   /** The deep dives (data/incidents/), in file order. */
   incidents: Incident[];
-  /** Every feed item from data/feed/, newest first; empty when there are no feed files. */
-  feed: FeedItem[];
   /** The incident patterns (data/incident-patterns/), by `order`, with what is derived from the deep dives and the feed. */
   incidentPatterns: IncidentPattern[];
   surfaces: Surface[];

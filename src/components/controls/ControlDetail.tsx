@@ -19,13 +19,65 @@ import {
   status as statusFile,
   statusFor,
   surfaces, enableGroupFor } from "@/lib/data";
-import type { Mitigation } from "@/lib/types";
+import type { Mitigation, SecurityTool } from "@/lib/types";
+import { securityToolsFor } from "@/lib/feed";
+import { SECURITY_TOOL_KINDS, SECURITY_TOOL_STATUSES } from "@/lib/feed-vocabulary";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
 import { cloudOptionsForControl } from "@/components/cloud/model";
-import { cloudHref, controlHref, cosaiControlHref, riskHref, componentHref } from "@/lib/routes";
+import { cloudHref, controlHref, cosaiControlHref, feedHref, riskHref, componentHref } from "@/lib/routes";
 
-export function ControlDetail({ mitigation, onClose, framed = true }: { mitigation: Mitigation; onClose?: () => void; framed?: boolean }) {
+const toolKind = new Map<string, string>(SECURITY_TOOL_KINDS.map((k) => [k.id, k.label]));
+const toolStatus = new Map<string, string>(SECURITY_TOOL_STATUSES.map((s) => [s.id, s.label]));
+
+/**
+ * The open-source and commercial tools that help deliver this control (data/security-tools/):
+ * each with who makes it, whether it is open or bought, how far it has shipped, what it does, and
+ * its own page. A tool is one option among many, never the control itself.
+ */
+function ToolsThatDeliverIt({ tools }: { tools: SecurityTool[] }) {
+  return (
+    <div className="mt-5" data-security-tools>
+      <p className="eyebrow">Tools that deliver it</p>
+      <p className="mt-1 text-xs text-ink-3">Open-source and commercial tools that help put this control in place, found by the daily feed. Options, not endorsements.</p>
+      <ul className="mt-2 divide-y divide-line overflow-hidden rounded-lg border border-line">
+        {tools.map((t) => (
+          <li key={t.id} className="px-3.5 py-2.5" data-security-tool={t.id}>
+            <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <a href={t.url} target="_blank" rel="noreferrer" className="text-[13px] font-semibold text-ink hover:text-introduced hover:underline">
+                {t.name}
+                <span className="ml-0.5 text-introduced">↗</span>
+              </a>
+              <span className="text-[12px] text-ink-3">by {t.by}</span>
+              <span className="rounded-full border border-line px-2 py-[1px] text-[11px] font-medium text-ink-2">{toolKind.get(t.kind) ?? t.kind}</span>
+              <span className="rounded-full border border-line px-2 py-[1px] text-[11px] font-medium text-ink-3">{toolStatus.get(t.status) ?? t.status}</span>
+            </p>
+            <p className="mt-0.5 text-[12.5px] leading-snug text-ink-2">{t.what}</p>
+            {t.feed && (
+              <Link href={feedHref({}, t.feed)} className="mt-0.5 inline-block text-[11.5px] font-semibold text-introduced hover:underline">
+                In the feed →
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function ControlDetail({
+  mitigation,
+  onClose,
+  framed = true,
+  securityTools = [],
+}: {
+  mitigation: Mitigation;
+  onClose?: () => void;
+  framed?: boolean;
+  /** The security tools (data/security-tools/), as the page was built with them; those that deliver this control are listed. */
+  securityTools?: SecurityTool[];
+}) {
+  const delivering = securityToolsFor(mitigation.id, securityTools);
   const controls = controlsForMitigation(mitigation.id);
   const risks = risksForMitigation(mitigation.id);
   const components = componentsForMitigation(mitigation.id);
@@ -103,6 +155,7 @@ export function ControlDetail({ mitigation, onClose, framed = true }: { mitigati
           ))}
         </div>
       </div>
+      {delivering.length > 0 && <ToolsThatDeliverIt tools={delivering} />}
       {mitigation.process?.length ? (
         <div className="mt-5">
           <p className="eyebrow">Run as a process</p>

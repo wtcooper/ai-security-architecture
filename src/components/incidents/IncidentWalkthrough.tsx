@@ -14,7 +14,8 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { PHASE_META } from "@/components/PhaseRail";
 import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
-import { archetypeById, controlName, feed, feedForIncident, incidentById, riskCode, riskTitle } from "@/lib/data";
+import { archetypeById, controlName, incidentById, riskCode, riskTitle } from "@/lib/data";
+import { feedForIncident } from "@/lib/feed";
 import { categoryById } from "@/lib/incident-categories";
 import type { FeedItem, Incident, IncidentSource, Phase } from "@/lib/types";
 import { CategoryChip, IncidentsBreadcrumb } from "./chrome";
@@ -39,7 +40,7 @@ function Text({ children }: { children: string }) {
   );
 }
 
-export function IncidentWalkthrough({ id, feed: items = feed }: { id: string; /** The feed to read; the dataset's unless a test passes its own. */ feed?: FeedItem[] }) {
+export function IncidentWalkthrough({ id, feed: items = [] }: { id: string; /** The feed items that tell it, as the page was built with them, or a test's whole feed. */ feed?: FeedItem[] }) {
   const incident = incidentById.get(id)!;
   const reports = feedForIncident(id, items);
   const archetype = archetypeById.get(incident.archetype)!;

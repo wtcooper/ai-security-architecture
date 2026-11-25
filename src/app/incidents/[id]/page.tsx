@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { IncidentPatternPage } from "@/components/incidents/IncidentPatternPage";
 import { IncidentWalkthrough } from "@/components/incidents/IncidentWalkthrough";
 import { incidentById, incidentPatternBySlug, incidentPatterns, incidents } from "@/lib/data";
+import { FEED_ON_INCIDENT_PATTERN, feedForCategory, feedForIncident } from "@/lib/feed";
+import { feedItems } from "@/lib/feed-server";
 
 /**
  * One page per incident pattern (by its slug) and one per deep dive (by its id), all generated at
@@ -18,13 +20,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: `${incidentById.get(id)?.title ?? "Incident"} · Incidents` };
 }
 
+/** Each page is given the few feed items it shows, worked out here when it is built; never the feed. */
 export default async function IncidentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const pattern = incidentPatternBySlug.get(id);
-  if (pattern) return <IncidentPatternPage id={pattern.id} />;
+  if (pattern) return <IncidentPatternPage id={pattern.id} reports={feedForCategory(pattern.id, feedItems).slice(0, FEED_ON_INCIDENT_PATTERN)} />;
   return (
     <Suspense>
-      <IncidentWalkthrough id={id} />
+      <IncidentWalkthrough id={id} feed={feedForIncident(id, feedItems)} />
     </Suspense>
   );
 }

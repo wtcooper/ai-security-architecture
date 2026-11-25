@@ -78,20 +78,12 @@ export const frameworkById = index(frameworks);
 export const overlayByRisk = new Map(overlays.map((o) => [o.risk, o]));
 export const incidentById = index(incidents);
 
-// --- The incident feed (data/feed/) --------------------------------------------------
-
-/** Every feed item, newest first. A dataset built before the feed existed reads as an empty one. */
-export const feed: FeedItem[] = dataset.feed ?? [];
-export const feedById = index(feed);
-
-/** The feed items that would replay on this pattern, newest first. */
-export const feedForPattern = (archetypeId: string, items: FeedItem[] = feed): FeedItem[] => items.filter((f) => f.patterns.includes(archetypeId));
-
-/** The feed items a deep dive tells, as its own walk-through or as one of its "also seen" entries. */
-export const feedForIncident = (incidentId: string, items: FeedItem[] = feed): FeedItem[] => items.filter((f) => f.incident === incidentId);
-
-/** The feed items filed under one incident pattern. */
-export const feedForCategory = (category: string, items: FeedItem[] = feed): FeedItem[] => items.filter((f) => f.category === category);
+// --- The feed (data/feed/) --------------------------------------------------------------
+//
+// Not here. The feed grows every day, so it stays out of this dataset, which every page loads:
+// the pages that show a few items are given them when they are built (src/lib/feed-server.ts),
+// /feed/ loads its months as the reader goes, and the helpers that work on a list of items are
+// in src/lib/feed.ts.
 
 // --- Incident patterns (data/incident-patterns/) ----------------------------------------------
 
@@ -101,11 +93,11 @@ export const incidentPatternById = index(incidentPatterns);
 export const incidentPatternBySlug = new Map(incidentPatterns.map((p) => [p.slug, p]));
 
 /**
- * An incident pattern with its deep dives, feed items and landings worked out from this feed:
- * the dataset's own, unless a test passes its own. A pattern given as a fixture is derived too.
+ * An incident pattern with its deep dives, feed count and landings: as the build derived them
+ * from the whole feed, or, when a test passes a feed of its own, worked out from that one.
  */
-export const incidentPatternView = (pattern: IncidentPatternAuthored, items: FeedItem[] = feed): IncidentPattern =>
-  items === feed && "landsOn" in pattern ? (pattern as IncidentPattern) : deriveIncidentPattern(pattern, incidents, items, archetypes.map((a) => a.id));
+export const incidentPatternView = (pattern: IncidentPatternAuthored, items?: FeedItem[]): IncidentPattern =>
+  !items && "landsOn" in pattern ? (pattern as IncidentPattern) : deriveIncidentPattern(pattern, incidents, items ?? [], archetypes.map((a) => a.id));
 
 const vocab = new Map(
   [...lifecycleStages, ...impactTypes, ...actorAccessLevels].map((v) => [v.id, v.title]),

@@ -18,6 +18,8 @@ import { SiteHeader } from "../src/components/shell/SiteHeader";
 import { archetypeById, controlName, dataset, incidentById, incidentPatternById, incidentPatterns, riskTitle } from "../src/lib/data";
 import { CATEGORY_COLOURS, categoryById, INCIDENT_CATEGORIES } from "../src/lib/incident-categories";
 import { deriveIncidentPattern, landsOn } from "../src/lib/incident-patterns";
+import { feedForCategory } from "../src/lib/feed";
+import { feedItems } from "../src/lib/feed-server";
 import { feedHref, incidentPatternHref, patternHref } from "../src/lib/routes";
 import { THREAT_LISTS, type FeedItem, type IncidentPatternAuthored } from "../src/lib/types";
 
@@ -168,7 +170,8 @@ test("the shipped incident patterns pass, by order, and every category is one of
   assert.deepEqual(orders, [...orders].sort((a, b) => a - b));
   for (const id of ["promptInjection", "supplyChain", "identity", "exposed", "exploitedSoftware", "aiMadeExposure", "breakout", "aiAttacker"]) assert.ok(ids.includes(id), id);
   for (const i of dataset.incidents) assert.ok(ids.includes(i.category), `deep dive ${i.id}: ${i.category}`);
-  for (const f of dataset.feed) assert.ok(ids.includes(f.category), `feed item ${f.id}: ${f.category}`);
+  for (const f of feedItems.filter((x) => x.kind === "incident")) assert.ok(ids.includes(f.category!), `feed item ${f.id}: ${f.category}`);
+  for (const f of feedItems.filter((x) => x.kind !== "incident")) assert.equal(f.category, undefined, `feed item ${f.id} is a ${f.kind}: no incident pattern`);
   const deepDiveIds = new Set(dataset.incidents.map((i) => i.id));
   for (const p of dataset.incidentPatterns) assert.ok(!deepDiveIds.has(p.slug) && p.slug !== "feed", `${p.slug} has an address of its own`);
   // The labels are the incident patterns' own names, and each has a colour of its own.
@@ -181,7 +184,7 @@ test("the shipped incident patterns pass, by order, and every category is one of
 test("a category that is no incident pattern fails, in the feed and for a deep dive alike", () => {
   assert.equal(categoryProblem("identity", ["identity"]), null);
   assert.match(categoryProblem("bias", ["identity", "exposed"])!, /category "bias" is not an incident pattern \(data\/incident-patterns\/\): one of identity, exposed/);
-  const feedCtx: FeedContext = { patternIds: new Set(dataset.archetypes.map((a) => a.id)), incidentIds: ctx.deepDiveIds, categoryIds: new Set(["identity"]) };
+  const feedCtx: FeedContext = { patternIds: new Set(dataset.archetypes.map((a) => a.id)), incidentIds: ctx.deepDiveIds, categoryIds: new Set(["identity"]), productIds: new Set(), controlIds: new Set() };
   const item = { id: "x", date: "2026-11-07", title: "t", summary: "s", category: "exposed", perspective: "target", evidence: "confirmed", patterns: [], sources: [{ title: "a", url: "https://example.org", publisher: "p" }] };
   const { problems } = checkFeed([{ file: "2026-11.yaml", doc: { items: [item] } }], feedCtx);
   assert.ok(problems.some((p) => p.startsWith("feed/2026-11.yaml item x: category \"exposed\" is not an incident pattern")), problems.join("\n"));
@@ -197,6 +200,7 @@ const OTHER = dataset.archetypes.find((a) => !PI_DEEP_DIVES.some((d) => d.archet
 const FEED: FeedItem[] = [
   ...Array.from({ length: 10 }, (_, i): FeedItem => ({
     id: `pi-${i}`,
+    kind: "incident",
     date: `2026-11-${String(24 - i * 2).padStart(2, "0")}`,
     title: `Report ${i}`,
     summary: "s",
@@ -207,13 +211,16 @@ const FEED: FeedItem[] = [
     ...(i === 0 ? { incident: A.id } : {}),
     sources: [{ title: "a", url: `https://example.org/${i}`, publisher: "p" }],
   })),
-  { id: "elsewhere", date: "2026-11-23", title: "Elsewhere", summary: "s", category: "identity", perspective: "target", evidence: "reported", patterns: [OTHER], sources: [{ title: "a", url: "https://example.org/e", publisher: "p" }] },
+  { id: "elsewhere", kind: "incident", date: "2026-11-23", title: "Elsewhere", summary: "s", category: "identity", perspective: "target", evidence: "reported", patterns: [OTHER], sources: [{ title: "a", url: "https://example.org/e", publisher: "p" }] },
 ];
 
 test("an incident pattern derives its deep dives, its feed items and where it lands, counting each incident once", () => {
   const p = deriveIncidentPattern(full() as IncidentPatternAuthored, dataset.incidents, FEED);
   assert.deepEqual(p.deepDives, incidentsNewestFirst().filter((i) => i.category === "promptInjection").map((i) => i.id));
-  assert.deepEqual(p.feed, FEED.filter((f) => f.category === "promptInjection").map((f) => f.id));
+  assert.equal(p.feedCount, 10);
+  assert.deepEqual(feedForCategory("promptInjection", FEED).map((f) => f.id), FEED.filter((f) => f.category === "promptInjection").map((f) => f.id));
+  // Only incidents are filed under an incident pattern, and only they are counted.
+  assert.equal(deriveIncidentPattern(full() as IncidentPatternAuthored, dataset.incidents, [...FEED, { ...FEED[1], id: "news", kind: "research" }]).feedCount, 10);
   assert.deepEqual(p.landsOn.find((l) => l.pattern === OTHER), { pattern: OTHER, count: 10, feed: 10, deepDives: 0 });
   // A's own feed item names A's pattern, so A is not counted again there; the other deep dives on it are.
   const own = p.landsOn.find((l) => l.pattern === A.archetype)!;

@@ -11,15 +11,15 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { archetypeById, atlasTechniques, controlName, feed as datasetFeed, feedById, frameworkEntries, incidentById, incidentPatternById, incidentPatternView, riskCode, riskTitle } from "@/lib/data";
+import { archetypeById, atlasTechniques, controlName, frameworkEntries, incidentById, incidentPatternById, incidentPatternView, riskCode, riskTitle } from "@/lib/data";
+import { FEED_ON_INCIDENT_PATTERN, feedForCategory } from "@/lib/feed";
 import { categoryColour } from "@/lib/incident-categories";
 import { THREAT_LISTS, type FeedItem, type IncidentPatternAuthored } from "@/lib/types";
 import { controlHref, feedHref, incidentHref, incidentPatternHref, patternHref, riskHref } from "@/lib/routes";
 import { CategoryDot, EvidenceTag, IncidentsBreadcrumb, plural } from "./chrome";
 import { formatDay, formatMonth } from "./model";
 
-/** How many of the newest feed reports the page lists before it hands over to the feed. */
-export const FEED_ON_INCIDENT_PATTERN = 8;
+export { FEED_ON_INCIDENT_PATTERN };
 
 /** An OWASP id's name, from whichever of the lists the threat models use carries it. */
 const owaspLabel = (id: string) => THREAT_LISTS.map((l) => frameworkEntries[l]?.[id]?.label).find(Boolean) ?? id;
@@ -39,20 +39,23 @@ function Section({ id, title, count, children }: { id: string; title: string; co
 export function IncidentPatternPage({
   id,
   pattern: given,
-  feed: items = datasetFeed,
+  feed: whole,
+  reports: newest = [],
 }: {
   /** The incident pattern's id. */
   id?: string;
   /** The incident pattern itself, for a test; the dataset's by `id` otherwise. */
   pattern?: IncidentPatternAuthored;
-  /** The feed to read; the dataset's unless a test passes its own. */
+  /** A whole feed to work everything out from, for a test. */
   feed?: FeedItem[];
+  /** Its newest incidents, newest first, as the page was built with them; the count and landings are the dataset's. */
+  reports?: FeedItem[];
 }) {
   const authored = given ?? incidentPatternById.get(id ?? "");
   if (!authored) return null;
-  const pattern = incidentPatternView(authored, items);
-  const reportById = items === datasetFeed ? feedById : new Map(items.map((f) => [f.id, f]));
-  const reports = pattern.feed.map((r) => reportById.get(r)).filter((f): f is FeedItem => Boolean(f));
+  const pattern = incidentPatternView(authored, whole);
+  const reports = whole ? feedForCategory(pattern.id, whole) : newest;
+  const total = pattern.feedCount;
   const deepDives = pattern.deepDives.map((d) => incidentById.get(d)).filter((d) => d !== undefined);
   const colour = categoryColour(pattern.id);
   const frameworks = (pattern.owasp?.length ?? 0) + (pattern.atlas?.length ?? 0);
@@ -74,7 +77,7 @@ export function IncidentPatternPage({
           <h1 className="display mt-1.5 text-[26px] font-bold leading-tight text-ink sm:text-[30px]">{pattern.name}</h1>
           <p className="mt-2 text-[15px] leading-snug text-ink">{pattern.short}</p>
           <p className="ident mt-2 text-ink-3" data-incident-pattern-facts>
-            {plural(deepDives.length, "deep dive")} · {plural(reports.length, "report")} in the feed · since {formatDay(pattern.since)}
+            {plural(deepDives.length, "deep dive")} · {plural(total, "report")} in the feed · since {formatDay(pattern.since)}
           </p>
         </div>
 
@@ -171,7 +174,7 @@ export function IncidentPatternPage({
           )}
 
           {reports.length > 0 && (
-            <Section id="feed" title="Recent in the feed" count={reports.length}>
+            <Section id="feed" title="Recent in the feed" count={total}>
               <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper">
                 {reports.slice(0, FEED_ON_INCIDENT_PATTERN).map((f) => (
                   <li key={f.id} data-feed-item={f.id}>
@@ -182,14 +185,14 @@ export function IncidentPatternPage({
                       <span className="ident whitespace-nowrap text-ink-3">{formatDay(f.date)}</span>
                       <span className="min-w-0 text-[13.5px] font-medium leading-snug text-ink">{f.title}</span>
                       <span className="col-start-2 sm:col-start-auto sm:text-right">
-                        <EvidenceTag evidence={f.evidence} />
+                        <EvidenceTag evidence={f.evidence ?? ""} />
                       </span>
                     </Link>
                   </li>
                 ))}
               </ul>
               <Link href={feedHref({ category: pattern.id })} className="mt-2.5 inline-block text-[13px] font-semibold text-introduced hover:underline">
-                All {reports.length} in the feed →
+                All {total} in the feed →
               </Link>
             </Section>
           )}

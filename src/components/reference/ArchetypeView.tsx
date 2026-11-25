@@ -24,7 +24,7 @@ import { ArchetypeDetail } from "./ArchetypeDetail";
 import type { BlockService, Highlight } from "@/components/drawing/types";
 import { FlowSequence } from "./FlowSequence";
 import { WalkList } from "./rail-lists";
-import { PatternIncidents, PatternRisks } from "@/components/patterns/PatternPanels";
+import { PatternIncidents, PatternRisks, type PatternFeed } from "@/components/patterns/PatternPanels";
 import { ThreatModelPanel } from "@/components/patterns/ThreatModel";
 
 /**
@@ -96,9 +96,11 @@ interface ArchetypeViewProps {
   /** Whether the drawing tags every pinned risk (the toolbar's Show risks toggle). */
   showRisks?: boolean;
   onShowRisks?: (on: boolean) => void;
+  /** The Incidents tab's feed: the newest incidents that would replay here, and how many there are, as the page was built with them. */
+  feed?: PatternFeed;
 }
 
-export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud, host = null, onHost, stack: chosenStack = NO_STACK, onStack, threat: threatId = null, onThreat, showRisks = false, onShowRisks }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud, host = null, onHost, stack: chosenStack = NO_STACK, onStack, threat: threatId = null, onThreat, showRisks = false, onShowRisks, feed }: ArchetypeViewProps) {
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const drawingRef = useRef<HTMLDivElement>(null);
   const open = highlight?.kind === "mitigation" ? highlight.id : null;
@@ -359,7 +361,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           <ThreatModelPanel archetype={archetype} open={openThreat?.id ?? null} onOpen={(id) => onThreat?.(id)} onPickControl={pickChip} onShowDrawing={narrow ? scrollToDrawing : undefined} />
         )}
 
-        {tab === "incidents" && <PatternIncidents archetype={archetype} />}
+        {tab === "incidents" && <PatternIncidents archetype={archetype} feed={feed?.items} total={feed?.total} />}
 
         {tab === "flows" && (
           <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">

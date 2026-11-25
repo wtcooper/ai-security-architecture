@@ -31,7 +31,12 @@ items:
         date: 2026-11-07
 ```
 
-No other field is accepted.
+An incident may also carry the fields every kind of item may: `kind: incident` (the default, so
+leave it out), `why` (at most 200 characters: why it matters for security, in one line),
+`vendor`, `products` (tooling ids such as `toolClaudeCode`), `controls` (catalogue ids) and
+`update` (the change to the site it implies). `ai-security-daily`'s
+[references/feed-kinds.md](../../ai-security-daily/references/feed-kinds.md) has their rules. No
+other field is accepted.
 
 ## The fields that need judgment
 

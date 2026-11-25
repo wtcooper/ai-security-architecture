@@ -10,22 +10,29 @@
  *   node incident-index.mjs           the index
  *   node incident-index.mjs --urls    only the source addresses already cited (for de-duplication)
  *
- * Reads src/data/generated/dataset.json, so run `npm run data` first if the YAML has changed.
+ * The feed holds five kinds of item; this index lists the incidents, and `--urls` the sources of
+ * every kind, so a daily run never files the same page twice under two kinds.
+ *
+ * Reads src/data/generated/dataset.json and feed.json (both written by `npm run data`, never
+ * committed), so run `npm run data` first.
  */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
 let dataset;
+let items;
 try {
   dataset = JSON.parse(readFileSync(join(root, "src/data/generated/dataset.json"), "utf8"));
+  items = JSON.parse(readFileSync(join(root, "src/data/generated/feed.json"), "utf8"));
 } catch {
   console.error("Run this from the repository root, after `npm run data`.");
   process.exit(1);
 }
 const incidents = [...dataset.incidents].sort((a, b) => b.date.localeCompare(a.date));
-// A dataset built before the feed or the incident patterns existed has none.
-const feed = [...(dataset.feed ?? [])].sort((a, b) => b.date.localeCompare(a.date));
+// Every item, of every kind; an item written before kinds existed is an incident.
+const all = [...items].sort((a, b) => b.date.localeCompare(a.date));
+const feed = all.filter((f) => (f.kind ?? "incident") === "incident");
 const patterns = [...(dataset.incidentPatterns ?? [])].sort((a, b) => a.order - b.order);
 const urls = new Set();
 for (const i of incidents) {
@@ -33,7 +40,7 @@ for (const i of incidents) {
   for (const st of i.steps ?? []) for (const s of st.sources ?? []) urls.add(s.url);
   for (const r of i.alsoSeen ?? []) for (const s of r.sources ?? []) urls.add(s.url);
 }
-for (const f of feed) for (const s of f.sources ?? []) urls.add(s.url);
+for (const f of all) for (const s of f.sources ?? []) urls.add(s.url);
 if (process.argv.includes("--urls")) {
   console.log([...urls].sort().join("\n"));
   process.exit(0);
@@ -43,7 +50,7 @@ const numbered = (dir) => (existsSync(dir) ? readdirSync(dir).filter((f) => /^\d
 const nextOf = (files) => String(Math.max(0, ...files.map((f) => Number(f.split("-")[0]))) + 1).padStart(2, "0");
 const next = nextOf(numbered(join(root, "data/incidents")));
 const nextPattern = nextOf(numbered(join(root, "data/incident-patterns")));
-const dir = join(root, "docs/research/incidents");
+const dir = join(root, "docs/research/daily");
 const logs = existsSync(dir) ? readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort() : [];
 const today = new Date().toISOString().slice(0, 10);
 const monday = (() => {
@@ -58,11 +65,11 @@ const daysBefore = (n) => {
 };
 
 console.log(`Today (UTC): ${today}`);
-console.log(`This week's log: docs/research/incidents/${monday}.md${logs.includes(`${monday}.md`) ? " (exists: append today's section)" : " (new: start it)"}`);
+console.log(`This week's log: docs/research/daily/${monday}.md${logs.includes(`${monday}.md`) ? " (exists: append today's section)" : " (new: start it)"}`);
 console.log(`Last log on record: ${logs.length ? logs.at(-1).replace(".md", "") : "none"}`);
-console.log(`Newest feed item: ${feed[0] ? `${feed[0].date} (${feed[0].id})` : "none; the feed is empty"}`);
+console.log(`Newest feed incident: ${feed[0] ? `${feed[0].date} (${feed[0].id})` : "none yet"}; newest item of any kind: ${all[0] ? `${all[0].date} (${all[0].id}, ${all[0].kind ?? "incident"})` : "none; the feed is empty"}`);
 console.log(`Newest deep dive: ${incidents[0]?.date ?? "none"}`);
-console.log(`Feed items: ${feed.length}, in data/feed/<YYYY-MM>.yaml`);
+console.log(`Feed items: ${all.length}, of which ${feed.length} incidents, in data/feed/<YYYY-MM>.yaml`);
 console.log(`Next deep dive file: data/incidents/${next}-<id>.yaml`);
 console.log(`Next incident pattern file: data/incident-patterns/${nextPattern}-<slug>.yaml (order ${patterns.length + 1})`);
 console.log(`Sources already cited: ${urls.size}\n`);
@@ -70,7 +77,7 @@ console.log(`Sources already cited: ${urls.size}\n`);
 console.log("INCIDENT PATTERNS  (order · id · slug · deep dives · feed items · name)");
 if (!patterns.length) console.log("  none yet: every category will fail until data/incident-patterns/ has files");
 for (const p of patterns) {
-  console.log(`  ${String(p.order).padStart(2)}  ${p.id.padEnd(18)} ${p.slug.padEnd(28)} ${String(p.deepDives?.length ?? 0).padStart(3)} ${String(p.feed?.length ?? 0).padStart(4)}  ${p.name}`);
+  console.log(`  ${String(p.order).padStart(2)}  ${p.id.padEnd(18)} ${p.slug.padEnd(28)} ${String(p.deepDives?.length ?? 0).padStart(3)} ${String(p.feedCount ?? 0).padStart(4)}  ${p.name}`);
   console.log(`      ${p.short}`);
 }
 
@@ -80,7 +87,7 @@ for (const i of incidents) {
   console.log(`           ${i.title}`);
   for (const r of i.alsoSeen ?? []) console.log(`           also seen: ${r.title}`);
 }
-console.log("\nFEED  (date · id · incident pattern · evidence · deep dive)");
+console.log("\nFEED INCIDENTS  (date · id · incident pattern · evidence · deep dive)");
 if (!feed.length) console.log("  none yet");
 for (const f of feed) {
   console.log(`  ${f.date}  ${f.id.padEnd(34)} ${(f.category + (f.fit === "loose" ? " (loose)" : "")).padEnd(26)} ${f.evidence.padEnd(13)} ${f.incident ?? ""}`);

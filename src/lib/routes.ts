@@ -72,14 +72,20 @@ export const incidentPatternHref = (id: string) => {
   return pattern ? `${ROUTES.incidents}/${pattern.slug}` : ROUTES.incidents;
 };
 
-/** The feed's filters, as its address carries them. `incident` narrows it to the reports one deep dive tells. */
+/**
+ * The feed's filters, as its address carries them: the kind of item, then the four that narrow
+ * incidents only (incident pattern, pattern, evidence, and `incident`, the reports one deep dive tells).
+ */
 export interface FeedFilters {
+  kind?: string | null;
   category?: string | null;
   pattern?: string | null;
   evidence?: string | null;
   incident?: string | null;
 }
-export const FEED_FILTERS = ["category", "pattern", "evidence", "incident"] as const;
+export const FEED_FILTERS = ["kind", "category", "pattern", "evidence", "incident"] as const;
+
+export { FEED_XML, fileHref, SITE_URL } from "./site";
 
 /** The feed's query string for these filters, in a fixed order; empty when none is set. */
 export function feedQuery(filters: FeedFilters = {}): string {

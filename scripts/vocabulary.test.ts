@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { dataset } from "../src/lib/data";
+import { feedItems, securityTools } from "../src/lib/feed-server";
 
 /**
  * The reader's words are pattern, control, setting and risk. "Capability", "countermeasure",
@@ -51,7 +52,7 @@ test("the interface says incident pattern for the kind of attack, never attack t
   assert.deepEqual(offenders, []);
 });
 
-test("no pattern, guidance, incident pattern, deep dive or feed prose still says archetype", () => {
+test("no pattern, guidance, incident pattern, deep dive, feed or security tool prose still says archetype", () => {
   const prose = (value: unknown): string[] =>
     typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(prose) : value && typeof value === "object" ? Object.entries(value).flatMap(([k, v]) => (/^(id|archetype|architecture|slug|at|from|to|follow|url)$/.test(k) ? [] : prose(v))) : [];
   for (const [name, items] of [
@@ -59,7 +60,8 @@ test("no pattern, guidance, incident pattern, deep dive or feed prose still says
     ["guidance", dataset.guidance],
     ["incident patterns", dataset.incidentPatterns ?? []],
     ["deep dives", dataset.incidents],
-    ["feed", dataset.feed ?? []],
+    ["feed", feedItems],
+    ["security tools", securityTools],
   ] as const) {
     const hits = prose(items).filter((t) => /\barchetypes?\b/i.test(t));
     assert.deepEqual(hits.map((t) => t.slice(0, 80)), [], name);

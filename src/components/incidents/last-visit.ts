@@ -71,8 +71,12 @@ export function newSince(items: FeedItem[], previous: Visit | null): Set<string>
   return new Set(items.filter((f) => f.date >= previous.from && !seen.has(f.id)).map((f) => f.id));
 }
 
-/** This visit, as it will be remembered: the reports dated within REMEMBERED_DAYS of the newest. */
-export function visitOf(items: FeedItem[], now: number): Visit {
+/**
+ * This visit, as it will be remembered: the items dated within REMEMBERED_DAYS of the newest. The
+ * feed loads its older months as the reader goes, so `loadedFrom` says from which day on every
+ * item was in front of the reader; nothing older is remembered, so nothing older is new next time.
+ */
+export function visitOf(items: FeedItem[], now: number, loadedFrom = ""): Visit {
   const newest = items.reduce((d, f) => (f.date > d ? f.date : d), "");
   let from = "";
   if (newest) {
@@ -80,6 +84,7 @@ export function visitOf(items: FeedItem[], now: number): Visit {
     day.setUTCDate(day.getUTCDate() - REMEMBERED_DAYS);
     from = day.toISOString().slice(0, 10);
   }
+  if (loadedFrom > from) from = loadedFrom;
   return { at: now, from, seen: items.filter((f) => f.date >= from).map((f) => f.id) };
 }
 
@@ -90,7 +95,7 @@ const subscribe = () => () => {};
 const snapshot = (): VisitState => (asked ??= { ready: true, previous: previousVisit(read(), Date.now()) });
 
 /** The reader's previous visit, then this one remembered. Server and tests see `ready: false`. */
-export function useLastVisit(items: FeedItem[]): VisitState {
+export function useLastVisit(items: FeedItem[], loadedFrom = ""): VisitState {
   const state = useSyncExternalStore(subscribe, snapshot, () => SERVER);
   const ids = items.map((f) => f.id).join(" ");
   useEffect(() => {
@@ -100,12 +105,13 @@ export function useLastVisit(items: FeedItem[]): VisitState {
       const now = Date.now();
       // While a visit is under way, the one before it is kept as what "new" is measured against.
       const before = stored && now - stored.last.at < VISIT_MS ? stored.before : (stored?.last ?? null);
-      window.localStorage.setItem(KEY, JSON.stringify({ last: visitOf(items, now), before } satisfies Stored));
+      // What this visit saw is what is loaded: a month loaded later widens it.
+      window.localStorage.setItem(KEY, JSON.stringify({ last: visitOf(items, now, loadedFrom), before } satisfies Stored));
     } catch {
       // No storage: nothing is remembered, and the next visit marks nothing.
     }
     // The ids stand for the items: a new array of the same reports is the same visit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, ids]);
+  }, [state, ids, loadedFrom]);
   return state;
 }

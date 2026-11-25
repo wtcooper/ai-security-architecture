@@ -22,8 +22,16 @@ import { PATTERN_TABS, ROUTES, patternHref, type PatternTab } from "@/lib/routes
 
 import type { Scenario } from "@/lib/types";
 import { SURFACE_SITUATION } from "./labels";
+import type { PatternFeed } from "./PatternPanels";
 
-export function PatternPage({ archetypeId }: { archetypeId: string }) {
+export function PatternPage({
+  archetypeId,
+  feed,
+}: {
+  archetypeId: string;
+  /** The Incidents tab's newest feed incidents, as the page was built with them. */
+  feed?: PatternFeed;
+}) {
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
   const params = useSearchParams();
   const router = useRouter();
@@ -230,6 +238,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
           onThreat={setThreat}
           showRisks={showRisks}
           onShowRisks={setShowRisks}
+          feed={feed}
         />
       </div>
     </>

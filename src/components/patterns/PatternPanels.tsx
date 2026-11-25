@@ -10,9 +10,18 @@ import Link from "next/link";
 
 import { CategoryChip } from "@/components/incidents/chrome";
 import { formatDay, formatMonth, incidentsNewestFirst } from "@/components/incidents/model";
-import { controlName, feed, feedForPattern, mitigationsForArchetype, riskCategories, riskCode, risksForArchetype } from "@/lib/data";
+import { controlName, mitigationsForArchetype, riskCategories, riskCode, risksForArchetype } from "@/lib/data";
+import { FEED_ON_PATTERN, feedForPattern } from "@/lib/feed";
 import { ROUTES, feedHref, incidentHref, riskHref } from "@/lib/routes";
 import type { Archetype, FeedItem } from "@/lib/types";
+
+export { FEED_ON_PATTERN };
+
+/** What a pattern page is built with from the feed: its newest incidents, and how many name it. */
+export interface PatternFeed {
+  items: FeedItem[];
+  total: number;
+}
 
 /** Where on the drawing a risk is pinned: the block, or both ends of the flow. */
 function placements(archetype: Archetype, riskId: string) {
@@ -104,12 +113,20 @@ export function PatternRisks({
   );
 }
 
-/** How many of the newest feed items the tab lists before it hands over to the feed. */
-export const FEED_ON_PATTERN = 5;
-
-export function PatternIncidents({ archetype, feed: items = feed }: { archetype: Archetype; /** The feed to read; the dataset's unless a test passes its own. */ feed?: FeedItem[] }) {
+export function PatternIncidents({
+  archetype,
+  feed: items = [],
+  total,
+}: {
+  archetype: Archetype;
+  /** Feed items: the newest incidents on this pattern as the page was built with them, or a test's whole feed. */
+  feed?: FeedItem[];
+  /** How many incidents in the whole feed name this pattern; what `feed` holds when it is the whole feed. */
+  total?: number;
+}) {
   const here = incidentsNewestFirst().filter((i) => i.archetype === archetype.id);
   const reports = feedForPattern(archetype.id, items);
+  const count = total ?? reports.length;
   return (
     <div className="space-y-6">
       {here.length ? (
@@ -157,14 +174,14 @@ export function PatternIncidents({ archetype, feed: items = feed }: { archetype:
                   <span className="ident whitespace-nowrap text-ink-3">{formatDay(f.date)}</span>
                   <span className="min-w-0 text-[13.5px] font-medium leading-snug text-ink">{f.title}</span>
                   <span className="col-start-2 sm:col-start-auto sm:text-right">
-                    <CategoryChip category={f.category} />
+                    <CategoryChip category={f.category ?? ""} />
                   </span>
                 </Link>
               </li>
             ))}
           </ul>
           <Link href={feedHref({ pattern: archetype.id })} className="mt-2.5 inline-block text-[13px] font-semibold text-introduced hover:underline">
-            All {reports.length} in the feed →
+            All {count} in the feed →
           </Link>
         </section>
       )}

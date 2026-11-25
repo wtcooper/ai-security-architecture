@@ -127,7 +127,7 @@ CoSAI controls, Components, Personas, Frameworks, Clouds & on-premises).
 | **Incidents** (`/incidents/`) | How AI systems are being attacked, sorted into **incident patterns**, as a catalogue built like the patterns index: a card per incident pattern (its name and one-liner, its deep dives and its feed reports of the last 30 days, its newest report with the date, and the two or three patterns it lands on most), then a compact list of every **deep dive** (date, title, incident pattern, pattern). An old `?category=<id>` link forwards to that incident pattern's page. |
 | **An incident pattern** (`/incidents/<slug>/`) | Laid out like a pattern page: the breadcrumb **Incidents ›**, the name and one-liner, then Overview, How it works (numbered), Signs, What stops it (the controls as chips into the control catalogue, each with where it bites), Where it lands (the patterns, with counts), Deep dives (its exemplars: date, title, subtitle, pattern), Recent in the feed (the eight newest and **All N in the feed →**), Risks and frameworks (risk chips, OWASP, ATLAS) and Not the same as. A section whose field is missing is not shown. |
 | **A deep dive** (`/incidents/<id>/`) | One real incident walked step by step across its pattern, every step sourced, ending at the controls that would have broken the chain, each a link to its row on the pattern's Enable tab. The breadcrumb reads **Incidents › <incident pattern> › <title>**, its incident pattern chip opens that incident pattern, and "In the feed: N reports" links to the feed items that point to it. Deep dives and incident patterns share the address; the build keeps them apart. |
-| **Feed** (`/feed/`) | The daily review: every incident tracked, newest first, under "Week of …" headings (weeks start on Monday), with a header line (how many reports, the newest, and **N new since your last visit**, remembered in this browser; new items carry a quiet **New**). Each item shows its date, its incident pattern chip (to the incident pattern's page) and an evidence tag, the headline and summary, **Replays on** with its patterns, **Deep dive →** when it has one, and its sources. Filters, all in the address: incident pattern chips with counts (`?category=`), a pattern select (`?pattern=`) and an evidence select (`?evidence=`). |
+| **Feed** (`/feed/`) | **AI security daily**, the daily review: five kinds of item (incidents, product updates, security tools, launches and research), newest first, under "Week of …" headings (weeks start on Monday), with a header line (how many items, the newest, **N new since your last visit**, remembered in this browser, and an **RSS** link to `/feed.xml`; new items carry a quiet **New**). At the top, **Latest**: the newest day's items as headlines, by kind; then **Proposed site updates**: every item whose implied change waits for the owner, with how to approve it (a line in `data/feed/decisions.yaml`, or asking in the session). Each item shows its kind and date (an incident also its incident pattern chip and evidence tag), the headline and summary, **Why it matters**, tags for its vendor, products (each opening that product's settings on its pattern's Enable tab), controls (chips into the control catalogue) and patterns, its **Site update: applied / proposed / declined** with the note, the security tool it announced, **Deep dive →** for an incident that has one, **Read more →** to its first source and the others after it. Filters, all in the address: kind chips with counts (`?kind=`), and the incident filters, which narrow incidents only and say so: incident pattern chips (`?category=`), a pattern select (`?pattern=`) and an evidence select (`?evidence=`). The page is built with its newest seven days; older months load from `/data/feed/<YYYY-MM>.json` as the reader scrolls, filters or follows a link to an older item. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Reference › CoSAI controls** (`/reference/cosai-controls/`) | The 35 CoSAI controls in six groups. A CoSAI control's status rolls up from the catalogue controls that deliver it. |
 | **Controls** (`/controls/`) | The full catalogue — 60 MITRE mitigations and 17 authored specialisations — as a matrix of NIST CSF category × deployment surface, tinted by status; one switch regroups the rows by CoSAI control group (`/controls?by=cosai`). Filter by pattern, risk category, stack layer or source. A control's detail shows the MITRE definition, the authored implementation scope, example technologies, its CSF category, the CoSAI controls it contributes to and the patterns that pin it. |
@@ -520,8 +520,13 @@ drawing sits a one-line key; everything else is on hover.
 
 ## Where things live
 
-Taxonomy data is YAML under `data/`, compiled once into a single typed dataset that the app
-reads synchronously. Nothing is fetched at runtime.
+Taxonomy data is YAML under `data/`, compiled by `npm run data` into a typed dataset that the
+app reads synchronously. The feed and the security tools are compiled apart, because the feed
+grows every day and the dataset rides in the JavaScript every page loads: the pages that show a
+few feed items are given them when they are built, `/feed/` fetches its older months
+(`/data/feed/<YYYY-MM>.json`) and search its titles (`/data/feed/titles.json`) in the browser, and
+`/feed.xml` is written at build time. Everything `npm run data` writes is generated and never
+committed; `dev`, `build` and `test` all run it first.
 
 ```
 data/
@@ -550,7 +555,9 @@ data/
 ├── incident-patterns/          ★ how AI systems are attacked: <NN>-<slug>.yaml, one per incident pattern; the source of
 │                                   truth for every deep dive's and feed item's `category`
 ├── incidents/                    the deep dives: authored incidents, one YAML each, replayed on their pattern
-├── feed/                         the feed: <YYYY-MM>.yaml, every incident tracked in two or three lines (README.md has the format)
+├── feed/                         the feed: <YYYY-MM>.yaml, every item of five kinds in two or three lines, and
+│                                   decisions.yaml, the owner's answers to proposed site updates (README.md has the format)
+├── security-tools/               security tools, <id>.yaml each, under the controls they help deliver (optional)
 ├── reference/
 │   ├── architectures/            ★ 21 flow-style reference architectures, one YAML each
 │   ├── guidance/                 controls guidance, one document per architecture
@@ -568,17 +575,19 @@ data/
 └── PROVENANCE.md                 pinned SHA, extraction record, what is original work
 
 scripts/
-├── build-data.ts                 data/** → dataset.json, with every integrity check
+├── build-data.ts                 data/** → dataset.json, feed.json and the feed's public files, with every integrity check
 ├── audit.ts                      regenerates docs/AUDIT.md from the data
 ├── fetch-cosai.ts                refreshes the vendored CoSAI snapshot
 ├── extract-saif-tour.ts          re-extracts the SAIF tour seed
 ├── lib/enablement.ts             loads and checks the control families and your controls (data/org/controls.yaml)
 ├── lib/incident-patterns.ts      loads and checks the incident patterns (data/incident-patterns/), naming the file and field
-├── lib/feed.ts                   loads and checks the feed (data/feed/), naming the file and item of every problem
+├── lib/feed.ts                   loads and checks the feed and decisions.yaml (data/feed/), naming the file and item of every problem
+├── lib/security-tools.ts         loads and checks the security tools (data/security-tools/), naming the file and tool
 └── lib/products.ts               checks settings rows, cloud implementations and your products (data/org/products.yaml)
 
 src/
-├── data/generated/dataset.json   the compiled dataset (committed, never hand-edited)
+├── data/generated/               written by `npm run data`, never committed: dataset.json (every page),
+│                                   feed.json and security-tools.json (read only by files under app/)
 ├── lib/
 │   ├── types.ts                  every shape, including Mitigation and Surface
 │   ├── data.ts                   the typed accessors the whole app reads
@@ -589,7 +598,10 @@ src/
 │   ├── frameworks.ts             framework lens logic
 │   ├── incident-patterns.ts      what an incident pattern derives: its deep dives, feed items and landings
 │   ├── incident-categories.ts    the incident patterns as chips and filters, and the colour of each
-│   ├── feed-vocabulary.ts        evidence, perspective and fit: the fixed words a feed item carries
+│   ├── feed-vocabulary.ts        kind, evidence, perspective, fit, updates, decisions: the fixed words a feed item carries
+│   ├── feed.ts                   what the build and the pages work out from a list of feed items (months, index, slices)
+│   ├── feed-server.ts            the feed and the security tools, for files under app/ only; never a client component
+│   ├── rss.ts                    the feed as RSS 2.0
 │   └── routes.ts                 ★ every internal address, and the helpers that build them
 ├── app/                          one route per tab (App Router, static export)
 │   ├── page.tsx                  home: the pattern finder
@@ -598,7 +610,8 @@ src/
 │   ├── incidents/                the incident patterns and every deep dive
 │   ├── incidents/[id]/           one static page per incident pattern (by slug) and per deep dive (by id)
 │   ├── incidents/feed/           retired: forwards to /feed/ (the build refuses a slug or deep dive id of "feed")
-│   ├── feed/                     the feed, the daily review
+│   ├── feed/                     the feed, the daily review, built with its newest days
+│   ├── feed.xml/route.ts         /feed.xml: the newest 100 items as RSS 2.0, written at build time
 │   ├── reference/                the index, and risk-map|risks|cosai-controls|components|personas|frameworks|clouds/
 │   └── map|risks|components|personas|frameworks|capabilities|enable|examples/
 │                                   retired paths: each only forwards to its new address
@@ -629,10 +642,12 @@ real incidents, each with an overview, the controls that stop it and its exempla
 interface always says "incident pattern" for the second kind, never bare "pattern". There are
 three layers:
 
-1. **The feed** (`/feed/`, its own nav item): daily headlines to review, one item per real
-   incident, from `data/feed/<YYYY-MM>.yaml` (one file per month; the format is in
-   [`data/feed/README.md`](data/feed/README.md)). Each is tagged with its incident pattern and the
-   patterns it would replay on.
+1. **The feed** (`/feed/`, its own nav item, **AI security daily**): daily headlines to review,
+   from `data/feed/<YYYY-MM>.yaml` (one file per month; the format is in
+   [`data/feed/README.md`](data/feed/README.md)). One item per real incident, tagged with its
+   incident pattern and the patterns it would replay on, and one per product update, security
+   tool, launch or research that changes how AI is secured, each saying why it matters and the
+   change to this site it implies.
 2. **Incident patterns** (`/incidents/`, the Incidents nav item): the catalogue, one file each in
    `data/incident-patterns/`, each with a page at `/incidents/<slug>/` laid out like a pattern page.
 3. **Deep dives** (`/incidents/<id>/`): the step-by-step incident files in `data/incidents/`,
@@ -641,7 +656,8 @@ three layers:
 
 | Route | What it is |
 | --- | --- |
-| `/feed/` | The feed. `?category=<incident pattern id>`, `?pattern=<pattern id>`, `?evidence=` and `?incident=<deep dive id>` filter it; `#<item id>` lands on an item. |
+| `/feed/` | The feed. `?kind=` filters it by kind; `?category=<incident pattern id>`, `?pattern=<pattern id>`, `?evidence=` and `?incident=<deep dive id>` narrow its incidents; `#<item id>` lands on an item, loading older months until it is there. |
+| `/feed.xml` | The newest 100 items as RSS 2.0, each linking to `/feed/#<id>`; every page names it for feed readers. |
 | `/incidents/` | The incident patterns as cards, then every deep dive. |
 | `/incidents/<slug>/` | An incident pattern. |
 | `/incidents/<id>/` | A deep dive. Slugs and deep dive ids share the segment, and the build refuses a slug that is a deep dive's id. |
@@ -649,10 +665,18 @@ three layers:
 | `/incidents/?category=<id>` | Retired: forwards to that incident pattern's page (so does the older `?type=`; `?arch=` goes to that pattern's Incidents tab). |
 
 They meet in four places: a pattern's **Incidents** tab lists its **Deep dives**, each labelled
-with its incident pattern, then the five newest feed items that name it ("In the feed") and a
+with its incident pattern, then the five newest feed incidents that name it ("In the feed") and a
 link to all of them; a deep dive's page says "In the feed: N reports" when feed items point to it;
-an incident pattern's page lists its deep dives and its eight newest feed items; and site search
-finds incident patterns, deep dives and feed items.
+an incident pattern's page lists its deep dives and its eight newest feed incidents; and site
+search finds incident patterns, deep dives and feed items. Each of those pages is given only the
+items it shows, worked out when it is built.
+
+**Security tools** (`data/security-tools/<id>.yaml`, optional) are open-source and commercial
+tools that protect AI systems, each listed under the one to four catalogue controls it helps
+deliver: a control's page in `/controls/` shows them as **Tools that deliver it** (name, who makes
+it, open source or commercial, how far it has shipped, what it does and its page), and the feed
+item that announced one shows it. `npm run data` checks that every control exists and that the
+`feed` item, if given, is in the feed.
 
 **The incident patterns are the source of truth for `category`.** Every deep dive's and feed
 item's `category` must be an incident pattern's `id`; the chip labels and the feed's filter chips
@@ -700,15 +724,19 @@ patterns it lands on (counted from both, each incident once) are derived by the 
 written.
 
 **Adding a feed item.** Add it to the month's file under `data/feed/`; `npm run data` checks
-that ids are unique, the date is a real day inside the file's month, the category is an incident
-pattern, evidence and perspective are on their lists, `fit` is `loose` with a `fitNote` when
-present, every pattern and the `incident` exist, there are one to three sources with `https`
-addresses, the title (120) and summary (420) fit, and no prose says "archetype". Each problem
-names the file and the item.
+that ids are unique, the `kind` is one of the five (an item without one is an incident), the
+date is a real day inside the file's month, an incident's category is an incident pattern and its
+evidence and perspective are on their lists (and that no other kind carries them), `fit` is
+`loose` with a `fitNote` when present, every other kind has a `why` (200), every pattern, product
+(a tooling id) and control (a catalogue id) and the `incident` exist, an `update` has a known
+action and status, a target and a note, and an applied one names a file or id that exists, there
+are one to three sources with `https` addresses, the title (120) and summary (420) fit, and no
+prose says "archetype". `data/feed/decisions.yaml` is checked too: each line names an item that
+proposes an update, once. Each problem names the file and the item.
 
 ```bash
-npm run data      # compile and check data/incident-patterns/, data/feed/ and data/incidents/ with everything else
-npm test          # scripts/incident-patterns.test.tsx and feed.test.tsx: the loaders' rules and the pages
+npm run data      # compile and check data/incident-patterns/, data/feed/, data/security-tools/ and data/incidents/ with everything else
+npm test          # incident-patterns, feed and daily tests: the loaders' rules, the pages, feed.xml and the bundle split
 npm run dev       # then open /feed/, /incidents/ and an incident pattern
 ```
 
@@ -737,14 +765,14 @@ npm run dev      # http://localhost:3000
 
 | Script | Purpose |
 | --- | --- |
-| `npm run data` | Compile `data/**` → the typed dataset, with every integrity check |
-| `npm test` | Run the control, matrix, Enable, deep dive, incident pattern, feed, route, vocabulary, drawing, platform, stack, shape and threat model tests |
+| `npm run data` | Compile `data/**` → the typed dataset and the feed's files, with every integrity check. Its output is generated and never committed |
+| `npm test` | Compile the data, then run the control, matrix, Enable, deep dive, incident pattern, feed, daily (security tools, RSS, bundle split), route, vocabulary, drawing, platform, stack, shape and threat model tests |
 | `npm run audit` | Regenerate `docs/AUDIT.md` |
 | `npm run drawing:audit` | Score every pattern against the pattern standard; add `-- <slug>` for one pattern's findings |
 | `npm run fetch:cosai` | Refresh the vendored CoSAI snapshot from its pinned commit |
 | `npm run extract:saif` | Re-extract the SAIF tour seed from the public SAIF bundle |
 
-`dev` and `build` both compile the dataset first and fail on any dangling identifier — a risk
+`dev`, `build` and `test` all compile the dataset first and fail on any dangling identifier — a risk
 pointing at a control that does not exist, an incident step naming an unknown component, an
 overlay phase with no components, a map that has drifted from CoSAI.
 
@@ -775,14 +803,15 @@ Everything is text. Clone the repository, and:
 
 ## Keeping it current
 
-Five skills under `.claude/skills/` carry the procedures for maintaining the catalogue. Each is
+Six skills under `.claude/skills/` carry the procedures for maintaining the catalogue. Each is
 run by asking Claude Code for the thing in plain words.
 
 | Skill | What it does | It leaves |
 | --- | --- | --- |
+| `ai-security-daily` | The one scheduled daily run. Sweeps the last seven days' primary sources for the feed's five kinds (incidents through `incident-research`), on a budget of about 40 searches, and files one item per event that clears the bar; applies a product's new settings row and up to three security tools by itself, proposes the rest (onboarding, new controls and patterns, control guidance), and carries out at most one change the owner approved in `data/feed/decisions.yaml`. Builds, tests, commits and pushes to `main`, and reports what it applied and what it proposed. | Feed items, security tools, settings rows, at most one approved change, and its section in `docs/research/daily/<Monday>.md`, one file per week. |
 | `pattern-research` | Sweeps the web, as of the day it runs, for kinds of AI tool or application the catalogue has no pattern for, and sorts each finding into new pattern, change to an existing pattern, product of an existing pattern, or watch. | A dated report in `docs/research/patterns/`. It changes no data. |
 | `pattern-author` | Adds a pattern, or restructures one, to the [pattern standard](docs/PATTERN-STANDARD.md): the drawing, one-liners, crossings, pins, sequence flows, guidance and finder entry, looped against the build, the drawing audit and the tests. | The pattern's files, and its row in the sign-off table. |
-| `incident-research` | Sweeps the web for AI security incidents since the newest one in the feed, verifies each against its sources, files every one that qualifies as a feed item under its incident pattern, writes a deep dive (at most two a run) only when the deep-dive criteria hold, and adds a new incident pattern (at most one a run) only when loose items show one is missing. Its **daily run** section is the procedure for the one scheduled run. | Feed items in `data/feed/`, deep dives in `data/incidents/`, now and then an incident pattern in `data/incident-patterns/`, and a log in `docs/research/incidents/`, one file per week. |
+| `incident-research` | Sweeps the web for AI security incidents since the newest one in the feed, verifies each against its sources, files every one that qualifies as a feed item under its incident pattern, writes a deep dive (at most two a run) only when the deep-dive criteria hold, and adds a new incident pattern (at most one a run) only when loose items show one is missing. Its **daily run** section is the incident lane of `ai-security-daily`. | Feed incidents in `data/feed/`, deep dives in `data/incidents/`, now and then an incident pattern in `data/incident-patterns/`, and a log in `docs/research/daily/`, one file per week (the folder was `docs/research/incidents/` until the daily covered five kinds). |
 | `tooling-onboard` | Adds or re-verifies a product's security settings under the pattern it belongs to. | A file in `data/tooling/`. |
 | `org-taxonomy-customize` | Records your organisation's own controls, their status and the catalogue controls each delivers, and the products you use. | `data/org/controls.yaml` and `data/org/products.yaml`. |
 
@@ -796,8 +825,9 @@ nobody searched.
 
 Static export, published to GitHub Pages by
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) on every push to `main`. The
-workflow lints and runs the full build, so a broken cross-reference fails the deploy rather than
-shipping.
+workflow compiles the data (the compiled dataset is not committed), lints, runs the tests and
+the full build, so a broken cross-reference fails the deploy rather than shipping. The export
+includes `/feed.xml` and the feed's month files under `/data/feed/`.
 
 ## Data and attribution
 

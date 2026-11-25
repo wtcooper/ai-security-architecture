@@ -14,9 +14,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
 import { PageHeader } from "@/components/Panel";
-import { archetypeById, feed as datasetFeed, feedById, incidentPatterns, incidentPatternView, incidents, meta } from "@/lib/data";
+import { archetypeById, incidentPatterns, incidentPatternView, incidents, meta } from "@/lib/data";
+import { incidentPatternCards, RECENT_DAYS, type IncidentPatternCardFeed } from "@/lib/feed";
 import { categoryColour } from "@/lib/incident-categories";
-import { deepDivesNewestFirst, within } from "@/lib/incident-patterns";
+import { deepDivesNewestFirst } from "@/lib/incident-patterns";
 import { ROUTES, feedHref, incidentHref, incidentPatternHref, patternHref } from "@/lib/routes";
 import type { FeedItem, IncidentPattern, IncidentPatternAuthored } from "@/lib/types";
 import { CategoryChip, plural } from "./chrome";
@@ -24,8 +25,7 @@ import { formatDay, formatMonth } from "./model";
 
 /** How many of the patterns an incident pattern lands on its card names. */
 export const LANDINGS_ON_CARD = 3;
-/** The window the card's feed count covers, in days. */
-export const RECENT_DAYS = 30;
+export { RECENT_DAYS };
 
 /** Where an old link to the incidents list goes now, or null when it names nothing to forward. Exported for the tests. */
 export function legacyIncidentsTarget(params: URLSearchParams): string | null {
@@ -38,13 +38,19 @@ export function legacyIncidentsTarget(params: URLSearchParams): string | null {
 
 export function IncidentPatternsIndex({
   patterns = incidentPatterns,
-  feed: items = datasetFeed,
+  feed: whole,
+  cards: built = {},
+  total = meta.counts.feed ?? 0,
   today = meta.generatedAt.slice(0, 10),
 }: {
   /** The incident patterns; the dataset's unless a test passes its own. */
   patterns?: IncidentPatternAuthored[];
-  /** The feed to read; the dataset's unless a test passes its own. */
+  /** A whole feed to work everything out from, for a test. */
   feed?: FeedItem[];
+  /** What each card shows of the feed, as the page was built with it: a count and the newest title, not the items. */
+  cards?: Record<string, IncidentPatternCardFeed>;
+  /** How many items the feed holds, of every kind. */
+  total?: number;
   /** The day "the last 30 days" ends on: the day the site was built. */
   today?: string;
 }) {
@@ -55,8 +61,9 @@ export function IncidentPatternsIndex({
     if (forward) router.replace(forward);
   }, [forward, router]);
 
-  const views = patterns.map((p) => incidentPatternView(p, items));
-  const reportById = items === datasetFeed ? feedById : new Map(items.map((f) => [f.id, f]));
+  const views = patterns.map((p) => incidentPatternView(p, whole));
+  const cards = whole ? incidentPatternCards(whole, today) : built;
+  const count = whole ? whole.length : total;
   const deepDives = deepDivesNewestFirst(incidents);
 
   return (
@@ -71,7 +78,7 @@ export function IncidentPatternsIndex({
             {plural(deepDives.length, "deep dive")} ↓
           </a>
           <Link href={ROUTES.feed} className="font-semibold text-introduced hover:underline">
-            {plural(items.length, "report")} in the feed →
+            {plural(count, "item")} in the feed →
           </Link>
         </p>
       </PageHeader>
@@ -80,7 +87,7 @@ export function IncidentPatternsIndex({
         {views.length ? (
           <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" aria-label="Incident patterns">
             {views.map((p) => (
-              <IncidentPatternCard key={p.id} pattern={p} reports={p.feed.map((id) => reportById.get(id)!).filter(Boolean)} today={today} />
+              <IncidentPatternCard key={p.id} pattern={p} feed={cards[p.id] ?? { recent: 0 }} />
             ))}
           </ul>
         ) : (
@@ -118,10 +125,8 @@ export function IncidentPatternsIndex({
 }
 
 /** One incident pattern: what it is, how much sits under it, the newest report and where it lands. */
-function IncidentPatternCard({ pattern, reports, today }: { pattern: IncidentPattern; reports: FeedItem[]; today: string }) {
+function IncidentPatternCard({ pattern, feed: { recent, latest } }: { pattern: IncidentPattern; feed: IncidentPatternCardFeed }) {
   const colour = categoryColour(pattern.id);
-  const recent = within(reports, today, RECENT_DAYS).length;
-  const latest = reports[0];
   const landings = pattern.landsOn.slice(0, LANDINGS_ON_CARD);
   return (
     <li

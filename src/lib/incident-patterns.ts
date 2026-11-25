@@ -42,7 +42,15 @@ export function landsOn(items: FeedItem[], deepDives: Incident[], patternOrder: 
   return [...tally.values()].sort((a, b) => b.count - a.count || rank(a.pattern) - rank(b.pattern) || seen.indexOf(a.pattern) - seen.indexOf(b.pattern));
 }
 
-/** One incident pattern with its deep dives, feed items (both newest first) and landings. */
+/** The incidents in a feed filed under one incident pattern, newest first (ties keep feed order). */
+export const incidentsUnder = (category: string, feed: FeedItem[]): FeedItem[] =>
+  feed
+    .map((f, i) => ({ f, i }))
+    .filter(({ f }) => f.kind === "incident" && f.category === category)
+    .sort((a, b) => b.f.date.localeCompare(a.f.date) || a.i - b.i)
+    .map(({ f }) => f);
+
+/** One incident pattern with its deep dives (newest first), how many feed items it holds, and its landings. */
 export function deriveIncidentPattern(
   pattern: IncidentPatternAuthored,
   incidents: Incident[],
@@ -50,11 +58,11 @@ export function deriveIncidentPattern(
   patternOrder: string[] = [],
 ): IncidentPattern {
   const deepDives = deepDivesNewestFirst(incidents.filter((i) => i.category === pattern.id));
-  const items = [...feed].filter((f) => f.category === pattern.id).sort((a, b) => b.date.localeCompare(a.date));
+  const items = incidentsUnder(pattern.id, feed);
   return {
     ...pattern,
     deepDives: deepDives.map((d) => d.id),
-    feed: items.map((f) => f.id),
+    feedCount: items.length,
     landsOn: landsOn(items, deepDives, patternOrder),
   };
 }

@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { SiteFooter } from "@/components/shell/SiteFooter";
 import { SiteHeader } from "@/components/shell/SiteHeader";
+import { FEED_XML, fileHref } from "@/lib/site";
 
 const display = Space_Grotesk({
   variable: "--font-display",
@@ -26,6 +27,8 @@ export const metadata: Metadata = {
   title: "AI Security Architecture",
   description:
     "Patterns for securely enabling AI: for each kind of AI tool or application, the enterprise controls to put in place and the settings of the product you chose.",
+  // Every page names the feed, so a feed reader given any address finds it.
+  alternates: { types: { "application/rss+xml": [{ url: fileHref(FEED_XML), title: "AI security daily" }] } },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { StackFilter } from "@/components/controls/StackFilter";
 import { cosaiControlHref, isCosaiControlId } from "@/lib/routes";
 import type { BandId } from "@/lib/bands";
+import type { SecurityTool } from "@/lib/types";
 import { ControlDetail } from "@/components/controls/ControlDetail";
 import { archetypeById, archetypesInOrder, bandsForMitigation, controlName, mitigations, mitigationById, mitigationAliases, riskById, riskCategories, status, statusFor } from "@/lib/data";
 
@@ -35,7 +36,7 @@ const catalogue = mitigations.filter((m) => !specialised.has(m.id));
 const anyStatus = Object.values(status).some((s) => s.status);
 
 /** The control catalogue: every control is a MITRE mitigation or an authored specialisation of one. */
-export function ControlsBrowser() {
+export function ControlsBrowser({ securityTools = [] }: { /** The security tools, as the page was built with them: each control lists those that deliver it. */ securityTools?: SecurityTool[] } = {}) {
   const [linked, setClicked] = useDefenseSelection();
   // This path used to hold the CoSAI controls; a link that names one is forwarded to Reference.
   const router = useRouter();
@@ -132,7 +133,7 @@ export function ControlsBrowser() {
         {!shown.length && <p className="mt-3 text-sm text-ink-2">No controls match these filters.</p>}
         <p className="mt-2 text-xs text-ink-3">A control sits in one row, on the surfaces where it applies; a MITRE mitigation with specialisations is shown as those specialisations, never beside them. A blank cell means no control in that row applies on that surface. NIST publishes no mapping from CSF to MITRE: the CSF category of each control is this repository&rsquo;s judgement.</p>
         <div ref={detailRef} className="mt-6 scroll-mt-20">
-          {picked && <ControlDetail mitigation={picked} onClose={() => setClicked(null)} />}
+          {picked && <ControlDetail mitigation={picked} onClose={() => setClicked(null)} securityTools={securityTools} />}
         </div>
       </div>
     </>

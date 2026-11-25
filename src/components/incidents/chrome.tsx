@@ -2,13 +2,13 @@
 
 /**
  * What the incident pages share: the filter chips, the chip that names an incident pattern, the
- * evidence tag a feed item carries, and the breadcrumb under /incidents/.
+ * kind and evidence tags a feed item carries, and the breadcrumb under /incidents/.
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { categoryById, categoryColour } from "@/lib/incident-categories";
-import { evidenceById } from "@/lib/feed-vocabulary";
+import { evidenceById, kindById } from "@/lib/feed-vocabulary";
 import { ROUTES, incidentPatternHref } from "@/lib/routes";
 
 /** A filter chip: ink when on, paper when off. */
@@ -42,6 +42,32 @@ export function CategoryChip({ category, link = false }: { category: string; lin
   ) : (
     <span title={c?.blurb} data-incident-pattern={category} className={className}>
       {body}
+    </span>
+  );
+}
+
+/**
+ * What kind of item a feed entry is. Each kind has a hue of its own on the left edge of its tag,
+ * so a day's mix reads at a glance; the tag itself stays quiet, as the evidence tag does.
+ */
+export const KIND_HUE: Record<string, string> = {
+  incident: "var(--exposed)",
+  productUpdate: "var(--introduced)",
+  tool: "var(--mitigated)",
+  launch: "var(--band-data-rail)",
+  research: "var(--chip)",
+};
+
+export function KindTag({ kind }: { kind: string }) {
+  const k = kindById.get(kind);
+  return (
+    <span
+      title={k?.blurb}
+      data-kind={kind}
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-paper px-2 py-[1px] text-[11px] font-semibold uppercase tracking-wide text-ink-2"
+    >
+      <span aria-hidden className="inline-block h-2 w-2 rounded-sm" style={{ background: KIND_HUE[kind] ?? "var(--ink-3)" }} />
+      {k?.label ?? kind}
     </span>
   );
 }

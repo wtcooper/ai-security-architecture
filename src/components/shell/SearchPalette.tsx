@@ -2,10 +2,11 @@
 
 /**
  * ⌘K over everything with a name: patterns (by title, product, cloud and everyday words), tools,
- * clouds, controls, incident patterns, deep dives, the feed's reports (by title, each landing on
- * the feed with the report in view), the threats of each pattern's threat model (by title), risks (with
+ * clouds, controls, incident patterns, deep dives, the feed's items (by title, each landing on
+ * the feed with the item in view), the threats of each pattern's threat model (by title), risks (with
  * their R-codes), CoSAI controls, components and personas. The dataset is
- * already in the bundle, so the index is built once and matched in the browser; a result is
+ * already in the bundle, so the index is built once and matched in the browser; the feed is not,
+ * so its titles are fetched the first time search opens. A result is
  * a plain link into the page that owns the entity, so navigation works under the GitHub
  * Pages base path exactly as every other link does.
  */
@@ -23,7 +24,6 @@ import {
   componentTitle,
   components,
   controls,
-  feed,
   incidentPatterns,
   incidents,
   riskCode,
@@ -37,7 +37,9 @@ import { RATING_STYLE } from "@/components/patterns/threat-style";
 import { cloudsFor } from "@/components/patterns/model";
 import { formatDay } from "@/components/incidents/model";
 import { cloudHref, patternHref, controlHref, cosaiControlHref, feedHref, incidentHref, incidentPatternHref, riskHref, componentHref, personaHref } from "@/lib/routes";
-import type { FeedItem } from "@/lib/types";
+import type { FeedTitle } from "@/lib/types";
+import { kindById } from "@/lib/feed-vocabulary";
+import { fileHref } from "@/lib/site";
 
 interface Entry {
   kind: string;
@@ -48,8 +50,8 @@ interface Entry {
   text: string;
 }
 
-/** Every entry search can find. `reports` is the incident feed, the dataset's unless a test passes its own. */
-export function buildIndex(reports: FeedItem[] = feed): Entry[] {
+/** Every entry search can find. `reports` is the feed's titles, as they have been fetched (none before). */
+export function buildIndex(reports: FeedTitle[] = []): Entry[] {
   const norm = (...parts: (string | undefined)[]) => parts.filter(Boolean).join(" ").toLowerCase();
   return [
     ...risksInOrder.map((r) => ({
@@ -131,11 +133,11 @@ export function buildIndex(reports: FeedItem[] = feed): Entry[] {
       href: incidentHref(i.id),
       text: norm(i.title, i.id, i.subtitle, categoryById.get(i.category)?.label ?? "", ...(i.patterns ?? [])),
     })),
-    // A report opens the feed scrolled to it.
+    // An item opens the feed scrolled to it: an incident hints at its incident pattern, any other at its kind.
     ...reports.map((f) => ({
       kind: "Feed",
       title: f.title,
-      hint: `${categoryById.get(f.category)?.label ?? ""} · ${formatDay(f.date)}`,
+      hint: `${(f.kind === "incident" ? categoryById.get(f.category ?? "")?.label : kindById.get(f.kind)?.label) ?? ""} · ${formatDay(f.date)}`,
       href: feedHref({}, f.id),
       text: norm(f.title),
     })),
@@ -144,8 +146,33 @@ export function buildIndex(reports: FeedItem[] = feed): Entry[] {
 
 const KIND_ORDER = ["Pattern", "Tool", "Cloud", "Control", "Incident pattern", "Deep dive", "Feed", "Threat", "Risk", "CoSAI control", "Component", "Persona"];
 
+/**
+ * The feed's titles, fetched the first time search opens (public/data/feed/titles.json): the feed
+ * grows every day, so it is not in the bundle every page loads. Until they arrive, or if they
+ * cannot be fetched, search finds everything else.
+ */
+let titles: Promise<FeedTitle[]> | undefined;
+const loadTitles = () =>
+  (titles ??= fetch(fileHref("/data/feed/titles.json"))
+    .then((r) => (r.ok ? (r.json() as Promise<FeedTitle[]>) : []))
+    .catch(() => {
+      titles = undefined;
+      return [];
+    }));
+
 export function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const index = useMemo(() => buildIndex(), []);
+  const [reports, setReports] = useState<FeedTitle[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    loadTitles().then((t) => {
+      if (live) setReports(t);
+    });
+    return () => {
+      live = false;
+    };
+  }, [open]);
+  const index = useMemo(() => buildIndex(reports), [reports]);
   const [query, setQuery] = useState("");
   // The cursor remembers which query it belongs to, so a new query starts at the top without
   // an effect having to reset it.

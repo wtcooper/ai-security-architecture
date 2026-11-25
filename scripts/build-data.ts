@@ -1,13 +1,15 @@
 /**
- * Compile the vendored CoSAI-RM YAML, the risk-component overlay, the incident patterns, the
- * deep dives and the incident feed into a single typed JSON dataset the app imports at build time.
+ * Compile the vendored CoSAI-RM YAML, the risk-component overlay, the incident patterns and the
+ * deep dives into a single typed JSON dataset the app imports at build time, and the feed and the
+ * security tools into files of their own (see writeFeed), so the feed never rides in the bundle
+ * every page loads. Everything written here is generated and never committed.
  *
  * Every cross-reference is checked; a dangling id fails the build rather than rendering
  * an empty box in the UI.
  *
  *   npm run data
  */
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
@@ -20,8 +22,10 @@ import { checkSettings, loadClouds, loadProductStatus } from "./lib/products";
 import { loadSpecializations } from "./lib/specializations";
 import { loadThreatModels } from "./lib/threat-models";
 import { loadFeed } from "./lib/feed";
+import { loadSecurityTools } from "./lib/security-tools";
 import { categoryProblem, loadIncidentPatterns } from "./lib/incident-patterns";
 import { deriveIncidentPatterns } from "../src/lib/incident-patterns";
+import { byMonth, feedIndexOf, feedTitles, incidentItems, withSecurityTools } from "../src/lib/feed";
 import { CROSSING_KINDS, THREAT_LISTS } from "../src/lib/types";
 
 import type {
@@ -32,6 +36,7 @@ import type {
   ComponentCategory,
   Control,
   Dataset,
+  FeedItem,
   Framework,
   FrameworkEntryInfo,
   FrameworkNote,
@@ -40,6 +45,7 @@ import type {
   Persona,
   Risk,
   RiskOverlay,
+  SecurityTool,
   Surface,
   Tool,
   ToolVendor,
@@ -66,6 +72,8 @@ import {
 const ROOT = process.cwd();
 const COSAI_DIR = join(ROOT, "data", "cosai");
 const OUT_DIR = join(ROOT, "src", "data", "generated");
+/** Served as /data/feed/: what /feed/ and site search load in the browser. Generated, never committed. */
+const PUBLIC_FEED_DIR = join(ROOT, "public", "data", "feed");
 const COSAI_REF = "afa43cd605674bcbaa5b1420f7b018ee23b4e8d6";
 
 const errors: string[] = [];
@@ -489,10 +497,31 @@ async function main() {
     }
   }
 
-  // --- The incident feed (data/feed/<YYYY-MM>.yaml); no files at all is an empty feed --------
-  const feed = await loadFeed(ROOT, { patternIds: archetypeIds, incidentIds: new Set(incidents.map((i) => i.id)), categoryIds: new Set(categoryIds) }, fail);
+  // --- The feed (data/feed/<YYYY-MM>.yaml and decisions.yaml); no files at all is an empty feed --------
+  const loadedFeed = await loadFeed(
+    ROOT,
+    {
+      patternIds: archetypeIds,
+      incidentIds: new Set(incidents.map((i) => i.id)),
+      categoryIds: new Set(categoryIds),
+      productIds: new Set(tools.map((t) => t.id)),
+      controlIds: mitigationIds,
+    },
+    fail,
+  );
 
-  // What each incident pattern's page derives: its deep dives, its feed items, where it lands.
+  // --- Security tools (data/security-tools/<id>.yaml), each under the controls it helps deliver ------
+  const securityTools = await loadSecurityTools(ROOT, { controlIds: mitigationIds, feedIds: new Set(loadedFeed.feed.map((f) => f.id)) }, fail);
+  // An item that says it added a security tool must name one that is there.
+  const securityToolIds = new Set(securityTools.map((t) => t.id));
+  for (const f of loadedFeed.feed) {
+    const u = f.update;
+    if (u?.action === "toolOption" && u.status === "applied" && !u.target.includes("/") && !securityToolIds.has(u.target))
+      fail(`feed/${loadedFeed.fileOf.get(f.id)} item ${f.id}: update: applied, but its target "${u.target}" is not a security tool (data/security-tools/)`);
+  }
+  const feed = withSecurityTools(loadedFeed.feed, securityTools);
+
+  // What each incident pattern's page derives: its deep dives, how many incidents, where it lands.
   const incidentPatterns = deriveIncidentPatterns(authoredIncidentPatterns, incidents, feed, archetypes.map((a) => a.id));
 
   if (errors.length) {
@@ -512,6 +541,8 @@ async function main() {
         personas: personasDoc.personas.length,
         incidents: incidents.length,
         feed: feed.length,
+        feedIncidents: incidentItems(feed).length,
+        securityTools: securityTools.length,
         incidentPatterns: incidentPatterns.length,
         mitigations: mitigationsDoc.mitigations.length,
         specializations: specializations.specializations.length,
@@ -539,7 +570,6 @@ async function main() {
     actorAccessLevels: actorDoc.actorAccessLevels,
     overlays,
     incidents,
-    feed,
     incidentPatterns,
     surfaces: mitigationsDoc.surfaces,
     specializations: specializations.specializations,
@@ -564,15 +594,34 @@ async function main() {
 
   await mkdir(OUT_DIR, { recursive: true });
   await writeFile(join(OUT_DIR, "dataset.json"), JSON.stringify(dataset) + "\n");
+  await writeFeed(feed, securityTools);
 
   const authored = overlays.filter((o) => o.source === "authored").length;
   console.log(
     `dataset.json: ${risks.length} risks (${overlays.length - authored} SAIF-seeded, ` +
       `${authored} authored), ${controls.length} CoSAI controls, ${components.length} components, ` +
-      `${incidentPatterns.length} incident patterns, ${incidents.length} deep dives, ${feed.length} feed items, ${mitigationsDoc.mitigations.length} controls in the catalogue, ` +
+      `${incidentPatterns.length} incident patterns, ${incidents.length} deep dives, ${feed.length} feed items (${feedIndexOf(feed).months.length} months), ` +
+      `${securityTools.length} security tools, ${mitigationsDoc.mitigations.length} controls in the catalogue, ` +
       `${archetypes.length} archetypes, ${guidance.length} guidance docs, ` +
       `${tools.length} tools, ${threatModels.length} threat models, ${orgControls.length} of your own controls recorded`,
   );
+}
+
+/**
+ * The feed and the security tools, kept out of dataset.json so they never ride in the bundle every
+ * page loads. Two files only the build reads (the pages that show a few items take them as props
+ * when they are built, and /feed.xml is made from them), and public/data/feed/ for the browser:
+ * one file per month, the index /feed/ starts from, and the titles site search finds. The public
+ * folder is emptied first, so a month that no longer has items leaves no file behind.
+ */
+async function writeFeed(feed: FeedItem[], securityTools: SecurityTool[]) {
+  await writeFile(join(OUT_DIR, "feed.json"), JSON.stringify(feed) + "\n");
+  await writeFile(join(OUT_DIR, "security-tools.json"), JSON.stringify(securityTools) + "\n");
+  await rm(PUBLIC_FEED_DIR, { recursive: true, force: true });
+  await mkdir(PUBLIC_FEED_DIR, { recursive: true });
+  await writeFile(join(PUBLIC_FEED_DIR, "index.json"), JSON.stringify(feedIndexOf(feed)) + "\n");
+  await writeFile(join(PUBLIC_FEED_DIR, "titles.json"), JSON.stringify(feedTitles(feed)) + "\n");
+  for (const { month, items } of byMonth(feed)) await writeFile(join(PUBLIC_FEED_DIR, `${month}.json`), JSON.stringify(items) + "\n");
 }
 
 /**

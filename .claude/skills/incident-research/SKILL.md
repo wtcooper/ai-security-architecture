@@ -23,13 +23,16 @@ a reference architecture (`/patterns/`), the drawing an incident replays on. Nev
 
 It leaves up to four things: new items in `data/feed/`; at most two new deep dives or `alsoSeen`
 entries in `data/incidents/`; at most one new incident pattern in `data/incident-patterns/`; and
-the log, one file per week, `docs/research/incidents/<this week's Monday>.md`, that records what
+the log, one file per week, `docs/research/daily/<this week's Monday>.md`, that records what
 was searched, what was added and what was turned down and why. The log matters as much as the
 files: it is how the next run knows where to start, and how a reader knows a missing incident was
 considered and not missed.
 
-The scheduled run is daily and follows **Daily run** at the end, which shortens the steps below;
-everything else here still applies to it.
+The feed carries five kinds of item (`kind:`); this skill writes the incidents, which are the
+items written without a `kind` or with `kind: incident`. The one scheduled run is
+`ai-security-daily` (`.claude/skills/ai-security-daily/`): it sweeps for the other four kinds and
+hands the incident lane to this skill's **Daily run** at the end, which shortens the steps below;
+everything else here still applies to it, and it shares the run's log and search budget.
 
 ## 1. Fix the date and the window
 
@@ -249,7 +252,7 @@ pattern and that its **Deep dive →** opens the deep dive it names.
 
 ## 11. Log and report
 
-The log is one file per week, `docs/research/incidents/<this week's Monday>.md`
+The log is one file per week, `docs/research/daily/<this week's Monday>.md`
 (`incident-index.mjs` names it and says whether it exists). Each run appends a section headed
 with its date: the window; a table of the deep dives added (file, date, incident pattern,
 pattern, sources); what was added as "also seen"; a table of the feed items added (id, date,
@@ -262,8 +265,9 @@ needs their decision. Commit only if asked to, or if the run's instructions say 
 
 ## Daily run
 
-The scheduled run happens once a day and keeps the feed, the deep dives and the incident
-patterns current. It is the steps above, narrowed:
+The scheduled run happens once a day (`ai-security-daily` drives it and calls this section for
+its incident lane, with about half of its searches) and keeps the feed's incidents, the deep
+dives and the incident patterns current. It is the steps above, narrowed:
 
 1. **Window.** The last seven days to today (from seven days before the newest feed date, if
    that is earlier). Skip anything already in the feed or already cited
@@ -284,14 +288,17 @@ patterns current. It is the steps above, narrowed:
    thin one.
 6. **Check the loose items.** When three or more of the last 60 days share a mechanism whose
    controls differ, add the incident pattern (section 9), at most one a run.
-7. **Log** in this week's file, `docs/research/incidents/<date of this week's Monday>.md`. The
+7. **Log** in this week's file, `docs/research/daily/<date of this week's Monday>.md`. The
    first run of the week creates it with a line saying which week it covers; each run appends a
    section `## <today>`: the window, the number of searches, each item added, any deep dive or
    incident pattern written, the candidates that wait and the leads turned down. A run that
    finds nothing still writes its section: the window, the queries and "nothing new", so the
    next run knows this stretch was searched.
 8. **Build, test, commit, push** as the run's instructions say: `npm run data` and `npm test`
-   must pass before anything is committed; commit the feed, deep dive and incident pattern files,
-   the log and the rebuilt dataset, unless the instructions say otherwise; push only to the
-   branch they name. If the build or the tests fail and the fix is not plainly yours to make,
-   commit nothing, say what failed in the log, and stop.
+   must pass before anything is committed; commit the feed, deep dive and incident pattern files
+   and the log, unless the instructions say otherwise. The compiled dataset and the feed's files
+   (`src/data/generated/`, `public/data/feed/`) are generated and ignored by git: never commit
+   them. Push only to the branch the instructions name. If the build or the tests fail and the
+   fix is not plainly yours to make, commit nothing, say what failed in the log, and stop. Run by
+   `ai-security-daily`, leave building, committing and pushing to it: it does them once for the
+   whole run.
