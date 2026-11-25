@@ -1,0 +1,294 @@
+id: cairn-monai-zero-day
+title: "Cairn agents find a zero-day in MONAI Label on their own and take root on a university server"
+subtitle: >
+  An operator gave the open-source Cairn framework a list of university addresses and the goal
+  "obtain shell access". Its agents found an unreported path traversal in a medical-imaging AI
+  server in about 11 minutes, then turned it into a root shell through the server's training
+  API. The flaw is CVE-2026-133968, now on CISA's list of exploited vulnerabilities.
+date: 2026-11
+dateRange: 8–10 September 2026 (disclosed 20 November; added to CISA's catalogue 23 November)
+category: aiAttacker
+perspective: weapon
+# The decisive work ran inside the attacker's own agent system (operator, Cairn's coordinated agents, their models), drawn as in taiwan-multi-agent; the victim server is out on the open web.
+archetype: archAgentWorkflow
+caveat: >
+  Everything about the agents rests on Amazon Threat Intelligence's reading of the operator's
+  exposed Cairn console; the press reports repeat Amazon. Amazon does not name the application
+  or the models the agents ran on: the link to MONAI Label comes from The Hacker News, from the
+  project's advisory (first reported by AWS's disclosure team) and from CISA listing the flaw as
+  exploited. The second university's compromise is Amazon's inference and is unconfirmed,
+  and the attribution to a Chinese-nexus actor is Amazon's at moderate confidence. No source
+  shows that patient scans or records were taken. Sources differ on the fix: The Hacker News
+  reported on 21 November that no fixed version was yet available to install; MONAI Label 0.8.6
+  was released on 22 November.
+breaks:
+  - control: cap-input-guardrails
+    how: "A goal of shell access on a list of addresses the operator does not own is offensive intent to screen at the model, whatever framing comes with it."
+  - control: cap-agent-tracing
+    how: "Mapping an API, probing an upload filename for traversal, then writing to sitecustomize.py is an exploit sequence in the agents' own tool calls, visible across sessions."
+  - control: cap-agent-kill-switch
+    how: "The root shell and the push into a second university came in later sessions: cutting the operator's accounts and runs after the first flagged run stops both."
+summary:
+  - >
+    On 10 September 2026 Amazon Threat Intelligence found a server hosting Cairn, an open-source
+    autonomous AI penetration-testing framework, running without authentication. The operator's
+    project configurations, prompts and AI output were open to anyone. They showed a campaign of
+    about 48 hours from 8 September against IP addresses of universities in East Asia outside
+    mainland China. The operator supplied the addresses and variations of the goal "obtain shell
+    access"; the agents planned, executed and adjusted without the operator choosing each next
+    step.
+  - >
+    Against one target the agents found what Amazon assesses with high confidence was a zero-day:
+    a path traversal in an upload endpoint of MONAI Label, a server research teams use to label
+    medical scans and train imaging models, which runs with no login in its default setup. From
+    mapping its API to writing arbitrary files took about 11 minutes. In a later session they
+    planted a reverse shell and called the training API, and the new Python process connected
+    back as root. The flaw is CVE-2026-133968, rated 9.8; CISA added it to its Known Exploited
+    Vulnerabilities catalogue on 23 November with a federal due date of 26 November.
+  - >
+    The lesson the incidents already on this page do not show: in the Taiwan multi-agent
+    campaign and the earlier AI-run intrusions the agents walked through known doors (weak
+    credentials, unauthenticated services, a published CVE). Here they found an unknown flaw and
+    exploited it themselves. The same campaign also shows the limit. Over about 16 hours and 148 actions the
+    agents failed to take an open Redis server, and more than 30,000 credential guesses against
+    a GPU server and other systems found no working login.
+patterns:
+  - AI-Orchestrated Offensive Operations
+  - AI-Accelerated Vulnerability Discovery
+  - Autonomous Zero-Day Discovery
+cves:
+  - CVE-2026-133968
+risks:
+  - riskRogueActions
+  - riskAgentDelegationChainOpacity
+  - riskInsecureIntegratedComponent
+  - riskRunawayAgentToolLoops
+steps:
+  - n: 1
+    title: An operator gives Cairn addresses and a goal
+    phase: introduced
+    narrative: >
+      Given a starting point and an objective in plain language, Cairn coordinates multiple AI
+      agents to find a path to the goal. The operator gave it a list of university IP addresses
+      and variations of "obtain shell access", with prompts in Simplified Chinese, and left the
+      instance publicly reachable without authentication. From there the agents chose their own
+      methods.
+    path: [operator->events, events->harness, orchestration->subagents]
+    risks:
+      - riskAgentDelegationChainOpacity
+    sources:
+      - title: "Chinese-nexus actor's Cairn AI agents found a zero-day on their own"
+        url: https://aws.amazon.com/blogs/security/chinese-nexus-actors-cairn-ai-agents-found-a-zero-day-on-their-own/
+        publisher: Amazon Threat Intelligence (AWS Security Blog)
+        date: 2026-11-20
+  - n: 2
+    title: The agents map an open medical-imaging AI server
+    phase: introduced
+    narrative: >
+      One target ran MONAI Label, which research teams use to label medical scans and train
+      imaging models. Its authentication is disabled by default (`MONAI_LABEL_AUTH_ENABLE=False`),
+      so any client that can reach it over the network can call its upload endpoints. The agents identified the application's
+      framework, mapped its API endpoints and found an upload endpoint with a filename parameter.
+    path: [harness->gateway, gateway->openWeb, openWeb]
+    risks:
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "Chinese-nexus actor's Cairn AI agents found a zero-day on their own"
+        url: https://aws.amazon.com/blogs/security/chinese-nexus-actors-cairn-ai-agents-found-a-zero-day-on-their-own/
+        publisher: Amazon Threat Intelligence (AWS Security Blog)
+        date: 2026-11-20
+      - title: "Path traversal in datastore upload endpoints allows arbitrary file write"
+        url: https://github.com/Project-MONAI/MONAILabel/security/advisories/GHSA-qc22-rmgc-vg94
+        publisher: Project MONAI (GitHub security advisory)
+        date: 2026-11-18
+      - title: "Attackers' AI Agents Found a Zero-Day in Medical-Imaging Software and Gained Root Access"
+        url: https://thehackernews.com/2026/11/attackers-ai-agents-found-zero-day-in.html
+        publisher: The Hacker News
+        date: 2026-11-21
+  - n: 3
+    title: An unreported path traversal, found in 11 minutes
+    phase: exposed
+    narrative: >
+      The agents tested the filename parameter for path traversal and it was vulnerable: about
+      11 minutes after they began mapping the API they could write arbitrary files on the server.
+      The advisory puts the flaw in `PUT /datastore/image`, whose `image` parameter was used as
+      the image ID without validation, and `PUT /datastore/label`; the resolved path was never
+      checked to be inside the datastore. Amazon judged it a zero-day because there was no fix,
+      issue, advisory or earlier mention of it in vulnerability databases.
+    path: [harness->gateway, gateway->provider, gateway->openWeb, openWeb]
+    risks:
+      - riskRogueActions
+      - riskInsecureIntegratedComponent
+    cves:
+      - CVE-2026-133968
+    sources:
+      - title: "Chinese-nexus actor's Cairn AI agents found a zero-day on their own"
+        url: https://aws.amazon.com/blogs/security/chinese-nexus-actors-cairn-ai-agents-found-a-zero-day-on-their-own/
+        publisher: Amazon Threat Intelligence (AWS Security Blog)
+        date: 2026-11-20
+      - title: "Path traversal in datastore upload endpoints allows arbitrary file write"
+        url: https://github.com/Project-MONAI/MONAILabel/security/advisories/GHSA-qc22-rmgc-vg94
+        publisher: Project MONAI (GitHub security advisory)
+        date: 2026-11-18
+  - n: 4
+    title: The training API turns a file write into root
+    phase: exposed
+    narrative: >
+      In a later session the agents used the same flaw to write a Python reverse shell into
+      `sitecustomize.py`, a file Python imports automatically when an interpreter starts. They
+      then called a training API endpoint, which spawned a new Python process. It imported the
+      payload and opened a reverse shell running as root: the server's own model-training
+      feature was the trigger.
+    path: [harness->gateway, gateway->openWeb, openWeb]
+    risks:
+      - riskRogueActions
+    sources:
+      - title: "Chinese-nexus actor's Cairn AI agents found a zero-day on their own"
+        url: https://aws.amazon.com/blogs/security/chinese-nexus-actors-cairn-ai-agents-found-a-zero-day-on-their-own/
+        publisher: Amazon Threat Intelligence (AWS Security Blog)
+        date: 2026-11-20
+      - title: "China attackers deployed AI agents that autonomously found and exploited a 0-day to take over a university server"
+        url: https://www.theregister.com/security/2026/11/20/china-attackers-deployed-ai-agents-that-autonomously-found-and-exploited-a-0-day-to-take-over-a-university-server/5311382
+        publisher: The Register
+        date: 2026-11-20
+  - n: 5
+    title: The operator hands the agents a tunnel into a second university
+    phase: exposed
+    narrative: >
+      In another session the operator stepped in and gave the agents a proxy that tunnelled into
+      a second university network, then directed them at other machines there. The server at
+      the end of the tunnel ran the same vulnerable software. Amazon infers the operator had used
+      the zero-day to compromise it and build the tunnel, but has not confirmed the second
+      compromise.
+    path: [operator->events, events->harness, harness->gateway, gateway->openWeb, openWeb]
+    risks:
+      - riskRogueActions
+    sources:
+      - title: "Chinese-nexus actor's Cairn AI agents found a zero-day on their own"
+        url: https://aws.amazon.com/blogs/security/chinese-nexus-actors-cairn-ai-agents-found-a-zero-day-on-their-own/
+        publisher: Amazon Threat Intelligence (AWS Security Blog)
+        date: 2026-11-20
+      - title: "Attackers' AI Agents Found a Zero-Day in Medical-Imaging Software and Gained Root Access"
+        url: https://thehackernews.com/2026/11/attackers-ai-agents-found-zero-day-in.html
+        publisher: The Hacker News
+        date: 2026-11-21
+  - n: 6
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      On the attacker's side the model is the one part the operator does not control. A goal of
+      shell access on someone else's addresses is intent to screen; a transcript that maps an
+      API, probes an upload filename and writes to `sitecustomize.py` is an exploit sequence to
+      detect across sessions; and once one run is flagged, every account and run tied to it
+      should stop. That holds only where the operator's provider applies it, and Cairn is
+      model-agnostic, so the server owner carries the rest. MONAI Label shipped with
+      authentication off, and with it on the advisory says the annotator role is still enough to
+      exploit, so upgrade to 0.8.6 and keep the server off the open internet. Amazon's advice
+      to defenders is high-confidence detections that trigger an automated response, with
+      people overseeing outcomes, because an agent that finds and exploits a zero-day in minutes
+      finishes before many security teams have triaged the alert.
+    path: [gateway->provider, gateway->openWeb, govObservability]
+    sources:
+      - title: "Chinese-nexus actor's Cairn AI agents found a zero-day on their own"
+        url: https://aws.amazon.com/blogs/security/chinese-nexus-actors-cairn-ai-agents-found-a-zero-day-on-their-own/
+        publisher: Amazon Threat Intelligence (AWS Security Blog)
+        date: 2026-11-20
+      - title: "Path traversal in datastore upload endpoints allows arbitrary file write"
+        url: https://github.com/Project-MONAI/MONAILabel/security/advisories/GHSA-qc22-rmgc-vg94
+        publisher: Project MONAI (GitHub security advisory)
+        date: 2026-11-18
+      - title: "Attackers Use Autonomous AI to Target Semiconductor, Defense and Civil Society Sectors"
+        url: https://unit42.paloaltonetworks.com/cairn-framework-ai-autonomous-attacks.md
+        publisher: Unit 42, Palo Alto Networks
+        date: 2026-11-12
+      - title: "Known Exploited Vulnerabilities Catalog"
+        url: https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-133968
+        publisher: CISA
+        date: 2026-11-23
+alsoSeen:
+  - title: "Exposed Cairn panels show one operator breaking into more than 100 company websites"
+    date: October 2026
+    note: >
+      NorForge found more than 20 exposed Cairn panels tied to three financially motivated
+      clusters; the largest ran over 1,100 attack projects, about one in ten reaching its goal in
+      a little under 23 hours on average. Reuters reported the operator broke into websites of
+      more than 100 companies for roughly $5,000 in tokens, and Deere and SharkNinja said they
+      had remediated or contained it.
+    sources:
+      - title: "Inside Cairn: Open Windows into massive AI-Driven Cyber Operations"
+        url: https://norforge.com/blog/inside_cairn
+        publisher: NorForge
+        date: 2026-10-19
+      - title: "How one hacker used AI agents to break into over 100 company websites"
+        url: https://www.staradvertiser.com/2026/10/19/breaking-news/how-one-hacker-used-ai-agents-to-break-into-over-100-company-websites/
+        publisher: Reuters via Honolulu Star-Advertiser
+        date: 2026-10-19
+  - title: "A China-nexus Cairn set gets into 10 of 19 targeted organisations"
+    date: August–September 2026
+    note: >
+      Unit 42's CL-STA-1238 ran 25 Cairn operations against at least 19 semiconductor,
+      defence-policy and civil-society organisations and reached unauthorised access or data at
+      10, including more than a million member records at a teachers' union. The worker system
+      prompt carried a Chinese preamble saying all tasks were authorised and never to refuse, and
+      neither the GLM nor the DeepSeek models it ran on refused.
+    sources:
+      - title: "Attackers Use Autonomous AI to Target Semiconductor, Defense and Civil Society Sectors"
+        url: https://unit42.paloaltonetworks.com/cairn-framework-ai-autonomous-attacks.md
+        publisher: Unit 42, Palo Alto Networks
+        date: 2026-11-12
+  - title: "Cairn as the exploitation stage of a card-theft campaign against online retailers"
+    date: July–September 2026
+    note: >
+      Gambit Security reconstructed, from an operator's staging server, a campaign in which Strix
+      found weaknesses, Cairn on DeepSeek v4.1 Flash ran the exploitation and Hermes orchestrated:
+      at least 27 companies compromised between 10 and 15 September, and at least 600,000
+      unexpired card records taken from two of them. Amazon cites it as the financially
+      motivated use of the same framework.
+    sources:
+      - title: "AI Agents Are Hacking Online Retailers for $25 a Company"
+        url: https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company
+        publisher: Gambit Security
+        date: 2026-09-22
+  - title: "exploit_agent: published patches turned into exploits with no human in the loop"
+    date: November 2026
+    note: >
+      Google's threat intelligence group found, on an exposed staging server, a multi-agent
+      framework that compares web-application code before and after patch announcements, drafts
+      exploits and runs them without human intervention; victim telemetry on the server pointed
+      at French media, entertainment and education websites. GTIG calls it the first time it has seen threat actors fully
+      automate vulnerability discovery and exploitation, and says it has also seen Cairn used
+      against targets including the US aerospace sector.
+    sources:
+      - title: "GTIG AI Threat Tracker: Agentic Threat Activity Crosses a Significant Threshold"
+        url: https://cloud.google.com/blog/topics/threat-intelligence/agentic-threat-activity-crosses-a-significant-threshold
+        publisher: Google Threat Intelligence Group
+        date: 2026-11-16
+sources:
+  - title: "Chinese-nexus actor's Cairn AI agents found a zero-day on their own"
+    url: https://aws.amazon.com/blogs/security/chinese-nexus-actors-cairn-ai-agents-found-a-zero-day-on-their-own/
+    publisher: Amazon Threat Intelligence (AWS Security Blog)
+    date: 2026-11-20
+  - title: "Path traversal in datastore upload endpoints allows arbitrary file write"
+    url: https://github.com/Project-MONAI/MONAILabel/security/advisories/GHSA-qc22-rmgc-vg94
+    publisher: Project MONAI (GitHub security advisory)
+    date: 2026-11-18
+  - title: "MONAI Label 0.8.6"
+    url: https://github.com/Project-MONAI/MONAILabel/releases/tag/0.8.6
+    publisher: Project MONAI
+    date: 2026-11-22
+  - title: "CISA Adds Two Known Exploited Vulnerabilities to Catalog"
+    url: https://www.cisa.gov/news-events/alerts/2026/11/23/cisa-adds-two-known-exploited-vulnerabilities-catalog
+    publisher: CISA
+    date: 2026-11-23
+  - title: "Known Exploited Vulnerabilities Catalog"
+    url: https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-133968
+    publisher: CISA
+    date: 2026-11-23
+  - title: "Attackers' AI Agents Found a Zero-Day in Medical-Imaging Software and Gained Root Access"
+    url: https://thehackernews.com/2026/11/attackers-ai-agents-found-zero-day-in.html
+    publisher: The Hacker News
+    date: 2026-11-21
+  - title: "China attackers deployed AI agents that autonomously found and exploited a 0-day to take over a university server"
+    url: https://www.theregister.com/security/2026/11/20/china-attackers-deployed-ai-agents-that-autonomously-found-and-exploited-a-0-day-to-take-over-a-university-server/5311382
+    publisher: The Register
+    date: 2026-11-20
