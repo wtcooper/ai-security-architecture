@@ -35,7 +35,8 @@ node .claude/skills/incident-research/scripts/incident-index.mjs
 This prints today's date (UTC), the last scan on record, the newest feed item and the newest
 incident on file, the next free file number, every incident already there with its "also
 seen" entries, every feed item, and which patterns have no incident yet. The window runs from
-the newest feed date to today. With an empty feed, it runs from the earlier of (last scan,
+seven days before the newest feed date to today: disclosures surface late, and anything
+already in the feed is skipped, so the overlap costs nothing. With an empty feed, it runs from the earlier of (last scan,
 first day of the newest incident's month) to today; with no scan on record either, start one
 month before the newest incident, because disclosures lag events. Write the window down and
 put the month and year in your queries.
@@ -192,9 +193,11 @@ needs their decision. Commit only if asked to, or if the run's instructions say 
 A scheduled run, daily or weekly, keeps the feed current between full sweeps. It is the steps
 above, narrowed:
 
-1. **Window.** From the newest feed date (`incident-index.mjs` prints it) to today. Nothing
-   older is swept; a find older than the window that no one has filed is recorded in the log
-   for the next full sweep, not added.
+1. **Window.** The last seven days to today (from seven days before the newest feed date, if
+   that is earlier). Skip anything already in the feed or already cited
+   (`incident-index.mjs --urls`); a find that came to light inside the window but was missed by
+   earlier runs is added like any other. A find older than the window that no one has filed is
+   recorded in the log for the next full sweep, not added.
 2. **Sweep.** The trackers, vendor disclosures, vulnerabilities, agencies and security press
    lanes, with the window's dates in the queries. The by-type and by-pattern passes are for the
    full sweep; run them only when the window is longer than a week.
