@@ -228,6 +228,16 @@ agent workflow (external: the AI gateway's). The same pass moved opencode's rows
 names, rewrote Copilot in Edge for Cowork's browser use, and re-pointed the 20 citations of the
 retired Cowork architecture article.
 
+Hosted AI app builder, 2026-11-25: Lovable (`toolLovable`), Replit (`toolReplit`) and Base44
+(`toolBase44`, vendor `wix`) onboarded with settings tables read from each vendor's docs that day, every
+row addressing all 13 pins. Most of what the drawing pins is a workspace setting on Business or
+Enterprise plans. The rules written into the rows: a scan block the maker can clear by ignoring or
+dismissing a finding is partial, as is a scan that only warns (all three); an approval that covers later
+versions of the app is partial (Lovable); a kill switch that leaves the database answering the page's
+key, or does not say it does not, is partial (Lovable, Base44). Replit has no setting for per-visitor
+data access (`none`): its database is reachable only from the app's server, and its connectors act on
+the builder's connection. Base44 uses workspace data for training on every plan below Enterprise.
+
 ## Exclusions
 
 Recorded here when a surface is deliberately left out, with the reason.
@@ -241,6 +251,7 @@ Recorded here when a surface is deliberately left out, with the reason.
 
 - Architecture exemplars not onboarded (scope decision 2026-09-25: existing entities plus one or two mainstream products per drawing) — Perplexity Comet, Dia (browser AI — Microsoft Copilot in Edge, including Copilot Mode, and Gemini in Chrome were onboarded 2026-10-30); Goose (first-party coding); Zapier Agents (low-code); Sierra (single agent); Intercom Fin, Decagon (chat agent); Atlassian Remote MCP Server, Cloudflare remote MCP hosting (remote MCP); KServe, SGLang (self-hosted inference); Axolotl, Hugging Face PEFT (training); Temporal, LangGraph, Microsoft Agent Framework (multi-agent workflow); the A2A specification, A2A-enabled agent platforms and the identity-assertion grant (federation).
 - Federation and sandbox exemplars not chosen on 2026-11-15 (one product per drawing) — Atlassian Rovo A2A Gateway: its pages document one administrator setting (Atlassian Administration › Rovo › Agent2Agent › Enable A2A connections, off by default) and fixed OAuth scopes, too few for an entry; Microsoft Agent Framework: its A2A pages document an `auth_interceptor`, `forwarded_kwargs` and server-side accepted-kwargs allowlists and a `timeout`, a narrower fit to the federation pins than ADK's registry client, interceptors and Model Armor plugin; Kata Containers and gVisor: each is one wall (the runtime) with settings for isolation and its own network, where Inspect's settings reach the sandbox choice, egress list, tool approval, the stop and the trace. gVisor is recorded on `toolInspect` as the default runtime class of its Kubernetes chart.
+- Hosted AI app builder surfaces left out on 2026-11-25: Lovable's desktop, mobile, Telegram and ChatGPT shells (only the admin's Local desktop MCP servers switch is recorded), and projects on the customer's own Supabase; Replit Design, Code with Replit, Workspace Reps and Bring your own cloud; Base44 Superagents (a persistent-agent product), Base Code and in-app agents. Each file's header gives the reason.
 - Cursor Origin (git forge, early beta 2026-08-17) — code hosting rather than an agent runtime; the admin disable switch and the code-egress concern are recorded as facts on `toolCursorCloudAgents`.
 - OpenAI ChatGPT Atlas — winding down; browser features moved into the ChatGPT app's built-in browser (recorded as a variant of toolChatgptDesktop). The Help Center article "Evolving Atlas into ChatGPT" returned 403 to automated fetch on 2026-09-10.
 - OpenAI Agent Builder — scheduled shutdown 2026-11-30 per developers.openai.com/api/docs/guides/agent-builder; ChatKit and the Agents SDK are the replacement.
