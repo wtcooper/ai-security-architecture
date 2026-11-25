@@ -672,13 +672,13 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-20 flow-style reference architectures. Everything below is a gap between the taxonomy and the drawings.
+21 flow-style reference architectures. Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
 | Endpoint | 5 — Browser AI agents & extensions, First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
 | Cloud & hosted | 10 — Single agent workflow, Agent-to-agent federation across platforms, Agent sandbox for RL & evaluation, Multi-agent workflow, Chat agent with tools, Managed agent service in your cloud, Remote MCP server you publish, Self-hosted model inference, Agentic software factory, Model training & release pipeline |
-| Third-party SaaS | 5 — Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents |
+| Third-party SaaS | 6 — Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, Hosted AI app builder, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents |
 
 ### 4a. Risks no architecture pins — 5 of 36
 
@@ -994,6 +994,25 @@ Highlights below are Google's original mapping, not ours.
 | Coding & desktop session managed agent runtime | Policy & authorization | governance | (none) |
 | Coding & desktop session managed agent runtime | Supply-chain assurance | governance | (none) |
 | Coding & desktop session managed agent runtime | Observability & response | governance | (none) |
+| Hosted AI app builder | Browser | service | `componentAgentUserQuery` |
+| Hosted AI app builder | Builder agent | provider | `componentReasoningCore` |
+| Hosted AI app builder | Project store | external | `componentDataStorage` |
+| Hosted AI app builder | Preview environments | service | (none) |
+| Hosted AI app builder | Deploy gate | service | (none) |
+| Hosted AI app builder | App hosting | service | `componentApplication` |
+| Hosted AI app builder | App data | external | `componentDataStorage` |
+| Hosted AI app builder | Tool services | service | `componentTools` |
+| Hosted AI app builder | Source control | service | `componentDataSources` |
+| Hosted AI app builder | Identity provider | service | (none) |
+| Hosted AI app builder | Enterprise data | external | `componentDataSources` |
+| Hosted AI app builder | Model provider | provider | `componentModelServing` |
+| Hosted AI app builder | Public package sources | external | (none) |
+| Hosted AI app builder | Open web | external | `componentDataSources` |
+| Hosted AI app builder | Identity services | governance | (none) |
+| Hosted AI app builder | Secrets & key management | governance | (none) |
+| Hosted AI app builder | Policy & authorization | governance | (none) |
+| Hosted AI app builder | Supply-chain assurance | governance | (none) |
+| Hosted AI app builder | Observability & response | governance | (none) |
 | UI/low-code managed agent runtime | Agent builder platform | provider | `componentApplication` |
 | UI/low-code managed agent runtime | Tool services | service | `componentTools` |
 | UI/low-code managed agent runtime | AI gateway | service | (none) |
@@ -1043,13 +1062,13 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-20 of 20 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a mitigation pinned on its architecture.
+21 of 21 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a mitigation pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
 | Endpoint | Browser AI agents & extensions, First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | — |
 | Cloud & hosted | Single agent workflow, Agent-to-agent federation across platforms, Agent sandbox for RL & evaluation, Multi-agent workflow, Chat agent with tools, Managed agent service in your cloud, Remote MCP server you publish, Self-hosted model inference, Agentic software factory, Model training & release pipeline | — |
-| Third-party SaaS | Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents | — |
+| Third-party SaaS | Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, Hosted AI app builder, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents | — |
 
 ### 5a. Documents
 
@@ -1072,6 +1091,7 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | use | draft | 7 | File Analysis |
 | Enterprise AI chat with connectors | use | draft | 7 | _none_ |
 | Coding & desktop session managed agent runtime | use | draft | 8 | _none_ |
+| Hosted AI app builder | use | draft | 8 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | Human In-the-Loop for AI Agent Actions |
 | API/SDK managed agent runtime | hybrid | draft | 9 | Access Policy Administration, Execution Isolation, Agent Egress Control |
 | Persistent managed agents | use | draft | 8 | Execution Isolation |

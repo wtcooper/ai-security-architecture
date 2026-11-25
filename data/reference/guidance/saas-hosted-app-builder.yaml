@@ -1,0 +1,126 @@
+# Controls guidance for the hosted AI app builder pattern. Audience: workspace admins, security
+# architects and the teams that buy these builders, where a vendor's agent writes an app from a
+# chat and the vendor hosts it, with its database and sign-in, for other people to use. This is a
+# use pattern: every part runs in the vendor's tenancy, so the controls are workspace settings,
+# the identity provider and connector grants we hold, the inventory of published apps, and the
+# assurance of what only the vendor can fix. The build's derivation check fails this document if
+# its cited controls stop being pinned on the pattern.
+archetype: archHostedAppBuilder
+mode: use
+status: draft
+attribution: >-
+  Authored in this repository from the pattern scan of 2026-11-25. Pattern-level by design;
+  builders are named only as examples on the pattern itself.
+
+overview:
+  - >-
+    A hosted app builder turns a chat into a running application with its own database, sign-in
+    and users, and puts it on the internet at an address of its own. Nobody reads the code, and on
+    a workspace with no rules set the only decision between what the agent wrote and real visitors
+    is the maker's publish click. So the work is setting the workspace up so that the platform makes
+    the decisions a code review would have: who may open an app, whether a finding stops it, and
+    what its database lets a browser do.
+  - >-
+    Two things make it different from any app your own teams ship. The browser talks to the
+    database directly with a public key, so the row rules the agent wrote are the authorisation,
+    not the sign-in in front of the app. And every customer of the platform shares one tenancy, so
+    some of the worst outcomes are the vendor's own flaws, which no setting of yours can stop and
+    only an assessment and a contract can cover.
+
+items:
+  - title: Make private the default, and publishing wider an admin's decision
+    mitigations: [D3-APA, AML.M0029]
+    body:
+      - >-
+        Set the workspace's default audience to the workspace or to the maker alone, and let only
+        admins publish to anyone with the link or the whole internet. Several builders preselect
+        "anyone with the link", and some set apps that look like public sites to public without
+        login, so the default is the policy. Where the platform offers it, require an admin's
+        approval of the version before an app goes outside the workspace or uses a connector to
+        company data, and check where preview links stand: on some products they open the app past
+        the audience chosen at publish.
+
+  - title: Make the publish scan a gate, and read the row rules it may not
+    mitigations: [D3-AVE, cap-data-access-governance]
+    body:
+      - >-
+        Turn on blocking for critical findings and for exposed personal data, for every maker; off,
+        the scan is advice that a maker in a hurry skips. Then deal with what the scan may miss. The
+        front end reads the database with a public key, so every table and file bucket needs a row
+        rule, and each rule needs reading for what it allows: records owned per visitor, nothing
+        readable without sign-in unless it is meant to be public. A check that confirms rules are
+        enabled is not a check that they are right, and that difference has exposed whole databases.
+
+  - title: Keep keys out of the page, the code and the chat
+    mitigations: [D3-CH]
+    body:
+      - >-
+        Every key belongs in the platform's server-side secret store, used only by server functions,
+        and the only key in the front end should be the public one that identifies the database.
+        Watch for variables a framework exposes to the browser by their name, and for model keys an
+        older app still carries in its page. Treat a key pasted into the builder's chat as exposed:
+        the chat is kept with the project, and project stores have leaked.
+
+  - title: Keep previews, and the agent, off the live app
+    mitigations: [cap-staged-rollout-gate]
+    body:
+      - >-
+        Prefer builders that give each app a development database apart from production, move schema
+        changes only at publish, and keep the agent out of live records; where that separation is a
+        setting, turn it on. Keep previews private and on test data. Check what a restore covers: on
+        some products it brings back the code and not the data a chat edit changed.
+
+  - title: Put your sign-in in front of the builder and of workspace apps
+    mitigations: [D3-MFA, D3-APA]
+    body:
+      - >-
+        Enforce single sign-on with a second factor for everyone who builds, limit building to the
+        groups you choose, and make your identity provider the only login method for apps limited to
+        the workspace. Turn off the emailed links and personal accounts the platform offers beside
+        it, so that removing someone at the identity provider removes them from the builder and from
+        every app they could open.
+
+  - title: Scope connectors to the visitor, not the maker
+    mitigations: [AML.M0028, cap-data-access-governance]
+    body:
+      - >-
+        Allow only the connectors you have reviewed, each limited to the records and actions its app
+        needs. Then decide whose access each connector uses: an app that reads on its maker's grant
+        shows every visitor what the maker can see. Prefer connectors each visitor signs in to, or
+        that pass the visitor's identity to the system of record, and refuse requests that arrive
+        with nobody signed in.
+
+  - title: Know every published app, find the ones made outside, and be able to stop any of them
+    mitigations: [D3-AI, cap-shadow-ai-discovery, cap-agent-kill-switch, AML.M0024]
+    body:
+      - >-
+        Keep an inventory of published apps with an owner, an audience, the data each holds and its
+        connectors, and reassign or unpublish the apps of people who leave. Look for apps made in
+        personal and free accounts on the builders' domains, in your network logs and in the public
+        certificate and DNS records attackers search, because those apps sit under no setting of
+        yours. Make sure an admin can unpublish an app at once, revoke its connectors and rotate its
+        keys, and export the audit of who published what to whom.
+
+  - title: Assure what only the vendor can fix
+    mitigations: [cap-ai-vendor-assessment]
+    body:
+      - >-
+        Every customer's projects, chat histories and apps share one tenancy and one sign-in layer,
+        and the largest exposures on these platforms have included the vendor's own authorisation
+        flaws and slow handling of the reports that found them. Ask how tenants are kept apart, how
+        the shared sign-in is tested, how bug reports are triaged, which suppliers run the database
+        and hosting, and where data is kept, before rollout and on a schedule after it.
+
+sources:
+  - title: "Lovable docs: Privacy and security settings"
+    url: https://docs.lovable.dev/features/privacy-and-security-settings
+  - title: "Replit docs: Privacy and deployment settings"
+    url: https://docs.replit.com/teams/privacy-and-deployment-settings
+  - title: "OpenAI Help Center: Creating and managing ChatGPT Sites"
+    url: https://help.openai.com/articles/20001339-creating-and-managing-chatgpt-sites
+  - title: "Matt Palmer: CVE-2025-48757, missing row-level security in Lovable apps"
+    url: https://mattpalmer.io/posts/CVE-2025-48757/
+  - title: "Wiz Research: Critical vulnerability in Base44"
+    url: https://www.wiz.io/blog/critical-vulnerability-base44
+  - title: "Claroc Research: GhostShares 2, Grok apps exposed"
+    url: https://blog.claroc.io/ghostshares-grok-build-apps/
