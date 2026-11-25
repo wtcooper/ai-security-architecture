@@ -205,9 +205,12 @@ above, narrowed:
    materially larger than the one on file. A repeat becomes an `alsoSeen` entry and a feed item
    pointing at it. Most routine runs add feed items and no catalogue file; that is the
    expected result, not a thin one.
-5. **Log** under `docs/research/incidents/<today>.md`, as in section 8. A run that finds
-   nothing still writes the log: the window, the queries and "nothing new", so the next run
-   knows this stretch was searched.
+5. **Log** one file per week, `docs/research/incidents/<date of this week's Monday>.md`. A
+   daily run appends a section `## <today> (daily)`: the window, the number of searches, each
+   item added, candidates for the weekly run and the leads turned down. The Monday run writes
+   the week's summary, as in section 8, at the top. A run that finds nothing still writes its
+   section: the window, the queries and "nothing new", so the next run knows this stretch was
+   searched.
 6. **Build, test, commit, push** as the run's instructions say: `npm run data` and `npm test`
    must pass before anything is committed; commit the feed and incident files, the log and the
    rebuilt dataset, unless the instructions say otherwise; push only to the branch they name.
