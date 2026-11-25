@@ -430,10 +430,16 @@ function Latest({ day, items, fresh }: { day: string; items: FeedItem[]; fresh: 
 function ProposedUpdates({ items }: { items: FeedItem[] }) {
   return (
     <section aria-labelledby="proposed-title" data-proposed-updates className="mt-5 rounded-xl border px-4 py-4 sm:px-5" style={{ borderColor: "var(--band-app-edge)", background: "var(--band-app-fill)" }}>
-      <h2 id="proposed-title" className="flex items-baseline gap-2">
-        <span className="display text-[17px] font-bold text-ink">Proposed site updates</span>
-        <span className="text-[13px] text-ink-3">{items.length}</span>
-      </h2>
+      {/* Folded when there are more than a few, so the day's headlines stay above the fold. */}
+      <details open={items.length <= 3} className="group">
+      <summary className="flex cursor-pointer list-none items-baseline gap-2 [&::-webkit-details-marker]:hidden">
+        <h2 id="proposed-title" className="flex items-baseline gap-2">
+          <span className="display text-[17px] font-bold text-ink">Proposed site updates</span>
+          <span className="text-[13px] text-ink-3">{items.length}</span>
+        </h2>
+        <span className="text-[12.5px] text-introduced group-open:hidden">Show all →</span>
+        <span className="hidden text-[12.5px] text-ink-3 group-open:inline">Hide</span>
+      </summary>
       <p className="mt-1 max-w-3xl text-[12.5px] leading-snug text-ink-2">
         Changes the daily run found and does not make by itself: a product to onboard, a new control or pattern, a change to a control&rsquo;s guidance. To approve
         one, add its line to <code className="rounded bg-paper px-1 font-mono text-[0.9em]">data/feed/decisions.yaml</code> (with <code className="font-mono text-[0.9em]">decline</code> to
@@ -464,6 +470,7 @@ function ProposedUpdates({ items }: { items: FeedItem[] }) {
           </li>
         ))}
       </ul>
+      </details>
     </section>
   );
 }
