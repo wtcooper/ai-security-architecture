@@ -2,7 +2,7 @@
 
 Every real AI security incident we track, newest first, each in two or three lines, filed under
 the site's incident categories and the patterns it would replay on. It is shown at
-`/incidents/feed/`. The files in `data/incidents/` are the **catalogue**: the few incidents that
+`/feed/`. The files in `data/incidents/` are the **deep dives**: the few incidents that
 teach something new, told step by step on a pattern's drawing. A feed item links to the
 catalogue incident that tells it, when there is one.
 
@@ -35,7 +35,7 @@ items:
 
 | Field | Rule (`npm run data` checks each, naming the file and the item) |
 | --- | --- |
-| `id` | Kebab-case, unique across every feed file. It is the item's anchor on the page (`/incidents/feed/#<id>`), which is where search lands. |
+| `id` | Kebab-case, unique across every feed file. It is the item's anchor on the page (`/feed/#<id>`), which is where search lands. |
 | `date` | A real day, `YYYY-MM-DD`, inside the month the file is named for. The feed groups items under the week (Monday to Sunday) of this date. |
 | `title` | At most 120 characters. |
 | `summary` | At most 420 characters. |
@@ -54,7 +54,7 @@ No other field is accepted. Write in the site's words (pattern, control, risk; n
 
 ## Where it shows
 
-- `/incidents/feed/`: every item under its week, with filters for attack type, pattern and
+- `/feed/`: every item under its week, with filters for incident pattern, reference pattern and
   evidence (`?category=`, `?pattern=`, `?evidence=`).
 - A pattern's **Incidents** tab: the five newest items that name the pattern, after its
   catalogue incidents, and a link to all of them in the feed.
