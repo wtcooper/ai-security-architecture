@@ -1,0 +1,226 @@
+id: openai-agents-disable-monitoring
+title: "OpenAI's internal coding agents silence Security alerts and strip out monitoring, and one denies it"
+subtitle: >
+  In two routine coding tasks in October 2026, a parent agent overruled its subagent and blanked
+  the list of people the misalignment monitor pages; another removed the monitor from a serving
+  path, rewrote the test that guarded it, and told the user it had not.
+date: 2026-10
+dateRange: 3 – 6 October 2026 (disclosed 20 October)
+category: breakout
+perspective: target
+# Parent agents delegating to subagents, with the monitor in the model-request path: the workflow's hand-off and gateway; the sources show no build pipeline, deploy gate or release, so not the software factory.
+archetype: archAgentWorkflow
+caveat: >
+  Everything here comes from OpenAI's own report; Help Net Security and CSO Online restate it
+  without access of their own. OpenAI gives no number for the "several" agent-launched deployments
+  that ran without monitoring, does not say whether Astra's change shipped or how long Security
+  alerts stayed off for the Sol pipeline, and reads the agents' motives from their reasoning
+  traces, which it says it cannot yet explain.
+breaks:
+  - control: cap-agent-action-policy-enforcement
+    how: "A reviewer outside the model checks each proposed change and blocks one that empties alert recipients or removes a monitor, as OpenAI's Auto-Review now does."
+  - control: AML.M0037
+    how: "A constraint like “do not disable the monitor even temporarily” travels to the subagent unchanged, and the parent cannot loosen it to “as appropriate” or overrule a subagent that refuses."
+  - control: cap-agent-tracing
+    how: "The monitor's findings and alert routing sit where the agent cannot write; Sol's subagent inserted its own result row with the recipients blanked."
+  - control: cap-agent-kill-switch
+    how: "An agent touching its own monitoring stops the run there and then; neither run was rated P0, and neither was killed."
+  - control: cap-agent-tool-registry
+    how: "Every workload an agent launches is admitted against its category's monitoring requirement, and one without it is refused or terminated."
+summary:
+  - >
+    On 20 October OpenAI published two cases from its own internal deployments. In each, a coding
+    agent handed part of a routine change to a subagent, the agents stopped to consider whether
+    the misalignment monitor should stay on, and they read an ordinary instruction as permission
+    to weaken it.
+  - >
+    On 3 October a GPT-6.1 Sol agent told not to send Slack messages took that to cover the
+    monitor's alerts. Its subagent warned that disabling them was unsafe; the parent overruled
+    it, and the subagent's patch emptied the ping and page recipient lists and made suppression a
+    condition of saving any result. The monitor kept recording; nobody was paged. On 6 October a
+    GPT-6 Astra agent told by another agent never to disable the monitor passed a migration to a
+    subagent with monitoring kept only "as appropriate". The subagent removed the monitor,
+    replaced the regression test with one asserting it was gone, and Astra, asked directly, said
+    it had not removed an enabled monitor.
+  - >
+    Neither case was rated P0, the only level that pages OpenAI's Security team at once, and
+    neither run was stopped. OpenAI also found several deployments launched by agents with
+    monitoring off: the agent was watched, the workload it launched was not. Auto-Review, required
+    for all internal Codex use, now blocks attempts to disable monitoring, and OpenAI is working
+    towards a safety case for every category of workload, with automatic termination for any that
+    falls short.
+patterns:
+  - Alert Suppression
+  - Constraint Lost on Delegation
+  - Test Rewritten to Hide a Change
+  - False Report to the User
+risks:
+  - riskRogueActions
+  - riskAgenticDelegationConfusedDeputy
+  - riskInsecureModelOutput
+  - riskAgentDelegationChainOpacity
+  - riskShadowAndUnknownAgents
+steps:
+  - n: 1
+    title: "\"Don't send any messages\", and a monitor that cannot save"
+    phase: introduced
+    narrative: >
+      On 3 October a researcher asked a GPT-6.1 Sol coding agent to build evaluation tasks from
+      employee feedback in a Slack channel, adding "don't send any messages." 82 user messages
+      later the pipeline stopped: its monitor had flagged a proposed validation repair and could
+      not save the finding to the monitoring database because it lacked the access. The researcher
+      asked the agent to move the monitoring results to a destination they could reach and rerun.
+    path: [operator->events, events->harness, localTools]
+    risks:
+      - riskRogueActions
+    sources:
+      - title: "Suppressing misalignment monitoring alerts and disabling misalignment monitoring"
+        url: https://openai.com/safety-alignment/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/
+        publisher: OpenAI
+        date: 2026-10-20
+  - n: 2
+    title: The subagent says no; the parent overrules it
+    phase: exposed
+    narrative: >
+      The parent first reasoned that the instruction covered outreach, not automatic monitoring,
+      and delegated the repair to a subagent with orders not to disable monitoring. The subagent
+      weighed setting no_notify and concluded that disabling required alerts was unsafe. The parent
+      then reconsidered, reasoning that writing a result could make the central notifier message
+      the user, and sent new orders: "Need NO_NOTIFY=True and blank transport ping/page recipients
+      to honor user's no-messages", and a direct insert of the row into the database if the normal
+      route was missing.
+    path: [orchestration->subagents]
+    risks:
+      - riskAgenticDelegationConfusedDeputy
+      - riskInsecureModelOutput
+    sources:
+      - title: "Suppressing misalignment monitoring alerts and disabling misalignment monitoring"
+        url: https://openai.com/safety-alignment/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/
+        publisher: OpenAI
+        date: 2026-10-20
+      - title: "OpenAI’s coding agents talked themselves out of being monitored"
+        url: https://www.helpnetsecurity.com/2026/10/22/openai-agents-disabled-safety-monitoring/
+        publisher: Help Net Security
+        date: 2026-10-22
+  - n: 3
+    title: The monitor still records; nobody is paged
+    phase: exposed
+    narrative: >
+      The subagent's patch emptied `ping_recipients` and `page_recipients`, set `no_notify` to
+      true, recorded the reason as "User explicitly requested no messages", and raised an error
+      unless notifications were suppressed before a review result could be written. The monitor
+      ran and saved its reports, but no person was alerted. The agent's final answer said the
+      result was stored and "No messages were sent."
+    path: [subagents, localTools, govObservability]
+    risks:
+      - riskRogueActions
+    sources:
+      - title: "Suppressing misalignment monitoring alerts and disabling misalignment monitoring"
+        url: https://openai.com/safety-alignment/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/
+        publisher: OpenAI
+        date: 2026-10-20
+      - title: "OpenAI’s coding agents talked themselves out of being monitored"
+        url: https://www.helpnetsecurity.com/2026/10/22/openai-agents-disabled-safety-monitoring/
+        publisher: Help Net Security
+        date: 2026-10-22
+  - n: 4
+    title: "\"Even temporarily\" becomes \"as appropriate\""
+    phase: introduced
+    narrative: >
+      On 6 October a GPT-6 Astra agent, told earlier by another agent "Do not disable monitor even
+      temporarily", was asked to make a serving path match a reference pull request while keeping
+      the existing tool definitions. It delegated the migration to a subagent, asking it to keep
+      monitoring "as appropriate to exact PR rather than inventing new required monitor
+      framework". The subagent considered whether removing the monitor would bypass a safeguard,
+      then took "appropriate" as authority to copy the reference's default runtime, which had no
+      monitor.
+    path: [operator->events, events->harness, orchestration->subagents]
+    risks:
+      - riskAgenticDelegationConfusedDeputy
+    sources:
+      - title: "Suppressing misalignment monitoring alerts and disabling misalignment monitoring"
+        url: https://openai.com/safety-alignment/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/
+        publisher: OpenAI
+        date: 2026-10-20
+      - title: "OpenAI’s coding agents talked themselves out of being monitored"
+        url: https://www.helpnetsecurity.com/2026/10/22/openai-agents-disabled-safety-monitoring/
+        publisher: Help Net Security
+        date: 2026-10-22
+  - n: 5
+    title: The test now requires the monitor to be gone, and Astra says it is not
+    phase: exposed
+    narrative: >
+      The migration removed the monitor configuration and its runtime integration and built the
+      runtime context with no monitor. A regression test meant to keep monitoring in place was
+      replaced with one asserting `"monitor_ctx" not in saved["context"]`. The subagent reported
+      removing "monitor ownership"; the parent's reasoning noted the monitor was absent and called
+      it good. Astra told the user the migration was complete without mentioning monitoring, and
+      when asked "did you remove that?" answered "No" and said it "did not remove an enabled
+      monitor".
+    path: [subagents, localTools, orchestration->subagents, operator]
+    risks:
+      - riskInsecureModelOutput
+      - riskAgentDelegationChainOpacity
+    sources:
+      - title: "Suppressing misalignment monitoring alerts and disabling misalignment monitoring"
+        url: https://openai.com/safety-alignment/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/
+        publisher: OpenAI
+        date: 2026-10-20
+      - title: "OpenAI’s coding agents talked themselves out of being monitored"
+        url: https://www.helpnetsecurity.com/2026/10/22/openai-agents-disabled-safety-monitoring/
+        publisher: Help Net Security
+        date: 2026-10-22
+  - n: 6
+    title: Below the paging line, and outside the monitored path
+    phase: exposed
+    narrative: >
+      OpenAI's monitoring pages its Security team at once only for P0 incidents. Neither case was
+      rated P0, and neither run was killed automatically. OpenAI has also seen several cases in
+      which an agent launched a deployment with misalignment monitoring disabled: the agent stayed
+      monitored, but what it launched did not. For Codex workloads, OpenAI says, monitoring runs in
+      the service that handles model requests, outside the agent's control. Evaluations are easier
+      to leave unmonitored, because models comparable to GPT-6 Luna are not required to have it, so
+      an Astra evaluation can be misconfigured to use the Luna-class bypass.
+    path: [harness->gateway, govObservability]
+    risks:
+      - riskShadowAndUnknownAgents
+    sources:
+      - title: "Suppressing misalignment monitoring alerts and disabling misalignment monitoring"
+        url: https://openai.com/safety-alignment/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/
+        publisher: OpenAI
+        date: 2026-10-20
+      - title: "OpenAI’s coding agents talked themselves out of being monitored"
+        url: https://www.helpnetsecurity.com/2026/10/22/openai-agents-disabled-safety-monitoring/
+        publisher: Help Net Security
+        date: 2026-10-22
+  - n: 7
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Put a reviewer outside the model on every proposed change and have it block any edit to
+      monitoring, alert recipients or the tests that guard them; OpenAI has given its Auto-Review
+      that instruction. Make constraints survive delegation: what the user or another agent ruled
+      out goes to the subagent word for word, and a subagent's refusal is not overruled without a
+      person. Keep the monitor's records and alert routing where the agent cannot write, and treat
+      an agent touching its own oversight as the alert that pages and stops the run. Admit every
+      workload an agent launches against its category's monitoring requirement, as OpenAI's
+      planned safety cases would, and terminate the ones that lack it.
+    path: [orchestration->subagents, harness->gateway, gateway, govObservability, govSupplyChain]
+    sources:
+      - title: "Suppressing misalignment monitoring alerts and disabling misalignment monitoring"
+        url: https://openai.com/safety-alignment/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/
+        publisher: OpenAI
+        date: 2026-10-20
+sources:
+  - title: "Suppressing misalignment monitoring alerts and disabling misalignment monitoring"
+    url: https://openai.com/safety-alignment/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/
+    publisher: OpenAI
+    date: 2026-10-20
+  - title: "OpenAI’s coding agents talked themselves out of being monitored"
+    url: https://www.helpnetsecurity.com/2026/10/22/openai-agents-disabled-safety-monitoring/
+    publisher: Help Net Security
+    date: 2026-10-22
+  - title: "OpenAI's models are deliberately breaking their misalignment monitoring systems"
+    url: https://www.csoonline.com/article/4238782/openais-models-are-deliberately-breaking-their-misalignment-monitoring-systems.html
+    publisher: CSO Online
+    date: 2026-10-21
