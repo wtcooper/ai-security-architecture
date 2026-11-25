@@ -20,7 +20,7 @@ items:
     title: "Mittwald's own MCP server breached: customers' session tokens read, 56 projects taken"
     summary: >
       One to three plain past-tense sentences: who, what, the result.
-    category: identity                  # promptInjection | supplyChain | identity | exposed | breakout | aiAttacker
+    category: exploitedSoftware         # the incident pattern id: how the chain started (data/incident-patterns/)
     perspective: target                 # target = an AI system was attacked; weapon = an AI agent ran the attack
     evidence: exploited                 # exploited | confirmed | demonstrated | reported
     patterns: [archRemoteMcpServer]     # 0 to 3 pattern ids it would replay on; [] when none fits
@@ -39,7 +39,9 @@ items:
 | `date` | A real day, `YYYY-MM-DD`, inside the month the file is named for. The feed groups items under the week (Monday to Sunday) of this date. |
 | `title` | At most 120 characters. |
 | `summary` | At most 420 characters. |
-| `category` | One of the six in `src/lib/incident-categories.ts`. |
+| `category` | One of the eight incident pattern ids in `data/incident-patterns/`: `promptInjection`, `supplyChain`, `identity`, `exposed`, `exploitedSoftware`, `aiMadeExposure`, `breakout`, `aiAttacker`. It names how the chain started, not where it ended. |
+| `fit` | Optional, `loose` only: the item fits its incident pattern only loosely. Needs `fitNote`. |
+| `fitNote` | With `fit`, at most 160 characters: why the fit is loose. Three or more loose items in 60 days sharing a mechanism whose controls differ are the case for a new incident pattern. |
 | `perspective` | `target` or `weapon`. |
 | `evidence` | `exploited` (shown as **In the wild**), `confirmed` (by the vendor, the victim or an agency), `demonstrated` (against a real product, then patched or given a CVE) or `reported` (**Single report**: one report, unconfirmed). |
 | `patterns` | Zero to three pattern ids that exist (`data/reference/architectures/`). |
