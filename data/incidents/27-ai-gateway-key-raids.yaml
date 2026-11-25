@@ -1,0 +1,227 @@
+id: ai-gateway-key-raids
+title: "LLMjacking: a bought LiteLLM key is lifted to proxy admin, and stolen model access is resold"
+subtitle: >
+  Google's threat intelligence group describes crews that steal cloud identities and AI keys,
+  prove them with one-token calls and sell them on. At one victim a follow-on crew turned LiteLLM
+  virtual keys into the gateway's master credential. Elsewhere stolen access was resold through
+  "LLM mixers", and some victims' charges reached $1 million before access was revoked.
+date: 2026-11
+dateRange: mid-2026 – November 2026 (GTIG report 2 November; CISA listing 18 November)
+category: identity
+perspective: target
+# The gateway is where the decisive step ran: a self-hosted LiteLLM proxy holding its callers' virtual keys and the master credential above them. The cloud model services the bills landed on are not drawn on any pattern.
+archetype: archSelfHostedInference
+caveat: >
+  GTIG's cases come from its own incident response: the victims are not named and the figures
+  are GTIG's. GTIG gives the LiteLLM flaw as CVE-2026-40217 and describes it as a user ID rebind
+  in `/key/regenerate`. The CVE record and LiteLLM's advisory for that number describe a
+  different flaw, a sandbox escape in the custom-code guardrail test endpoint
+  (`/guardrails/test_custom_code`) that by LiteLLM's account needs a proxy-admin credential to
+  reach, and none of LiteLLM's published advisories describes the rebind. CISA's listing on 18
+  November uses the CVE record's name for the flaw.
+breaks:
+  - control: D3-AVE
+    how: "Bring the gateway into vulnerability management and patch its privilege-escalation flaws first: GTIG's own first recommendation."
+  - control: D3-AA
+    how: "Callers present a workload identity the gateway checks on every request, not a bearer key, so a key sold on by the crew that stole it stops working at the next rotation."
+  - control: D3-CH
+    how: "Short-lived keys scoped by model, environment and spend, so a key for a utility model cannot call a frontier one, and a leaked one expires."
+  - control: AML.M0004
+    how: "Per-key quotas and spending caps at the gateway put a ceiling on what a stolen key can run up in a day."
+  - control: AML.M0024
+    how: "Gateway logs show the tells GTIG lists: `max_tokens=1` sweeps, key regeneration and models enabled that nobody asked for."
+summary:
+  - >
+    An AI gateway such as LiteLLM issues virtual keys to the teams and services that call it and
+    holds the master credential above them. Google Threat Intelligence Group and Mandiant's
+    report of 2 November describes LLMjacking: crews that steal access to models, prove it
+    works, and sell it or spend it on the victim's account.
+  - >
+    Most cases began with stolen cloud identities, and the access was checked with single-token
+    calls before use. At one victim a follow-on crew bought pre-validated LiteLLM virtual keys
+    from the actor that got in and, through what GTIG calls a user ID rebind flaw in the
+    gateway's `/key/regenerate` endpoint, made them PROXY_ADMIN master credentials. GTIG gives
+    the flaw as CVE-2026-40217; the CVE record for that number describes a different flaw in the
+    same gateway. CISA listed CVE-2026-40217 as exploited on 18 November.
+  - >
+    The money end is a market. GTIG describes "LLM mixers", illicit routing gateways that proxy,
+    aggregate and resell stolen LLM access; UNC6993 ran open-source gateways such as new-api,
+    likely to pool its stolen keys. One actor made more than 500,000 calls in under eight hours to power the
+    Jet Night service, which passed nearly one million dollars in token costs to one victim and
+    sells an unlimited plan for about $60 a month.
+risks:
+  - riskCrossTenantCredentialPropagation
+  - riskInsecureIntegratedComponent
+  - riskEconomicDenialOfWallet
+steps:
+  - n: 1
+    title: Stolen cloud identities, and keys left in public code
+    phase: introduced
+    narrative: >
+      Across GTIG and Mandiant's LLMjacking investigations the dominant way in was exposed or
+      stolen cloud identity tokens: IAM credentials, service-account keys, GitHub personal access
+      tokens and active session tokens. In mid-2026 UNC6993 got in through a misconfigured
+      service-account key. It also ran a page posing as a portal for joining a group of LLM
+      users, which had people paste a raw JSON payload holding a live access token and so
+      bypassed password and MFA checks. Another actor collected corporate LLM API keys from
+      public GitHub repositories.
+    path: [govIdentity, govSecrets]
+    sources:
+      - title: "The Rise of LLMJacking: How Threat Actors Monetize Compromised Cloud and Model Resources"
+        url: https://cloud.google.com/blog/topics/threat-intelligence/llmjacking-monetizing-compromised-cloud-models
+        publisher: Google Threat Intelligence Group / Mandiant
+        date: 2026-11-02
+  - n: 2
+    title: Keys proved live with one-token calls, then sold on
+    phase: introduced
+    narrative: >
+      Stolen access was checked before it was used: GTIG saw automated validation sweeps made of
+      single-token requests (`max_tokens=1`). At one victim the keys changed hands. A follow-on
+      cluster acquired pre-validated LiteLLM virtual keys, the keys the gateway gives its
+      callers, from the threat actor that had established initial access.
+    path: [consumers->gateway]
+    risks:
+      - riskCrossTenantCredentialPropagation
+    sources:
+      - title: "The Rise of LLMJacking: How Threat Actors Monetize Compromised Cloud and Model Resources"
+        url: https://cloud.google.com/blog/topics/threat-intelligence/llmjacking-monetizing-compromised-cloud-models
+        publisher: Google Threat Intelligence Group / Mandiant
+        date: 2026-11-02
+  - n: 3
+    title: A virtual key is rebound to proxy admin
+    phase: exposed
+    narrative: >
+      The follow-on cluster exploited what GTIG calls a user ID rebind vulnerability in LiteLLM's
+      `/key/regenerate` endpoint to elevate the standard virtual keys into full PROXY_ADMIN
+      master credentials, which GTIG says gave it deep, persistent control over the environment.
+      GTIG gives the flaw as CVE-2026-40217. The CVE record and LiteLLM's advisory for that
+      number describe something else: a sandbox escape in `POST /guardrails/test_custom_code`
+      that runs code on the proxy host and, by LiteLLM's account, needs a proxy-admin credential
+      to reach. CISA added CVE-2026-40217 to its exploited list on 18 November, with federal
+      agencies to fix it by 2 December.
+    path: [consumers->gateway, gateway]
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskCrossTenantCredentialPropagation
+    cves:
+      - CVE-2026-40217
+    sources:
+      - title: "The Rise of LLMJacking: How Threat Actors Monetize Compromised Cloud and Model Resources"
+        url: https://cloud.google.com/blog/topics/threat-intelligence/llmjacking-monetizing-compromised-cloud-models
+        publisher: Google Threat Intelligence Group / Mandiant
+        date: 2026-11-02
+      - title: "LiteLLM has a sandbox escape in custom-code guardrail"
+        url: https://github.com/advisories/GHSA-wxxx-gvqv-xp7p
+        publisher: GitHub Advisory Database
+        date: 2026-05-07
+      - title: "CISA Adds Four Known Exploited Vulnerabilities to Catalog"
+        url: https://www.cisa.gov/news-events/alerts/2026/11/18/cisa-adds-four-known-exploited-vulnerabilities-catalog
+        publisher: CISA
+        date: 2026-11-18
+      - title: "CISA Warns of 4 Exploited Flaws Linked to Ransomware, Cryptomining, and LLMjacking Attacks"
+        url: https://thehackernews.com/2026/11/cisa-warns-of-4-exploited-flaws-linked.html
+        publisher: The Hacker News
+        date: 2026-11-19
+  - n: 4
+    title: New keys and accounts on the victim's cloud, then the bill
+    phase: exposed
+    narrative: >
+      GTIG does not say what this crew did with the gateway next. Across its cases, actors with
+      model access generated more API keys and enabled services in victims' cloud projects,
+      signed victim accounts up to pay-as-you-go agreements for premium models and ran
+      high-volume inference, and kept creating and deleting short-lived service accounts to get
+      around rate limits ("burn and rotate"). Some also provisioned GPU instances. GTIG saw
+      fraudulent charges above $100,000 in a single day in some incidents, and cumulative
+      charges reaching $1 million at some organisations before access was revoked. Stolen access
+      was resold through services such as Jet Night, which GTIG lists as an LLM mixer, and the
+      newapi[.]pro resale ecosystem.
+    path: [govIdentity, govSecrets]
+    risks:
+      - riskEconomicDenialOfWallet
+    sources:
+      - title: "The Rise of LLMJacking: How Threat Actors Monetize Compromised Cloud and Model Resources"
+        url: https://cloud.google.com/blog/topics/threat-intelligence/llmjacking-monetizing-compromised-cloud-models
+        publisher: Google Threat Intelligence Group / Mandiant
+        date: 2026-11-02
+      - title: "Google Warns LLMjacking Attacks Are Costing Some Enterprises Up to $1 Million in Cloud Charges"
+        url: https://thehackernews.com/2026/11/google-warns-llmjacking-attacks-are.html
+        publisher: The Hacker News
+        date: 2026-11-03
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Run the gateway as the key vault it is. Put it under vulnerability management and patch its
+      privilege-escalation and authentication flaws first. Have callers authenticate with a
+      workload identity rather than a bearer key that can be sold, and keep the keys that must
+      exist short-lived and scoped by model, environment and spend. Set per-key quotas and
+      spending caps at the gateway. And watch its logs for what GTIG lists: single-token
+      validation sweeps, key regeneration, and models or services switched on that nobody
+      asked for.
+    path: [consumers->gateway, gateway, govIdentity, govSecrets, govSupplyChain, govObservability]
+    sources:
+      - title: "The Rise of LLMJacking: How Threat Actors Monetize Compromised Cloud and Model Resources"
+        url: https://cloud.google.com/blog/topics/threat-intelligence/llmjacking-monetizing-compromised-cloud-models
+        publisher: Google Threat Intelligence Group / Mandiant
+        date: 2026-11-02
+alsoSeen:
+  - title: "ARTEX agents take provider keys from exposed AI gateways and app builders"
+    date: November 2026
+    note: >
+      Amazon's MadPot decoys, posing as LLM inference APIs, caught ARTEX agents from 3 October to
+      5 November sending their own campaign records: they found internet-exposed gateways (One
+      API, New API, Veloera, Sub2API, LiteLLM) and app builders, used flaws such as LiteLLM's
+      default master key and anonymous provider-configuration endpoints, and fed the upstream
+      keys into their own model gateway to pay for more hunting. Amazon notified affected AWS
+      customers and says it cannot verify the outcomes the agents reported.
+    sources:
+      - title: "Amazon Threat Intelligence observes threat actors running cybercrime campaigns with ARTEX AI agents"
+        url: https://aws.amazon.com/blogs/security/amazon-threat-intelligence-observes-threat-actors-running-cybercrime-campaigns-with-artex-ai-agents/
+        publisher: Amazon Threat Intelligence
+        date: 2026-11-13
+      - title: "Attackers are using AI agents to automate cybercrime at 'industrial scale,' FBI and AWS warn"
+        url: https://www.theregister.com/cyber-crime/2026/11/16/attackers-are-using-ai-agents-to-automate-cybercrime-at-industrial-scale-fbi-and-aws-warn/5310223
+        publisher: The Register
+        date: 2026-11-16
+  - title: "PoeLLM: LiteLLM's MCP test endpoint turns exposed gateways into miners and scanners"
+    date: October 2026
+    note: >
+      Lumen's Black Lotus Labs tracked a botnet, active since at least April 2026, that likely
+      entered LiteLLM through `/mcp-rest/test/connection` (CVE-2026-42271, which needed only a
+      valid proxy key before 1.83.7) and installed miners and a remote shell, then used infected
+      servers to scan for more. Its report gives both "more than 3,400" and "almost 2,200"
+      affected servers, and reports no key theft.
+    sources:
+      - title: "Canto incognito: tracking the PoeLLM malware"
+        url: https://www.lumen.com/blog/en-us/canto-incognito-tracking-the-poellm-malware
+        publisher: Lumen Black Lotus Labs
+        date: 2026-10-07
+      - title: "LiteLLM: Authenticated command execution via MCP stdio test endpoints"
+        url: https://github.com/advisories/GHSA-v4p8-mg3p-g94g
+        publisher: GitHub Advisory Database
+        date: 2026-04-21
+      - title: "Cryptomining botnet hides C2 addresses in GitHub poem, infects over 3,400 servers"
+        url: https://www.helpnetsecurity.com/2026/10/08/poellm-malware-github-poem-ai-servers/
+        publisher: Help Net Security
+        date: 2026-10-08
+sources:
+  - title: "The Rise of LLMJacking: How Threat Actors Monetize Compromised Cloud and Model Resources"
+    url: https://cloud.google.com/blog/topics/threat-intelligence/llmjacking-monetizing-compromised-cloud-models
+    publisher: Google Threat Intelligence Group / Mandiant
+    date: 2026-11-02
+  - title: "Google Warns LLMjacking Attacks Are Costing Some Enterprises Up to $1 Million in Cloud Charges"
+    url: https://thehackernews.com/2026/11/google-warns-llmjacking-attacks-are.html
+    publisher: The Hacker News
+    date: 2026-11-03
+  - title: "LiteLLM has a sandbox escape in custom-code guardrail"
+    url: https://github.com/advisories/GHSA-wxxx-gvqv-xp7p
+    publisher: GitHub Advisory Database
+    date: 2026-05-07
+  - title: "CISA Adds Four Known Exploited Vulnerabilities to Catalog"
+    url: https://www.cisa.gov/news-events/alerts/2026/11/18/cisa-adds-four-known-exploited-vulnerabilities-catalog
+    publisher: CISA
+    date: 2026-11-18
+  - title: "CISA Warns of 4 Exploited Flaws Linked to Ransomware, Cryptomining, and LLMjacking Attacks"
+    url: https://thehackernews.com/2026/11/cisa-warns-of-4-exploited-flaws-linked.html
+    publisher: The Hacker News
+    date: 2026-11-19

@@ -1,0 +1,212 @@
+id: near-ai-sglang
+title: "NEAR AI: an SGLang flaw opens a confidential inference server, and the systems behind it"
+subtitle: >
+  An attacker ran code through a flaw in SGLang on one of NEAR AI's inference servers. Inside the
+  enclave, requests in processing were within reach; from the server, the attacker reached a
+  deprecated product's back end and a legacy agents deployment that ran outside the enclave.
+date: 2026-11
+dateRange: 8–9 November 2026 (disclosed 9 November)
+category: exposed
+perspective: target
+# NEAR AI ran the serving engine itself, as anyone self-hosting open-weights models does: the flaw was in the inference runtime, and the damage came from what that runtime could reach.
+archetype: archSelfHostedInference
+caveat: >
+  NEAR AI's report is the only first-hand account, and the press coverage restates it. NEAR AI
+  has not named the SGLang flaw by CVE, the affected versions, how the attacker reached the
+  server or when access began (The Hacker News, 10 November).
+breaks:
+  - control: D3-NI
+    how: "An inference server that can reach only the gateway in front of it and its model storage has no route to another product's back end or to a legacy agents deployment."
+  - control: D3-AVE
+    how: "An inventory of every engine instance, and of the deprecated services still running beside them, lets one fix reach the whole fleet and shows what should already have been switched off."
+  - control: D3-CH
+    how: "Customer API keys live in a vault, never in logs, so a reachable log is not a reachable key."
+  - control: AML.M0024
+    how: "Logs of requests and agent runs are a corpus of everything asked; kept apart from the serving tier under their own access rules, they are not one hop from the engine."
+summary:
+  - >
+    NEAR AI serves open-weights models with SGLang, the open-source inference engine, and offers
+    a confidential mode in which requests are processed inside a trusted execution environment
+    (TEE), with SGLang running inside it. On 9 November it reported that an unauthorized party
+    had exploited a remote code execution flaw in SGLang to run code on one inference server and,
+    from there, reach its infrastructure.
+  - >
+    The enclave did not help, and NEAR AI says why: confidential computing protects data from the
+    operator and the host, not from a vulnerability in the software running inside the
+    environment. The attacker could access requests in processing on that server, confidential
+    ones included. From the server it reached an internal system behind Private Chat, a product
+    already deprecated, and took account details for about 100 users, then 18 agents on a legacy
+    NEAR AI Agents deployment that ran outside the TEE. Two customers' NEAR AI Cloud API keys were
+    exposed in logs. NEAR AI revoked all sessions, administrative credentials and agent tokens,
+    took Private Chat offline and deployed a fix for the flaw across all its inference servers.
+  - >
+    For anyone serving models themselves the lesson is that the engine is third-party code with
+    flaws of its own, and that what the server can reach decides the damage. Brave's Leo
+    assistant runs chats with the GLM 5.3 Flash model inside a TEE operated by NEAR AI; NEAR AI
+    has not said whether the affected server handled any of them (The Hacker News).
+risks:
+  - riskInsecureIntegratedComponent
+  - riskSensitiveDataDisclosure
+steps:
+  - n: 1
+    title: A flaw in the serving engine gives code execution
+    phase: introduced
+    narrative: >
+      An unauthorized party exploited a remote code execution vulnerability in SGLang, the
+      inference engine on NEAR AI's servers, and gained code execution on one inference server.
+      NEAR AI has not said how the attacker reached the engine or which SGLang versions were
+      affected. It reported the flaw to the SGLang project.
+    path: [runtime]
+    risks:
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "NEAR AI Security Incident Report: SGLang Vulnerability"
+        url: https://near.ai/blog/security-incident-report-sglang-vulnerability
+        publisher: NEAR AI
+        date: 2026-11-09
+      - title: "SGLang RCE Exploit Breaches NEAR AI, Steals Data From 18 Agents and About 100 Users"
+        url: https://thehackernews.com/2026/11/sglang-rce-exploit-breaches-near-ai.html
+        publisher: The Hacker News
+        date: 2026-11-10
+  - n: 2
+    title: Inside the enclave, requests in processing are within reach
+    phase: exposed
+    narrative: >
+      Confidential-mode requests are processed inside the TEE, and SGLang runs inside it, so code
+      running in the engine ran inside the enclave too. NEAR AI says the attacker could access
+      requests in processing on that server, including confidential ones, and that on 8 November
+      it could have observed user requests being processed there. In NEAR AI's words,
+      confidential computing protects data from the operator and the host; it does not protect
+      against a vulnerability in the software running inside the environment.
+    path: [api->runtime, runtime]
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "NEAR AI Security Incident Report: SGLang Vulnerability"
+        url: https://near.ai/blog/security-incident-report-sglang-vulnerability
+        publisher: NEAR AI
+        date: 2026-11-09
+      - title: "SGLang RCE Exploit Breaches NEAR AI, Steals Data From 18 Agents and About 100 Users"
+        url: https://thehackernews.com/2026/11/sglang-rce-exploit-breaches-near-ai.html
+        publisher: The Hacker News
+        date: 2026-11-10
+  - n: 3
+    title: From the server to a deprecated product's back end
+    phase: exposed
+    narrative: >
+      The inference server was also a way into the rest of NEAR AI's infrastructure. The attacker
+      reached an internal system behind Private Chat, a product NEAR AI had already deprecated,
+      and downloaded account details for approximately 100 users: email addresses and names, and
+      for some accounts plan and balance information. NEAR AI found no indication that stored
+      Private Chat conversations or uploaded files were accessed.
+    path: [runtime, consumers]
+    risks:
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "NEAR AI Security Incident Report: SGLang Vulnerability"
+        url: https://near.ai/blog/security-incident-report-sglang-vulnerability
+        publisher: NEAR AI
+        date: 2026-11-09
+  - n: 4
+    title: A legacy agents deployment, outside the enclave
+    phase: exposed
+    narrative: >
+      The attacker also reached 18 agents on a legacy deployment of NEAR AI Agents, which did not
+      run in the TEE, and retrieved their chat history, settings and logs. Two NEAR AI Cloud
+      customers had API keys exposed in logs; NEAR AI has revoked both, and contacted the 18
+      agent owners individually.
+    path: [consumers]
+    risks:
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "NEAR AI Security Incident Report: SGLang Vulnerability"
+        url: https://near.ai/blog/security-incident-report-sglang-vulnerability
+        publisher: NEAR AI
+        date: 2026-11-09
+      - title: "SGLang RCE Exploit Breaches NEAR AI, Steals Data From 18 Agents and About 100 Users"
+        url: https://thehackernews.com/2026/11/sglang-rce-exploit-breaches-near-ai.html
+        publisher: The Hacker News
+        date: 2026-11-10
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Treat the serving engine as third-party code that will have flaws, whatever encloses it:
+      the TEE guards against the operator and the host, and this flaw was inside it. Give
+      inference servers a network
+      that reaches the gateway in front and the model storage behind and nothing else, so code
+      running in the engine has nowhere to go. Keep an inventory of every engine instance and
+      version, so a fix reaches every server, as NEAR AI's did, and retire deprecated
+      products and legacy deployments rather than leaving them reachable. Keep customer keys in
+      a vault and out of logs, and keep logs apart from the serving tier under their own access
+      rules.
+    path: [gateway->api, api->runtime, storage->runtime, govSupplyChain, govSecrets, govObservability]
+    sources:
+      - title: "NEAR AI Security Incident Report: SGLang Vulnerability"
+        url: https://near.ai/blog/security-incident-report-sglang-vulnerability
+        publisher: NEAR AI
+        date: 2026-11-09
+alsoSeen:
+  - title: "GPUStack: requests taken for loopback get admin, and a custom backend runs a reverse shell"
+    date: November 2026
+    note: >
+      GPUStack below 2.2.0 made any request it took to come from loopback (through a same-host
+      reverse proxy, or with a forged `X-GPUStack-Real-IP` header) the built-in administrator
+      while `force_auth_localhost` was off, its default, and an administrator's custom inference
+      backend runs code on the GPU workers. The advisory records exploitation against a v2.1.1
+      deployment with backends running reverse shells; CISA added CVE-2026-102895 to its
+      exploited list on 9 November.
+    sources:
+      - title: "Authentication bypass via trusted loopback source (reverse-proxy TCP peer or X-GPUStack-Real-IP header) grants unauthenticated admin"
+        url: https://github.com/gpustack/gpustack/security/advisories/GHSA-gj9m-f8ph-pmhr
+        publisher: GPUStack
+        date: 2026-07-31
+      - title: "CISA Adds Four Known Exploited Vulnerabilities to Catalog"
+        url: https://www.cisa.gov/news-events/alerts/2026/11/09/cisa-adds-four-known-exploited-vulnerabilities-catalog
+        publisher: CISA
+        date: 2026-11-09
+  - title: "Phala: a legacy service and loopback-trusted management interfaces hand over an inference VM"
+    date: November 2026
+    note: >
+      Phala says an attacker chained a legacy internet-facing service with management interfaces
+      that relied on loopback access for trust and did not independently authenticate callers,
+      took control of the inference VM serving DeepSeek V4 Flash 0731, and could see in-flight
+      request data. It treats requests from 21 October to 05:35 UTC on 8 November as exposed, and
+      confirmed misuse of some stolen credentials belonging to one tenant.
+    sources:
+      - title: "Phala November Preliminary Incident Report"
+        url: https://phala.com/posts/phala-november-preliminary-incident-report
+        publisher: Phala
+        date: 2026-11-10
+  - title: "Canary prompts catch three AI hosting providers copying requests"
+    date: November 2026
+    note: >
+      Dragos sent nearly two million prompts, each carrying a unique AWS key, DNS name and URL,
+      to AI providers from July to November 2026 and found attackers stealing data from three
+      hosting providers, the earliest from mid-July; at the largest, requests were copied at the
+      provider's front door, and bait keys were tested within hours. OpenRouter then off-boarded
+      three providers and removed 125 endpoints from Zero Data Retention eligibility; neither has
+      said publicly whether they are the same three.
+    sources:
+      - title: "Three breaches, endless leaks: Your AI supply chain needs canaries"
+        url: https://www.dragos.com/blog/ai-supply-chain-security-canary-tokens
+        publisher: Dragos
+        date: 2026-11-19
+      - title: "Data Processing Incidents on Inference Providers"
+        url: https://openrouter.ai/blog/announcements/data-processing-incidents-on-inference-providers/
+        publisher: OpenRouter
+        date: 2026-11-22
+      - title: "OpenRouter Drops 3 Providers After Researchers Catch Months of Prompt Theft at AI Hosting Firms"
+        url: https://thehackernews.com/2026/11/openrouter-drops-3-providers-after.html
+        publisher: The Hacker News
+        date: 2026-11-22
+sources:
+  - title: "NEAR AI Security Incident Report: SGLang Vulnerability"
+    url: https://near.ai/blog/security-incident-report-sglang-vulnerability
+    publisher: NEAR AI
+    date: 2026-11-09
+  - title: "SGLang RCE Exploit Breaches NEAR AI, Steals Data From 18 Agents and About 100 Users"
+    url: https://thehackernews.com/2026/11/sglang-rce-exploit-breaches-near-ai.html
+    publisher: The Hacker News
+    date: 2026-11-10
