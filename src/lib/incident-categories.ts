@@ -1,37 +1,53 @@
 /**
- * The fixed attack types an incident is filed under, one per incident. The list is short on
- * purpose: it is the one filter on the Incidents page, so it has to stay readable at a glance
- * however many incidents are added. A new incident that fits none of these is a reason to
- * revisit the list, not to add a seventh label quietly.
+ * The incident patterns, as the filters and chips that file deep dives and feed items under them
+ * read them. The incident patterns (data/incident-patterns/) are the source of truth: their id is
+ * the `category` every deep dive and feed item carries, their name the chip's label and their
+ * one-liner its hover text. Only the colour is set here, one per incident pattern, so a chip
+ * reads the same on every page; a new incident pattern with no colour yet is drawn in grey
+ * until it is given one.
  */
-export const INCIDENT_CATEGORIES = [
-  { id: "promptInjection", label: "Prompt injection", blurb: "Untrusted content steers the agent." },
-  { id: "supplyChain", label: "Supply chain", blurb: "Poisoned tools, packages, models, releases or instruction files." },
-  { id: "identity", label: "Identity & credentials", blurb: "Stolen tokens and keys, over-broad integrations, unapproved AI." },
-  { id: "exposed", label: "Exposed by default", blurb: "Agents, gateways and apps left open to anyone who finds them." },
-  { id: "breakout", label: "Agent breaks out", blurb: "An agent escapes its sandbox or evaluation, or acts beyond its brief." },
-  { id: "aiAttacker", label: "AI as the attacker", blurb: "An agent runs the intrusion itself." },
-] as const;
+import { incidentPatterns } from "./data";
 
-export type IncidentCategory = (typeof INCIDENT_CATEGORIES)[number]["id"];
+/** Each incident pattern's colour: a saturated dot and rail, and a pale wash behind its card. */
+export interface CategoryColour {
+  /** The dot on a chip, the rail on a card. */
+  rail: string;
+  /** A pale wash, for a card's top or a chip that is on. */
+  fill: string;
+}
 
-export const categoryById = new Map<string, (typeof INCIDENT_CATEGORIES)[number]>(INCIDENT_CATEGORIES.map((c) => [c.id, c]));
+export const CATEGORY_COLOURS: Record<string, CategoryColour> = {
+  promptInjection: { rail: "#c2456a", fill: "#fbe8ed" },
+  supplyChain: { rail: "#a8781f", fill: "#f9f0d8" },
+  identity: { rail: "#4a6cd4", fill: "#e8efff" },
+  exposed: { rail: "#d4622a", fill: "#fdeadf" },
+  exploitedSoftware: { rail: "#0f7c8c", fill: "#dff3f5" },
+  aiMadeExposure: { rail: "#8a5cc8", fill: "#f0e9fa" },
+  breakout: { rail: "#2f8a5b", fill: "#e4f3ea" },
+  aiAttacker: { rail: "#5b6474", fill: "#eceef2" },
+};
 
-/**
- * How well a feed item is established, in the words the feed shows. The feed sorts on date
- * alone; this is a tag on each item and one of its filters, never a ranking.
- */
-export const FEED_EVIDENCE = [
-  { id: "exploited", label: "In the wild", blurb: "Exploited against real systems." },
-  { id: "confirmed", label: "Confirmed", blurb: "Confirmed by the vendor, the victim or an agency." },
-  { id: "demonstrated", label: "Demonstrated", blurb: "Shown against a real product, then patched or given a CVE." },
-  { id: "reported", label: "Single report", blurb: "One report, not confirmed by anyone else." },
-] as const;
+/** Grey, for an incident pattern not yet given a colour of its own. */
+export const NO_COLOUR: CategoryColour = { rail: "#98a2b3", fill: "#f2f4f7" };
 
-export type FeedEvidence = (typeof FEED_EVIDENCE)[number]["id"];
+export const categoryColour = (id: string): CategoryColour => CATEGORY_COLOURS[id] ?? NO_COLOUR;
 
-export const evidenceById = new Map<string, (typeof FEED_EVIDENCE)[number]>(FEED_EVIDENCE.map((e) => [e.id, e]));
+/** An incident pattern as a filter or chip shows it. */
+export interface IncidentCategoryEntry {
+  id: string;
+  slug: string;
+  label: string;
+  blurb: string;
+  colour: CategoryColour;
+}
 
-/** "target": an AI system was attacked. "weapon": an AI agent ran the attack. */
-export const INCIDENT_PERSPECTIVES = ["target", "weapon"] as const;
-export type IncidentPerspective = (typeof INCIDENT_PERSPECTIVES)[number];
+/** Every incident pattern, by `order`. */
+export const INCIDENT_CATEGORIES: IncidentCategoryEntry[] = incidentPatterns.map((p) => ({
+  id: p.id,
+  slug: p.slug,
+  label: p.name,
+  blurb: p.short,
+  colour: categoryColour(p.id),
+}));
+
+export const categoryById = new Map<string, IncidentCategoryEntry>(INCIDENT_CATEGORIES.map((c) => [c.id, c]));

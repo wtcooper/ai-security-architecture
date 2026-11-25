@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * One incident, walked step by step across its reference architecture. The step reads on the
+ * One deep dive: an incident, filed under its incident pattern (the breadcrumb and the chip lead
+ * there), walked step by step across the pattern it happened on. The step reads on the
  * left, the drawing lights where it lands on the right, and the last step turns the drawing
  * back to its control pins: the few that would have broken the chain, each a link to its
  * row on the architecture's Enable tab. Background, related incidents and sources sit below,
@@ -16,8 +17,9 @@ import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawi
 import { archetypeById, controlName, feed, feedForIncident, incidentById, riskCode, riskTitle } from "@/lib/data";
 import { categoryById } from "@/lib/incident-categories";
 import type { FeedItem, Incident, IncidentSource, Phase } from "@/lib/types";
+import { CategoryChip, IncidentsBreadcrumb } from "./chrome";
 import { stepOverlay } from "./model";
-import { feedHref, patternHref, riskHref } from "@/lib/routes";
+import { feedHref, incidentPatternHref, patternHref, riskHref } from "@/lib/routes";
 
 /** Authored text marks file names and settings with backticks; show them as code, not as ticks. */
 function Text({ children }: { children: string }) {
@@ -70,19 +72,18 @@ export function IncidentWalkthrough({ id, feed: items = feed }: { id: string; /*
 
   return (
     <div className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6">
-      <Link href="/incidents" className="text-[13px] font-semibold text-introduced hover:underline">
-        ← All incidents
-      </Link>
+      <IncidentsBreadcrumb
+        trail={[
+          { label: categoryById.get(incident.category)?.label ?? incident.category, href: incidentPatternHref(incident.category) },
+          { label: incident.title },
+        ]}
+      />
 
       <header className="mt-3 max-w-4xl">
         <div className="flex flex-wrap items-center gap-2">
           <span className="ident text-ink-3">{incident.dateRange}</span>
-          <Link
-            href={`/incidents?type=${incident.category}`}
-            className="rounded-full border border-line bg-mist px-2.5 py-[2px] text-[11.5px] font-semibold text-ink-2 hover:underline"
-          >
-            {categoryById.get(incident.category)?.label}
-          </Link>
+          <CategoryChip category={incident.category} link />
+          <span className="eyebrow">Deep dive</span>
           <PerspectiveTag perspective={incident.perspective} />
         </div>
         <h1 className="display mt-2 text-[26px] font-bold leading-tight text-ink sm:text-[30px]">{incident.title}</h1>

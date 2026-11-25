@@ -3,11 +3,10 @@ import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
-import { IncidentList } from "../src/components/incidents/IncidentList";
+import { IncidentPatternsIndex } from "../src/components/incidents/IncidentPatternsIndex";
 import { IncidentWalkthrough } from "../src/components/incidents/IncidentWalkthrough";
 import { incidentsNewestFirst } from "../src/components/incidents/model";
 import { archetypeById, controlName, incidents } from "../src/lib/data";
-import { INCIDENT_CATEGORIES } from "../src/lib/incident-categories";
 
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
 const render = (path: string, query: string, node: React.ReactNode) =>
@@ -18,24 +17,14 @@ const render = (path: string, query: string, node: React.ReactNode) =>
       </PathnameContext.Provider>
     </AppRouterContext.Provider>,
   );
-// The switch under the heading links to the feed, which is not a row of the list.
-const rows = (html: string) => [...html.matchAll(/href="\/incidents\/([^"?]+)"/g)].map((m) => m[1]).filter((id) => id !== "feed");
 
-test("the list shows every incident once, newest first", () => {
-  const html = render("/incidents", "", <IncidentList />);
-  assert.deepEqual(rows(html), incidentsNewestFirst().map((i) => i.id));
+test("the Incidents index lists every deep dive once, newest first", () => {
+  const html = render("/incidents", "", <IncidentPatternsIndex />);
+  const rows = [...html.matchAll(/data-deep-dive="([^"]+)"><a [^>]*href="\/incidents\/([^"?]+)"/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(rows.map((r) => r[0]), incidentsNewestFirst().map((i) => i.id));
+  for (const [id, href] of rows) assert.equal(href, id);
   const dates = incidentsNewestFirst().map((i) => i.date);
   assert.deepEqual(dates, [...dates].sort().reverse());
-});
-
-test("each attack type and architecture filter narrows the list to its incidents", () => {
-  for (const c of INCIDENT_CATEGORIES) {
-    const want = incidentsNewestFirst().filter((i) => i.category === c.id).map((i) => i.id);
-    assert.deepEqual(rows(render("/incidents", `type=${c.id}`, <IncidentList />)), want, c.id);
-  }
-  const arch = incidents[0].archetype;
-  const want = incidentsNewestFirst().filter((i) => i.archetype === arch).map((i) => i.id);
-  assert.deepEqual(rows(render("/incidents", `arch=${arch}`, <IncidentList />)), want);
 });
 
 test("a walk-through opens on step 1, and its last step names each break and links it to its Enable row", () => {

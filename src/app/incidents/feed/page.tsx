@@ -1,16 +1,18 @@
 import { Suspense } from "react";
-import { IncidentFeed } from "@/components/incidents/IncidentFeed";
+import { LegacyRedirect } from "@/components/shell/LegacyRedirect";
+import { ROUTES } from "@/lib/routes";
+
+export const metadata = { title: "Moved · AI Security Architecture" };
 
 /**
- * A static segment beside incidents/[id]: Next.js matches it before the dynamic one, and the
- * build refuses an incident whose id is "feed", so the two never claim the same address.
+ * The feed moved to /feed/. A static segment beside incidents/[id]: Next.js matches it before the
+ * dynamic one, and the build refuses a deep dive id or incident pattern slug of "feed", so the
+ * two never claim the same address. The query (filters) and the anchor (an item) are kept.
  */
-export const metadata = { title: "Incident feed · AI Security Architecture" };
-
-export default function IncidentFeedPage() {
+export default function Page() {
   return (
     <Suspense>
-      <IncidentFeed />
+      <LegacyRedirect kind="path" to={ROUTES.feed} />
     </Suspense>
   );
 }

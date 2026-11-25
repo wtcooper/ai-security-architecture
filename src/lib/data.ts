@@ -1,5 +1,6 @@
 import raw from "@/data/generated/dataset.json";
 import { bandFor, type BandId } from "./bands";
+import { deriveIncidentPattern } from "./incident-patterns";
 import { ACTORS, actorById } from "./map-layout";
 import { DISPLAY_NAME } from "./naming";
 import type {
@@ -9,6 +10,8 @@ import type {
   Control,
   Dataset,
   FeedItem,
+  IncidentPattern,
+  IncidentPatternAuthored,
   Persona,
   Risk,
   RiskOverlay,
@@ -84,11 +87,25 @@ export const feedById = index(feed);
 /** The feed items that would replay on this pattern, newest first. */
 export const feedForPattern = (archetypeId: string, items: FeedItem[] = feed): FeedItem[] => items.filter((f) => f.patterns.includes(archetypeId));
 
-/** The feed items a catalogue incident tells, as its own walk-through or as one of its "also seen" entries. */
+/** The feed items a deep dive tells, as its own walk-through or as one of its "also seen" entries. */
 export const feedForIncident = (incidentId: string, items: FeedItem[] = feed): FeedItem[] => items.filter((f) => f.incident === incidentId);
 
-/** The feed items filed under one attack type. */
+/** The feed items filed under one incident pattern. */
 export const feedForCategory = (category: string, items: FeedItem[] = feed): FeedItem[] => items.filter((f) => f.category === category);
+
+// --- Incident patterns (data/incident-patterns/) ----------------------------------------------
+
+/** Every incident pattern, by `order`. A dataset built before they existed reads as none. */
+export const incidentPatterns: IncidentPattern[] = dataset.incidentPatterns ?? [];
+export const incidentPatternById = index(incidentPatterns);
+export const incidentPatternBySlug = new Map(incidentPatterns.map((p) => [p.slug, p]));
+
+/**
+ * An incident pattern with its deep dives, feed items and landings worked out from this feed:
+ * the dataset's own, unless a test passes its own. A pattern given as a fixture is derived too.
+ */
+export const incidentPatternView = (pattern: IncidentPatternAuthored, items: FeedItem[] = feed): IncidentPattern =>
+  items === feed && "landsOn" in pattern ? (pattern as IncidentPattern) : deriveIncidentPattern(pattern, incidents, items, archetypes.map((a) => a.id));
 
 const vocab = new Map(
   [...lifecycleStages, ...impactTypes, ...actorAccessLevels].map((v) => [v.id, v.title]),

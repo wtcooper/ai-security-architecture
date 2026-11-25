@@ -6,7 +6,10 @@
  * (one entry per paragraph); the build step normalises them to Paragraph[].
  */
 
-import type { FeedEvidence, IncidentCategory, IncidentPerspective } from "./incident-categories";
+import type { FeedEvidence, FeedFit, IncidentPerspective } from "./feed-vocabulary";
+
+/** An incident pattern's id (data/incident-patterns/): the `category` every deep dive and feed item carries. */
+export type IncidentCategory = string;
 
 export type Phase = "introduced" | "exposed" | "mitigated";
 export const PHASES: Phase[] = ["introduced", "exposed", "mitigated"];
@@ -1405,7 +1408,7 @@ export interface Incident {
   /** "YYYY-MM" when it last came to light (the latest event or disclosure); the list sorts on it, newest first. */
   date: string;
   dateRange: string;
-  /** One of INCIDENT_CATEGORIES — the attack type the list files it under. */
+  /** The incident pattern it is an exemplar of: an id in data/incident-patterns/. */
   category: IncidentCategory;
   /** "target" = the AI system was attacked. "weapon" = an AI agent ran the attack. */
   perspective: "target" | "weapon";
@@ -1430,8 +1433,8 @@ export interface Incident {
  * ------------------------------------------------------------------ The incident feed
  *
  * Every real AI security incident tracked, in two or three lines each (data/feed/<YYYY-MM>.yaml).
- * The incident files above are the catalogue: the few that teach something new, told step by
- * step. A feed item points at the catalogue incident that tells it, when there is one.
+ * The incident files above are the deep dives: the few that teach something new, told step by
+ * step. A feed item points at the deep dive that tells it, when there is one.
  */
 export interface FeedItem {
   /** Unique across every feed file; kebab-case. Also the item's anchor on the feed page. */
@@ -1442,16 +1445,94 @@ export interface FeedItem {
   title: string;
   /** At most 420 characters: one to three plain past-tense sentences. */
   summary: string;
+  /** The incident pattern it is filed under: an id in data/incident-patterns/. */
   category: IncidentCategory;
   perspective: IncidentPerspective;
   evidence: FeedEvidence;
+  /** Set when the item only loosely fits its incident pattern; `fitNote` says why. */
+  fit?: FeedFit;
+  /** At most 160 characters: what about it the incident pattern does not cover. */
+  fitNote?: string;
   /** Zero to three patterns it would replay on. */
   patterns: string[];
-  /** The catalogue incident that tells it, as its own file or as one of its "also seen" entries. */
+  /** The deep dive that tells it, as its own file or as one of its "also seen" entries. */
   incident?: string;
   cves?: string[];
   /** One to three, the primary first. */
   sources: IncidentSource[];
+}
+
+/**
+ * ------------------------------------------------------------------ Incident patterns
+ *
+ * How AI systems are being attacked, clustered from the real incidents
+ * (data/incident-patterns/<NN>-<slug>.yaml). Every deep dive and feed item carries one as its
+ * `category`. The authored part says what it is and what stops it; its deep dives, feed items and
+ * the patterns it lands on are derived by the build, never written.
+ */
+export interface IncidentPatternStop {
+  /** A control in the catalogue (a MITRE mitigation or a cap-* specialisation). */
+  control: string;
+  /** At most 160 characters: where it bites for this incident pattern. */
+  how: string;
+}
+
+export interface IncidentPatternContrast {
+  /** The id of the nearest incident pattern. */
+  pattern: string;
+  /** At most 160 characters: the line between the two. */
+  why: string;
+}
+
+/** A pattern an incident pattern's incidents replay on, and how often. */
+export interface IncidentPatternLanding {
+  /** The pattern's id. */
+  pattern: string;
+  /** Distinct incidents: feed items naming it, and deep dives on it that no feed item of theirs already counts. */
+  count: number;
+  /** Feed items that name it. */
+  feed: number;
+  /** Deep dives replayed on it. */
+  deepDives: number;
+}
+
+export interface IncidentPatternAuthored {
+  /** camelCase; the key feed items and deep dives carry in `category`. */
+  id: string;
+  /** kebab-case; its address, /incidents/<slug>/. Never a deep dive's id. */
+  slug: string;
+  order: number;
+  /** At most 60 characters. */
+  name: string;
+  /** At most 140 characters: one line, what happens. */
+  short: string;
+  /** "YYYY-MM-DD": when the incident pattern was added. */
+  since: string;
+  /** At most 700 characters: what it is, why it happens to AI systems, what is at stake. */
+  overview?: string;
+  /** Three to five steps, each at most 160 characters: the chain in general terms. */
+  howItWorks?: string[];
+  /** Two to four, each at most 140 characters: what it looks like when it happens. */
+  signs?: string[];
+  /** Two to six controls from the catalogue. */
+  stops?: IncidentPatternStop[];
+  /** Risk ids. */
+  risks?: string[];
+  /** OWASP ids, as the threat models write them (LLM01:2026, ASI01, MCP01:2025). */
+  owasp?: string[];
+  /** MITRE ATLAS technique ids from the vendored release. */
+  atlas?: string[];
+  /** One to three: the nearest incident patterns and the line between them. */
+  notSameAs?: IncidentPatternContrast[];
+}
+
+export interface IncidentPattern extends IncidentPatternAuthored {
+  /** Derived: the deep dives filed under it, newest first. */
+  deepDives: string[];
+  /** Derived: the feed items filed under it, newest first. */
+  feed: string[];
+  /** Derived: the patterns it lands on, most often first. */
+  landsOn: IncidentPatternLanding[];
 }
 
 /**
@@ -1568,9 +1649,12 @@ export interface Dataset {
   impactTypes: Vocabulary[];
   actorAccessLevels: Vocabulary[];
   overlays: RiskOverlay[];
+  /** The deep dives (data/incidents/), in file order. */
   incidents: Incident[];
   /** Every feed item from data/feed/, newest first; empty when there are no feed files. */
   feed: FeedItem[];
+  /** The incident patterns (data/incident-patterns/), by `order`, with what is derived from the deep dives and the feed. */
+  incidentPatterns: IncidentPattern[];
   surfaces: Surface[];
   /** Authored specialisations of MITRE mitigations, also merged into `mitigations`. */
   specializations: Mitigation[];

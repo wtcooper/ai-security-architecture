@@ -5,7 +5,7 @@
  * export, so there are no server redirects: each retired path keeps a page that renders this,
  * which reads the old query and anchor and replaces the address with the new one.
  *
- *   path       the same query and anchor at a new path (/risks -> /reference/risks)
+ *   path       the same query and anchor at a new path (/risks -> /reference/risks, /incidents/feed -> /feed)
  *   pattern    /reference?archetype=…&tab=…&tool=… and /enable?… -> /patterns/<slug>/
  *   catalogue  /capabilities?capability=… -> /controls?control=…
  */
@@ -28,6 +28,11 @@ export function legacyPatternTarget(params: URLSearchParams, hash = "", defaultT
   const control = hash.match(/^#(?:capability|control)-(.+)$/)?.[1];
   const tab = product || control ? "enable" : linked && PATTERN_TABS.includes(linked) ? linked : defaultTab;
   return patternHref(archetypeId, { tab, tool: product, control });
+}
+
+/** Where an old path goes now: the same query and anchor at the new path. Exported for the tests. */
+export function legacyPathTarget(to: string, params: URLSearchParams, hash = ""): string {
+  return `${to}${params.size ? `?${params}` : ""}${hash}`;
 }
 
 /** Where an old catalogue link goes now. */
@@ -58,7 +63,7 @@ export function LegacyRedirect({
   useEffect(() => {
     const query = new URLSearchParams(params.toString());
     const hash = window.location.hash;
-    if (kind === "path") router.replace(`${to}${query.size ? `?${query}` : ""}${hash}`);
+    if (kind === "path") router.replace(legacyPathTarget(to ?? "/", query, hash));
     else if (kind === "catalogue") router.replace(legacyCatalogueTarget(query));
     else {
       const target = legacyPatternTarget(query, hash, defaultTab);

@@ -29,7 +29,7 @@ export function SiteFooter() {
         </span>
         <span>
           {meta.counts.archetypes} patterns · {meta.counts.mitigations} controls · {meta.counts.tools} tools ·{" "}
-          {meta.counts.incidents} incidents · {meta.counts.risks} risks
+          {meta.counts.incidents} deep dives · {meta.counts.risks} risks
         </span>
         <span
           className="rounded-full border px-2 py-[2px] text-[10.5px] font-semibold"

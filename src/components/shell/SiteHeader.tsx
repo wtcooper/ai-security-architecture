@@ -6,18 +6,19 @@ import { usePathname } from "next/navigation";
 import { SearchPalette } from "./SearchPalette";
 
 /**
- * Patterns lead: what a reader is enabling, then the control catalogue behind them and the
- * incidents that show why. A tool has no page of its own: it is reached on its pattern. The risk and framework material shares one
- * Reference menu.
+ * Patterns lead: what a reader is enabling, then the control catalogue behind them, the incident
+ * patterns that show why and the feed, reviewed daily. A tool has no page of its own: it is
+ * reached on its pattern. The risk and framework material shares one Reference menu.
  */
 type NavItem =
   | { href: string; label: string }
   | { label: string; children: { href: string; label: string }[] };
 
-const NAV: NavItem[] = [
+export const NAV: NavItem[] = [
   { href: "/patterns", label: "Patterns" },
   { href: "/controls", label: "Controls" },
   { href: "/incidents", label: "Incidents" },
+  { href: "/feed", label: "Feed" },
   {
     label: "Reference",
     children: [

@@ -1,10 +1,11 @@
 /**
  * Every internal address in one place. Patterns are the front door (`/patterns/<slug>/`), the
  * control catalogue sits beside them (a tool is reached on its pattern), and the risk and framework material
- * lives under `/reference/`. Old addresses are forwarded by `LegacyRedirect`, which uses the
+ * lives under `/reference/`. Incident patterns and deep dives share `/incidents/<id>/` (a slug
+ * or a deep dive's id, never both), and the feed is `/feed/`. Old addresses are forwarded by `LegacyRedirect`, which uses the
  * same helpers, so a link and its redirect can never disagree.
  */
-import { archetypeById, toolById } from "@/lib/data";
+import { archetypeById, incidentPatternById, toolById } from "@/lib/data";
 
 /**
  * The tabs of a pattern page, in their order. A page opens on How it works ("overview"), which is
@@ -19,7 +20,8 @@ export const ROUTES = {
   patterns: "/patterns",
   controls: "/controls",
   incidents: "/incidents",
-  incidentFeed: "/incidents/feed",
+  /** The feed; its old address, /incidents/feed/, forwards here. */
+  feed: "/feed",
   reference: "/reference",
   riskMap: "/reference/risk-map",
   risks: "/reference/risks",
@@ -61,9 +63,16 @@ export const riskHref = (id: string) => `${ROUTES.risks}?risk=${id}`;
 export const componentHref = (id: string) => `${ROUTES.components}?component=${id}`;
 export const personaHref = (id: string) => `${ROUTES.personas}?persona=${id}`;
 export const riskMapHref = (riskId: string, phase: string) => `${ROUTES.riskMap}?risk=${riskId}&phase=${phase}`;
+/** A deep dive's page. Deep dives and incident patterns share /incidents/<id>/; the build keeps them apart. */
 export const incidentHref = (id: string) => `${ROUTES.incidents}/${id}`;
 
-/** The feed's filters, as its address carries them. `incident` narrows it to the reports one catalogue incident tells. */
+/** An incident pattern's page, by its id (the `category` key); the index when there is no such incident pattern. */
+export const incidentPatternHref = (id: string) => {
+  const pattern = incidentPatternById.get(id);
+  return pattern ? `${ROUTES.incidents}/${pattern.slug}` : ROUTES.incidents;
+};
+
+/** The feed's filters, as its address carries them. `incident` narrows it to the reports one deep dive tells. */
 export interface FeedFilters {
   category?: string | null;
   pattern?: string | null;
@@ -85,7 +94,7 @@ export function feedQuery(filters: FeedFilters = {}): string {
 /** The feed, optionally filtered, optionally with one item in view. */
 export function feedHref(filters: FeedFilters = {}, itemId?: string): string {
   const query = feedQuery(filters);
-  return `${ROUTES.incidentFeed}${query ? `?${query}` : ""}${itemId ? `#${itemId}` : ""}`;
+  return `${ROUTES.feed}${query ? `?${query}` : ""}${itemId ? `#${itemId}` : ""}`;
 }
 /** A cloud's page: the patterns built on it and its own control options. */
 export const cloudHref = (cloudId: string) => `${ROUTES.clouds}?cloud=${cloudSlug(cloudId)}`;

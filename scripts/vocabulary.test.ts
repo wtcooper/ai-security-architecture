@@ -42,10 +42,25 @@ test("no retired word reaches the page from the interface code", () => {
   assert.deepEqual(offenders, []);
 });
 
-test("no pattern, guidance, incident or feed prose still says archetype", () => {
+test("the interface says incident pattern for the kind of attack, never attack type or catalogue incident", () => {
+  const offenders: string[] = [];
+  for (const file of walk("src")) {
+    if (file.includes("data/generated") || file.endsWith("lib/types.ts")) continue;
+    for (const text of readerText(readFileSync(file, "utf8"))) if (/attack types?\b|catalogue incidents?/i.test(text)) offenders.push(`${file}: ${text.slice(0, 90)}`);
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test("no pattern, guidance, incident pattern, deep dive or feed prose still says archetype", () => {
   const prose = (value: unknown): string[] =>
     typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(prose) : value && typeof value === "object" ? Object.entries(value).flatMap(([k, v]) => (/^(id|archetype|architecture|slug|at|from|to|follow|url)$/.test(k) ? [] : prose(v))) : [];
-  for (const [name, items] of [["patterns", dataset.archetypes], ["guidance", dataset.guidance], ["incidents", dataset.incidents], ["feed", dataset.feed ?? []]] as const) {
+  for (const [name, items] of [
+    ["patterns", dataset.archetypes],
+    ["guidance", dataset.guidance],
+    ["incident patterns", dataset.incidentPatterns ?? []],
+    ["deep dives", dataset.incidents],
+    ["feed", dataset.feed ?? []],
+  ] as const) {
     const hits = prose(items).filter((t) => /\barchetypes?\b/i.test(t));
     assert.deepEqual(hits.map((t) => t.slice(0, 80)), [], name);
   }

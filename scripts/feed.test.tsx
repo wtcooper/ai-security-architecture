@@ -9,13 +9,13 @@ import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks
 
 import { checkFeed, FEED_LIMITS, loadFeed, type FeedContext } from "./lib/feed";
 import { IncidentFeed } from "../src/components/incidents/IncidentFeed";
-import { IncidentList } from "../src/components/incidents/IncidentList";
 import { IncidentWalkthrough } from "../src/components/incidents/IncidentWalkthrough";
+import { newSince, previousVisit, visitOf, VISIT_MS } from "../src/components/incidents/last-visit";
 import { byWeek, weekOf } from "../src/components/incidents/model";
 import { FEED_ON_PATTERN, PatternIncidents } from "../src/components/patterns/PatternPanels";
 import { buildIndex } from "../src/components/shell/SearchPalette";
-import { archetypeById, dataset, feedForCategory, feedForIncident, feedForPattern } from "../src/lib/data";
-import { feedHref, patternHref } from "../src/lib/routes";
+import { archetypeById, dataset, feedForCategory, feedForIncident, feedForPattern, incidentPatternById } from "../src/lib/data";
+import { feedHref, incidentPatternHref, patternHref } from "../src/lib/routes";
 import type { FeedItem } from "../src/lib/types";
 
 /*
@@ -26,7 +26,10 @@ import type { FeedItem } from "../src/lib/types";
 const ctx: FeedContext = {
   patternIds: new Set(dataset.archetypes.map((a) => a.id)),
   incidentIds: new Set(dataset.incidents.map((i) => i.id)),
+  categoryIds: new Set(dataset.incidentPatterns.map((p) => p.id)),
 };
+/** An incident pattern's name, as the page writes it. */
+const nameOf = (id: string) => incidentPatternById.get(id)!.name.replace(/&/g, "&amp;");
 
 const MCP = "archRemoteMcpServer";
 const CHAT = "archChatAgent";
@@ -95,19 +98,32 @@ test("the loader rejects a malformed date, and a date outside the file's month",
   assert.ok(problemsOf([item()], "2026-13.yaml").some((p) => /name the file after the month/.test(p)));
 });
 
-test("the loader rejects a category, evidence or perspective that is not on its list", () => {
-  rejects({ category: "bias" }, /category "bias" is not one of promptInjection, supplyChain, identity, exposed, breakout, aiAttacker/);
+test("the loader rejects a category that is no incident pattern, and evidence or perspective that is not on its list", () => {
+  rejects({ category: "bias" }, new RegExp(`category "bias" is not an incident pattern \\(data/incident-patterns/\\): one of ${dataset.incidentPatterns.map((p) => p.id).join(", ")}`));
+  for (const p of dataset.incidentPatterns) assert.deepEqual(problemsOf([item({ category: p.id })]), [], p.id);
   rejects({ evidence: "rumoured" }, /evidence "rumoured" is not one of exploited, confirmed, demonstrated, reported/);
   rejects({ evidence: undefined }, /evidence/);
   rejects({ perspective: "victim" }, /perspective "victim" is not one of target, weapon/);
 });
 
-test("the loader rejects an unknown pattern, more than three, and an incident not in the catalogue", () => {
+test("a loose fit is marked with fit: loose and says why in a fitNote", () => {
+  const loose = checkFeed([{ file: "2026-11.yaml", doc: { items: [item({ fit: "loose", fitNote: "A gateway flaw, not a default left open." })] } }], ctx);
+  assert.deepEqual(loose.problems, []);
+  assert.equal(loose.feed[0].fit, "loose");
+  assert.equal(loose.feed[0].fitNote, "A gateway flaw, not a default left open.");
+  assert.equal("fit" in checkFeed([{ file: "2026-11.yaml", doc: { items: [item()] } }], ctx).feed[0], false, "no fit when it fits");
+  rejects({ fit: "tight", fitNote: "x" }, /fit "tight" is not one of loose/);
+  rejects({ fit: "loose" }, /fit: loose needs a fitNote/);
+  rejects({ fitNote: "x" }, /fitNote goes with fit: loose/);
+  rejects({ fit: "loose", fitNote: "x".repeat(FEED_LIMITS.fitNote + 1) }, /fitNote is 161 characters; at most 160/);
+});
+
+test("the loader rejects an unknown pattern, more than three, and an incident that is not a deep dive", () => {
   rejects({ patterns: ["archNope"] }, /pattern "archNope" does not exist/);
   rejects({ patterns: [MCP, CHAT, "archAgentWorkflow", "archActionAgent"] }, /names 4 patterns; at most 3/);
   rejects({ patterns: [MCP, MCP] }, /names a pattern twice/);
   rejects({ patterns: MCP }, /patterns must be a list/);
-  rejects({ incident: "no-such-incident" }, /incident "no-such-incident" is not in the catalogue/);
+  rejects({ incident: "no-such-incident" }, /incident "no-such-incident" is not a deep dive/);
   rejects({ cves: ["CVE-26-1"] }, /not a CVE identifier/);
 });
 
@@ -184,7 +200,8 @@ const render = (path: string, query: string, node: React.ReactNode) =>
       </PathnameContext.Provider>
     </AppRouterContext.Provider>,
   );
-const feedPage = (query = "", items: FeedItem[] = FIXTURE) => render("/incidents/feed", query, <IncidentFeed items={items} />);
+const feedPage = (query = "", items: FeedItem[] = FIXTURE, lastVisit?: Parameters<typeof IncidentFeed>[0]["lastVisit"]) =>
+  render("/feed", query, <IncidentFeed items={items} lastVisit={lastVisit} />);
 /** The reports listed, in order: each row's anchor. */
 const listed = (html: string) => [...html.matchAll(/<li id="([^"]+)"/g)].map((m) => m[1]);
 
@@ -205,25 +222,33 @@ test("the feed page lists every report newest first, under the week each came to
   // Each report sits under its own week's heading.
   const sections = html.split(/<h2 /).slice(1);
   assert.deepEqual(sections.map(listed), [["mcp-tokens", "package-hijack", "chat-injection"], ["open-gateway", "mcp-follow-up"], ["agent-intrusion"], ["sandbox-escape", "oldest-mcp"]]);
-  assert.match(html, /Every AI security incident we track, newest first; the ones that teach something new are told step by step in the catalogue\./);
+  // The header line: what the page is, how many reports, and the newest.
+  assert.match(html, /<h1[^>]*>The incident feed<\/h1>/);
+  assert.match(html, /Every AI security incident we track, newest first: what happened, the incident pattern it belongs to and the patterns it would replay on\. Reviewed daily\./);
+  assert.match(html, /data-feed-status[^>]*><span>8 reports<\/span><span>Latest 20 November 2026<\/span>/);
+  // The Catalogue and Feed switch is gone: the feed has its own place in the nav.
+  assert.doesNotMatch(html, /Incidents views|>Catalogue </);
 });
 
-test("a report shows its date, attack type, evidence, story, patterns, walk-through and sources", () => {
+test("a report shows its date, incident pattern, evidence, story, patterns, deep dive and sources", () => {
   const html = feedPage();
   const row = html.slice(html.indexOf('<li id="chat-injection"'), html.indexOf('<li id="open-gateway"'));
   assert.match(row, /<time dateTime="2026-11-16"[^>]*>16 Nov<\/time>/);
-  assert.match(row, />Prompt injection</);
+  // The incident pattern's chip opens its page.
+  const chip = row.match(/<a [^>]*data-incident-pattern="promptInjection"[^>]*>(?:<span[^>]*><\/span>)([^<]+)<\/a>/);
+  assert.ok(chip && chip[0].includes(`href="${incidentPatternHref("promptInjection")}"`), "a link to the incident pattern");
+  assert.equal(chip![1], nameOf("promptInjection"));
   assert.match(row, />Demonstrated</);
   assert.ok(row.includes(item().title.replace(/'/g, "&#x27;")), "the title");
   assert.ok(row.includes(item().summary), "the summary");
   assert.match(row, /Replays on/);
   for (const id of [MCP, CHAT]) assert.ok(row.includes(`href="${patternHref(id, { tab: "incidents" })}"`), `links ${id}`);
   assert.ok(row.includes(archetypeById.get(CHAT)!.title), "names the pattern");
-  assert.doesNotMatch(row, /Step by step/, "no walk-through without an incident");
+  assert.doesNotMatch(row, /Deep dive/, "no deep dive without an incident");
   assert.match(row, /href="https:\/\/example.org\/notice"[^>]*>Example, 7 Nov 2026 ↗/);
 
   const told = html.slice(html.indexOf('<li id="mcp-tokens"'), html.indexOf('<li id="package-hijack"'));
-  assert.match(told, new RegExp(`href="/incidents/${MITTWALD}"[^>]*>Step by step →`));
+  assert.match(told, new RegExp(`href="/incidents/${MITTWALD}"[^>]*>Deep dive →`));
   assert.match(told, />In the wild</);
   const none = html.slice(html.indexOf('<li id="open-gateway"'), html.indexOf('<li id="mcp-follow-up"'));
   assert.doesNotMatch(none, /Replays on/, "no pattern, no line");
@@ -245,10 +270,16 @@ test("each filter narrows the feed, from the address, and together they narrow f
   // The chips count what the other filters leave, and say which is on.
   const html = feedPage(`pattern=${MCP}`);
   assert.match(html, /aria-pressed="true"[^>]*>All <span[^>]*>6</);
-  assert.match(html, />Identity &amp; credentials <span[^>]*>3</);
+  // One chip per incident pattern, in order, each with its count.
+  assert.match(html, new RegExp(`>${nameOf("identity")} <span[^>]*>3<`));
+  const chips = [...html.matchAll(/<div [^>]*role="group" aria-label="Incident pattern">([\s\S]*?)<\/div>/g)][0][1];
+  assert.deepEqual([...chips.matchAll(/<button [^>]*title="[^"]*"[^>]*><span[^>]*><\/span>([^<]+) </g)].map((m) => m[1]), dataset.incidentPatterns.map((p) => nameOf(p.id)));
   assert.match(html, new RegExp(`<option value="${MCP}" selected="">[^<]+\\(6\\)`));
   assert.match(feedPage("evidence=reported"), /<option value="reported" selected="">Single report \(1\)/);
-  assert.match(feedPage(`incident=${MITTWALD}`), /Showing the reports told step by step in/);
+  assert.match(feedPage(`incident=${MITTWALD}`), /Showing the reports told step by step in the deep dive/);
+  // An incident pattern chosen says what it is, and leads to its page.
+  assert.ok(feedPage("category=identity").includes(`href="${incidentPatternHref("identity")}"`));
+  assert.match(feedPage("category=identity"), /About this incident pattern →/);
 });
 
 test("the feed says so when nothing matches, and when it is empty", () => {
@@ -258,20 +289,35 @@ test("the feed says so when nothing matches, and when it is empty", () => {
   assert.match(html, /Clear them/);
   const empty = feedPage("", []);
   assert.match(empty, /Nothing in the feed yet\./);
-  assert.match(empty, /Feed <span[^>]*>0</);
+  assert.match(empty, /<span>0 reports<\/span>/);
 });
 
-test("the switch under the heading shows on both pages, with each view's count", () => {
-  const catalogue = render("/incidents", "", <IncidentList />);
-  const feed = feedPage();
-  for (const [html, on] of [[catalogue, "Catalogue"], [feed, "Feed"]] as const) {
-    assert.match(html, /<nav aria-label="Incidents views"/);
-    assert.match(html, new RegExp(`<a [^>]*href="/incidents">Catalogue <span[^>]*>${dataset.incidents.length}<`));
-    assert.match(html, /<a [^>]*href="\/incidents\/feed">Feed <span[^>]*>\d+</);
-    assert.match(html, new RegExp(`aria-current="page"[^>]*>${on} <`), `${on} is the page shown`);
-    assert.equal(html.match(/aria-current="page"/g)?.length, 1);
-  }
-  assert.match(feed, new RegExp(`>Feed <span[^>]*>${FIXTURE.length}<`));
+test("the feed counts and marks what is new since the reader's last visit", () => {
+  const before = visitOf(FIXTURE.filter((f) => !["mcp-tokens", "chat-injection"].includes(f.id)), Date.UTC(2026, 10, 19, 9));
+  const html = feedPage("", FIXTURE, before);
+  assert.match(html, /data-feed-new="2"[^>]*>2 new since your last visit<span[^>]*> \(19 Nov 2026\)/);
+  const marked = [...html.matchAll(/<li id="([^"]+)"[\s\S]*?<\/li>/g)].filter((m) => m[0].includes("data-new")).map((m) => m[1]);
+  assert.deepEqual(marked, ["mcp-tokens", "chat-injection"]);
+  assert.match(html, /data-new="true">New</);
+  // Nothing new, and no visit on record: the line says so, or stays quiet.
+  assert.match(feedPage("", FIXTURE, visitOf(FIXTURE, Date.UTC(2026, 10, 21))), />Nothing new since your last visit</);
+  assert.doesNotMatch(feedPage("", FIXTURE, null), /since your last visit|data-new/);
+  assert.doesNotMatch(feedPage(), /since your last visit|data-new/, "without storage, the page marks nothing");
+});
+
+test("a visit is remembered by the reports it saw, and a reload within the hour is the same visit", () => {
+  const visit = visitOf(FIXTURE, 1_000);
+  assert.deepEqual(visit.seen, ids(FIXTURE));
+  assert.equal(visit.from, "2026-09-21", "sixty days before the newest report");
+  // A report found late, filed under an older day, is still new; one older than what was remembered is not.
+  const late = { ...FIXTURE[0], id: "late-find", date: "2026-11-01" };
+  const ancient = { ...FIXTURE[0], id: "ancient", date: "2026-08-01" };
+  assert.deepEqual([...newSince([late, ancient, ...FIXTURE], visit)], ["late-find"]);
+  assert.deepEqual([...newSince(FIXTURE, null)], []);
+  const earlier = visitOf(FIXTURE.slice(1), 0);
+  assert.equal(previousVisit(null, 5), null);
+  assert.equal(previousVisit({ last: visit, before: earlier }, 1_000 + VISIT_MS + 1), visit, "after an hour, the last visit");
+  assert.equal(previousVisit({ last: visit, before: earlier }, 1_000 + 60_000), earlier, "within the hour, the one before");
 });
 
 test("a pattern's Incidents tab lists its five newest feed reports, then all of them in the feed", () => {
@@ -280,22 +326,29 @@ test("a pattern's Incidents tab lists its five newest feed reports, then all of 
   const mine = feedForPattern(MCP, FIXTURE);
   assert.equal(mine.length, 6);
   assert.match(html, /In the feed/);
-  const linked = [...html.matchAll(/href="\/incidents\/feed\?pattern=archRemoteMcpServer#([^"]+)"/g)].map((m) => m[1]);
+  const linked = [...html.matchAll(/href="\/feed\?pattern=archRemoteMcpServer#([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(linked, ids(mine.slice(0, FEED_ON_PATTERN)));
-  assert.ok(html.indexOf("In the feed") > html.indexOf(`href="/incidents/${MITTWALD}"`), "after the catalogue's own incidents");
+  assert.ok(html.indexOf("In the feed") > html.indexOf(`href="/incidents/${MITTWALD}"`), "after the pattern's deep dives");
   assert.ok(html.includes(`href="${feedHref({ pattern: MCP })}"`) && html.includes("All 6 in the feed →"));
-  assert.equal(feedHref({ pattern: MCP }), "/incidents/feed?pattern=archRemoteMcpServer");
+  assert.equal(feedHref({ pattern: MCP }), "/feed?pattern=archRemoteMcpServer");
+  // The deep dives are titled so, each labelled with its incident pattern.
+  assert.match(html, /<p class="eyebrow">Deep dives<\/p>/);
+  const dives = dataset.incidents.filter((i) => i.archetype === MCP);
+  for (const d of dives) {
+    const row = html.slice(html.indexOf(`data-deep-dive="${d.id}"`), html.indexOf("</li>", html.indexOf(`data-deep-dive="${d.id}"`)));
+    assert.ok(row.includes(`data-incident-pattern="${d.category}"`) && row.includes(nameOf(d.category)), d.id);
+  }
   // A pattern no report names shows no feed section.
   const quiet = archetypeById.get("archTrainingPipeline")!;
   assert.doesNotMatch(render("/patterns/x", "", <PatternIncidents archetype={quiet} feed={FIXTURE} />), /In the feed/);
 });
 
-test("a catalogue incident links to the feed reports that point to it", () => {
+test("a deep dive links to the feed reports that point to it", () => {
   const many = render(`/incidents/${MITTWALD}`, "", <IncidentWalkthrough id={MITTWALD} feed={FIXTURE} />);
   assert.equal(feedForIncident(MITTWALD, FIXTURE).length, 2);
-  assert.match(many, new RegExp(`In the feed: <a [^>]*href="/incidents/feed\\?incident=${MITTWALD}">2 reports</a>`));
+  assert.match(many, new RegExp(`In the feed: <a [^>]*href="/feed\\?incident=${MITTWALD}">2 reports</a>`));
   const one = render(`/incidents/${LITELLM}`, "", <IncidentWalkthrough id={LITELLM} feed={FIXTURE} />);
-  assert.match(one, /In the feed: <a [^>]*href="\/incidents\/feed#sandbox-escape">1 report<\/a>/);
+  assert.match(one, /In the feed: <a [^>]*href="\/feed#sandbox-escape">1 report<\/a>/);
   const none = render("/incidents/x", "", <IncidentWalkthrough id="mckinsey-lilli" feed={FIXTURE} />);
   assert.doesNotMatch(none, /In the feed/);
 });
@@ -303,7 +356,7 @@ test("a catalogue incident links to the feed reports that point to it", () => {
 test("site search finds a feed report by its title and lands on it in the feed", () => {
   const entries = buildIndex(FIXTURE).filter((e) => e.kind === "Feed");
   assert.equal(entries.length, FIXTURE.length);
-  const first = entries.find((e) => e.href === "/incidents/feed#mcp-tokens")!;
+  const first = entries.find((e) => e.href === "/feed#mcp-tokens")!;
   assert.equal(first.title, FIXTURE[0].title);
   assert.ok(first.text.includes("session tokens"));
   assert.equal(buildIndex([]).filter((e) => e.kind === "Feed").length, 0);

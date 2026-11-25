@@ -1,13 +1,15 @@
 "use client";
 
 /**
- * What the two Incidents pages share: the switch between the catalogue and the feed under the
- * heading, the filter chips, and the tags an incident or a feed item carries.
+ * What the incident pages share: the filter chips, the chip that names an incident pattern, the
+ * evidence tag a feed item carries, and the breadcrumb under /incidents/.
  */
 import Link from "next/link";
+import type { ReactNode } from "react";
 
-import { categoryById, evidenceById } from "@/lib/incident-categories";
-import { ROUTES } from "@/lib/routes";
+import { categoryById, categoryColour } from "@/lib/incident-categories";
+import { evidenceById } from "@/lib/feed-vocabulary";
+import { ROUTES, incidentPatternHref } from "@/lib/routes";
 
 /** A filter chip: ink when on, paper when off. */
 export const filterChip = (active: boolean) =>
@@ -15,38 +17,31 @@ export const filterChip = (active: boolean) =>
     active ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3 hover:text-ink"
   }`;
 
-/** The Incidents section has two views; the nav item stays "Incidents" and the catalogue is the default. */
-export function IncidentsSwitch({ current, catalogue, feed }: { current: "catalogue" | "feed"; catalogue: number; feed: number }) {
-  const views = [
-    { id: "catalogue", label: "Catalogue", href: ROUTES.incidents, count: catalogue, title: "The incidents that teach something new, each told step by step" },
-    { id: "feed", label: "Feed", href: ROUTES.incidentFeed, count: feed, title: "Every incident we track, newest first" },
-  ] as const;
-  return (
-    <nav aria-label="Incidents views" className="mt-5 inline-flex rounded-lg border border-line bg-mist p-0.5">
-      {views.map((v) => {
-        const on = current === v.id;
-        return (
-          <Link
-            key={v.id}
-            href={v.href}
-            title={v.title}
-            aria-current={on ? "page" : undefined}
-            className={`rounded-md px-3 py-1 text-[13px] transition-colors ${on ? "bg-paper font-semibold text-ink shadow-sm" : "text-ink-3 hover:text-ink"}`}
-          >
-            {v.label} <span className="ml-0.5 font-normal opacity-70">{v.count}</span>
-          </Link>
-        );
-      })}
-    </nav>
-  );
+/** The incident pattern's own colour, as a small dot beside its name. */
+export function CategoryDot({ category, className = "" }: { category: string; className?: string }) {
+  return <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full ${className}`} style={{ background: categoryColour(category).rail }} />;
 }
 
-/** An incident's or a feed item's attack type, as the catalogue list shows it. */
-export function CategoryChip({ category }: { category: string }) {
+/**
+ * The incident pattern a deep dive or a feed item is filed under. With `link`, it opens that
+ * incident pattern's page; inside a row that is itself a link, it is plain text.
+ */
+export function CategoryChip({ category, link = false }: { category: string; link?: boolean }) {
   const c = categoryById.get(category);
-  return (
-    <span title={c?.blurb} className="whitespace-nowrap rounded-full border border-line bg-mist px-2.5 py-[2px] text-[11.5px] font-semibold text-ink-2">
+  const className = "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-mist px-2.5 py-[2px] text-[11.5px] font-semibold text-ink-2";
+  const body = (
+    <>
+      <CategoryDot category={category} />
       {c?.label ?? category}
+    </>
+  );
+  return link && c ? (
+    <Link href={incidentPatternHref(category)} title={c.blurb} data-incident-pattern={category} className={`${className} hover:border-ink-3 hover:text-ink`}>
+      {body}
+    </Link>
+  ) : (
+    <span title={c?.blurb} data-incident-pattern={category} className={className}>
+      {body}
     </span>
   );
 }
@@ -69,3 +64,34 @@ export function EvidenceTag({ evidence }: { evidence: string }) {
     </span>
   );
 }
+
+/** "Incidents › …": where a page sits under /incidents/. The last crumb is the page itself. */
+export function IncidentsBreadcrumb({ trail }: { trail: { label: ReactNode; href?: string }[] }) {
+  return (
+    <nav aria-label="Breadcrumb" className="text-[12.5px] text-ink-3">
+      <ol className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+        <li>
+          <Link href={ROUTES.incidents} className="font-semibold text-ink-2 hover:text-ink hover:underline">
+            Incidents
+          </Link>
+        </li>
+        {trail.map((t, i) => (
+          <li key={i} className="flex min-w-0 items-baseline gap-x-1.5">
+            <span aria-hidden>›</span>
+            {t.href ? (
+              <Link href={t.href} className="font-semibold text-ink-2 hover:text-ink hover:underline">
+                {t.label}
+              </Link>
+            ) : (
+              <span aria-current="page" className="min-w-0">
+                {t.label}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

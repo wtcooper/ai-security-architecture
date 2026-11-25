@@ -1,22 +1,26 @@
 "use client";
 
 /**
- * The incident feed: every AI security incident tracked, newest first, each in two or three
- * lines under the week it came to light. Nothing is ranked but the date. Three filters (attack
- * type, pattern, evidence) ride in the address, so a filtered feed can be linked and comes back
- * on Back; a fourth, `incident`, narrows it to the reports one catalogue incident tells and is
- * reached from that incident's page. An item's anchor is its id, which is how search lands on it.
+ * The feed (/feed/): the daily review. Every AI security incident tracked, newest first, each in
+ * two or three lines under the week it came to light, filed under its incident pattern and naming
+ * the patterns it would replay on. Nothing is ranked but the date. What is new since the reader's
+ * last visit is counted in the header and marked on the item. Three filters (incident pattern,
+ * pattern, evidence) ride in the address, so a filtered feed can be linked and comes back on
+ * Back; a fourth, `incident`, narrows it to the reports one deep dive tells and is reached from
+ * that deep dive's page. An item's anchor is its id, which is how search lands on it.
  */
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { PageHeader } from "@/components/Panel";
-import { archetypeById, archetypesInOrder, feed as datasetFeed, incidentById, incidents, surfaces } from "@/lib/data";
-import { categoryById, evidenceById, FEED_EVIDENCE, INCIDENT_CATEGORIES } from "@/lib/incident-categories";
-import { feedQuery, incidentHref, patternHref, ROUTES, type FeedFilters } from "@/lib/routes";
+import { archetypeById, archetypesInOrder, feed as datasetFeed, incidentById, surfaces } from "@/lib/data";
+import { evidenceById, FEED_EVIDENCE } from "@/lib/feed-vocabulary";
+import { categoryById, INCIDENT_CATEGORIES } from "@/lib/incident-categories";
+import { feedQuery, incidentHref, incidentPatternHref, patternHref, ROUTES, type FeedFilters } from "@/lib/routes";
 import type { FeedItem } from "@/lib/types";
-import { CategoryChip, EvidenceTag, filterChip, IncidentsSwitch } from "./chrome";
+import { CategoryChip, CategoryDot, EvidenceTag, filterChip, plural } from "./chrome";
+import { newSince, useLastVisit, type Visit } from "./last-visit";
 import { byWeek, formatDay, formatLongDay, formatShortDay } from "./model";
 
 /** The item named after the # in the address. Empty on the server, so hydration agrees. */
@@ -27,9 +31,14 @@ const subscribeHash = (onChange: () => void) => {
 const readHash = () => decodeURIComponent(window.location.hash.slice(1));
 const useHash = () => useSyncExternalStore(subscribeHash, readHash, () => "");
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
-export function IncidentFeed({ items: given = datasetFeed }: { items?: FeedItem[] }) {
+export function IncidentFeed({
+  items: given = datasetFeed,
+  lastVisit,
+}: {
+  items?: FeedItem[];
+  /** The reader's previous visit, for a test; the browser's own record otherwise. */
+  lastVisit?: Visit | null;
+}) {
   // Newest first, ties as given: the feed is built that way, and a list passed in is held to it.
   const items = [...given].sort((a, b) => b.date.localeCompare(a.date));
   const params = useSearchParams();
@@ -42,6 +51,9 @@ export function IncidentFeed({ items: given = datasetFeed }: { items?: FeedItem[
   const [evidence, setEvidence] = useState(() => linked("evidence", (v) => evidenceById.has(v)));
   const [incident, setIncident] = useState(() => linked("incident", (v) => incidentById.has(v)));
   const hash = useHash();
+  const visit = useLastVisit(items);
+  const previous = lastVisit !== undefined ? lastVisit : visit.previous;
+  const fresh = newSince(items, previous);
 
   // Filters stay shareable and survive Back. replaceState rather than router.push keeps the
   // GitHub Pages basePath, and the # keeps the item a link landed on.
@@ -73,21 +85,33 @@ export function IncidentFeed({ items: given = datasetFeed }: { items?: FeedItem[
     setIncident(null);
   };
   const told = incident ? incidentById.get(incident) : undefined;
+  const on = category ? categoryById.get(category) : undefined;
   const select =
     "min-w-0 max-w-full flex-1 rounded-lg border border-line bg-paper px-2.5 py-1.5 text-[13px] font-medium text-ink focus:outline-none focus:ring-2 focus:ring-introduced sm:flex-none";
 
   return (
     <>
       <PageHeader
-        eyebrow="Incidents"
+        eyebrow="Feed"
         title="The incident feed"
-        lead="Every AI security incident we track, newest first; the ones that teach something new are told step by step in the catalogue."
+        lead="Every AI security incident we track, newest first: what happened, the incident pattern it belongs to and the patterns it would replay on. Reviewed daily."
       >
-        <IncidentsSwitch current="feed" catalogue={incidents.length} feed={items.length} />
+        <p className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px] text-ink-3" data-feed-status>
+          <span>{plural(items.length, "report")}</span>
+          {items[0] && <span>Latest {formatLongDay(items[0].date)}</span>}
+          {previous ? (
+            <span className={fresh.size ? "font-semibold text-ink" : undefined} data-feed-new={fresh.size}>
+              {fresh.size ? `${fresh.size} new` : "Nothing new"} since your last visit
+              <span className="font-normal text-ink-3"> ({formatDay(new Date(previous.at).toISOString().slice(0, 10))})</span>
+            </span>
+          ) : (
+            visit.ready && <span>New reports are marked from your next visit.</span>
+          )}
+        </p>
       </PageHeader>
 
       <div className="mx-auto w-full max-w-5xl px-6 py-7">
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Attack type">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Incident pattern">
           <button type="button" onClick={() => setCategory(null)} aria-pressed={category === null} className={filterChip(category === null)}>
             All <span className="font-normal opacity-70">{forCategory.length}</span>
           </button>
@@ -101,8 +125,9 @@ export function IncidentFeed({ items: given = datasetFeed }: { items?: FeedItem[
                 onClick={() => setCategory(category === c.id ? null : c.id)}
                 aria-pressed={category === c.id}
                 disabled={n === 0 && category !== c.id}
-                className={`${filterChip(category === c.id)} disabled:opacity-40`}
+                className={`${filterChip(category === c.id)} inline-flex items-center gap-1.5 disabled:opacity-40`}
               >
+                <CategoryDot category={c.id} />
                 {c.label} <span className="font-normal opacity-70">{n}</span>
               </button>
             );
@@ -139,12 +164,20 @@ export function IncidentFeed({ items: given = datasetFeed }: { items?: FeedItem[
               ))}
             </select>
           </label>
-          {category && <p className="text-[12.5px] text-ink-3">{categoryById.get(category)?.blurb}</p>}
         </div>
+
+        {on && (
+          <p className="mt-3 max-w-3xl text-[12.5px] leading-snug text-ink-3">
+            {on.blurb}{" "}
+            <Link href={incidentPatternHref(on.id)} className="font-semibold text-introduced hover:underline">
+              About this incident pattern →
+            </Link>
+          </p>
+        )}
 
         {told && (
           <p className="mt-4 text-[13px] text-ink-2">
-            Showing the reports told step by step in{" "}
+            Showing the reports told step by step in the deep dive{" "}
             <Link href={incidentHref(told.id)} className="font-semibold text-ink hover:text-introduced hover:underline">
               {told.title}
             </Link>
@@ -165,7 +198,7 @@ export function IncidentFeed({ items: given = datasetFeed }: { items?: FeedItem[
                 </h2>
                 <ul className="mt-2.5 divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper">
                   {inWeek.map((f) => (
-                    <FeedRow key={f.id} item={f} inView={hash === f.id} />
+                    <FeedRow key={f.id} item={f} inView={hash === f.id} isNew={fresh.has(f.id)} />
                   ))}
                 </ul>
               </section>
@@ -182,7 +215,7 @@ export function IncidentFeed({ items: given = datasetFeed }: { items?: FeedItem[
           <p className="mt-6 rounded-xl border border-line bg-paper px-5 py-6 text-[13.5px] text-ink-2">
             Nothing in the feed yet.{" "}
             <Link href={ROUTES.incidents} className="font-semibold text-introduced hover:underline">
-              The catalogue →
+              The incident patterns →
             </Link>
           </p>
         )}
@@ -191,16 +224,21 @@ export function IncidentFeed({ items: given = datasetFeed }: { items?: FeedItem[
   );
 }
 
-/** One report: when, what kind, how well established, what happened, where it would replay, and who said so. */
-function FeedRow({ item, inView }: { item: FeedItem; inView: boolean }) {
+/** One report: when, its incident pattern, how well established, what happened, where it would replay, its deep dive and who said so. */
+function FeedRow({ item, inView, isNew }: { item: FeedItem; inView: boolean; isNew: boolean }) {
   return (
     <li id={item.id} className={`scroll-mt-20 px-5 py-4 transition-colors ${inView ? "bg-introduced-soft/50" : ""}`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <time dateTime={item.date} title={formatDay(item.date)} className="ident text-ink-3">
           {formatShortDay(item.date)}
         </time>
-        <CategoryChip category={item.category} />
+        <CategoryChip category={item.category} link />
         <EvidenceTag evidence={item.evidence} />
+        {isNew && (
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-introduced" data-new>
+            New
+          </span>
+        )}
       </div>
       <h3 className="mt-1.5 text-[15px] font-semibold leading-snug text-ink">{item.title}</h3>
       <p className="mt-1 max-w-3xl text-[13px] leading-snug text-ink-2">{item.summary}</p>
@@ -221,7 +259,7 @@ function FeedRow({ item, inView }: { item: FeedItem; inView: boolean }) {
           )}
           {item.incident && (
             <Link href={incidentHref(item.incident)} title={incidentById.get(item.incident)?.title} className="font-semibold text-introduced hover:underline">
-              Step by step →
+              Deep dive →
             </Link>
           )}
         </p>

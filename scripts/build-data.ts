@@ -1,6 +1,6 @@
 /**
- * Compile the vendored CoSAI-RM YAML, the risk-component overlay, the incident case
- * studies and the incident feed into a single typed JSON dataset the app imports at build time.
+ * Compile the vendored CoSAI-RM YAML, the risk-component overlay, the incident patterns, the
+ * deep dives and the incident feed into a single typed JSON dataset the app imports at build time.
  *
  * Every cross-reference is checked; a dangling id fails the build rather than rendering
  * an empty box in the UI.
@@ -20,7 +20,9 @@ import { checkSettings, loadClouds, loadProductStatus } from "./lib/products";
 import { loadSpecializations } from "./lib/specializations";
 import { loadThreatModels } from "./lib/threat-models";
 import { loadFeed } from "./lib/feed";
-import { CROSSING_KINDS } from "../src/lib/types";
+import { categoryProblem, loadIncidentPatterns } from "./lib/incident-patterns";
+import { deriveIncidentPatterns } from "../src/lib/incident-patterns";
+import { CROSSING_KINDS, THREAT_LISTS } from "../src/lib/types";
 
 import type {
   Archetype,
@@ -49,7 +51,6 @@ import {
   TOOL_COVERAGES,
   TOOL_SURFACE_CLASSES,
 } from "../src/lib/types";
-import { categoryById, INCIDENT_CATEGORIES } from "../src/lib/incident-categories";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
 import { ICON_NAMES } from "../src/lib/icon-names";
 import {
@@ -377,7 +378,7 @@ async function main() {
   }
 
   // --- Threat models (data/reference/threat-models/), named after each pattern's file ------------
-  const { threatModels, atlasTechniques } = await loadThreatModels(ROOT, {
+  const { threatModels, atlasTechniques, atlasIds, describeAtlas } = await loadThreatModels(ROOT, {
     archetypes,
     riskIds,
     incidentIds: new Set(incidents.map((i) => i.id)),
@@ -399,7 +400,23 @@ async function main() {
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
   await checkAgainstSaifSeed(overlays, risks);
 
-  // --- Incidents ---------------------------------------------------------------
+  // --- Incident patterns (data/incident-patterns/): the source of truth for `category` ----------
+  const authoredIncidentPatterns = await loadIncidentPatterns(
+    ROOT,
+    {
+      controlIds: mitigationIds,
+      riskIds,
+      owaspIds: new Set(THREAT_LISTS.flatMap((l) => Object.keys(frameworkEntries[l] ?? {}))),
+      atlasIds,
+      deepDiveIds: new Set(incidents.map((i) => i.id)),
+    },
+    fail,
+  );
+  const categoryIds = authoredIncidentPatterns.map((p) => p.id);
+  // The page names each ATLAS technique an incident pattern lists, as it does a threat model's.
+  for (const id of authoredIncidentPatterns.flatMap((p) => p.atlas ?? [])) if (atlasIds.has(id)) atlasTechniques[id] = describeAtlas(id);
+
+  // --- Deep dives (data/incidents/) ------------------------------------------------
   const archetypeIds = new Set(archetypes.map((a) => a.id));
   for (const inc of incidents) {
     const where = `incident ${inc.id}`;
@@ -410,13 +427,12 @@ async function main() {
     for (const id of inc.risks) if (!riskIds.has(id)) fail(`${where}: unknown risk ${id}`);
     for (const id of inc.controls ?? []) if (!controlIds.has(id)) fail(`${where}: unknown control ${id}`);
     if (!inc.sources?.length) fail(`${where}: needs at least one source`);
-    if (!categoryById.has(inc.category)) {
-      fail(`${where}: category "${inc.category}" is not one of ${INCIDENT_CATEGORIES.map((c) => c.id).join(", ")}`);
-    }
+    const badCategory = categoryProblem(inc.category, categoryIds);
+    if (badCategory) fail(`${where}: ${badCategory}`);
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(inc.date ?? "")) fail(`${where}: date "${inc.date}" must be YYYY-MM (the latest event)`);
     if (incidents.filter((i) => i.id === inc.id).length > 1) fail(`${where}: duplicate incident id`);
-    // /incidents/feed/ is the feed's own page; an incident by that id would take its address.
-    if (inc.id === "feed") fail(`${where}: "feed" is the address of the incident feed; choose another id`);
+    // /incidents/feed/ forwards to the feed; a deep dive by that id would take its address.
+    if (inc.id === "feed") fail(`${where}: "feed" is the old address of the feed; choose another id`);
     // The last step lights these on the drawing, so each must be a control pinned there.
     const pinnedHere = new Set(archetypes.find((a) => a.id === inc.archetype)?.mitigations ?? []);
     if (!inc.breaks?.length || inc.breaks.length > 6) fail(`${where}: needs 1–6 breaks (controls that stop the chain)`);
@@ -474,7 +490,10 @@ async function main() {
   }
 
   // --- The incident feed (data/feed/<YYYY-MM>.yaml); no files at all is an empty feed --------
-  const feed = await loadFeed(ROOT, { patternIds: archetypeIds, incidentIds: new Set(incidents.map((i) => i.id)) }, fail);
+  const feed = await loadFeed(ROOT, { patternIds: archetypeIds, incidentIds: new Set(incidents.map((i) => i.id)), categoryIds: new Set(categoryIds) }, fail);
+
+  // What each incident pattern's page derives: its deep dives, its feed items, where it lands.
+  const incidentPatterns = deriveIncidentPatterns(authoredIncidentPatterns, incidents, feed, archetypes.map((a) => a.id));
 
   if (errors.length) {
     console.error(`\nData integrity check failed (${errors.length}):`);
@@ -493,6 +512,7 @@ async function main() {
         personas: personasDoc.personas.length,
         incidents: incidents.length,
         feed: feed.length,
+        incidentPatterns: incidentPatterns.length,
         mitigations: mitigationsDoc.mitigations.length,
         specializations: specializations.specializations.length,
         archetypes: archetypes.length,
@@ -520,6 +540,7 @@ async function main() {
     overlays,
     incidents,
     feed,
+    incidentPatterns,
     surfaces: mitigationsDoc.surfaces,
     specializations: specializations.specializations,
     specializationsAttribution: specializations.attribution,
@@ -548,7 +569,7 @@ async function main() {
   console.log(
     `dataset.json: ${risks.length} risks (${overlays.length - authored} SAIF-seeded, ` +
       `${authored} authored), ${controls.length} CoSAI controls, ${components.length} components, ` +
-      `${incidents.length} incidents, ${feed.length} feed items, ${mitigationsDoc.mitigations.length} controls in the catalogue, ` +
+      `${incidentPatterns.length} incident patterns, ${incidents.length} deep dives, ${feed.length} feed items, ${mitigationsDoc.mitigations.length} controls in the catalogue, ` +
       `${archetypes.length} archetypes, ${guidance.length} guidance docs, ` +
       `${tools.length} tools, ${threatModels.length} threat models, ${orgControls.length} of your own controls recorded`,
   );

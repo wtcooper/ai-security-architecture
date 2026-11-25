@@ -3,7 +3,8 @@
 /**
  * Two panels of a pattern page that list what the drawing only marks: the risks that enter the
  * pattern, with where each enters and the controls here that reduce it; and the real incidents
- * that happened on it, the catalogue's walk-throughs first and then the newest feed reports.
+ * that happened on it, its deep dives first (each labelled with its incident pattern) and then
+ * the newest feed reports.
  */
 import Link from "next/link";
 
@@ -112,15 +113,16 @@ export function PatternIncidents({ archetype, feed: items = feed }: { archetype:
   return (
     <div className="space-y-6">
       {here.length ? (
-        <section aria-label="Incidents on this pattern">
-          <p className="max-w-3xl text-[13px] leading-relaxed text-ink-2">
-            Real incidents that happened on this pattern. Each opens a step-by-step walk across the drawing, ending at the controls that
-            would have broken the chain.
+        <section aria-label="Deep dives">
+          <p className="eyebrow">Deep dives</p>
+          <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-ink-2">
+            Real incidents that happened on this pattern, each labelled with its incident pattern. Each opens a step-by-step walk across the
+            drawing, ending at the controls that would have broken the chain.
           </p>
           <ul className="mt-3 divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper">
             {here.map((i) => (
-              <li key={i.id}>
-                <Link href={incidentHref(i.id)} className="grid grid-cols-1 gap-x-5 gap-y-1.5 px-5 py-4 transition-colors hover:bg-mist/60 sm:grid-cols-[84px_minmax(0,1fr)_190px]">
+              <li key={i.id} data-deep-dive={i.id}>
+                <Link href={incidentHref(i.id)} className="grid grid-cols-1 gap-x-5 gap-y-1.5 px-5 py-4 transition-colors hover:bg-mist/60 sm:grid-cols-[84px_minmax(0,1fr)_minmax(0,220px)]">
                   <span className="ident pt-0.5 text-ink-3">{formatMonth(i.date)}</span>
                   <span className="min-w-0">
                     <span className="block text-[15px] font-semibold leading-snug text-ink">{i.title}</span>
@@ -136,8 +138,8 @@ export function PatternIncidents({ archetype, feed: items = feed }: { archetype:
         </section>
       ) : (
         <p className="rounded-xl border border-line bg-paper px-5 py-6 text-[13.5px] text-ink-2">
-          No catalogued incident happened on this pattern yet.{" "}
-          <Link href={ROUTES.incidents} className="font-semibold text-introduced hover:underline">See all incidents →</Link>
+          No deep dive on this pattern yet.{" "}
+          <Link href={ROUTES.incidents} className="font-semibold text-introduced hover:underline">See the incident patterns →</Link>
         </p>
       )}
 

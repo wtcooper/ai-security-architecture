@@ -1,5 +1,6 @@
 import type { StepOverlay } from "@/components/drawing/types";
 import { incidents } from "@/lib/data";
+import { deepDivesNewestFirst } from "@/lib/incident-patterns";
 import type { Archetype, Incident, IncidentStep } from "@/lib/types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -51,9 +52,8 @@ export function byWeek<T extends { date: string }>(items: T[]): { week: string; 
   return weeks;
 }
 
-/** Newest first; ties keep file order, so a case study's place is stable. */
-export const incidentsNewestFirst = (): Incident[] =>
-  incidents.map((inc, i) => ({ inc, i })).sort((a, b) => b.inc.date.localeCompare(a.inc.date) || a.i - b.i).map((x) => x.inc);
+/** The deep dives newest first; ties keep file order, so a deep dive's place is stable. */
+export const incidentsNewestFirst = (): Incident[] => deepDivesNewestFirst(incidents);
 
 /**
  * The step replayed on its reference architecture: the blocks it lands in and the edges it

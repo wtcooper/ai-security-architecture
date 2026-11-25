@@ -2,8 +2,8 @@
 
 /**
  * ⌘K over everything with a name: patterns (by title, product, cloud and everyday words), tools,
- * clouds, controls, incidents, the incident feed's reports (by title, each landing on the feed
- * with the report in view), the threats of each pattern's threat model (by title), risks (with
+ * clouds, controls, incident patterns, deep dives, the feed's reports (by title, each landing on
+ * the feed with the report in view), the threats of each pattern's threat model (by title), risks (with
  * their R-codes), CoSAI controls, components and personas. The dataset is
  * already in the bundle, so the index is built once and matched in the browser; a result is
  * a plain link into the page that owns the entity, so navigation works under the GitHub
@@ -24,6 +24,7 @@ import {
   components,
   controls,
   feed,
+  incidentPatterns,
   incidents,
   riskCode,
   risksInOrder,
@@ -35,7 +36,7 @@ import { SURFACE_SITUATION } from "@/components/patterns/labels";
 import { RATING_STYLE } from "@/components/patterns/threat-style";
 import { cloudsFor } from "@/components/patterns/model";
 import { formatDay } from "@/components/incidents/model";
-import { cloudHref, patternHref, controlHref, cosaiControlHref, feedHref, incidentHref, riskHref, componentHref, personaHref } from "@/lib/routes";
+import { cloudHref, patternHref, controlHref, cosaiControlHref, feedHref, incidentHref, incidentPatternHref, riskHref, componentHref, personaHref } from "@/lib/routes";
 import type { FeedItem } from "@/lib/types";
 
 interface Entry {
@@ -115,8 +116,16 @@ export function buildIndex(reports: FeedItem[] = feed): Entry[] {
         text: norm(t.title),
       })),
     ),
+    // How AI systems are being attacked: by name, one-liner and id.
+    ...incidentPatterns.map((p) => ({
+      kind: "Incident pattern",
+      title: p.name,
+      hint: p.short,
+      href: incidentPatternHref(p.id),
+      text: norm(p.name, p.short, p.id, p.slug),
+    })),
     ...incidents.map((i) => ({
-      kind: "Incident",
+      kind: "Deep dive",
       title: i.title,
       hint: `${categoryById.get(i.category)?.label ?? ""} · ${i.dateRange}`,
       href: incidentHref(i.id),
@@ -133,7 +142,7 @@ export function buildIndex(reports: FeedItem[] = feed): Entry[] {
   ];
 }
 
-const KIND_ORDER = ["Pattern", "Tool", "Cloud", "Control", "Incident", "Feed", "Threat", "Risk", "CoSAI control", "Component", "Persona"];
+const KIND_ORDER = ["Pattern", "Tool", "Cloud", "Control", "Incident pattern", "Deep dive", "Feed", "Threat", "Risk", "CoSAI control", "Component", "Persona"];
 
 export function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const index = useMemo(() => buildIndex(), []);

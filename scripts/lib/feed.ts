@@ -9,20 +9,24 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "yaml";
 
-import { categoryById, evidenceById, FEED_EVIDENCE, INCIDENT_CATEGORIES, INCIDENT_PERSPECTIVES } from "../../src/lib/incident-categories";
+import { evidenceById, FEED_EVIDENCE, FEED_FITS, INCIDENT_PERSPECTIVES } from "../../src/lib/feed-vocabulary";
 import type { FeedItem, IncidentSource } from "../../src/lib/types";
+import { categoryProblem } from "./incident-patterns";
 
 /** Field limits, as the format sets them. */
-export const FEED_LIMITS = { title: 120, summary: 420, patterns: 3, sources: 3 } as const;
+export const FEED_LIMITS = { title: 120, summary: 420, fitNote: 160, patterns: 3, sources: 3 } as const;
 
 /** The keys an item may carry. Anything else is a typo or retired grammar, and fails. */
-const ITEM_KEYS = new Set(["id", "date", "title", "summary", "category", "perspective", "evidence", "patterns", "incident", "cves", "sources"]);
+const ITEM_KEYS = new Set(["id", "date", "title", "summary", "category", "perspective", "evidence", "fit", "fitNote", "patterns", "incident", "cves", "sources"]);
 const SOURCE_KEYS = new Set(["title", "url", "publisher", "date"]);
 
 /** What an item is checked against. */
 export interface FeedContext {
   patternIds: Set<string>;
+  /** The deep dives (data/incidents/). */
   incidentIds: Set<string>;
+  /** The incident pattern ids (data/incident-patterns/): the only categories there are. */
+  categoryIds: Set<string>;
 }
 
 /** One feed file: its name in data/feed/ and its parsed YAML. */
@@ -106,11 +110,21 @@ export function checkFeed(files: FeedFile[], ctx: FeedContext): { feed: FeedItem
       }
 
       const category = str(raw.category);
-      if (!categoryById.has(category)) p(`category "${category}" is not one of ${INCIDENT_CATEGORIES.map((c) => c.id).join(", ")}`);
+      const badCategory = categoryProblem(category, [...ctx.categoryIds]);
+      if (badCategory) p(badCategory);
       const perspective = str(raw.perspective);
       if (!(INCIDENT_PERSPECTIVES as readonly string[]).includes(perspective)) p(`perspective "${perspective}" is not one of ${INCIDENT_PERSPECTIVES.join(", ")}`);
       const evidence = str(raw.evidence);
       if (!evidenceById.has(evidence)) p(`evidence "${evidence}" is not one of ${FEED_EVIDENCE.map((e) => e.id).join(", ")}`);
+
+      // A loose fit says why, so the run that weighs a new incident pattern can read the mechanism.
+      const fit = raw.fit == null ? undefined : str(raw.fit);
+      const fitNote = raw.fitNote == null ? undefined : str(raw.fitNote);
+      if (fit !== undefined && !(FEED_FITS as readonly string[]).includes(fit)) p(`fit "${fit}" is not one of ${FEED_FITS.join(", ")}; leave it out when the item fits its incident pattern`);
+      if (fit === "loose" && !fitNote) p("fit: loose needs a fitNote: what about it the incident pattern does not cover");
+      if (fitNote !== undefined && fit !== "loose") p("fitNote goes with fit: loose");
+      if (fitNote && len(fitNote) > FEED_LIMITS.fitNote) p(`fitNote is ${len(fitNote)} characters; at most ${FEED_LIMITS.fitNote}`);
+      if (fitNote && RETIRED.test(fitNote)) p(`fitNote says "archetype"; the reader's word is pattern`);
 
       let patterns: string[] = [];
       if (raw.patterns != null && !Array.isArray(raw.patterns)) p("patterns must be a list of pattern ids ([] when none fits)");
@@ -122,7 +136,7 @@ export function checkFeed(files: FeedFile[], ctx: FeedContext): { feed: FeedItem
       }
 
       const incident = raw.incident == null ? undefined : str(raw.incident);
-      if (incident !== undefined && !ctx.incidentIds.has(incident)) p(`incident "${incident}" is not in the catalogue (data/incidents/)`);
+      if (incident !== undefined && !ctx.incidentIds.has(incident)) p(`incident "${incident}" is not a deep dive (data/incidents/)`);
 
       let cves: string[] | undefined;
       if (raw.cves != null) {
@@ -167,6 +181,8 @@ export function checkFeed(files: FeedFile[], ctx: FeedContext): { feed: FeedItem
         category: category as FeedItem["category"],
         perspective: perspective as FeedItem["perspective"],
         evidence: evidence as FeedItem["evidence"],
+        ...(fit === "loose" ? { fit: "loose" as const } : {}),
+        ...(fit === "loose" && fitNote ? { fitNote } : {}),
         patterns,
         ...(incident ? { incident } : {}),
         ...(cves?.length ? { cves } : {}),

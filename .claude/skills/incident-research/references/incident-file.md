@@ -1,24 +1,29 @@
-# The incident file
+# The deep dive file
 
-One file per incident: `data/incidents/<NN>-<id>.yaml`. `NN` is the next two-digit number
+One file per deep dive: `data/incidents/<NN>-<id>.yaml`. `NN` is the next two-digit number
 (`incident-index.mjs` prints it); it only orders the folder. The page address is
-`/incidents/<id>/`. The build (`npm run data`) checks everything marked **checked** below and
-names the file and field when something is wrong.
+`/incidents/<id>/`, the same segment as the incident patterns' slugs, so the id must not be one
+of them. The page shows the breadcrumb **Incidents › <incident pattern> › <title>**, and the
+deep dive is listed as an exemplar on its incident pattern's page. The build (`npm run data`)
+checks everything marked **checked** below and names the file and field when something is wrong.
 
-A catalogue file is never the only record. The incident it tells, and each of its `alsoSeen`
+Write one only when the deep-dive test in the skill's section 3 holds, at most two a run
+(`alsoSeen` entries included).
+
+A deep dive is never the only record. The incident it tells, and each of its `alsoSeen`
 entries, also gets a feed item in `data/feed/` whose `incident:` is this file's `id`
-([feed-item.md](feed-item.md)); the incident's page then links to them.
+([feed-item.md](feed-item.md)); the deep dive's page then links to them.
 
 ## Skeleton
 
 ```yaml
-id: short-kebab-id                 # unique; becomes the address, so never "feed" (the feed's own). checked
+id: short-kebab-id                 # unique; becomes the address, so never "feed" or an incident pattern's slug. checked
 title: "Who or what: what happened, in one line"
 subtitle: >
   One or two sentences telling the whole story. The list row and the page header lead with it.
 date: 2026-11                      # YYYY-MM of the latest event or disclosure; the list sorts on it. checked
 dateRange: 3 – 14 November 2026    # free text, as a reader would say it
-category: promptInjection          # one of the six below. checked
+category: promptInjection          # an incident pattern id (data/incident-patterns/). checked
 perspective: target                # target = the AI system was attacked; weapon = an AI agent ran the attack
 # One comment line: why this pattern and not a neighbouring one.
 archetype: archCodingAgentThirdParty   # a pattern id from pattern-map.mjs. checked
@@ -77,20 +82,17 @@ sources:                           # every source for the incident, at least one
 Older files also carry `components:` on each step and a top-level `controls:` list. Both are
 optional now; new files can leave them out.
 
-## Categories
+## Category: the incident pattern
 
-| `category` | Files under | Means |
-| --- | --- | --- |
-| `promptInjection` | Prompt injection | Untrusted content steers the agent. |
-| `supplyChain` | Supply chain | Poisoned tools, packages, models, releases or instruction files. |
-| `identity` | Identity & credentials | Stolen tokens and keys, over-broad integrations, unapproved AI. |
-| `exposed` | Exposed by default | Agents, gateways and apps left open to anyone who finds them. |
-| `breakout` | Agent breaks out | An agent escapes its sandbox or evaluation, or acts beyond its brief. |
-| `aiAttacker` | AI as the attacker | An agent runs the intrusion itself. |
+`category` is the id of the incident pattern the deep dive is an exemplar of, the one that names
+how the chain *started*. The skill's section 4 has the rule and the eight; `incident-index.mjs`
+lists them with how many deep dives each has. An incident pattern with no deep dive yet is where
+a first one is most valuable.
 
-Pick the one that names how the chain *started*. A new category is a change to
-`src/lib/incident-categories.ts` and to the page's filters, so raise it with the owner instead
-of adding one.
+An incident that fits none of them is not a reason to stretch one: file its feed item with
+`fit: loose`, and let the new-incident-pattern test (the skill's section 9) decide. A new incident
+pattern is a file in `data/incident-patterns/` ([incident-pattern-file.md](incident-pattern-file.md)),
+not a change to code.
 
 ## Phases
 

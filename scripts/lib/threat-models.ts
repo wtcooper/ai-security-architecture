@@ -142,7 +142,14 @@ export function checkThreatModel(t: ThreatModel, file: string, ctx: ThreatModelC
 export async function loadThreatModels(
   root: string,
   ctx: Omit<ThreatModelContext, "atlasIds"> & { fail: (msg: string) => void },
-): Promise<{ threatModels: ThreatModel[]; atlasTechniques: Record<string, AtlasTechnique> }> {
+): Promise<{
+  threatModels: ThreatModel[];
+  atlasTechniques: Record<string, AtlasTechnique>;
+  /** Every technique id in the vendored release, for other files that name ATLAS techniques. */
+  atlasIds: Set<string>;
+  /** A technique as the page names it, for an id in `atlasIds`. */
+  describeAtlas: (id: string) => AtlasTechnique;
+}> {
   const dir = join(root, "data", "reference", "threat-models");
   const files = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith(".yaml")).sort();
   const atlas = await loadAtlas(root);
@@ -167,5 +174,10 @@ export async function loadThreatModels(
   const order = new Map(ctx.archetypes.map((a, i) => [a.id, i]));
   models.sort((x, y) => (order.get(x.pattern) ?? 0) - (order.get(y.pattern) ?? 0));
   const used = [...new Set(models.flatMap((m) => m.threats.flatMap((x) => list(x.atlas))))].filter((id) => full.atlasIds.has(id)).sort();
-  return { threatModels: models, atlasTechniques: Object.fromEntries(used.map((id) => [id, techniqueOf(atlas, id)])) };
+  return {
+    threatModels: models,
+    atlasTechniques: Object.fromEntries(used.map((id) => [id, techniqueOf(atlas, id)])),
+    atlasIds: full.atlasIds,
+    describeAtlas: (id) => techniqueOf(atlas, id),
+  };
 }

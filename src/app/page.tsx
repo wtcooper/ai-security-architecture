@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PatternFinder } from "@/components/patterns/PatternFinder";
-import { archetypes, incidents, mitigations } from "@/lib/data";
+import { archetypes, incidentPatterns, incidents, mitigations } from "@/lib/data";
 import { ROUTES } from "@/lib/routes";
 
 export const metadata = {
@@ -18,7 +18,7 @@ const STEPS = [
 export default function HomePage() {
   const more = [
     { href: ROUTES.controls, title: "Controls", body: `The catalogue behind the patterns: ${mitigations.length} controls from MITRE D3FEND and ATLAS, by NIST CSF category.` },
-    { href: ROUTES.incidents, title: "Incidents", body: `${incidents.length} real 2025–26 incidents, walked step by step across the pattern each happened on.` },
+    { href: ROUTES.incidents, title: "Incidents", body: `How AI systems are being attacked, in ${incidentPatterns.length} incident patterns, with ${incidents.length} real incidents walked step by step and a feed reviewed daily.` },
     { href: ROUTES.reference, title: "Reference", body: `The reasoning: the risk map, the risks, the CoSAI controls and the framework crosswalks the ${archetypes.length} patterns are built on.` },
   ];
   return (

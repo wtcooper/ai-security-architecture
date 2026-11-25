@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { legacyCatalogueTarget, legacyPatternTarget } from "../src/components/shell/LegacyRedirect";
+import { LegacyRedirect, legacyCatalogueTarget, legacyPathTarget, legacyPatternTarget } from "../src/components/shell/LegacyRedirect";
+import LegacyFeedPage from "../src/app/incidents/feed/page";
 import { findPatterns } from "../src/components/patterns/model";
 import { dataset, toolsForArchetype } from "../src/lib/data";
-import { ROUTES, cloudHref, controlHref, isCosaiControlId, patternHref, toolHref } from "../src/lib/routes";
+import { ROUTES, cloudHref, controlHref, feedHref, incidentHref, incidentPatternHref, isCosaiControlId, patternHref, toolHref } from "../src/lib/routes";
 
 const q = (s: string) => new URLSearchParams(s);
 
@@ -87,4 +88,29 @@ test("a pattern can be linked as built on a cloud, on any tab, and a cloud has i
   assert.equal(patternHref("archChatAgent", { tab: "flows", cloud: "cloudGcp" }), "/patterns/cloud-chat-agent?tab=flows&cloud=gcp");
   assert.equal(patternHref("archChatAgent", { cloud: "cloudAzure", control: "D3-OTF" }), "/patterns/cloud-chat-agent?cloud=azure#control-D3-OTF");
   assert.equal(cloudHref("cloudAzure"), `${ROUTES.clouds}?cloud=azure`);
+});
+
+test("the feed moved to /feed/: the old address forwards there, keeping the filters and the item", () => {
+  assert.equal(ROUTES.feed, "/feed");
+  assert.equal(feedHref({ category: "identity", evidence: "exploited" }, "some-item"), "/feed?category=identity&evidence=exploited#some-item");
+  // The old page is a path redirect to the feed, like the site's other retired addresses.
+  const page = LegacyFeedPage() as React.ReactElement<{ children: React.ReactElement<{ kind: string; to: string }> }>;
+  const redirect = page.props.children;
+  assert.equal(redirect.type, LegacyRedirect);
+  assert.deepEqual({ kind: redirect.props.kind, to: redirect.props.to }, { kind: "path", to: "/feed" });
+  assert.equal(
+    legacyPathTarget(redirect.props.to, q("category=identity&pattern=archChatAgent&evidence=exploited"), "#mittwald-mcp-server"),
+    "/feed?category=identity&pattern=archChatAgent&evidence=exploited#mittwald-mcp-server",
+  );
+  assert.equal(legacyPathTarget(redirect.props.to, q(""), ""), "/feed");
+  assert.equal(legacyPathTarget(redirect.props.to, q("incident=mittwald-mcp-server"), ""), "/feed?incident=mittwald-mcp-server");
+});
+
+test("incident patterns and deep dives share /incidents/<id>/, each at its own address", () => {
+  const addresses = [...dataset.incidentPatterns.map((p) => p.slug), ...dataset.incidents.map((i) => i.id)];
+  assert.equal(new Set(addresses).size, addresses.length, "no slug is a deep dive's id");
+  assert.ok(!addresses.includes("feed"), "/incidents/feed/ stays the old feed's forward");
+  for (const p of dataset.incidentPatterns) assert.equal(incidentPatternHref(p.id), `/incidents/${p.slug}`);
+  for (const i of dataset.incidents) assert.equal(incidentHref(i.id), `/incidents/${i.id}`);
+  assert.equal(incidentPatternHref("noSuchPattern"), ROUTES.incidents);
 });
