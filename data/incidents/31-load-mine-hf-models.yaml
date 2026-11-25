@@ -1,0 +1,193 @@
+id: load-mine-hf-models
+title: "Load/Mine: fake Qwen2 test models on Hugging Face run a miner and a backdoor on the hosts that load them"
+subtitle: >
+  From September 2026, seven accounts published 31 Hugging Face repositories posing as small
+  Qwen2 test checkpoints. Loading one with trust_remote_code ran the publisher's Python before any
+  weights, turning self-hosted inference GPUs into miners with a way back in. Every scanner
+  passed the flagship, and a second wave was up within days of the takedown.
+date: 2026-10
+dateRange: 21 September – 29 October 2026 (disclosed 29 October)
+category: supplyChain
+perspective: target
+# Pluto says the payloads were written for self-hosted inference hosts (Xinference, GPUStack) and report into Xinference's registry: the serving runtime's loader imported the repo's code, so the chain ran sources to storage to runtime.
+archetype: archSelfHostedInference
+caveat: >
+  The counts are Pluto Security's and measure downloads, not infections; nobody has said how
+  many hosts ran the payload. The figure of about $5,000 is Pluto's estimate of on-chain payouts
+  to one wallet. BleepingComputer independently confirmed a live copy carried the same miner and
+  reverse shell.
+breaks:
+  - control: D3-FA
+    how: "Analyse the Python a repo's auto_map names, not just its weight files: subprocess, sockets and memfd_create in a model definition were the tell Pluto's own scanner used."
+  - control: AML.M0014
+    how: "Load only a revision someone reviewed and approved, checked by digest at load; a fresh tiny Qwen2 straight off the Hub never qualifies."
+  - control: AML.M0023
+    how: "Record which repository and revision each host loaded, so a published list of bad repos tells you which machines to clean."
+  - control: D3-NI
+    how: "Serving hosts reach your model store and your own services, nothing else: no mining pool, no reverse-shell receiver, no direct route around the proxy the downloader ignored."
+summary:
+  - >
+    Some models need Python that Transformers does not ship, and `trust_remote_code=True` lets
+    the repository supply it. Transformers imports the module `config.json` names under
+    `auto_map`, and Python runs its top-level statements to define the class. Code placed
+    there runs with the loader's privileges before a single weight is read; no poisoned
+    weights or pickle are needed.
+  - >
+    Pluto Security found repositories named like tiny Qwen2 test checkpoints that were nothing
+    but that loader. The payload planted a watchdog and shell-startup hooks, ran a miner from
+    memory disguised as a kernel worker, and planted an SSH key or opened reverse shells. It
+    was written for GPU hosts running self-hosted inference, Xinference and GPUStack above all,
+    and reported its progress into Xinference's own model registry.
+  - >
+    The Hub's antivirus and its partner scanners for weight formats all passed it. After Pluto
+    reported the first wave, Hugging Face and ModelScope removed the accounts; a second wave of
+    19 repositories followed within days, and its flagship went past 28,000 downloads. Pluto
+    counts 31 malicious repositories across seven accounts.
+risks:
+  - riskModelSourceTampering
+  - riskMaliciousLoaderDeserialization
+  - riskInsecureIntegratedComponent
+steps:
+  - n: 1
+    title: Test checkpoints that are only a loader
+    phase: introduced
+    narrative: >
+      The account hhzz667, created on 29 April 2026, sat dormant for five months. From
+      21 September it published repositories named like small Qwen2 checkpoints (qwen2-shell,
+      qwen2-tiny, -mini, -nano), the first with a README copied word for word from the official
+      Qwen2.5-0.5B model card. Each `config.json` used `auto_map` to send Transformers to a
+      Python file in the repository. In the later MENXIANGYU/qwen2-tiny, `model.safetensors`
+      held no tensors and was 42 bytes; the payload was `modeling_evil2.py`.
+    path: [sources]
+    risks:
+      - riskModelSourceTampering
+    sources:
+      - title: "Load/Mine: A Hugging Face Malware Campaign Returns After Takedown"
+        url: https://pluto.security/blog/hugging-face-malware-campaign-load-mine/
+        publisher: Pluto Security
+        date: 2026-10-29
+  - n: 2
+    title: The Hub's scanners pass it
+    phase: introduced
+    narrative: >
+      Hugging Face runs every file under 2 GB through the ClamAV antivirus at each commit, and
+      partner scanners from Protect AI and JFrog inspect weight formats. Nothing read what the
+      Python did. None of the 12 first-wave repositories was flagged; in Pluto's checks
+      `modeling_evil2.py` returned safe from every scanner, JFrog's reporting that it was "not a
+      machine-learning model". The repositories were aimed at GPU hosts, shared notebooks and
+      CI jobs that pull small test models without anyone reading the code.
+    path: [sources->storage]
+    risks:
+      - riskModelSourceTampering
+    sources:
+      - title: "Load/Mine: A Hugging Face Malware Campaign Returns After Takedown"
+        url: https://pluto.security/blog/hugging-face-malware-campaign-load-mine/
+        publisher: Pluto Security
+        date: 2026-10-29
+      - title: "Hugging Face malware campaign returns to hijack GPUs for crypto mining"
+        url: https://www.bleepingcomputer.com/news/security/hugging-face-malware-campaign-returns-to-hijack-gpus-for-crypto-mining/
+        publisher: BleepingComputer
+        date: 2026-10-29
+  - n: 3
+    title: The loader runs the repository's code before any weights
+    phase: exposed
+    narrative: >
+      Loading with `trust_remote_code=True` imported the module and ran the payload before any
+      weights loaded, with no prompt and no error. It wrote a watchdog (`/tmp/.cch/svc.py`) and
+      shell-startup hooks, launched the miner from memory with `memfd_create` under the name
+      `[kworker/u20:1]`, killed rival miners and removed their model registrations, and wrote
+      its progress into the local Xinference registry disguised as model names. Early builds
+      planted an SSH key, including in the xinference user's home; three second-wave builds
+      opened reverse shells instead.
+    path: [storage->runtime, runtime]
+    risks:
+      - riskMaliciousLoaderDeserialization
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "Load/Mine: A Hugging Face Malware Campaign Returns After Takedown"
+        url: https://pluto.security/blog/hugging-face-malware-campaign-load-mine/
+        publisher: Pluto Security
+        date: 2026-10-29
+  - n: 4
+    title: The GPUs mine for the operator
+    phase: exposed
+    narrative: >
+      When the miner binary had to be fetched, the downloader set an empty proxy handler, so it
+      ignored the host's HTTP_PROXY and HTTPS_PROXY wherever direct outbound traffic was
+      allowed. Pluto counted about 2,276 PRL paid into the first-wave wallet, which it puts at
+      roughly $5,000, and watched nine workers named like a shared notebook cluster, A100
+      machines among them, join within 90 seconds and stop about six minutes later.
+    path: [runtime]
+    risks:
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "Load/Mine: A Hugging Face Malware Campaign Returns After Takedown"
+        url: https://pluto.security/blog/hugging-face-malware-campaign-load-mine/
+        publisher: Pluto Security
+        date: 2026-10-29
+  - n: 5
+    title: Taken down, and back within days
+    phase: exposed
+    narrative: >
+      Pluto reported the first wave and Hugging Face and ModelScope removed the accounts. A
+      second wave of 19 repositories followed under new accounts. Its flagship,
+      MENXIANGYU/qwen2-tiny, went from 7,354 downloads at Pluto's report to 28,412 on
+      28 October. 8.5 hours after the disclosure email the same account published a script that
+      escapes a privileged container and takes root on the host, looking for GPUStack's data
+      directory. Pluto counts 29,818 recorded downloads (32,376 with linked models).
+      BleepingComputer found the flagship disabled and a near-identical copy,
+      htt0118/qwen2-tiny, still live with the same miner and reverse shell.
+    path: [sources->storage, storage->runtime]
+    risks:
+      - riskModelSourceTampering
+      - riskMaliciousLoaderDeserialization
+    sources:
+      - title: "Load/Mine: A Hugging Face Malware Campaign Returns After Takedown"
+        url: https://pluto.security/blog/hugging-face-malware-campaign-load-mine/
+        publisher: Pluto Security
+        date: 2026-10-29
+      - title: "Hugging Face malware campaign returns to hijack GPUs for crypto mining"
+        url: https://www.bleepingcomputer.com/news/security/hugging-face-malware-campaign-returns-to-hijack-gpus-for-crypto-mining/
+        publisher: BleepingComputer
+        date: 2026-10-29
+  - n: 6
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Read the Python files `auto_map` points to before anything sets `trust_remote_code`, and
+      pin the revision you read: Pluto says that review would have caught every payload in this
+      campaign. Make that analysis part of ingest, because the Hub's scanning looks at weight
+      formats and known signatures. Let the runtime load only what was approved, checked at
+      load. Keep the record of which repository and revision each host loaded, so a list of bad
+      repositories becomes a list of machines. And give serving hosts no outbound route except
+      to your own model store and services.
+    path: [sources->storage, storage->runtime, runtime, govSupplyChain]
+    sources:
+      - title: "Load/Mine: A Hugging Face Malware Campaign Returns After Takedown"
+        url: https://pluto.security/blog/hugging-face-malware-campaign-load-mine/
+        publisher: Pluto Security
+        date: 2026-10-29
+alsoSeen:
+  - title: "An AI agent builds booby-trapped Hugging Face models aimed at services that ingest user-supplied repositories"
+    date: 24 November 2026
+    note: >
+      JFrog assesses that an ARTEX agent on gpt-5.4 published 13 repositories in one day; its
+      models ran their payload on load through `auto_map` code, a malicious pickle or the chat
+      template, and the second had no weights, made to fire in a service that only reads the
+      config, such as an indexer or an evaluation harness. Its first self-test published the
+      agent's own OpenAI key, and Hugging Face disabled all 13 repositories the same day, before
+      any victim data came back.
+    sources:
+      - title: "The Agent That Robbed Itself: an AI-Driven Hugging Face Malware Campaign Leaks Its Own Operator"
+        url: https://research.jfrog.com/post/the-agent-that-robbed-itself-an-ai-driven-hugging-face-malware-campaign-leaks-its-own-operator/
+        publisher: JFrog Security Research
+        date: 2026-11-24
+sources:
+  - title: "Load/Mine: A Hugging Face Malware Campaign Returns After Takedown"
+    url: https://pluto.security/blog/hugging-face-malware-campaign-load-mine/
+    publisher: Pluto Security
+    date: 2026-10-29
+  - title: "Hugging Face malware campaign returns to hijack GPUs for crypto mining"
+    url: https://www.bleepingcomputer.com/news/security/hugging-face-malware-campaign-returns-to-hijack-gpus-for-crypto-mining/
+    publisher: BleepingComputer
+    date: 2026-10-29
