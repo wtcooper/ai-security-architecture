@@ -6,7 +6,7 @@
  * (one entry per paragraph); the build step normalises them to Paragraph[].
  */
 
-import type { IncidentCategory } from "./incident-categories";
+import type { FeedEvidence, IncidentCategory, IncidentPerspective } from "./incident-categories";
 
 export type Phase = "introduced" | "exposed" | "mitigated";
 export const PHASES: Phase[] = ["introduced", "exposed", "mitigated"];
@@ -1427,6 +1427,34 @@ export interface Incident {
 }
 
 /**
+ * ------------------------------------------------------------------ The incident feed
+ *
+ * Every real AI security incident tracked, in two or three lines each (data/feed/<YYYY-MM>.yaml).
+ * The incident files above are the catalogue: the few that teach something new, told step by
+ * step. A feed item points at the catalogue incident that tells it, when there is one.
+ */
+export interface FeedItem {
+  /** Unique across every feed file; kebab-case. Also the item's anchor on the feed page. */
+  id: string;
+  /** "YYYY-MM-DD": the day it came to light. Inside the month its file is named for. */
+  date: string;
+  /** At most 120 characters. */
+  title: string;
+  /** At most 420 characters: one to three plain past-tense sentences. */
+  summary: string;
+  category: IncidentCategory;
+  perspective: IncidentPerspective;
+  evidence: FeedEvidence;
+  /** Zero to three patterns it would replay on. */
+  patterns: string[];
+  /** The catalogue incident that tells it, as its own file or as one of its "also seen" entries. */
+  incident?: string;
+  cves?: string[];
+  /** One to three, the primary first. */
+  sources: IncidentSource[];
+}
+
+/**
  * ------------------------------------------------------------------ Threat models
  *
  * One short threat model per pattern (data/reference/threat-models/<slug>.yaml), read as the
@@ -1541,6 +1569,8 @@ export interface Dataset {
   actorAccessLevels: Vocabulary[];
   overlays: RiskOverlay[];
   incidents: Incident[];
+  /** Every feed item from data/feed/, newest first; empty when there are no feed files. */
+  feed: FeedItem[];
   surfaces: Surface[];
   /** Authored specialisations of MITRE mitigations, also merged into `mitigations`. */
   specializations: Mitigation[];

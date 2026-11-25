@@ -1,6 +1,6 @@
 /**
- * Compile the vendored CoSAI-RM YAML, the risk-component overlay and the incident case
- * studies into a single typed JSON dataset the app imports at build time.
+ * Compile the vendored CoSAI-RM YAML, the risk-component overlay, the incident case
+ * studies and the incident feed into a single typed JSON dataset the app imports at build time.
  *
  * Every cross-reference is checked; a dangling id fails the build rather than rendering
  * an empty box in the UI.
@@ -19,6 +19,7 @@ import { standIn } from "../src/components/drawing/crossings";
 import { checkSettings, loadClouds, loadProductStatus } from "./lib/products";
 import { loadSpecializations } from "./lib/specializations";
 import { loadThreatModels } from "./lib/threat-models";
+import { loadFeed } from "./lib/feed";
 import { CROSSING_KINDS } from "../src/lib/types";
 
 import type {
@@ -414,6 +415,8 @@ async function main() {
     }
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(inc.date ?? "")) fail(`${where}: date "${inc.date}" must be YYYY-MM (the latest event)`);
     if (incidents.filter((i) => i.id === inc.id).length > 1) fail(`${where}: duplicate incident id`);
+    // /incidents/feed/ is the feed's own page; an incident by that id would take its address.
+    if (inc.id === "feed") fail(`${where}: "feed" is the address of the incident feed; choose another id`);
     // The last step lights these on the drawing, so each must be a control pinned there.
     const pinnedHere = new Set(archetypes.find((a) => a.id === inc.archetype)?.mitigations ?? []);
     if (!inc.breaks?.length || inc.breaks.length > 6) fail(`${where}: needs 1–6 breaks (controls that stop the chain)`);
@@ -470,6 +473,9 @@ async function main() {
     }
   }
 
+  // --- The incident feed (data/feed/<YYYY-MM>.yaml); no files at all is an empty feed --------
+  const feed = await loadFeed(ROOT, { patternIds: archetypeIds, incidentIds: new Set(incidents.map((i) => i.id)) }, fail);
+
   if (errors.length) {
     console.error(`\nData integrity check failed (${errors.length}):`);
     for (const e of errors) console.error(`  - ${e}`);
@@ -486,6 +492,7 @@ async function main() {
         controls: controls.length,
         personas: personasDoc.personas.length,
         incidents: incidents.length,
+        feed: feed.length,
         mitigations: mitigationsDoc.mitigations.length,
         specializations: specializations.specializations.length,
         archetypes: archetypes.length,
@@ -512,6 +519,7 @@ async function main() {
     actorAccessLevels: actorDoc.actorAccessLevels,
     overlays,
     incidents,
+    feed,
     surfaces: mitigationsDoc.surfaces,
     specializations: specializations.specializations,
     specializationsAttribution: specializations.attribution,
@@ -540,7 +548,7 @@ async function main() {
   console.log(
     `dataset.json: ${risks.length} risks (${overlays.length - authored} SAIF-seeded, ` +
       `${authored} authored), ${controls.length} CoSAI controls, ${components.length} components, ` +
-      `${incidents.length} incidents, ${mitigationsDoc.mitigations.length} controls in the catalogue, ` +
+      `${incidents.length} incidents, ${feed.length} feed items, ${mitigationsDoc.mitigations.length} controls in the catalogue, ` +
       `${archetypes.length} archetypes, ${guidance.length} guidance docs, ` +
       `${tools.length} tools, ${threatModels.length} threat models, ${orgControls.length} of your own controls recorded`,
   );

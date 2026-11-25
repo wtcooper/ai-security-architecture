@@ -124,7 +124,7 @@ CoSAI controls, Components, Personas, Frameworks).
 | **Home** (`/`) and **Patterns** (`/patterns/`) | Home opens with what the site is for and the three steps of reading a pattern, then the pattern finder: one situation at a time (tools on your devices, AI services you subscribe to, AI you host yourself), a short list of its patterns, and beside it a preview of the one the pointer is on — when it applies, its examples and its drawing. A click opens the pattern. The search box understands product, cloud and everyday words ("copilot", "azure", "chatbot") and searches every situation at once. |
 | **Reference › Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
 | **A pattern** (`/patterns/<slug>/`) | One page per pattern. A header says when it applies and gives examples; the drawing carries its numbered control chips, and its toolbar a **Show risks** toggle that tags every risk the pattern pins where it is pinned, in place of the chips (hover a tag for the risk's name, select it to light that risk as opening it under Risks does; a legend line says what the red tags are); beneath it sit five tabs, each of which changes what the drawing shows and the panel under it: How it works, Threat model, Enable, Data flows and Incidents. **How it works** (default) is short: a **How to enable it →** link to Enable, the pattern's overview (`overview`: what it is and what sets it apart from its nearest neighbour, in at most 420 characters), then **In more detail**, the pattern's `description` (two or three short paragraphs, at most 900 characters) shown plainly; then, folded, the risks that enter the pattern (opening one tags it on the drawing), with a platform chosen one fold **On <platform>** (what its drawing shows differently and why, the differences it cannot show, limits to watch, the services also needed, the quickstart links and each named service's checked page), and the sources. What plays each box and its options are in the drawing's hover help, and the examples are named in the header, so there is no component list, examples fold or side-by-side comparison of the platforms. The guidance and the authors' notes on the drawing stay in the data for authors and are not shown. **Threat model** (`?tab=threats`) reads top down: the executive summary, where risk concentrates, and a compact table of the threats, each with a rating chip (critical, high, medium, low), the evidence for it (observed, disclosed, research or theoretical) and its OWASP ids. A row opens, as a control row does on Enable, to how it happens here, where (the boxes and arrows, lit and outlined on the drawing while the row is open, with the controls that break it), the risks it is, its MITRE ATLAS techniques (linked to ATLAS) and OWASP items, the controls that break it as numbered chips linking to their Enable rows, its incidents and sources. Beneath, folded: assets and threat actors, OWASP coverage (each item of each list that applies, with the threats that cover it or why none does), design review questions, and the scope the ratings assume. A pattern whose threat model is not yet written says so. Search finds a pattern's threats by title. **Enable** is where the pattern is put in place, as folded steps: two for a pattern that is bought, three for one the organisation hosts (controls, then **Choose how you'll build it**, then **Set it**). (1) **Enterprise controls**: one table, a band per NIST CSF category with a plain heading ("Check your suppliers") and one sentence on what it is for, and one line per control: its chip, its name, your organisation's own controls that deliver it, where it goes on the drawing, the chosen product's settings for it, and its status once your organisation records one in `data/org/controls.yaml`. A row opens to what to do and why at each place it is pinned, each setting with the value to set, your own controls, and links to the drawing and the full definition. (2) **Set it in your product** (or **(3) Set it** on a hosted pattern): one pill per product and, for the one picked, its recommended settings as a table built like the controls table: the same bands, the same columns in the same order, and rows that open. A closed row is one line of reference, indented under its band: the chip and name of the control the setting delivers ("+2 more" where it delivers others) above the setting's name; the value to set (a short `value`, tinted so it never reads as the default) with the default; how it is set (MDM, admin console, config file, API/CLI, IdP, cloud policy or your own code); and its status at the right once recorded in `data/org/products.yaml`. Opening a row lights its control on the drawing and shows how to set it and why, the path, every control it delivers, what your organisation recorded, a read-only command to check it where there is one, and the vendor's page. On a hosted pattern, **(2) Choose how you'll build it** comes first, in the order the choices are made: (a) where it runs; (b) how it is hosted there, compared on the same ten rows from the vendor's own pages, none ranked, each marked if your organisation has approved it; (c) on a platform where you choose the products yourself (on-premises), **Your stack**: a card for each platform pack (a set of products its vendor or project documents as working together: name, open source, commercial or mixed, its status if not generally available, when it fits, what it covers and what you bring) and one for **Mix your own**, then add-on cards you can switch on (an add-on replaces the pack's product on the boxes it covers), a side-by-side comparison of the packs behind a fold (licence, support, covers, what you bring, integration, effort, status), and a table of every box's options with their kind and the packs each belongs to, the one in effect marked once a pack is chosen; none ranked. Choosing a pack puts its products in the boxes on the drawing and narrows **Set it** to the rows that apply whatever you choose and those of products in effect; with none chosen, or your own mix, every row is shown, each that belongs to one product tagged "If you use …"; (d) what the boxes you build are built with: on an agent pattern, the frameworks teams build agents with, as cards grouped into open-source frameworks, model or cloud providers' SDKs and coding agents' runtimes, each with one line on what it is, its languages and last month's downloads, most downloaded first. A framework is catalogued once (`builder.also` lists the other patterns it builds) and offered on each with the settings that deliver what that pattern pins. Clicking a tab changes the panel, never the scroll position. **Data flows** numbers each sequence flow onto the drawing, with the boundary crossings. **Incidents** lists the real incidents that happened on it. The tab, the open threat (`threat=T2`), the platform (`cloud=`), its hosting (`host=`), the stack (`stack=<pack>`, `addons=<id,id>`), the open product, the Show risks toggle (`risks=1`) and the open control ride in the address; an old link to the Risks tab lands on How it works. |
-| **Incidents** | A list of real 2025–26 incidents, newest first, filtered by attack type and architecture. Each opens its own page: a step-by-step walk across its reference architecture, every step sourced, ending at the controls that would have broken the chain — each a link to its row on the pattern's Enable tab. |
+| **Incidents** | Two views under one heading, switched by **Catalogue** and **Feed**. The catalogue (`/incidents/`, the default) lists the real 2025–26 incidents that teach something new, newest first, filtered by attack type and pattern. Each opens its own page: a step-by-step walk across its pattern, every step sourced, ending at the controls that would have broken the chain — each a link to its row on the pattern's Enable tab — and, when feed items point to it, one line linking to them. The feed (`/incidents/feed/`) is every incident tracked, newest first, under week headings, each in two or three lines with its attack type, evidence, patterns and sources, filtered by attack type, pattern and evidence. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Reference › CoSAI controls** (`/reference/cosai-controls/`) | The 35 CoSAI controls in six groups. A CoSAI control's status rolls up from the catalogue controls that deliver it. |
 | **Controls** (`/controls/`) | The full catalogue — 60 MITRE mitigations and 17 authored specialisations — as a matrix of NIST CSF category × deployment surface, tinted by status; one switch regroups the rows by CoSAI control group (`/controls?by=cosai`). Filter by pattern, risk category, stack layer or source. A control's detail shows the MITRE definition, the authored implementation scope, example technologies, its CSF category, the CoSAI controls it contributes to and the patterns that pin it. |
@@ -543,7 +543,8 @@ data/
 ├── frameworks/
 │   ├── entries.yaml              framework entry titles and descriptions
 │   └── nist-csf.yaml             NIST CSF 2.0 categories + CoSAI control crosswalk
-├── incidents/                    authored incidents, one YAML each, replayed on their architecture
+├── incidents/                    the catalogue: authored incidents, one YAML each, replayed on their pattern
+├── feed/                         the incident feed: <YYYY-MM>.yaml, every incident tracked in two or three lines (README.md has the format)
 ├── reference/
 │   ├── architectures/            ★ 20 flow-style reference architectures, one YAML each
 │   ├── guidance/                 controls guidance, one document per architecture
@@ -566,6 +567,7 @@ scripts/
 ├── fetch-cosai.ts                refreshes the vendored CoSAI snapshot
 ├── extract-saif-tour.ts          re-extracts the SAIF tour seed
 ├── lib/enablement.ts             loads and checks the control families and your controls (data/org/controls.yaml)
+├── lib/feed.ts                   loads and checks the incident feed (data/feed/), naming the file and item of every problem
 └── lib/products.ts               checks settings rows, cloud implementations and your products (data/org/products.yaml)
 
 src/
@@ -583,7 +585,8 @@ src/
 │   ├── page.tsx                  home: the pattern finder
 │   ├── patterns/[slug]/          one static page per pattern
 │   ├── controls/                 the control catalogue
-│   ├── incidents/[id]/           one static page per incident
+│   ├── incidents/[id]/           one static page per catalogue incident
+│   ├── incidents/feed/           the incident feed (a static segment; the build refuses an incident whose id is "feed")
 │   ├── reference/                the index, and risk-map|risks|cosai-controls|components|personas|frameworks|clouds/
 │   └── map|risks|components|personas|frameworks|capabilities|enable|examples/
 │                                   retired paths: each only forwards to its new address
@@ -601,22 +604,52 @@ src/
     ├── cloud/                    ★ a pattern as built on a cloud: the switch, the component table, options per control, the Clouds page
     ├── reference/                ★ the pattern view (drawing, tabs, panels), sequence flows, switcher, per-block styling
     ├── enable/                   ★ a pattern's Enable tab: the controls by CSF category, the choices of a hosted pattern, product pills and recommended-settings tables
-    └── incidents/                the incident list and the per-incident walk-through
+    └── incidents/                the catalogue list, the feed, the switch between them and the per-incident walk-through
 
 docs/AUDIT.md                     generated: every deviation and authored mapping, with reasons
 ```
 
 ## The incidents
 
-Each incident is one YAML file in `data/incidents/`, walked step by step across one reference
-architecture. The list on `/incidents` stays one glance however many are added: newest first,
-with two filters — the attack type and the architecture.
+The Incidents section has two views, chosen by a switch under its heading: the **catalogue**
+(`/incidents/`, the default) and the **feed** (`/incidents/feed/`). The nav item is "Incidents"
+for both.
+
+- **The catalogue** is the incidents that teach something new. Each is one YAML file in
+  `data/incidents/`, walked step by step across one pattern. The list stays one glance however
+  many are added: newest first, with two filters — the attack type and the pattern.
+- **The feed** is every AI security incident we track, newest first, each in two or three
+  lines, from `data/feed/<YYYY-MM>.yaml` (one file per month; the format is in
+  [`data/feed/README.md`](data/feed/README.md)). Items sit under the week they came to light in
+  ("Week of 16 November 2026", weeks starting on Monday). Each shows its date, attack type and
+  evidence (In the wild, Confirmed, Demonstrated, Single report), its title and summary, the
+  patterns it would replay on, **Step by step →** when the catalogue tells it, and its sources.
+  Three filters ride in the address and survive Back: `?category=`, `?pattern=` and
+  `?evidence=`. Nothing is ranked but the date. With no feed files at all, the build makes an
+  empty feed and the page says so.
+
+The two meet in three places: a pattern's **Incidents** tab lists its catalogue incidents, then
+the five newest feed items that name it and a link to all of them in the feed; a catalogue
+incident's page says "In the feed: N reports" when feed items point to it; and site search
+finds feed items by title and opens the feed at the item.
 
 **Attack types** (`src/lib/incident-categories.ts`), one per incident: prompt injection, supply
 chain, identity & credentials, exposed by default, agent breaks out, AI as the attacker. The list
 is short on purpose; an incident that fits none of them is a reason to revisit it.
 
-**Adding one.** The build checks every field:
+**Adding a feed item.** Add it to the month's file under `data/feed/`; `npm run data` checks
+that ids are unique, the date is a real day inside the file's month, the category, evidence and
+perspective are on their lists, every pattern and the `incident` exist, there are one to three
+sources with `https` addresses, the title (120) and summary (420) fit, and no prose says
+"archetype". Each problem names the file and the item.
+
+```bash
+npm run data      # compile and check data/feed/ with everything else
+npm test          # scripts/feed.test.tsx: the loader's rules, the feed page, the switch, the pattern tab
+npm run dev       # then open /incidents/feed/
+```
+
+**Adding a catalogue incident.** The build checks every field:
 
 - `date` (`YYYY-MM`, when it came to light) sorts the list; `dateRange` is the human version.
 - `category`, `perspective` (`target`: the AI system was attacked; `weapon`: an agent ran the
@@ -642,7 +675,7 @@ npm run dev      # http://localhost:3000
 | Script | Purpose |
 | --- | --- |
 | `npm run data` | Compile `data/**` → the typed dataset, with every integrity check |
-| `npm test` | Run the control, matrix, Enable, incident, route, vocabulary, drawing, platform, stack, shape and threat model tests |
+| `npm test` | Run the control, matrix, Enable, incident, feed, route, vocabulary, drawing, platform, stack, shape and threat model tests |
 | `npm run audit` | Regenerate `docs/AUDIT.md` |
 | `npm run drawing:audit` | Score every pattern against the pattern standard; add `-- <slug>` for one pattern's findings |
 | `npm run fetch:cosai` | Refresh the vendored CoSAI snapshot from its pinned commit |
@@ -686,7 +719,7 @@ run by asking Claude Code for the thing in plain words.
 | --- | --- | --- |
 | `pattern-research` | Sweeps the web, as of the day it runs, for kinds of AI tool or application the catalogue has no pattern for, and sorts each finding into new pattern, change to an existing pattern, product of an existing pattern, or watch. | A dated report in `docs/research/patterns/`. It changes no data. |
 | `pattern-author` | Adds a pattern, or restructures one, to the [pattern standard](docs/PATTERN-STANDARD.md): the drawing, one-liners, crossings, pins, sequence flows, guidance and finder entry, looped against the build, the drawing audit and the tests. | The pattern's files, and its row in the sign-off table. |
-| `incident-research` | Sweeps the web for AI security incidents since the last one on file, verifies each against its sources, and writes the ones that qualify as walk-throughs on the pattern they happened on. | New files in `data/incidents/` and a dated log in `docs/research/incidents/`. |
+| `incident-research` | Sweeps the web for AI security incidents since the newest one in the feed, verifies each against its sources, gives every one that qualifies a feed item, and writes the ones that teach something new as walk-throughs on the pattern they happened on. Its **routine run** section is the procedure for a scheduled daily or weekly run. | Feed items in `data/feed/`, new files in `data/incidents/`, and a dated log in `docs/research/incidents/`. |
 | `tooling-onboard` | Adds or re-verifies a product's security settings under the pattern it belongs to. | A file in `data/tooling/`. |
 | `org-taxonomy-customize` | Records your organisation's own controls, their status and the catalogue controls each delivers, and the products you use. | `data/org/controls.yaml` and `data/org/products.yaml`. |
 

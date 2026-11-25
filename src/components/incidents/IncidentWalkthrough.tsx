@@ -13,11 +13,11 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { PHASE_META } from "@/components/PhaseRail";
 import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
-import { archetypeById, controlName, incidentById, riskCode, riskTitle } from "@/lib/data";
+import { archetypeById, controlName, feed, feedForIncident, incidentById, riskCode, riskTitle } from "@/lib/data";
 import { categoryById } from "@/lib/incident-categories";
-import type { Incident, IncidentSource, Phase } from "@/lib/types";
+import type { FeedItem, Incident, IncidentSource, Phase } from "@/lib/types";
 import { stepOverlay } from "./model";
-import { patternHref, riskHref } from "@/lib/routes";
+import { feedHref, patternHref, riskHref } from "@/lib/routes";
 
 /** Authored text marks file names and settings with backticks; show them as code, not as ticks. */
 function Text({ children }: { children: string }) {
@@ -37,8 +37,9 @@ function Text({ children }: { children: string }) {
   );
 }
 
-export function IncidentWalkthrough({ id }: { id: string }) {
+export function IncidentWalkthrough({ id, feed: items = feed }: { id: string; /** The feed to read; the dataset's unless a test passes its own. */ feed?: FeedItem[] }) {
   const incident = incidentById.get(id)!;
+  const reports = feedForIncident(id, items);
   const archetype = archetypeById.get(incident.archetype)!;
   const params = useSearchParams();
   const linked = Number(params.get("step"));
@@ -95,6 +96,14 @@ export function IncidentWalkthrough({ id }: { id: string }) {
           >
             <span className="font-semibold">Caveat: </span>
             {incident.caveat}
+          </p>
+        )}
+        {reports.length > 0 && (
+          <p className="mt-2 text-[12.5px] text-ink-3">
+            In the feed:{" "}
+            <Link href={reports.length === 1 ? feedHref({}, reports[0].id) : feedHref({ incident: id })} className="font-semibold text-introduced hover:underline">
+              {reports.length === 1 ? "1 report" : `${reports.length} reports`}
+            </Link>
           </p>
         )}
       </header>

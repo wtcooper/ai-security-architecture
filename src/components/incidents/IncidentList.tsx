@@ -1,18 +1,20 @@
 "use client";
 
 /**
- * The Incidents index: every incident, newest first, filed under one attack type and replayed
- * on one reference architecture. Two filters and a list, so it reads at a glance with fifty
- * incidents as well as with ten; each walk-through lives on the incident's own page.
+ * The Incidents catalogue: every incident told step by step, newest first, filed under one
+ * attack type and replayed on one reference architecture. Two filters and a list, so it reads at
+ * a glance with fifty incidents as well as with ten; each walk-through lives on the incident's
+ * own page. The switch under the heading leads to the feed, where every incident tracked is.
  */
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/Panel";
-import { archetypeById, archetypesInOrder, incidents, surfaces } from "@/lib/data";
+import { archetypeById, archetypesInOrder, feed, incidents, surfaces } from "@/lib/data";
 import { categoryById, INCIDENT_CATEGORIES } from "@/lib/incident-categories";
 import { incidentHref } from "@/lib/routes";
+import { CategoryChip, filterChip as chip, IncidentsSwitch } from "./chrome";
 import { formatMonth, incidentsNewestFirst } from "./model";
 
 export function IncidentList() {
@@ -39,18 +41,15 @@ export function IncidentList() {
   const archCount = (id: string) => (type ? all.filter((i) => i.category === type) : all).filter((i) => i.archetype === id).length;
   const archetypesWithIncidents = archetypesInOrder.filter((a) => incidents.some((i) => i.archetype === a.id));
 
-  const chip = (active: boolean) =>
-    `rounded-full border px-3 py-1 text-[12.5px] font-semibold transition-colors ${
-      active ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3 hover:text-ink"
-    }`;
-
   return (
     <>
       <PageHeader
         eyebrow="Incidents"
         title="Real AI incidents, replayed"
         lead={`${incidents.length} incidents from 2025–26, each walked step by step across the pattern it happened on, ending at the controls that would have broken the chain.`}
-      />
+      >
+        <IncidentsSwitch current="catalogue" catalogue={incidents.length} feed={feed.length} />
+      </PageHeader>
 
       <div className="mx-auto w-full max-w-5xl px-6 py-7">
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Attack type">
@@ -112,9 +111,7 @@ export function IncidentList() {
                     <span className="mt-1 line-clamp-2 block text-[13px] leading-snug text-ink-2">{i.subtitle}</span>
                   </span>
                   <span className="flex flex-wrap content-start items-start gap-1.5 sm:flex-col sm:items-end sm:text-right">
-                    <span className="rounded-full border border-line bg-mist px-2.5 py-[2px] text-[11.5px] font-semibold text-ink-2">
-                      {categoryById.get(i.category)?.label}
-                    </span>
+                    <CategoryChip category={i.category} />
                     <span className="text-[12px] leading-snug text-ink-3">{archetypeById.get(i.archetype)?.title}</span>
                   </span>
                 </Link>

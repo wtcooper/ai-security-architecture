@@ -2,7 +2,8 @@
 
 /**
  * ⌘K over everything with a name: patterns (by title, product, cloud and everyday words), tools,
- * clouds, controls, incidents, the threats of each pattern's threat model (by title), risks (with
+ * clouds, controls, incidents, the incident feed's reports (by title, each landing on the feed
+ * with the report in view), the threats of each pattern's threat model (by title), risks (with
  * their R-codes), CoSAI controls, components and personas. The dataset is
  * already in the bundle, so the index is built once and matched in the browser; a result is
  * a plain link into the page that owns the entity, so navigation works under the GitHub
@@ -22,6 +23,7 @@ import {
   componentTitle,
   components,
   controls,
+  feed,
   incidents,
   riskCode,
   risksInOrder,
@@ -32,7 +34,9 @@ import {
 import { SURFACE_SITUATION } from "@/components/patterns/labels";
 import { RATING_STYLE } from "@/components/patterns/threat-style";
 import { cloudsFor } from "@/components/patterns/model";
-import { cloudHref, patternHref, controlHref, cosaiControlHref, incidentHref, riskHref, componentHref, personaHref } from "@/lib/routes";
+import { formatDay } from "@/components/incidents/model";
+import { cloudHref, patternHref, controlHref, cosaiControlHref, feedHref, incidentHref, riskHref, componentHref, personaHref } from "@/lib/routes";
+import type { FeedItem } from "@/lib/types";
 
 interface Entry {
   kind: string;
@@ -43,7 +47,8 @@ interface Entry {
   text: string;
 }
 
-export function buildIndex(): Entry[] {
+/** Every entry search can find. `reports` is the incident feed, the dataset's unless a test passes its own. */
+export function buildIndex(reports: FeedItem[] = feed): Entry[] {
   const norm = (...parts: (string | undefined)[]) => parts.filter(Boolean).join(" ").toLowerCase();
   return [
     ...risksInOrder.map((r) => ({
@@ -117,10 +122,18 @@ export function buildIndex(): Entry[] {
       href: incidentHref(i.id),
       text: norm(i.title, i.id, i.subtitle, categoryById.get(i.category)?.label ?? "", ...(i.patterns ?? [])),
     })),
+    // A report opens the feed scrolled to it.
+    ...reports.map((f) => ({
+      kind: "Feed",
+      title: f.title,
+      hint: `${categoryById.get(f.category)?.label ?? ""} · ${formatDay(f.date)}`,
+      href: feedHref({}, f.id),
+      text: norm(f.title),
+    })),
   ];
 }
 
-const KIND_ORDER = ["Pattern", "Tool", "Cloud", "Control", "Incident", "Threat", "Risk", "CoSAI control", "Component", "Persona"];
+const KIND_ORDER = ["Pattern", "Tool", "Cloud", "Control", "Incident", "Feed", "Threat", "Risk", "CoSAI control", "Component", "Persona"];
 
 export function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const index = useMemo(() => buildIndex(), []);

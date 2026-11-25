@@ -18,7 +18,8 @@ const render = (path: string, query: string, node: React.ReactNode) =>
       </PathnameContext.Provider>
     </AppRouterContext.Provider>,
   );
-const rows = (html: string) => [...html.matchAll(/href="\/incidents\/([^"?]+)"/g)].map((m) => m[1]);
+// The switch under the heading links to the feed, which is not a row of the list.
+const rows = (html: string) => [...html.matchAll(/href="\/incidents\/([^"?]+)"/g)].map((m) => m[1]).filter((id) => id !== "feed");
 
 test("the list shows every incident once, newest first", () => {
   const html = render("/incidents", "", <IncidentList />);

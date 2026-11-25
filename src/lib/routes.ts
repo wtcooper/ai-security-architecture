@@ -19,6 +19,7 @@ export const ROUTES = {
   patterns: "/patterns",
   controls: "/controls",
   incidents: "/incidents",
+  incidentFeed: "/incidents/feed",
   reference: "/reference",
   riskMap: "/reference/risk-map",
   risks: "/reference/risks",
@@ -61,6 +62,31 @@ export const componentHref = (id: string) => `${ROUTES.components}?component=${i
 export const personaHref = (id: string) => `${ROUTES.personas}?persona=${id}`;
 export const riskMapHref = (riskId: string, phase: string) => `${ROUTES.riskMap}?risk=${riskId}&phase=${phase}`;
 export const incidentHref = (id: string) => `${ROUTES.incidents}/${id}`;
+
+/** The feed's filters, as its address carries them. `incident` narrows it to the reports one catalogue incident tells. */
+export interface FeedFilters {
+  category?: string | null;
+  pattern?: string | null;
+  evidence?: string | null;
+  incident?: string | null;
+}
+export const FEED_FILTERS = ["category", "pattern", "evidence", "incident"] as const;
+
+/** The feed's query string for these filters, in a fixed order; empty when none is set. */
+export function feedQuery(filters: FeedFilters = {}): string {
+  const query = new URLSearchParams();
+  for (const key of FEED_FILTERS) {
+    const value = filters[key];
+    if (value) query.set(key, value);
+  }
+  return query.toString();
+}
+
+/** The feed, optionally filtered, optionally with one item in view. */
+export function feedHref(filters: FeedFilters = {}, itemId?: string): string {
+  const query = feedQuery(filters);
+  return `${ROUTES.incidentFeed}${query ? `?${query}` : ""}${itemId ? `#${itemId}` : ""}`;
+}
 /** A cloud's page: the patterns built on it and its own control options. */
 export const cloudHref = (cloudId: string) => `${ROUTES.clouds}?cloud=${cloudSlug(cloudId)}`;
 

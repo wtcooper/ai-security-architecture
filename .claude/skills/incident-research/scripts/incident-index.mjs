@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Print what the incident catalogue already holds, so a scan knows where to start and what it
- * must not file twice: every incident with its date, pattern and category, every "also seen"
- * entry, every source address, and the next free file number.
+ * Print what the incident catalogue and the feed already hold, so a scan knows where to start
+ * and what it must not file twice: every incident with its date, pattern and category, every
+ * "also seen" entry, every feed item, every source address, the newest feed date (where a
+ * routine run's window starts) and the next free file number.
  *
  *   node incident-index.mjs           the index
  *   node incident-index.mjs --urls    only the source addresses already cited (for de-duplication)
@@ -21,12 +22,15 @@ try {
   process.exit(1);
 }
 const incidents = [...dataset.incidents].sort((a, b) => b.date.localeCompare(a.date));
+// A dataset built before the feed existed has none.
+const feed = [...(dataset.feed ?? [])].sort((a, b) => b.date.localeCompare(a.date));
 const urls = new Set();
 for (const i of incidents) {
   for (const s of i.sources ?? []) urls.add(s.url);
   for (const st of i.steps ?? []) for (const s of st.sources ?? []) urls.add(s.url);
   for (const r of i.alsoSeen ?? []) for (const s of r.sources ?? []) urls.add(s.url);
 }
+for (const f of feed) for (const s of f.sources ?? []) urls.add(s.url);
 if (process.argv.includes("--urls")) {
   console.log([...urls].sort().join("\n"));
   process.exit(0);
@@ -39,7 +43,9 @@ const scans = existsSync(dir) ? readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{
 
 console.log(`Today (UTC): ${new Date().toISOString().slice(0, 10)}`);
 console.log(`Last incident scan: ${scans.length ? scans.at(-1).replace(".md", "") : "none on record"}`);
+console.log(`Newest feed item: ${feed[0] ? `${feed[0].date} (${feed[0].id})` : "none; the feed is empty"}`);
 console.log(`Newest incident on file: ${incidents[0]?.date ?? "none"}`);
+console.log(`Feed items: ${feed.length}, in data/feed/<YYYY-MM>.yaml`);
 console.log(`Next file: data/incidents/${next}-<id>.yaml`);
 console.log(`Sources already cited: ${urls.size}\n`);
 console.log("INCIDENTS  (date · id · category · pattern)");
@@ -48,6 +54,14 @@ for (const i of incidents) {
   console.log(`           ${i.title}`);
   for (const r of i.alsoSeen ?? []) console.log(`           also seen: ${r.title}`);
 }
+console.log("\nFEED  (date · id · category · evidence · catalogue incident)");
+if (!feed.length) console.log("  none yet");
+for (const f of feed) {
+  console.log(`  ${f.date}  ${f.id.padEnd(34)} ${f.category.padEnd(16)} ${f.evidence.padEnd(13)} ${f.incident ?? ""}`);
+}
+const told = new Set(feed.map((f) => f.incident).filter(Boolean));
+const untold = incidents.filter((i) => !told.has(i.id)).map((i) => i.id);
+if (feed.length && untold.length) console.log(`Catalogue incidents no feed item points to: ${untold.join(" · ")}`);
 const byCat = {};
 for (const i of incidents) byCat[i.category] = (byCat[i.category] ?? 0) + 1;
 console.log(`\nBy category: ${Object.entries(byCat).map(([k, v]) => `${k} ${v}`).join(" · ")}`);

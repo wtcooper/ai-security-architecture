@@ -42,10 +42,10 @@ test("no retired word reaches the page from the interface code", () => {
   assert.deepEqual(offenders, []);
 });
 
-test("no pattern, guidance or incident prose still says archetype", () => {
+test("no pattern, guidance, incident or feed prose still says archetype", () => {
   const prose = (value: unknown): string[] =>
-    typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(prose) : value && typeof value === "object" ? Object.entries(value).flatMap(([k, v]) => (/^(id|archetype|architecture|slug|at|from|to|follow)$/.test(k) ? [] : prose(v))) : [];
-  for (const [name, items] of [["patterns", dataset.archetypes], ["guidance", dataset.guidance], ["incidents", dataset.incidents]] as const) {
+    typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(prose) : value && typeof value === "object" ? Object.entries(value).flatMap(([k, v]) => (/^(id|archetype|architecture|slug|at|from|to|follow|url)$/.test(k) ? [] : prose(v))) : [];
+  for (const [name, items] of [["patterns", dataset.archetypes], ["guidance", dataset.guidance], ["incidents", dataset.incidents], ["feed", dataset.feed ?? []]] as const) {
     const hits = prose(items).filter((t) => /\barchetypes?\b/i.test(t));
     assert.deepEqual(hits.map((t) => t.slice(0, 80)), [], name);
   }

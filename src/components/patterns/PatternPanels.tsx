@@ -3,15 +3,15 @@
 /**
  * Two panels of a pattern page that list what the drawing only marks: the risks that enter the
  * pattern, with where each enters and the controls here that reduce it; and the real incidents
- * that happened on it.
+ * that happened on it, the catalogue's walk-throughs first and then the newest feed reports.
  */
 import Link from "next/link";
 
-import { formatMonth, incidentsNewestFirst } from "@/components/incidents/model";
-import { controlName, mitigationsForArchetype, riskCategories, riskCode, risksForArchetype } from "@/lib/data";
-import { categoryById } from "@/lib/incident-categories";
-import { ROUTES, incidentHref, riskHref } from "@/lib/routes";
-import type { Archetype } from "@/lib/types";
+import { CategoryChip } from "@/components/incidents/chrome";
+import { formatDay, formatMonth, incidentsNewestFirst } from "@/components/incidents/model";
+import { controlName, feed, feedForPattern, mitigationsForArchetype, riskCategories, riskCode, risksForArchetype } from "@/lib/data";
+import { ROUTES, feedHref, incidentHref, riskHref } from "@/lib/routes";
+import type { Archetype, FeedItem } from "@/lib/types";
 
 /** Where on the drawing a risk is pinned: the block, or both ends of the flow. */
 function placements(archetype: Archetype, riskId: string) {
@@ -103,38 +103,69 @@ export function PatternRisks({
   );
 }
 
-export function PatternIncidents({ archetype }: { archetype: Archetype }) {
+/** How many of the newest feed items the tab lists before it hands over to the feed. */
+export const FEED_ON_PATTERN = 5;
+
+export function PatternIncidents({ archetype, feed: items = feed }: { archetype: Archetype; /** The feed to read; the dataset's unless a test passes its own. */ feed?: FeedItem[] }) {
   const here = incidentsNewestFirst().filter((i) => i.archetype === archetype.id);
-  if (!here.length) {
-    return (
-      <p className="rounded-xl border border-line bg-paper px-5 py-6 text-[13.5px] text-ink-2">
-        No catalogued incident happened on this pattern yet.{" "}
-        <Link href={ROUTES.incidents} className="font-semibold text-introduced hover:underline">See all incidents →</Link>
-      </p>
-    );
-  }
+  const reports = feedForPattern(archetype.id, items);
   return (
-    <section aria-label="Incidents on this pattern">
-      <p className="max-w-3xl text-[13px] leading-relaxed text-ink-2">
-        Real incidents that happened on this pattern. Each opens a step-by-step walk across the drawing, ending at the controls that
-        would have broken the chain.
-      </p>
-      <ul className="mt-3 divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper">
-        {here.map((i) => (
-          <li key={i.id}>
-            <Link href={incidentHref(i.id)} className="grid grid-cols-1 gap-x-5 gap-y-1.5 px-5 py-4 transition-colors hover:bg-mist/60 sm:grid-cols-[84px_minmax(0,1fr)_190px]">
-              <span className="ident pt-0.5 text-ink-3">{formatMonth(i.date)}</span>
-              <span className="min-w-0">
-                <span className="block text-[15px] font-semibold leading-snug text-ink">{i.title}</span>
-                <span className="mt-1 line-clamp-2 block text-[13px] leading-snug text-ink-2">{i.subtitle}</span>
-              </span>
-              <span className="sm:text-right">
-                <span className="rounded-full border border-line bg-mist px-2.5 py-[2px] text-[11.5px] font-semibold text-ink-2">{categoryById.get(i.category)?.label}</span>
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <div className="space-y-6">
+      {here.length ? (
+        <section aria-label="Incidents on this pattern">
+          <p className="max-w-3xl text-[13px] leading-relaxed text-ink-2">
+            Real incidents that happened on this pattern. Each opens a step-by-step walk across the drawing, ending at the controls that
+            would have broken the chain.
+          </p>
+          <ul className="mt-3 divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper">
+            {here.map((i) => (
+              <li key={i.id}>
+                <Link href={incidentHref(i.id)} className="grid grid-cols-1 gap-x-5 gap-y-1.5 px-5 py-4 transition-colors hover:bg-mist/60 sm:grid-cols-[84px_minmax(0,1fr)_190px]">
+                  <span className="ident pt-0.5 text-ink-3">{formatMonth(i.date)}</span>
+                  <span className="min-w-0">
+                    <span className="block text-[15px] font-semibold leading-snug text-ink">{i.title}</span>
+                    <span className="mt-1 line-clamp-2 block text-[13px] leading-snug text-ink-2">{i.subtitle}</span>
+                  </span>
+                  <span className="sm:text-right">
+                    <CategoryChip category={i.category} />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : (
+        <p className="rounded-xl border border-line bg-paper px-5 py-6 text-[13.5px] text-ink-2">
+          No catalogued incident happened on this pattern yet.{" "}
+          <Link href={ROUTES.incidents} className="font-semibold text-introduced hover:underline">See all incidents →</Link>
+        </p>
+      )}
+
+      {reports.length > 0 && (
+        <section aria-label="In the feed">
+          <p className="eyebrow">In the feed</p>
+          <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-ink-2">The newest reports that would replay on this pattern.</p>
+          <ul className="mt-2.5 divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper">
+            {reports.slice(0, FEED_ON_PATTERN).map((f) => (
+              <li key={f.id}>
+                <Link
+                  href={feedHref({ pattern: archetype.id }, f.id)}
+                  className="grid grid-cols-[80px_minmax(0,1fr)] items-baseline gap-x-4 gap-y-1 px-5 py-2.5 transition-colors hover:bg-mist/60 sm:grid-cols-[84px_minmax(0,1fr)_auto]"
+                >
+                  <span className="ident whitespace-nowrap text-ink-3">{formatDay(f.date)}</span>
+                  <span className="min-w-0 text-[13.5px] font-medium leading-snug text-ink">{f.title}</span>
+                  <span className="col-start-2 sm:col-start-auto sm:text-right">
+                    <CategoryChip category={f.category} />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <Link href={feedHref({ pattern: archetype.id })} className="mt-2.5 inline-block text-[13px] font-semibold text-introduced hover:underline">
+            All {reports.length} in the feed →
+          </Link>
+        </section>
+      )}
+    </div>
   );
 }

@@ -5,10 +5,14 @@ One file per incident: `data/incidents/<NN>-<id>.yaml`. `NN` is the next two-dig
 `/incidents/<id>/`. The build (`npm run data`) checks everything marked **checked** below and
 names the file and field when something is wrong.
 
+A catalogue file is never the only record. The incident it tells, and each of its `alsoSeen`
+entries, also gets a feed item in `data/feed/` whose `incident:` is this file's `id`
+([feed-item.md](feed-item.md)); the incident's page then links to them.
+
 ## Skeleton
 
 ```yaml
-id: short-kebab-id                 # unique; becomes the address. checked
+id: short-kebab-id                 # unique; becomes the address, so never "feed" (the feed's own). checked
 title: "Who or what: what happened, in one line"
 subtitle: >
   One or two sentences telling the whole story. The list row and the page header lead with it.
@@ -55,7 +59,7 @@ steps:
       The controls that break the chain and where each one bites, as advice.
     path: [developer->harness, govObservability]
     sources: [...]
-alsoSeen:                          # optional: related events that repeat this chain
+alsoSeen:                          # optional: related events that repeat this chain; each also gets a feed item with incident: <this id>
   - title: "Another event with the same chain"
     date: 2026
     note: >

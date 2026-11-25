@@ -8,6 +8,7 @@ import type {
   Component,
   Control,
   Dataset,
+  FeedItem,
   Persona,
   Risk,
   RiskOverlay,
@@ -73,6 +74,21 @@ export const personaById = index(personas);
 export const frameworkById = index(frameworks);
 export const overlayByRisk = new Map(overlays.map((o) => [o.risk, o]));
 export const incidentById = index(incidents);
+
+// --- The incident feed (data/feed/) --------------------------------------------------
+
+/** Every feed item, newest first. A dataset built before the feed existed reads as an empty one. */
+export const feed: FeedItem[] = dataset.feed ?? [];
+export const feedById = index(feed);
+
+/** The feed items that would replay on this pattern, newest first. */
+export const feedForPattern = (archetypeId: string, items: FeedItem[] = feed): FeedItem[] => items.filter((f) => f.patterns.includes(archetypeId));
+
+/** The feed items a catalogue incident tells, as its own walk-through or as one of its "also seen" entries. */
+export const feedForIncident = (incidentId: string, items: FeedItem[] = feed): FeedItem[] => items.filter((f) => f.incident === incidentId);
+
+/** The feed items filed under one attack type. */
+export const feedForCategory = (category: string, items: FeedItem[] = feed): FeedItem[] => items.filter((f) => f.category === category);
 
 const vocab = new Map(
   [...lifecycleStages, ...impactTypes, ...actorAccessLevels].map((v) => [v.id, v.title]),
