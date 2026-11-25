@@ -1,0 +1,225 @@
+id: agent-framework-pypi-hijack
+title: "Microsoft Agent Framework 1.26.1 and 1.26.2: hijacked releases run a credential stealer in every Python process"
+subtitle: >
+  For under an hour on 17 November, the official agent-framework package on PyPI carried a
+  startup hook that ran whenever Python started on a host that installed it, agent or not. It
+  collected the host's cloud and CI secrets, asked Azure for fresh tokens, and posted the lot to
+  a public webhook.
+date: 2026-11
+dateRange: 17 November 2026, 20:35 – 21:30 UTC
+category: supplyChain
+perspective: target
+# The poisoned package is the framework a team builds its own agent on: the single agent workflow is where that framework, its pinned installs and the identity it runs as sit.
+archetype: archActionAgent
+caveat: >
+  How the attacker got publishing access is not settled. Wiz says the attacker "appears" to have
+  held a client certificate and private key for Microsoft's ESRP signing and publishing service;
+  OX Security, quoted by CSO Online, said they appeared to hijack the process that builds the
+  package's wheels; The Register described what appeared to be unauthorised access to an
+  administrator account in Microsoft's GitHub organisation. Microsoft has not said. The victim
+  count and the Cairn self-identification come from Wiz alone. Reports put the end of the window
+  at 21:20 or 21:30 UTC.
+breaks:
+  - control: D3-FA
+    how: "Admission scanning at the mirror flags a framework release that adds a `.pth` file to site-packages: a startup hook is execution, not packaging."
+  - control: cap-staged-rollout-gate
+    how: "A framework upgrade is a change to the agent and waits at the gate like one; a release pulled within the hour never reaches a build."
+  - control: cap-agent-egress-control
+    how: "The agent's workload reaches its gateway and its mirror, not webhook.site; the payload had one hard-coded URL and no fallback."
+  - control: D3-CH
+    how: "No standing key in the agent's environment for a match on KEY or TOKEN to find; what it can mint is short-lived, and Wiz puts the stolen tokens' life at up to 24 hours."
+summary:
+  - >
+    On 17 November 2026 versions 1.26.1 and 1.26.2 of `agent-framework`, the PyPI package for
+    Microsoft Agent Framework, were published with a credential stealer added. Wiz says the
+    attacker appears to have held a client certificate and private key for ESRP, the internal
+    service Microsoft uses to sign and publish the package; Microsoft has not said how it
+    happened. Wiz puts the package at about 41,000 downloads a week. Both versions were gone
+    from PyPI by 21:30 UTC, under an hour after the first.
+  - >
+    The stealer was a `.pth` startup hook. Python runs those at every interpreter start, so it
+    ran in any Python process on a host that installed the package, whether or not the
+    framework was imported: the agent itself, a build host, a CI runner. It took secrets from
+    environment variables and credential files, asked Azure's identity endpoints and the CI
+    system for fresh managed-identity and OIDC tokens, and sent everything in one POST to
+    webhook.site. Wiz counted three victims whose data reached the attacker, and says the
+    attacker's tooling identifies itself as Cairn, an open-source AI penetration-testing
+    framework.
+  - >
+    The LiteLLM release hijack on file put its stealer in a shared AI gateway and went after the
+    provider keys a gateway holds; this one was the framework a team builds its own agent with,
+    so it ran inside the agent's own process and went after the cloud and CI identities the agent
+    and its build run as.
+patterns:
+  - Release Pipeline Hijack
+  - Startup Hook Execution
+  - Workload Identity Token Theft
+cves: []
+risks:
+  - riskToolSourceProvenance
+  - riskInsecureIntegratedComponent
+  - riskSensitiveDataDisclosure
+steps:
+  - n: 1
+    title: A credential for Microsoft's own publishing service
+    phase: introduced
+    narrative: >
+      Wiz says the attacker appears to have compromised a client certificate and private key for
+      Microsoft ESRP (Engineering System Release Pipeline), the internal service Microsoft uses to
+      sign and publish this package. A first publish attempt from AWS was rejected by ESRP's IP
+      filtering; a second, from Microsoft-owned IP space, succeeded. How the credentials were
+      obtained is not known, and Microsoft has not said publicly how the attacker got access; it
+      told The Register it had made some repositories private while it investigated.
+    path: [sources]
+    risks:
+      - riskToolSourceProvenance
+    sources:
+      - title: "Microsoft agent-framework Compromised: Credential Stealer Targets Azure and CI Pipelines"
+        url: https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi
+        publisher: Wiz Research
+        date: 2026-11-17
+      - title: "Attackers hijack Microsoft’s agent-framework package to steal Azure and CI credentials"
+        url: https://www.csoonline.com/article/4250156/attackers-hijack-microsofts-agent-framework-package-to-steal-azure-and-ci-credentials.html
+        publisher: CSO Online
+        date: 2026-11-18
+      - title: "Microsoft's official Python agent framework hijacked to distribute malware"
+        url: https://www.theregister.com/2026/11/18/microsoft_onnx_runtime_github/5310858
+        publisher: The Register
+        date: 2026-11-18
+  - n: 2
+    title: Two official releases, 33 minutes apart
+    phase: introduced
+    narrative: >
+      The last clean release, 1.26.0, had shipped on 12 November. Version 1.26.1 appeared at
+      20:35 UTC on 17 November; after PyPI quarantined it, the attacker published 1.26.2 at 21:08,
+      still holding publishing access. Both were uploaded as wheels only, without the source
+      package the clean release carried. Endor Labs said any unpinned install in the window pulled
+      in a malicious version, and containers, CI caches and lockfiles built then could still hold
+      it.
+    path: [sources->registry, localTools->registry]
+    risks:
+      - riskToolSourceProvenance
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "Microsoft agent-framework Compromised: Credential Stealer Targets Azure and CI Pipelines"
+        url: https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi
+        publisher: Wiz Research
+        date: 2026-11-17
+      - title: "Credential stealer slipped into Microsoft's official Python agent framework"
+        url: https://www.helpnetsecurity.com/2026/11/19/microsoft-agent-framework-package-pypi-compromised/
+        publisher: Help Net Security
+        date: 2026-11-19
+      - title: "Attackers hijack Microsoft’s agent-framework package to steal Azure and CI credentials"
+        url: https://www.csoonline.com/article/4250156/attackers-hijack-microsofts-agent-framework-package-to-steal-azure-and-ci-credentials.html
+        publisher: CSO Online
+        date: 2026-11-18
+  - n: 3
+    title: Python's own startup runs the stealer
+    phase: exposed
+    narrative: >
+      Installing either version dropped a `.pth` file in the site-packages root
+      (`agent_framework_meta.pth` in 1.26.1, `af_runtime_diag.pth` in 1.26.2) that imports the
+      module which starts the stealer. Python runs `.pth` files on every interpreter start, so the stealer ran even if
+      `agent-framework` was never imported: in the agent's own process and in every other Python
+      process on the host.
+    path: [planner, localTools]
+    risks:
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "Microsoft agent-framework Compromised: Credential Stealer Targets Azure and CI Pipelines"
+        url: https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi
+        publisher: Wiz Research
+        date: 2026-11-17
+      - title: "Attackers Compromise Microsoft's Agent Framework PyPI Package to Steal Cloud Credentials"
+        url: https://thehackernews.com/2026/11/attackers-compromise-microsofts-agent.html
+        publisher: The Hacker News
+        date: 2026-11-18
+  - n: 4
+    title: Stored secrets, and fresh tokens on request
+    phase: exposed
+    narrative: >
+      It read environment variables whose names contain TOKEN, SECRET, PASSWORD, KEY, AZURE, AWS
+      or GITHUB (1.26.2 added ACTIONS, OIDC, RUNNER and ARM_), secret-looking values from up to
+      300 other processes' environments, and up to 60 credential files (80 in 1.26.2): Azure CLI,
+      npm, pip, git, Docker, Hugging Face and Azure DevOps agent credentials. It then asked for
+      new tokens: Azure managed-identity tokens from the metadata or App Service identity endpoint
+      for 12 resources, Azure DevOps OIDC tokens, and in 1.26.2 GitHub Actions OIDC tokens in
+      workflows allowed to request them. Help Net Security notes there is no confirmation any
+      tokens were issued.
+    path: [localTools, govSecrets, govIdentity]
+    risks:
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "Microsoft agent-framework Compromised: Credential Stealer Targets Azure and CI Pipelines"
+        url: https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi
+        publisher: Wiz Research
+        date: 2026-11-17
+      - title: "Microsoft's agent-framework PyPI package Compromised with Credential Stealer"
+        url: https://socket.dev/blog/agent-framework-pypi-package-compromised-with-credential-stealer
+        publisher: Socket
+        date: 2026-11-17
+      - title: "Credential stealer slipped into Microsoft's official Python agent framework"
+        url: https://www.helpnetsecurity.com/2026/11/19/microsoft-agent-framework-package-pypi-compromised/
+        publisher: Help Net Security
+        date: 2026-11-19
+  - n: 5
+    title: One POST to a public webhook
+    phase: exposed
+    narrative: >
+      Everything went into one JSON document, compressed, encoded and sent in a single HTTPS POST
+      to a hard-coded webhook.site URL, with no fallback channel. The attacker's tooling reported
+      its own progress to the same webhook and identifies itself as Cairn, an open-source AI
+      penetration-testing framework. The webhook was on the free tier and kept at most 50
+      requests: four from the attacker, 29 from sandboxes, vendor scanning and tests, and 17 that
+      Wiz says represent three unique, successful exfiltrations of victim data.
+    path: [localTools]
+    risks:
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "Microsoft agent-framework Compromised: Credential Stealer Targets Azure and CI Pipelines"
+        url: https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi
+        publisher: Wiz Research
+        date: 2026-11-17
+  - n: 6
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Install the framework your agent is built on from your own mirror, pinned, and scan what
+      the mirror admits: a release that adds a startup hook to site-packages should stop there.
+      Treat a framework upgrade as a change to the agent that waits at the gate, so a release
+      that lived for under an hour never reaches a build. Give the agent's workload egress to its
+      gateway and its mirror only: this payload had one destination and nowhere else to go. And
+      keep standing keys out of the agent's environment; Wiz's advice for anyone exposed was to
+      rotate every secret that was there and audit the managed identities and federated
+      credentials the host could use.
+    path: [sources->registry, localTools->registry, planner->gateway, govSupplyChain]
+    sources:
+      - title: "Microsoft agent-framework Compromised: Credential Stealer Targets Azure and CI Pipelines"
+        url: https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi
+        publisher: Wiz Research
+        date: 2026-11-17
+sources:
+  - title: "Microsoft agent-framework Compromised: Credential Stealer Targets Azure and CI Pipelines"
+    url: https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi
+    publisher: Wiz Research
+    date: 2026-11-17
+  - title: "Microsoft's agent-framework PyPI package Compromised with Credential Stealer"
+    url: https://socket.dev/blog/agent-framework-pypi-package-compromised-with-credential-stealer
+    publisher: Socket
+    date: 2026-11-17
+  - title: "Attackers Compromise Microsoft's Agent Framework PyPI Package to Steal Cloud Credentials"
+    url: https://thehackernews.com/2026/11/attackers-compromise-microsofts-agent.html
+    publisher: The Hacker News
+    date: 2026-11-18
+  - title: "Microsoft's official Python agent framework hijacked to distribute malware"
+    url: https://www.theregister.com/2026/11/18/microsoft_onnx_runtime_github/5310858
+    publisher: The Register
+    date: 2026-11-18
+  - title: "Attackers hijack Microsoft’s agent-framework package to steal Azure and CI credentials"
+    url: https://www.csoonline.com/article/4250156/attackers-hijack-microsofts-agent-framework-package-to-steal-azure-and-ci-credentials.html
+    publisher: CSO Online
+    date: 2026-11-18
+  - title: "Credential stealer slipped into Microsoft's official Python agent framework"
+    url: https://www.helpnetsecurity.com/2026/11/19/microsoft-agent-framework-package-pypi-compromised/
+    publisher: Help Net Security
+    date: 2026-11-19
