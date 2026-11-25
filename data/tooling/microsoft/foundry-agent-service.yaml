@@ -34,6 +34,11 @@
 # agents/environment-setup), so that row says only that the capability hosts article is retained for reference.
 # The hosted agents and prompt agents pages carry no preview label and no explicit GA sentence; status rests on the
 # limits page ("Foundry Agent Service is generally available (GA). Some sub-features are in public preview").
+# 2026-11-25 (daily feed): re-read after the Ignite 2026 hosted-agents posts (devblogs.microsoft.com/foundry, 200).
+# Egress controls were already recorded as GA (Transform rules preview, stable API 2026-09-01). The Azure Policy
+# governance page (how-to/govern-hosted-agent-egress-azure-policy, 200) now lists six preview regions where the blog
+# and this record said three, so the egress note and the egressPolicyFloor row now name six. Added the privateCaTrust
+# setting from how-to/private-certificate-authority (200, preview).
 vendor: microsoft
 family: Microsoft Foundry Agent Service
 tools:
@@ -572,10 +577,12 @@ tools:
           Foundry tools (they keep their own service network behaviour; web search uses Microsoft-managed public
           endpoints), and the foundational domains the runtime allow-lists for itself. Default prompt agents have
           no sandbox egress to govern. The harness controls are preview and have no Azure Policy governance. The
-          policy floor is preview in Canada Central, Spain Central and Korea Central, and neither a new Deny
-          assignment nor a compliance change stops a running session. Anyone who can write the RAI policy can
-          change the rules, and the proxy inspects HTTPS with a CA it injects into the sandbox.
-        verified: "2026-11-18"
+          policy floor is preview in Brazil South, Canada Central, Korea Central, Norway East, Southeast Asia and
+          Spain Central, and neither a new Deny assignment nor a compliance change stops a running session. Anyone
+          who can write the RAI policy can change the rules, and the proxy inspects HTTPS with a CA it injects into
+          the sandbox. Private CA trust (preview) lets agents reach internal services that use the firm's own CA with
+          certificate checks on, so there is no reason to turn verification off.
+        verified: "2026-11-25"
       - mitigation: AML.M0028
         coverage: native
         mechanism: >-
@@ -1314,8 +1321,9 @@ tools:
         value: "Enforce, default Deny"
         why: Code in the hosted agent's sandbox can reach only the hosts the firm allows, enforced by a proxy outside the sandbox that denies when it cannot evaluate.
         mitigations: [cap-agent-egress-control]
+        requires: RAI policy API version 2026-09-01 or later (Transform rules and secret-backed headers are preview)
         url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/add-hosted-agent-guardrails#network-egress-controls
-        verified: "2026-11-18"
+        verified: "2026-11-25"
       - id: egressPolicyFloor
         name: Microsoft Foundry hosted agents should enforce resolved RAI egress restrictions
         where: Azure Policy › Cognitive Services category › assign with the three RAI-policy egress definitions (permittedDestinations, deniedDestinations, effect)
@@ -1325,9 +1333,22 @@ tools:
         recommended: Deny, with permittedDestinations set to the firm's approved hosts
         why: A builder cannot create a hosted agent version without a compliant egress policy; it does not stop sessions already running.
         mitigations: [cap-agent-egress-control]
-        requires: Preview; Canada Central, Spain Central and Korea Central
+        requires: Preview; Brazil South, Canada Central, Korea Central, Norway East, Southeast Asia and Spain Central
         url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/govern-hosted-agent-egress-azure-policy
-        verified: "2026-11-18"
+        verified: "2026-11-25"
+      - id: privateCaTrust
+        name: Private CA trust (trustedCertificateSources)
+        where: Foundry resource (Microsoft.CognitiveServices/accounts) › trustedCertificateSources, referencing a Key Vault secret version that holds the root CA's PEM, read by the resource's managed identity
+        setVia: [apiCli]
+        area: network
+        default: Public CAs only
+        recommended: The firm's root CA registered from Key Vault, pinned to a secret version, wherever agents call internal MCP servers, APIs or a model gateway
+        value: "Your root CA, from Key Vault"
+        why: Internal services stay on the private network with certificate and hostname checks on, so nobody turns verification off to make an agent's call work; it opens no network path and authenticates nothing.
+        mitigations: [D3-NI]
+        requires: Preview; standard agent setup with your own virtual network for tools, toolboxes and model gateways
+        url: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/private-certificate-authority
+        verified: "2026-11-25"
       - id: harnessEgressPolicy
         name: Network egress controls (Copilot harness prompt agent)
         where: Foundry portal › Build › Guardrails › Create › Network; assigned to the harness prompt agent (policies in azure.yaml)

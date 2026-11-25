@@ -13,6 +13,13 @@
 # cloud-environments and claude-code-on-the-web (both 200); migration.original blocks keep the names they were verified under.
 # 2026-11-21 (new pins): toolClaudeCode AML.M0036 (native) row and memberSpendLimit setting after the pattern pinned
 # spend limits, from support articles 14782391, 13799932 and 12005970 (200).
+# 2026-11-25 (daily feed): toolClaudeCode gained the permissions.blockWritesOutsideWorkingDirectories,
+# permissions.denyInsteadOfPrompting, enforceAnthropicSignIn, PreSkillShellCommand hook, sandbox.autoAllowBashIfSandboxed
+# and CLAUDE_CODE_EXPERIMENTAL_CODE_MODE settings, and the AML.M0029 row now records that sandboxed Bash prompts by
+# default from v2.1.324 (it said to set autoAllowBashIfSandboxed false). Read that day: code.claude.com/docs/en
+# settings-reference, hooks and code-mode (.md, 200) and raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md
+# (200; github.com itself answers 403). The changelog files the autoAllowBashIfSandboxed default change under 2.1.325
+# (no 2.1.324 entry); the settings reference says v2.1.324, which the row follows.
 vendor: anthropic
 family: Claude Code
 tools:
@@ -985,20 +992,24 @@ tools:
                 allowManagedPermissionRulesOnly true, which hides the always-allow choices and stops saving
                 new rules.
             url: https://code.claude.com/docs/en/settings-reference
-          - title: Decide whether sandboxed commands prompt
+          - title: Keep sandboxed commands in the prompt
             body:
               - >-
-                Set sandbox.autoAllowBashIfSandboxed false in managed settings if sandboxed Bash commands
-                should go through the prompt too.
-            url: https://code.claude.com/docs/en/settings-reference
+                From v2.1.324 sandbox.autoAllowBashIfSandboxed defaults to false, so sandboxed Bash follows the
+                normal permission flow; set it false explicitly in managed settings so older clients prompt too.
+                Setting it true in managed settings works only in the sandbox block of the highest-ranked managed
+                source.
+            url: https://code.claude.com/docs/en/settings-reference#sandbox-autoallowbashifsandboxed
         note: >-
           Native: a present developer approves each matched action with its current arguments, and an
           administrator can force the prompt and remove the modes and persistence that bypass it. Boundaries:
           acceptEdits stays selectable (in-scope edits and mkdir, touch, rm, mv, cp and sed run unprompted); a
           managed PermissionRequest hook can answer prompts; Remote Control approvals come from a phone; -p
-          runs and GitHub Actions have no present human, so matched calls are denied or answered by the host.
-          The auto-mode classifier is not human approval.
-        verified: "2026-09-25"
+          runs and GitHub Actions have no present human, so matched calls are denied or answered by the host
+          (permissions.denyInsteadOfPrompting denies them). Before v2.1.324 sandboxed Bash ran without a prompt
+          by default; the sandbox is not approval. The auto-mode classifier is not human approval, and in Code
+          Mode it reviews the script, not each call.
+        verified: "2026-11-25"
         migration:
           from:
             - capabilityHitlControls
@@ -1551,6 +1562,19 @@ tools:
         mitigations: [D3-MFA, D3-CH, cap-shadow-ai-discovery]
         url: https://code.claude.com/docs/en/settings-reference#forceloginorguuid
         verified: "2026-10-30"
+      - id: enforceAnthropicSignIn
+        name: enforceAnthropicSignIn
+        where: managed-settings.json (or the MDM policy) → enforceAnthropicSignIn, beside forceLoginOrgUUID; ignored in server-managed settings, HKCU and policy helper output
+        setVia: [mdm, configFile]
+        area: identity
+        default: Unset
+        recommended: '"true" with forceLoginOrgUUID, once Desktop users on a cloud provider or gateway have moved to the Enterprise Admin Console sign-in'
+        value: '"true", with forceLoginOrgUUID'
+        why: A session needs a claude.ai login or your organisation's Enterprise Admin Console sign-in, so a user's own Bedrock, Vertex, Foundry or gateway setup can't bypass your identity and settings.
+        mitigations: [D3-MFA, cap-shadow-ai-discovery]
+        requires: Claude Code v2.1.329 or later (Enterprise Admin Console sign-in from v2.1.330)
+        url: https://code.claude.com/docs/en/settings-reference#enforceanthropicsignin
+        verified: "2026-11-25"
       - id: apiKeyHelper
         name: apiKeyHelper
         where: managed-settings.json → apiKeyHelper
@@ -1599,6 +1623,19 @@ tools:
         mitigations: [cap-agent-action-policy-enforcement, AML.M0028, cap-sensitive-data-redaction]
         url: https://code.claude.com/docs/en/settings-reference#permissions-deny
         verified: "2026-10-30"
+      - id: blockWritesOutsideWorkingDirectories
+        name: permissions.blockWritesOutsideWorkingDirectories
+        where: managed-settings.json → permissions.blockWritesOutsideWorkingDirectories (a true in any settings file applies; a repository can't lift it)
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (writes outside the working directories follow the permission mode)
+        recommended: '"true", with sandbox.enabled so shell commands are held to the same paths'
+        value: '"true"'
+        why: Write, Edit and NotebookEdit refuse dotfiles, shell profiles and other paths outside the project in every mode, bypassPermissions included; shell commands, MCP tools and hooks are not covered.
+        mitigations: [D3-EI, AML.M0028]
+        requires: Claude Code v2.1.314 or later
+        url: https://code.claude.com/docs/en/settings-reference#permissions-blockwritesoutsideworkingdirectories
+        verified: "2026-11-25"
       - id: allowManagedPermissionRulesOnly
         name: allowManagedPermissionRulesOnly
         where: managed-settings.json → allowManagedPermissionRulesOnly
@@ -1633,6 +1670,19 @@ tools:
         mitigations: [AML.M0029]
         url: https://code.claude.com/docs/en/settings-reference#permissions-defaultmode
         verified: "2026-10-30"
+      - id: denyInsteadOfPrompting
+        name: permissions.denyInsteadOfPrompting
+        where: ~/.claude/settings.json or managed-settings.json → permissions.denyInsteadOfPrompting (user or managed only; a repository can't set it)
+        setVia: [configFile, mdm]
+        area: tools
+        default: Unset (a call that needs approval waits on a prompt)
+        recommended: '"true" on CI runners and other unattended sessions; unset on developers'' own machines'
+        value: '"true" on unattended runs'
+        why: A session nobody watches denies what would wait on a prompt and carries on, instead of hanging or being run in bypass mode to avoid prompts.
+        mitigations: [AML.M0029, AML.M0028]
+        requires: Claude Code v2.1.319 or later
+        url: https://code.claude.com/docs/en/settings-reference#permissions-denyinsteadofprompting
+        verified: "2026-11-25"
       - id: allowManagedHooksOnly
         name: allowManagedHooksOnly
         where: managed-settings.json → allowManagedHooksOnly
@@ -1644,6 +1694,19 @@ tools:
         mitigations: [cap-agent-action-policy-enforcement, cap-agent-tool-registry]
         url: https://code.claude.com/docs/en/settings-reference#allowmanagedhooksonly
         verified: "2026-10-30"
+      - id: preSkillShellCommandHook
+        name: PreSkillShellCommand (hook event)
+        where: managed-settings.json → hooks.PreSkillShellCommand, matcher "Bash|PowerShell", a command, http or mcp_tool hook with onFailure "block"
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: No hook (a skill's injected commands run once they pass the permission check)
+        recommended: The organisation's PreToolUse blocking and logging script registered on this event too, with requiredMinimumVersion at 2.1.332
+        value: "Your PreToolUse script, on this event too"
+        why: Shell commands a skill or command injects as it loads never reach PreToolUse; this hook can log or refuse them, not approve them, and v2.1.331 and older run them without calling it.
+        mitigations: [cap-agent-action-policy-enforcement]
+        requires: Claude Code v2.1.332 or later
+        url: https://code.claude.com/docs/en/hooks#preskillshellcommand
+        verified: "2026-11-25"
       - id: allowedMcpServers
         name: allowedMcpServers
         where: managed-settings.json → allowedMcpServers
@@ -1722,6 +1785,18 @@ tools:
         mitigations: [D3-EI, cap-agent-egress-control]
         url: https://code.claude.com/docs/en/settings-reference#sandbox-enabled
         verified: "2026-10-30"
+      - id: autoAllowBashIfSandboxed
+        name: sandbox.autoAllowBashIfSandboxed
+        where: managed-settings.json → sandbox.autoAllowBashIfSandboxed (a managed true counts only in the sandbox block of the highest-ranked managed source)
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: '"false" from v2.1.324, so sandboxed Bash follows the permission flow; "true" before'
+        recommended: '"false", set explicitly so clients older than v2.1.324 prompt too'
+        value: '"false", set explicitly'
+        why: The sandbox no longer stands in for approval, so sandboxed commands meet your allow rules and prompts; deny and content-scoped ask rules apply either way.
+        mitigations: [AML.M0029]
+        url: https://code.claude.com/docs/en/settings-reference#sandbox-autoallowbashifsandboxed
+        verified: "2026-11-25"
       - id: subprocessEnvScrub
         name: CLAUDE_CODE_SUBPROCESS_ENV_SCRUB
         where: managed-settings.json → env.CLAUDE_CODE_SUBPROCESS_ENV_SCRUB
@@ -1733,6 +1808,19 @@ tools:
         mitigations: [D3-CH, D3-EI]
         url: https://code.claude.com/docs/en/env-vars
         verified: "2026-10-30"
+      - id: codeMode
+        name: CLAUDE_CODE_EXPERIMENTAL_CODE_MODE
+        where: managed-settings.json → env.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (Code Mode off; a user can opt in with "1")
+        recommended: '"0" until Code Mode has been assessed, delivered by MDM or a managed settings file where users can choose a cloud provider themselves'
+        value: '"0" until assessed'
+        why: In Code Mode Claude's JavaScript makes the tool calls, auto mode's classifier reviews the script rather than each call, and the script and its file, web and MCP calls run outside the Bash sandbox.
+        mitigations: [AML.M0029, D3-EI]
+        requires: Claude Code v2.1.323 or later (experimental; not available under HIPAA or zero data retention)
+        url: https://code.claude.com/docs/en/code-mode
+        verified: "2026-11-25"
       - id: requiredMinimumVersion
         name: requiredMinimumVersion
         where: managed-settings.json → requiredMinimumVersion

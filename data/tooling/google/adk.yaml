@@ -10,8 +10,12 @@
 # delegated task or cutting a peer off), AML.M0031 (the A2A pages say only that to_a2a() defaults to in-memory
 # services) and cap-mcp-tool-integrity (no page mentions verifying an agent card's signature or hash; the
 # prebuilt Tool Call Integrity plugin signs function calls in the session, which is a different object).
-# The Agent Identity Auth Manager (Preview) is documented for tools and toolsets, not for A2A calls, and is
-# not claimed. The Cancel agent runs page was read and is not cited; sessions/memory/, sessions/session/,
+# The Agent Identity Auth Manager is documented for tools and toolsets, not for the A2A call to a peer. Since
+# 2026-11-25 it is claimed in one place: Gemini Enterprise documents 3-legged OAuth through the auth manager for ADK
+# A2A agents on Agent Runtime as GA (release note of 2026-11-13; register-and-manage-an-a2a-agent#auth-manager, 200),
+# so an inbound task from Gemini Enterprise gets a user-delegated token for each tool that asks for one; adk.dev
+# integrations/agent-identity/ (200) still labels the auth manager Preview (ADK Python 1.30.0+). The gcpAuthProviderScheme
+# setting and the D3-CTS note record it. The Cancel agent runs page was read and is not cited; sessions/memory/, sessions/session/,
 # artifacts/, callbacks/types-of-callbacks/, tools-custom/authentication/, tools-custom/confirmation/ and
 # observability/logging/ were fetched (200) but not read through, and nothing in the entry rests on them.
 # 2026-11-15: onboarded. Read as Markdown from adk.dev (every page answers 200 at <path>/index.md, and the
@@ -192,10 +196,13 @@ tools:
           Partial: the scoping is by construction of the client, and ADK enforces only that registry credentials
           stay off A2A requests (Go: the registry HTTPClient is reused for *.googleapis.com MCP traffic "but never
           for A2A traffic"; Python: header_provider headers "do not affect requests made by RemoteA2aAgent").
-          Nothing exchanges a user assertion for a peer-bound token, binds an audience or mints a downstream
-          token for an inbound task: the per-hop exchange this drawing pins is done by the authorization server
-          and placed in the client by the application.
-        verified: "2026-11-15"
+          Nothing exchanges a user assertion for a peer-bound token or binds an audience on the A2A call itself:
+          the per-hop exchange this drawing pins is done by the authorization server and placed in the client by
+          the application. One downstream case is covered: an ADK A2A agent on Agent Runtime called from Gemini
+          Enterprise can obtain a user-delegated 3-legged OAuth token per tool through the Agent Identity auth
+          manager (GA there; the ADK page still says Preview), so its MCP servers and APIs are called with the
+          signed-in user's consent rather than a shared credential.
+        verified: "2026-11-25"
       - mitigation: cap-agent-tool-registry
         coverage: partial
         mechanism: >-
@@ -367,6 +374,19 @@ tools:
         mitigations: [D3-AA, D3-CTS]
         url: https://adk.dev/integrations/agent-registry/
         verified: "2026-11-15"
+      - id: gcpAuthProviderScheme
+        name: GcpAuthProviderScheme (Agent Identity auth manager, 3-legged OAuth)
+        where: "auth_scheme=GcpAuthProviderScheme(name=projects/.../authProviders/..., continue_uri=https://vertexaisearch.cloud.google.com/validateUserId) on McpToolset or AuthenticatedFunctionTool; CredentialManager.register_auth_provider(GcpAuthProvider()) in the runner builder; A2aAgentExecutor"
+        setVia: [code]
+        area: identity
+        default: Not used (tools carry whatever credential the code gives them)
+        recommended: Every tool that calls an MCP server or API for the user given a 3-legged OAuth auth provider, for A2A agents on Agent Runtime that Gemini Enterprise calls
+        value: "A 3-legged OAuth provider per user-facing tool"
+        why: The tool runs with a token the signed-in user consented to, issued and stored by Agent Identity, instead of one service credential shared by every caller of the agent.
+        mitigations: [D3-CTS]
+        requires: google-adk[a2a,agent-identity,mcp] above 2.7.1, a2a-sdk[http-server] 1.0.0+ and google-cloud-aiplatform[agent_engines,adk] 1.156.0+; the Agent Identity API; GA for this path per Gemini Enterprise, Preview on adk.dev
+        url: https://docs.cloud.google.com/gemini/enterprise/docs/register-and-manage-an-a2a-agent#auth-manager
+        verified: "2026-11-25"
       - id: remoteAgentCard
         name: agent_card
         where: "RemoteA2aAgent(name=..., agent_card=...): an AgentCard object, a URL, or a path to a local agent card file"

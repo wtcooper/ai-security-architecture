@@ -21,6 +21,14 @@
 # the open desktop app); both answered 200.
 # 2026-11-21 (new pins): toolClaudeDesktop AML.M0036 (native) row and memberSpendLimit setting after the pattern
 # pinned spend limits, from support articles 14782391 and 13799932 (200).
+# 2026-11-25 (daily feed): IP allowlisting is self-serve. The record said "CIDR ranges enabled by Anthropic support";
+# platform.claude.com/docs/en/manage-claude/ip-allowlist and support article 13200993 (both 200) now say Owners set the
+# list themselves at Organization settings › Organization and access (public beta), so the items text, the D3-OTF
+# mechanism and its step were corrected; the migration.original block keeps the wording it was verified under.
+# toolClaudeWeb gained IP allowlist, Sign Out User (Admin API, beta; api/beta/organization/users/sign_out, 200),
+# connector file transfers (article 18534325), Claude Meetings and its guest and connector settings (article 18325154);
+# toolClaudeDesktop gained computer use, App access and computerUseEnabled (article 18483812). All support.claude.com
+# and platform.claude.com pages answered 200 that day.
 vendor: anthropic
 family: Claude
 tools:
@@ -114,8 +122,9 @@ tools:
         body:
           - SSO via WorkOS (Okta, Entra ID, Google, OneLogin, JumpCloud, Duo SAML) with "Require SSO for
             Claude", JIT or SCIM provisioning with group-to-role mapping and automatic removal; Enterprise
-            custom roles and groups; IP allowlisting (CIDR ranges enabled by Anthropic support); tenant
-            restrictions via the proxy-injected anthropic-allowed-org-ids header.
+            custom roles and groups; an IP allowlist Owners set themselves (beta, up to 1,000 addresses or
+            CIDR ranges); tenant restrictions via the proxy-injected anthropic-allowed-org-ids header; member
+            sign-out through the Admin API (beta).
           - Audit logs (Enterprise, 180 days, emailed download link) from Organization settings > Data and
             privacy; the Compliance API for the Activity Feed, chats, files, projects, directory, effective
             settings and Cowork / Claude Code / M365 session transcripts; custom data retention from 30 days;
@@ -242,8 +251,9 @@ tools:
         mechanism: >-
           anthropic-allowed-org-ids tenant-restriction header (Enterprise and Console) injected by the
           organisation's TLS-inspecting proxy and enforced by Anthropic for claude.ai web, desktop, API-key and
-          OAuth traffic; IP allowlisting (Enterprise, CIDR ranges enabled by Anthropic support); the code
-          execution sandbox's own egress set at Organization settings > Capabilities
+          OAuth traffic; the IP allowlist (Enterprise, beta, set by Owners at Organization settings >
+          Organization and access); the code execution sandbox's own egress set at Organization settings >
+          Capabilities
         steps:
           - title: Block other tenants at the proxy
             body:
@@ -255,9 +265,11 @@ tools:
           - title: Restrict where your tenant can be used from (Enterprise)
             body:
               - >-
-                Send Anthropic support your office and VPN CIDR ranges; every authenticated request from
-                another address is then denied.
-            url: https://support.claude.com/en/articles/13200993-restrict-access-to-claude-with-ip-allowlisting
+                As an Owner, open Organization settings > Organization and access, turn on IP allowlist, add
+                your office, VPN and proxy egress ranges with Add IP range, keep Allow owners to access this
+                settings page from any IP address selected, and save; other addresses are refused within about
+                15 minutes.
+            url: https://platform.claude.com/docs/en/manage-claude/ip-allowlist
           - title: Set the sandbox's own egress
             body:
               - >-
@@ -272,9 +284,11 @@ tools:
           Anthropic's cloud, web search runs on Anthropic's servers, and the code execution sandbox is governed
           only by the Capabilities network setting (off for new Enterprise organisations, package managers only
           on Team; connector traffic stays possible whatever it says). Off-network and unmanaged devices bypass
-          the header; IP allowlisting gates only the organisation's own tenant. Local MCP servers and desktop
-          extensions in Claude Desktop use the device's network; that local reach is toolClaudeDesktop.
-        verified: "2026-10-30"
+          the header; the IP allowlist gates only the organisation's own tenant, not Claude Design, Claude in
+          Slack or artifacts shared outside it, and a running chat task can continue for up to 24 hours after its
+          user is blocked. Local MCP servers and desktop extensions in Claude Desktop use the device's network;
+          that local reach is toolClaudeDesktop.
+        verified: "2026-11-25"
         migration:
           from:
             - capabilitySse
@@ -1080,6 +1094,31 @@ tools:
         requires: Enterprise
         url: https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
         verified: "2026-10-30"
+      - id: ipAllowlist
+        name: IP allowlist
+        where: claude.ai Organization settings › Organization and access › IP allowlist (Add IP range; Allow owners to access this settings page from any IP address)
+        setVia: [adminConsole]
+        area: network
+        default: "Off"
+        recommended: On, listing the public egress addresses of your offices, VPN and proxies (including the one bridge.claudeusercontent.com leaves through), with the owners' way back in selected
+        value: "On, your egress ranges"
+        why: A stolen sign-in can't open the organisation from other networks on web, desktop, mobile, Claude Code, Cowork, Chrome or the add-ins; Claude Design, Claude in Slack and externally shared artifacts are outside it.
+        mitigations: [D3-OTF, D3-CH]
+        requires: Enterprise (public beta); Owners and Primary Owners
+        url: https://platform.claude.com/docs/en/manage-claude/ip-allowlist
+        verified: "2026-11-25"
+      - id: memberSignOut
+        name: Sign Out User (Admin API)
+        where: POST /v1/organizations/users/{user_id}/sign_out with the anthropic-beta header admin-user-sign-out-2026-10-08 and a key holding write:members
+        setVia: [apiCli]
+        area: identity
+        recommended: Part of the stolen-session runbook, followed by a block in the IdP when the member must stay out
+        value: "In the stolen-session runbook"
+        why: Ends the member's sign-in sessions and this organisation's OAuth tokens everywhere without removing them; API keys, running cloud sessions and routines carry on, and a token can take up to an hour to stop.
+        mitigations: [cap-agent-kill-switch, D3-CH]
+        requires: Enterprise (beta)
+        url: https://platform.claude.com/docs/en/api/beta/organization/users/sign_out
+        verified: "2026-11-25"
       - id: chatCapability
         name: Chat (custom role capability)
         where: claude.ai Organization settings › Roles › role › Capabilities
@@ -1153,6 +1192,19 @@ tools:
         requires: Team or Enterprise
         url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
         verified: "2026-10-30"
+      - id: connectorFileTransfers
+        name: File uploads to connectors / File downloads from connectors
+        where: claude.ai Organization settings › Connectors › File transfers
+        setVia: [adminConsole]
+        area: data
+        default: Both off on Team and Enterprise
+        recommended: Off until the directory connectors members use are approved for files; then downloads first, and uploads only where files may leave for those apps
+        value: "Off until connectors are approved for files"
+        why: Once on, files go to and come from any directory connector with file support, organisation-wide; Claude asks before the first file to each app, and blocked connector tools stay blocked.
+        mitigations: [cap-data-access-governance, AML.M0028]
+        requires: Team or Enterprise (beta)
+        url: https://support.claude.com/en/articles/18534325-send-files-to-connected-apps-and-save-files-from-them
+        verified: "2026-11-25"
       - id: roleConnectorPermissions
         name: Connector permissions (custom role Connectors tab)
         where: claude.ai Organization settings › Roles › role › Connectors
@@ -1258,6 +1310,44 @@ tools:
         requires: Team or Enterprise
         url: https://support.claude.com/en/articles/16994751-artifacts-admin-guide-for-team-and-enterprise-plans
         verified: "2026-10-30"
+      - id: claudeMeetings
+        name: Claude Meetings
+        where: claude.ai Organization settings › Products › Claude Meetings (beta); on Enterprise, the Claude Meetings capability in custom roles
+        setVia: [adminConsole, identityProvider]
+        area: data
+        default: On for everyone on Team; off on Enterprise
+        recommended: "Enterprise: on only for the roles of groups whose calls may be transcribed; Team: off unless every member's calls may be"
+        value: "Only roles whose calls may be transcribed"
+        why: Claude joins Google Meet calls and keeps a transcript, summary and screen descriptions with the organisation's chats; on Team any member can add it until an owner turns it off.
+        mitigations: [cap-data-access-governance]
+        requires: Team or Enterprise (beta; role scoping on Enterprise)
+        url: https://support.claude.com/en/articles/18325154-use-claude-meetings
+        verified: "2026-11-25"
+      - id: meetingsExternalGuests
+        name: Meetings with external guests
+        where: claude.ai Organization settings › Products › Claude Meetings (beta); on Enterprise also a custom-role capability
+        setVia: [adminConsole]
+        area: sharing
+        default: Allowed on Team; internal meetings only on Enterprise
+        recommended: Internal meetings only, set explicitly on Team
+        value: "Internal meetings only"
+        why: Clients' and other outsiders' words stay out of Claude's notes and transcripts; Claude stays out of calls with outside invitees and leaves if one, or another company's notetaker, joins.
+        mitigations: [cap-data-access-governance]
+        requires: Team or Enterprise (beta)
+        url: https://support.claude.com/en/articles/18325154-use-claude-meetings
+        verified: "2026-11-25"
+      - id: meetingsMemberConnectors
+        name: Members' connectors in meetings
+        where: claude.ai Organization settings › Products › Claude Meetings (beta)
+        setVia: [adminConsole]
+        area: tools
+        recommended: Off until write and send tools are set to Needs approval in the organisation-wide tool policy
+        value: "Off until write tools need approval"
+        why: During a call Claude acts with each member's connected tools when asked, such as posting to Slack; it asks that member the first time and a yes applies from then on.
+        mitigations: [AML.M0028]
+        requires: Team or Enterprise (beta)
+        url: https://support.claude.com/en/articles/18325154-use-claude-meetings
+        verified: "2026-11-25"
       - id: complianceApi
         name: Compliance API
         where: claude.ai Organization settings › API, then a Compliance Access Key with read:compliance_activities and read:compliance_user_data
@@ -2079,6 +2169,44 @@ tools:
         requires: Enterprise
         url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
         verified: "2026-10-30"
+      - id: computerUse
+        name: Computer use
+        where: claude.ai Organization settings › Capabilities › Claude Desktop › Computer use (Edit role access on Enterprise)
+        setVia: [adminConsole, identityProvider]
+        area: tools
+        default: "Off"
+        recommended: Off; on only for the custom roles of groups whose work needs desktop apps, with an App access allow list in use first
+        value: "Off, or only roles that need it"
+        why: Claude works in the user's own apps with no sandbox and outside folder limits, read-only folders included, so the role grant is the boundary; turning it off takes about an hour to reach each device.
+        mitigations: [AML.M0028, cap-agent-action-policy-enforcement]
+        requires: Team or Enterprise (beta; role scoping on Enterprise); Chat and Cowork unified on
+        url: https://support.claude.com/en/articles/18483812-set-up-computer-use-for-team-and-enterprise-plans
+        verified: "2026-11-25"
+      - id: computerUseAppAccess
+        name: App access (Block these apps / Allow only these apps)
+        where: claude.ai Organization settings › Capabilities › Claude Desktop › App access
+        setVia: [adminConsole]
+        area: tools
+        recommended: Allow only these apps, listing the apps the work needs; password managers, terminals and remote-desktop clients never on it
+        value: "Allow only the apps the work needs"
+        why: Claude can't click, type in or see an app outside the list; it can still affect a denied app through approved ones, and Claude in Chrome, Claude Code and extensions are not covered.
+        mitigations: [AML.M0028, cap-agent-action-policy-enforcement]
+        requires: Team or Enterprise (beta)
+        url: https://support.claude.com/en/articles/18483812-set-up-computer-use-for-team-and-enterprise-plans
+        verified: "2026-11-25"
+      - id: computerUseEnabled
+        name: computerUseEnabled
+        where: Claude Desktop policy → computerUseEnabled, at computer level (macOS com.anthropic.claudefordesktop profile; Windows HKLM\SOFTWARE\Policies\Claude DWORD)
+        setVia: [mdm]
+        area: tools
+        default: Unset (the organisation's setting and the user's toggle decide)
+        recommended: '"false" on every computer outside the group approved for computer use'
+        value: '"false" outside the approved group'
+        why: Keeps computer use off on that computer whichever account signs in, personal ones included; the app reads it only at start, and older versions ignore it.
+        mitigations: [AML.M0028, cap-agent-kill-switch]
+        requires: Claude Desktop 5.1231.0 or later
+        url: https://support.claude.com/en/articles/18483812-set-up-computer-use-for-team-and-enterprise-plans
+        verified: "2026-11-25"
       - id: isLocalDevMcpEnabled
         name: isLocalDevMcpEnabled
         where: Claude Desktop policy → isLocalDevMcpEnabled

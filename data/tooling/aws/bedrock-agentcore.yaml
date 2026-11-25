@@ -18,6 +18,8 @@
 # 2026-10-04: removed the D3-MFA and D3-AA rows after the managed-runtime drawing pruned those pins (review MR-02); the token-passthrough note merged into the confused-deputy note.
 # 2026-10-30: added the settings table, each row re-read from the developer guide as .md (all 200); devguide/harness-limits.html and devguide/browser-create.html 404 (limits are on harness-operations). policy-enforcement-modes still says no key protects the mode while security-gateway-condition-keys lists bedrock-agentcore:PolicyEngineMode.
 # 2026-10-30 (controls): added the D3-APA and AML.M0036 rows from resource-based-policies, harness-security, security-gateway-condition-keys, harness-operations, runtime-lifecycle-settings and gateway-rate-limits (.md, 200); both are delivered by existing settings rows.
+# 2026-11-25 (daily feed): added the instancePrivilegeMode setting and a sentence on it in the D3-EI note, from the
+# What's New post of 2026-11-18 (agentcore-elevated-privileges) and devguide/runtime-instances-privilege-mode.html (both 200).
 vendor: aws
 family: Amazon Bedrock AgentCore
 tools:
@@ -415,9 +417,12 @@ tools:
           agent loop. Outside: inference, Gateway, Memory, and Browser and Code Interpreter sessions (their own
           sandboxes). Commands run as root in the microVM and InvokeAgentRuntimeCommand at a higher privilege; a
           caller allowed to invoke the runtime ARN can route into any session ID it knows. On Instances the
-          boundary is an EC2 instance in your account shared by co-located agents. Unit 42 showed Code
-          Interpreter SANDBOX mode leaking DNS in 2026; AWS remediated it.
-        verified: "2026-09-25"
+          boundary is an EC2 instance in your account shared by co-located agents; there linux.privilegeMode
+          STANDARD (the default) runs the agent unprivileged (a dedicated user, or a user namespace with seccomp
+          and masked /proc and /sys for a container), while PRIVILEGED runs it as root on the instance with every
+          capability and no seccomp filter, alone in its session. Unit 42 showed Code Interpreter SANDBOX mode
+          leaking DNS in 2026; AWS remediated it.
+        verified: "2026-11-25"
       - mitigation: cap-agent-egress-control
         coverage: partial
         mechanism: >-
@@ -977,6 +982,19 @@ tools:
         mitigations: [cap-agent-egress-control, D3-EI]
         url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-create.html
         verified: "2026-10-30"
+      - id: instancePrivilegeMode
+        name: privilegeMode (runtime instances)
+        where: CreateAgentRuntime / UpdateAgentRuntime › capacityProviderConfiguration.operatingSystemConfiguration.linux.privilegeMode
+        setVia: [apiCli]
+        area: tools
+        default: STANDARD (also when the field is omitted, including from an update)
+        recommended: STANDARD; PRIVILEGED only for a runtime whose agent must run containers or install system packages, on a capacity provider of its own
+        value: "STANDARD"
+        why: A privileged agent runs as root on its EC2 instance with every Linux capability, no seccomp filter and all devices, so an injected command owns the instance; a privileged session holds only that agent.
+        mitigations: [D3-EI]
+        requires: AgentCore Runtime on the Instances compute type (a capacity provider)
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-instances-privilege-mode.html
+        verified: "2026-11-25"
       - id: harnessMemory
         name: memory (harness)
         where: CreateHarness / UpdateHarness › memory (disabled, managedMemoryConfiguration or agentCoreMemoryConfiguration)

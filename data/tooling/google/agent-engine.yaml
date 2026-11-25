@@ -21,6 +21,10 @@
 # not on govern/agent-identity-overview (left out of settings). The Managed Agents API stays a variant (same platform,
 # project, IAM, docs tree and billing), not a second entity.
 # 2026-10-04: removed the D3-MFA and D3-AA rows and the stale-binding risk note after the managed-runtime drawing pruned those pins (review MR-02); the orphaned-grant fact moved to the shadow-agents note.
+# 2026-11-25 (daily feed): added modelArmorFloorConstraint (custom organisation policies on
+# modelarmor.googleapis.com/FloorSetting, GA 2026-11-17) and modelArmorResidencyConstraint (the managed
+# requireTemplateDataResidencyCompliance constraint, enforced by default since 2026-10-26), from the Model Armor
+# release notes, access-control/custom-constraints and manage-templates (all 200).
 vendor: google
 family: Gemini Enterprise Agent Platform (Vertex AI Agent Engine)
 tools:
@@ -992,6 +996,31 @@ tools:
         mitigations: [cap-input-guardrails]
         url: https://docs.cloud.google.com/model-armor/configure-floor-settings
         verified: "2026-10-30"
+      - id: modelArmorFloorConstraint
+        name: "Custom organization policy constraint on modelarmor.googleapis.com/FloorSetting"
+        where: "Organization Policy › custom constraint on resource type modelarmor.googleapis.com/FloorSetting, methodTypes UPDATE, with a CEL condition such as resource.filterConfig.piAndJailbreakFilterSettings.filterEnforcement == 'ENABLED'"
+        setVia: [cloudPolicy]
+        area: tools
+        default: "No constraint: anyone with modelarmor.floorSettings.update can weaken the floor"
+        recommended: "Enforced at the organisation: floor updates allowed only when the prompt-injection and jailbreak filter is ENABLED and the Agent Platform floor is set to inspect and block"
+        value: "PI and jailbreak filter required on the floor"
+        why: A project owner can't quietly switch off the screening floor over agents' Gemini calls, because the organisation policy refuses the update; a floor that already breaks the rule stays as it is until it is next changed.
+        mitigations: [cap-input-guardrails, D3-ACH]
+        requires: Organization Policy Administrator on the organisation
+        url: https://docs.cloud.google.com/model-armor/access-control/custom-constraints
+        verified: "2026-11-25"
+      - id: modelArmorResidencyConstraint
+        name: "Require Model Armor Template Data Residency Compliance (constraints/modelarmor.managed.requireTemplateDataResidencyCompliance)"
+        where: Organization Policy › managed constraint on the project, folder or organisation
+        setVia: [cloudPolicy]
+        area: data
+        default: "Enforced (since 26 October 2026): a template can't be created or updated with data_residency_compliant false"
+        recommended: Left enforced; disabled only for a project whose templates need features that aren't hosted in their location
+        value: "Enforced"
+        why: Prompts and responses screened by a template aren't routed to another jurisdiction for features missing locally unless an Organization Policy Administrator allows it.
+        mitigations: [D3-ACH]
+        url: https://docs.cloud.google.com/model-armor/manage-templates#disable-data-residency-constraint
+        verified: "2026-11-25"
       - id: toolConfirmation
         name: require_confirmation (ADK Tool Confirmation)
         where: Agent code → FunctionTool(..., require_confirmation=True)
