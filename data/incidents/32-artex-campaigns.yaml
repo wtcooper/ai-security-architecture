@@ -1,0 +1,310 @@
+id: artex-campaigns
+title: "ARTEX: one public agent framework, many attackers, and Storm-0940's run through stolen ConnectWise app identities"
+subtitle: >
+  An open-source offensive agent framework was picked up by several separate actors in the
+  autumn of 2026. In the best-documented case, Storm-0940's ARTEX agents used stolen ConnectWise
+  application credentials to attempt sign-ins to more than 2,250 Microsoft 365 tenants, over 200
+  in under four minutes, then granted themselves roles and planted credentials in some.
+date: 2026-11
+dateRange: July – November 2026 (ConnectWise app sign-ins 15–16 October; Microsoft's report 21 October)
+category: aiAttacker
+perspective: weapon
+# The drawing is the attackers' own ARTEX deployment, as in the Taiwan and GTG-1002 files; the stolen app identity is what its agents presented at the gateway.
+archetype: archAgentWorkflow
+caveat: >
+  The link to ARTEX is Microsoft's assessment: it published no ARTEX prompts or transcripts for
+  this campaign, and the user agents it lists (python-requests, curl and the like) are not
+  specific to ARTEX. Huntress, which saw the ConnectWise sign-ins first-hand, described
+  scripted tooling and did not itself confirm an AI agent. The counts differ: Microsoft reports attempted sign-ins to more than 2,250 tenants with four
+  application credentials (its hunting queries name three apps); Huntress saw almost 1,000
+  tenants with sign-in activity, over 300 of them successful, across six ConnectWise apps.
+  Microsoft does not say how the app credentials were obtained, and neither source confirms
+  that data left any tenant.
+breaks:
+  - control: D3-AA
+    how: "The ConnectWise apps signed in from Storm-0940's IP range and were accepted; tie a vendor's app identity to the vendor's own infrastructure, so a valid credential presented from anywhere else is refused."
+  - control: D3-CH
+    how: "The agents' whole reach was a handful of application credentials; certificate-bound credentials, rotated and revoked as soon as the vendor is breached, leave less to replay across 2,250 tenants."
+  - control: AML.M0028
+    how: "Least privilege on multi-tenant app permissions and consent grants, as Microsoft advises: an integration that can make itself Global Administrator holds authority its job never needed."
+  - control: cap-agent-tracing
+    how: "Watch app-only activity: 200 sign-ins in under four minutes, in sorted tenant order, then role grants and new credentials, is an agent's signature and not a customer's."
+  - control: cap-agent-kill-switch
+    how: "Switch the integration off in every tenant at once and keep it off, then remove the credentials it planted on other apps, which outlive the switch."
+summary:
+  - >
+    ARTEX is an open-source multi-agent penetration-testing platform released on GitHub in July
+    2026. It turns an objective written in plain language into tasks that agent workers carry out
+    with real tools, on whichever model the operator connects. The FBI says a variety of actors
+    have used it since at least August; Microsoft, CrowdStrike, CERT-EU and Korean authorities
+    have each described different ones. Where the cases on file each show one operator's own
+    set-up, this is one download in many hands, and pulling the repository on 8 October did not
+    stop it.
+  - >
+    Microsoft's account of Storm-0940, a group it calls China-state aligned, is the
+    best-sourced, because Huntress watched the same intrusion from the customer side. A
+    password spray across eight organisations failed. What worked was a vendor's trust:
+    identities of ConnectWise cloud applications that customers had installed in their
+    Microsoft 365 tenants. The agents signed in as those applications, without any user,
+    attempting sign-ins to more than 2,250 tenants; in some they assigned themselves privileged
+    roles, added credentials to other apps and read Azure Key Vault secrets, in several cases
+    within three hours of first targeting.
+  - >
+    ConnectWise had disabled the apps by 17 October, two days after the first sign-ins. Nothing
+    in the chain was a new kind of flaw. The agents replayed standing access at a speed the FBI
+    says leaves defenders little time to respond, and the controls that would have broken it
+    belong to whoever issues and accepts non-human identities.
+patterns:
+  - AI-Orchestrated Offensive Operations
+  - Supply Chain Credential Cascade
+  - Overprivileged Integration
+cves: []
+risks:
+  - riskRogueActions
+  - riskCrossTenantCredentialPropagation
+  - riskShadowAndUnknownAgents
+  - riskAgentDelegationChainOpacity
+  - riskSensitiveDataDisclosure
+steps:
+  - n: 1
+    title: A public framework, with scope left to the model
+    phase: introduced
+    narrative: >
+      ARTEX, written in Go and released on GitHub in July 2026 by a developer called
+      "Autumn-27", takes an objective in natural language, breaks it into goals and intents, and
+      has agent workers execute them with real tools. It has no model of its own: operators
+      connect Claude, GPT, DeepSeek, GLM, Grok or Kimi, and the FBI found DeepSeek Flash models
+      most used, for their low cost and "lack of observable guardrails when framed for
+      penetration testing". CERT-EU notes that staying in scope rests on configurable rules and
+      the model itself, with no hard technical enforcement. The developer made the repository
+      unavailable on 8 October; forks, archived copies and a commercial ARTEX PRO kept it in
+      circulation. Microsoft says Storm-0940 was using it as early as September.
+    path: [operator->events, events->harness, orchestration->subagents, harness->gateway, gateway->provider]
+    risks:
+      - riskRogueActions
+    sources:
+      - title: "AI-driven, large-scale nation-state campaign using ARTEX enables supply chain compromise"
+        url: https://www.microsoft.com/en-us/security/blog/2026/10/21/storm-0940-uses-artex-agentic-ai-connectwise-supply-chain-compromise/
+        publisher: Microsoft Threat Intelligence
+        date: 2026-10-21
+      - title: "Threat Overview of ARTEX Autonomous Penetration Testing Framework (FLASH-20261113-001)"
+        url: https://www.ic3.gov/CSA/2026/261113.pdf
+        publisher: FBI
+        date: 2026-11-13
+      - title: "From Penetration Testing to Cyber Threat: Beware of ARTEX"
+        url: https://www.cert.europa.eu/blog/from-penetration-testing-to-cyber-threat-beware-of-artex
+        publisher: CERT-EU
+        date: 2026-11-05
+  - n: 2
+    title: A machine-speed password spray that got nowhere
+    phase: introduced
+    narrative: >
+      Between 10 and 14 October, Storm-0940 infrastructure at 144.172.64[.]99 ran what Microsoft
+      calls an automated cross-tenant password spray against 327 accounts at eight
+      organisations, aimed at Microsoft 365 and Exchange Online. Microsoft counted more than
+      151,000 failed logons, more than 111,000 of them in a single day and up to 2,900 a minute
+      on 11 October; 48 accounts took more than 1,000 failures each, and lockouts were nearly 98%
+      of the responses. Microsoft saw no successful authentication, token issuance, Graph call or
+      directory change.
+    path: [harness->gateway, gateway->openWeb]
+    sources:
+      - title: "AI-driven, large-scale nation-state campaign using ARTEX enables supply chain compromise"
+        url: https://www.microsoft.com/en-us/security/blog/2026/10/21/storm-0940-uses-artex-agentic-ai-connectwise-supply-chain-compromise/
+        publisher: Microsoft Threat Intelligence
+        date: 2026-10-21
+  - n: 3
+    title: Stolen vendor app identities, 200 sign-ins in four minutes
+    phase: exposed
+    narrative: >
+      Microsoft assesses that Storm-0940 was responsible for the ConnectWise supply-chain
+      compromise that surfaced on 15 October, in which it gained control of identities of
+      multiple ConnectWise cloud applications; it does not say how. From the IP range used for
+      the spray, the agents used the stolen application credentials to attempt sign-ins to more
+      than 2,250 tenants, including over 200 sign-ins in under four minutes with four
+      application credentials. Signing in as the application needed no interactive user
+      sign-in. Huntress, watching customer tenants, confirmed unauthorised sign-ins in 162
+      tenants by 16 October and a day later counted almost 1,000 with sign-in activity, over 300
+      successful; the tooling "moved through tenants in sorted GUID order, a few seconds apart".
+    path: [harness->gateway, gateway->openWeb, openWeb]
+    risks:
+      - riskCrossTenantCredentialPropagation
+      - riskShadowAndUnknownAgents
+    sources:
+      - title: "AI-driven, large-scale nation-state campaign using ARTEX enables supply chain compromise"
+        url: https://www.microsoft.com/en-us/security/blog/2026/10/21/storm-0940-uses-artex-agentic-ai-connectwise-supply-chain-compromise/
+        publisher: Microsoft Threat Intelligence
+        date: 2026-10-21
+      - title: "ConnectWise (SkyKick) Vendor Credentials Abused in M365 Attacks"
+        url: https://www.huntress.com/blog/vendor-credential-enables-unauthorized-access
+        publisher: Huntress
+        date: 2026-10-16
+  - n: 4
+    title: "Inside the tenants: Global Administrator, new credentials, Key Vault reads"
+    phase: exposed
+    narrative: >
+      In some tenants the agents went on through Microsoft Graph: reconnaissance, credentials
+      added to applications for persistence, changes to identities, groups and privileged roles,
+      and secrets read at scale across multiple Azure Key Vaults, with a key-unwrapping
+      operation. One ConnectWise management application assigned itself Global Administrator;
+      in several cases privileged access came less than three hours after first targeting.
+      Huntress saw the Cloud Management apps give themselves directory roles, mostly Exchange
+      Administrator, in roughly 50 tenants it monitored, and called the behaviour "fast,
+      scripted, and notably indiscriminate". ARTEX's agents add what they find to a graph of
+      assets and vulnerabilities as they go. To the tenants, every action came from the
+      vendor's own apps, and, as Huntress notes, Graph directory reads leave no audit record.
+    path: [harness->gateway, gateway->openWeb, openWeb, orchestration->state]
+    risks:
+      - riskRogueActions
+      - riskSensitiveDataDisclosure
+      - riskAgentDelegationChainOpacity
+    sources:
+      - title: "AI-driven, large-scale nation-state campaign using ARTEX enables supply chain compromise"
+        url: https://www.microsoft.com/en-us/security/blog/2026/10/21/storm-0940-uses-artex-agentic-ai-connectwise-supply-chain-compromise/
+        publisher: Microsoft Threat Intelligence
+        date: 2026-10-21
+      - title: "ConnectWise (SkyKick) Vendor Credentials Abused in M365 Attacks"
+        url: https://www.huntress.com/blog/vendor-credential-enables-unauthorized-access
+        publisher: Huntress
+        date: 2026-10-16
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      The decisive controls sit with whoever issues and accepts the non-human identity. Bind a
+      vendor's application to the vendor's own infrastructure and harden its credentials, so a
+      valid secret presented from an attacker's IP range fails. Grant multi-tenant apps only the
+      permissions their job needs, and find any that can assign directory roles: these could.
+      Alert on app-only sign-ins from unfamiliar sources, on credential additions and on
+      self-assigned roles, which Microsoft and the FBI both name. And be able to switch an
+      integration off in every tenant at once, then hunt for the credentials it planted on other
+      apps, which Microsoft warns can stay active as a backdoor after the original is fixed.
+      ConnectWise had disabled the apps within two days of the first sign-ins; Microsoft advises
+      keeping them off until ConnectWise says otherwise. On the model side, the FBI's finding
+      that operators pick models for their lack of guardrails under a penetration-test framing
+      matters for ARTEX at large, but Microsoft does not say which model Storm-0940 used.
+    path: [harness->gateway, gateway->openWeb, gateway->internalTools, govIdentity, govObservability]
+    sources:
+      - title: "AI-driven, large-scale nation-state campaign using ARTEX enables supply chain compromise"
+        url: https://www.microsoft.com/en-us/security/blog/2026/10/21/storm-0940-uses-artex-agentic-ai-connectwise-supply-chain-compromise/
+        publisher: Microsoft Threat Intelligence
+        date: 2026-10-21
+      - title: "Threat Overview of ARTEX Autonomous Penetration Testing Framework (FLASH-20261113-001)"
+        url: https://www.ic3.gov/CSA/2026/261113.pdf
+        publisher: FBI
+        date: 2026-11-13
+alsoSeen:
+  - title: "FBI FLASH: many actors, one framework, privileged access in under three hours"
+    date: 13 November 2026
+    note: >
+      The FBI says a variety of actors have used ARTEX since at least August 2026, some reaching
+      privileged access in under three hours, and that researchers counted more than 1,600
+      publicly exposed ARTEX consoles in early November. Its indicators include the attackers'
+      own model traffic: unexpected calls to api.anthropic.com, api.deepseek.com,
+      open.bigmodel.cn and api.x.ai.
+    sources:
+      - title: "Threat Overview of ARTEX Autonomous Penetration Testing Framework (FLASH-20261113-001)"
+        url: https://www.ic3.gov/CSA/2026/261113.pdf
+        publisher: FBI
+        date: 2026-11-13
+  - title: "European Commission: internal systems disrupted, ARTEX suspected"
+    date: October – November 2026
+    note: >
+      On 5 November CERT-EU said AI-driven activity against the EU institutions "highly likely
+      involved the use of ARTEX"; press reports (Politico, Euronews) say it detected an attack on the Commission on
+      22 October and named ARTEX as a possible tool. HR, medical-reimbursement and
+      health-insurance systems were disrupted for more than ten days, the Commission has since
+      confirmed that EU Academy users' names and email addresses leaked, and attribution awaits
+      the investigation.
+    sources:
+      - title: "From Penetration Testing to Cyber Threat: Beware of ARTEX"
+        url: https://www.cert.europa.eu/blog/from-penetration-testing-to-cyber-threat-beware-of-artex
+        publisher: CERT-EU
+        date: 2026-11-05
+      - title: "European Commission Cyberattack: ARTEX AI Tool Suspected in Prolonged Disruption"
+        url: https://securityaffairs.com/203483/hacking/european-commission-cyberattack-artex-ai-tool-suspected-in-prolonged-disruption.html
+        publisher: Security Affairs
+        date: 2026-11-19
+      - title: "EU Academy Users' Names and Emails Exposed in EU Commission Hack"
+        url: https://securityaffairs.com/203900/data-breach/eu-academy-users-names-and-emails-exposed-in-eu-commission-hack.html
+        publisher: Security Affairs
+        date: 2026-11-24
+  - title: "VAPOR PANDA: one ARTEX controller, 200+ organisations, 1.4 billion planning tokens"
+    date: October 2026
+    note: >
+      From 17 October CrowdStrike saw a single ARTEX controller it links to VAPOR PANDA used
+      against more than 200 organisations in at least 14 countries over 11 days, with
+      post-exploitation confirmed at nine, among them a Middle East interior ministry, and a
+      human steering the agents in Chinese at decision points. In one intrusion, CrowdStrike
+      says, the planning agents consumed on the order of 1.4 billion input tokens.
+    sources:
+      - title: "VAPOR PANDA Uses AI-Driven ARTEX to Scale a Global Espionage Campaign"
+        url: https://www.crowdstrike.com/en-us/blog/vapor-panda-uses-artex-to-scale-global-campaign/
+        publisher: CrowdStrike
+        date: 2026-10-29
+  - title: "South Korean banks: peripheral systems, and the operator's own Claude Code files"
+    date: September – October 2026
+    note: >
+      From late September an unattributed actor, likely a Chinese speaker and financially
+      motivated in CrowdStrike's moderate-confidence view, used ARTEX on DeepSeek against a
+      loan-progress service for brokers at one bank and an employee mobile work system at
+      another, and left Claude Code session histories, ARTEX configs and Claude memory files in
+      open directories; the FBI says personal data of about 67,000 people was taken. Separately,
+      Seoul police arrested a former penetration tester on 15 October over 8.2 million records from
+      more than 90 other organisations, a case Yonhap ties to the same "AI autonomous
+      penetration-testing system" and BleepingComputer to ARTEX.
+    sources:
+      - title: "Unknown Threat Actor Uses AI-Driven ARTEX to Target South Korean Finance"
+        url: https://www.crowdstrike.com/en-us/blog/unknown-threat-actor-uses-artex-to-target-south-korean-finance/
+        publisher: CrowdStrike
+        date: 2026-10-07
+      - title: "The Korean financial sector was breached by a two-month-old Chinese AI"
+        url: https://www.khan.co.kr/en/article/202610042320007
+        publisher: The Kyunghyang Shinmun
+        date: 2026-10-04
+      - title: "비전공자가 AI로 골프장 등 개인정보 820만건 탈취에 협박까지"
+        url: https://www.yna.co.kr/view/AKR20261026075100004
+        publisher: Yonhap
+        date: 2026-10-26
+      - title: "Former pentester used ARTEX AI to steal 8.2 million data records"
+        url: https://www.bleepingcomputer.com/news/security/former-pentester-used-artex-ai-to-steal-82-million-data-records/
+        publisher: BleepingComputer
+        date: 2026-10-26
+  - title: "Operation Snowball: not ARTEX, a jailbroken DeepSeek agent inside a European telecom"
+    date: November 2026
+    note: >
+      Malbear Labs found the exposed workspace of a custom harness, not ARTEX, running a
+      jailbroken DeepSeek Flash agent for more than two weeks against a European telecom; it got
+      in through an unauthenticated XXE in Cisco BroadWorks (CVE-2026-20320) and mapped 13
+      organisations hosted on the provider. CISA added the CVE to its exploited-vulnerabilities
+      catalogue on 10 November but did not confirm Malbear's analysis, so the AI account rests
+      on that one report.
+    sources:
+      - title: "Operation Snowball: Inside an Autonomous AI Intrusion Campaign"
+        url: https://malbearlabs.com/posts/operation-snowball-inside-an-autonomous-ai-intrusion-campaign
+        publisher: Malbear Labs
+        date: 2026-11-08
+      - title: "CISA Adds Six Known Exploited Vulnerabilities to Catalog"
+        url: https://www.cisa.gov/news-events/alerts/2026/11/10/cisa-adds-six-known-exploited-vulnerabilities-catalog
+        publisher: CISA
+        date: 2026-11-10
+      - title: "CISA Orders Patch for Cisco Flaw Tied to AI Agent Attack"
+        url: https://www.govinfosecurity.com/cisa-orders-patch-for-cisco-flaw-tied-to-ai-agent-attack-a-33364
+        publisher: GovInfoSecurity
+        date: 2026-11-11
+sources:
+  - title: "AI-driven, large-scale nation-state campaign using ARTEX enables supply chain compromise"
+    url: https://www.microsoft.com/en-us/security/blog/2026/10/21/storm-0940-uses-artex-agentic-ai-connectwise-supply-chain-compromise/
+    publisher: Microsoft Threat Intelligence
+    date: 2026-10-21
+  - title: "ConnectWise (SkyKick) Vendor Credentials Abused in M365 Attacks"
+    url: https://www.huntress.com/blog/vendor-credential-enables-unauthorized-access
+    publisher: Huntress
+    date: 2026-10-16
+  - title: "Threat Overview of ARTEX Autonomous Penetration Testing Framework (FLASH-20261113-001)"
+    url: https://www.ic3.gov/CSA/2026/261113.pdf
+    publisher: FBI
+    date: 2026-11-13
+  - title: "From Penetration Testing to Cyber Threat: Beware of ARTEX"
+    url: https://www.cert.europa.eu/blog/from-penetration-testing-to-cyber-threat-beware-of-artex
+    publisher: CERT-EU
+    date: 2026-11-05
