@@ -28,11 +28,15 @@ was searched, what was added and what was turned down and why. The log matters a
 files: it is how the next run knows where to start, and how a reader knows a missing incident was
 considered and not missed.
 
-The feed carries five kinds of item (`kind:`); this skill writes the incidents, which are the
-items written without a `kind` or with `kind: incident`. The one scheduled run is
-`ai-security-daily` (`.claude/skills/ai-security-daily/`): it sweeps for the other four kinds and
-hands the incident lane to this skill's **Daily run** at the end, which shortens the steps below;
-everything else here still applies to it, and it shares the run's log and search budget.
+The feed carries six kinds of item (`kind:`); this skill writes the incidents, which are the
+items written without a `kind` or with `kind: incident`, and that includes **campaign threat
+intelligence**: a vendor's or agency's report of attacks happening, with its actors, intrusions
+and detections, is an incident item (or an `alsoSeen` entry), not research. The one scheduled run
+is `ai-security-daily` (`.claude/skills/ai-security-daily/`): it sweeps for the other five kinds
+and hands the incident lane to this skill's **Daily run** at the end, which shortens the steps
+below; everything else here still applies to it, and it shares the run's log, search budget and
+**verification gate**: nothing this skill writes is committed until an independent verifier has
+opened its sources and the gate has passed (`ai-security-daily`'s `references/gate.md`).
 
 ## 1. Fix the date and the window
 
@@ -87,7 +91,19 @@ A lead earns a **feed item** when all four of these hold:
 - **It is inside the window**, by the date it came to light.
 
 Every lead that meets the four gets a feed item: the feed is the record of everything that
-happened.
+happened. Three rules decide how many items, and where:
+
+- **One event, one item.** A post that tells two cases (two intrusions, two campaigns, one by a
+  named framework and one by another) is two items, never one item mixing their figures, even
+  when the post files them under one heading.
+- **A follow-up joins its story.** A new report on a campaign, framework, actor or vulnerability
+  already in the feed in the last month is filed as its own item *in that thread's story*
+  (`story:` on the item, the story in `data/feed/stories.yaml`); create the story if there is
+  none, and put the earlier items in it. One story per thread, as the sources keep the threads
+  apart: ARTEX and CyberStrikeAI are two.
+- **As the source attributes it.** An agency that names two frameworks as examples has not said
+  which was used; "at varying confidence" and "we assess" survive into the summary; an item is
+  linked to a deep dive (`incident:`) only when the source ties the case to it.
 
 A feed item earns a **deep dive** when any of these holds:
 
@@ -141,10 +157,14 @@ a single item: three loose items are the signal (section 9).
 
 ## 5. Verify before you write
 
-Read every source you will cite, with the fetch tool, on the day you cite it. For each step of
-the chain, be able to point to the sentence that supports it. Take dates, counts, names,
-versions and identifiers from the page, never from memory or from a search snippet. Where two
-sources disagree, say so in the narrative or the caveat instead of picking one silently.
+**Read every lead you keep; a lead you could not read is not filed.** Read every source you
+will cite, with the fetch tool, on the day you cite it. For each step of the chain, and each
+figure in a feed item, be able to point to the sentence that supports it. Take dates, counts,
+names, versions and identifiers from the page, never from memory or from a search snippet, and
+say whose a figure is (the vendor's telemetry, the researcher's, an attacker's leaked logs).
+Where two sources disagree, say so in the narrative or the caveat instead of picking one
+silently. Keep your reading apart from the source's: what the source does not say is not in the
+item.
 
 If a page will not load, do not cite it. If the only source for a step will not load, the step
 is not verified and the deep dive waits for the next run; note it in the log. A deep dive is
@@ -180,12 +200,18 @@ judgment:
 - **`category`** is the incident pattern's id (section 4), with `fit: loose` and a `fitNote`
   when the fit is loose.
 - **`evidence`** is the strongest the sources you read support: in the wild, confirmed,
-  demonstrated, or a single report. No stronger.
+  demonstrated, or a single report. No stronger, and no weaker than items already filed on the
+  same kind of evidence (real intrusions a vendor observed are `exploited`).
 - **`patterns`** are the ones the chain would replay on, at most three; `[]` when none fits.
 - **`incident`** points at the deep dive that tells it, whether as its own walk-through or as an
-  `alsoSeen` entry. Every deep dive and `alsoSeen` entry written in this run gets an item that
-  points at it.
-- **`summary`** is one to three plain past-tense sentences: who, what, the result.
+  `alsoSeen` entry, and only when the source ties the case to it. Every deep dive and `alsoSeen`
+  entry written in this run gets an item that points at it.
+- **`weight`**: `headline` (a confirmed large incident, or one a reader would be poorly served not
+  knowing today; at most three headlines a day across all kinds), `notable`, or `brief`.
+- **`story`**: the thread's story when it is a follow-up (section 3).
+- **`title`** at most 90 characters (aim for about 70, one figure at most); **`summary`** one to
+  three plain past-tense sentences, who, what, the result, at most 280 (aim for about 200);
+  **`why`** one line, at most 160, on what a defender should check or do.
 
 The item is read in a few seconds, so it says what happened and stops. Read the primary source
 before you write it, as for a deep dive.
@@ -247,8 +273,15 @@ npm run dev       # then open /feed/, the incident pattern you touched (/inciden
 Step through each new deep dive in the browser: each step should light the boxes and arrows the
 narrative describes, and the last step should light the breaking controls. A path that builds
 but lights the wrong part of the drawing is the mistake the build cannot catch. On the feed,
-check that each new item sits under the right week, that its chip opens the right incident
-pattern and that its **Deep dive →** opens the deep dive it names.
+check that each new item sits under the right week and story, that its chip opens the right
+incident pattern and that its **Deep dive →** opens the deep dive it names.
+
+Before anything is committed, the new and changed items, deep dives, `alsoSeen` entries and
+incident patterns pass `ai-security-daily`'s gate, whether this skill runs alone or inside the
+daily run: `feed-lint.mjs`, then `verify-brief.mjs`, an independent verifier subagent in the
+foreground, each finding fixed or the entry dropped, and `verify-brief.mjs --gate`
+(`.claude/skills/ai-security-daily/references/gate.md`). Inside the daily run, the daily run does
+this once for everything.
 
 ## 11. Log and report
 
@@ -276,29 +309,37 @@ dives and the incident patterns current. It is the steps above, narrowed:
    added too, under the day it came to light, once its primary source is read; the log marks it
    as a late find.
 2. **Sweep.** The trackers, vendor disclosures, vulnerabilities, agencies and security press
-   lanes, with the window's dates in the queries. Add the by-incident-pattern and by-pattern
-   passes when the window is longer than a week.
-3. **Read the primary source of each item before adding it**, with the fetch tool, on the day.
-   A lead whose primary source will not load waits for the next run, noted in the log.
+   lanes, with the window's dates in the queries, and the security research blogs for
+   **campaign threat intelligence** (reports of attacks happening, with actors and detections),
+   which is this lane's, not research's. Add the by-incident-pattern and by-pattern passes when
+   the window is longer than a week.
+3. **Read the primary source of each lead you keep**, with the fetch tool, on the day. A lead
+   whose primary source will not load is not filed: it waits for the next run, named in the log.
 4. **Add feed items** for every lead that meets the four tests, each filed under its incident
-   pattern (section 4), with `fit: loose` and a `fitNote` when the fit is loose.
+   pattern (section 4), with `fit: loose` and a `fitNote` when the fit is loose; one event per
+   item; a follow-up in its thread's story; attributed as the source attributes it; with a
+   `weight` and a one-line `why` (section 7).
 5. **Write deep dives only when the deep-dive test holds** (section 3), at most two deep dives
    and `alsoSeen` entries a run, every source read; candidates from the last run's log come
-   first. Most daily runs add feed items and no deep dive; that is the expected result, not a
-   thin one.
+   first. An `alsoSeen` entry goes on the deep dive its source ties it to, and no other. Most
+   daily runs add feed items and no deep dive; that is the expected result, not a thin one.
 6. **Check the loose items.** When three or more of the last 60 days share a mechanism whose
    controls differ, add the incident pattern (section 9), at most one a run.
-7. **Log** in this week's file, `docs/research/daily/<date of this week's Monday>.md`. The
+7. **Hand back to the daily run** what was drafted: it lints everything, starts the independent
+   verifier on the whole diff and resolves its findings (section 10's gate). An incident item, a
+   deep dive or an `alsoSeen` entry with an unresolved finding is not published; the log says
+   what was dropped and why.
+8. **Log** in this week's file, `docs/research/daily/<date of this week's Monday>.md`. The
    first run of the week creates it with a line saying which week it covers; each run appends a
    section `## <today>`: the window, the number of searches, each item added, any deep dive or
    incident pattern written, the candidates that wait and the leads turned down. A run that
    finds nothing still writes its section: the window, the queries and "nothing new", so the
    next run knows this stretch was searched.
-8. **Build, test, commit, push** as the run's instructions say: `npm run data` and `npm test`
-   must pass before anything is committed; commit the feed, deep dive and incident pattern files
-   and the log, unless the instructions say otherwise. The compiled dataset and the feed's files
-   (`src/data/generated/`, `public/data/feed/`) are generated and ignored by git: never commit
-   them. Push only to the branch the instructions name. If the build or the tests fail and the
-   fix is not plainly yours to make, commit nothing, say what failed in the log, and stop. Run by
-   `ai-security-daily`, leave building, committing and pushing to it: it does them once for the
-   whole run.
+9. **Build, test, commit, push** as the run's instructions say, and only after the gate has
+   passed: `npm run data` and `npm test` must pass before anything is committed; commit the
+   feed, story, deep dive and incident pattern files and the log, unless the instructions say
+   otherwise. The compiled dataset and the feed's files (`src/data/generated/`,
+   `public/data/feed/`) are generated and ignored by git: never commit them. Push only to the
+   branch the instructions name. If the build or the tests fail and the fix is not plainly yours
+   to make, commit nothing, say what failed in the log, and stop. Run by `ai-security-daily`,
+   leave the gate, building, committing and pushing to it: it does them once for the whole run.

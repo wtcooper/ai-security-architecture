@@ -87,10 +87,18 @@ for (const i of incidents) {
   console.log(`           ${i.title}`);
   for (const r of i.alsoSeen ?? []) console.log(`           also seen: ${r.title}`);
 }
-console.log("\nFEED INCIDENTS  (date · id · incident pattern · evidence · deep dive)");
+console.log("\nFEED INCIDENTS  (date · id · incident pattern · evidence · weight · story · deep dive)");
 if (!feed.length) console.log("  none yet");
 for (const f of feed) {
-  console.log(`  ${f.date}  ${f.id.padEnd(34)} ${(f.category + (f.fit === "loose" ? " (loose)" : "")).padEnd(26)} ${f.evidence.padEnd(13)} ${f.incident ?? ""}`);
+  console.log(`  ${f.date}  ${f.id.padEnd(34)} ${(f.category + (f.fit === "loose" ? " (loose)" : "")).padEnd(26)} ${f.evidence.padEnd(13)} ${(f.weight ?? "-").padEnd(9)} ${(f.story ?? "-").padEnd(20)} ${f.incident ?? ""}`);
+}
+// A follow-up joins its thread's story: items that tell one deep dive but share no story are the first place to look.
+const byDeepDive = new Map();
+for (const f of feed.filter((x) => x.incident && x.date > daysBefore(30))) byDeepDive.set(f.incident, [...(byDeepDive.get(f.incident) ?? []), f]);
+const unstoried = [...byDeepDive].filter(([, fs]) => fs.length > 1 && new Set(fs.map((f) => f.story ?? f.id)).size > 1);
+if (unstoried.length) {
+  console.log("\nFOLLOW-UPS IN THE LAST 30 DAYS WITH NO SHARED STORY  (deep dive · items): give each thread one story");
+  for (const [dd, fs] of unstoried) console.log(`  ${dd.padEnd(34)} ${fs.map((f) => f.id).join(", ")}`);
 }
 const told = new Set(feed.map((f) => f.incident).filter(Boolean));
 const untold = incidents.filter((i) => !told.has(i.id)).map((i) => i.id);
