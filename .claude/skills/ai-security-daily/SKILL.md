@@ -233,10 +233,13 @@ A run that finds nothing still writes its section: the window, the queries and "
 ## 11. Build, test, commit, push
 
 ```bash
-npm run data && npm test && npm run build
+npm run data && npm test && NODE_USE_ENV_PROXY=1 npm run build
 ```
 
-All three must pass. Then commit the files under `data/` (feed, stories, overviews, decisions,
+All three must pass. In a cloud session the build fetches its web fonts through the session's
+proxy, hence `NODE_USE_ENV_PROXY=1`. If the fonts still cannot be fetched there, run
+`npx next build --webpack` instead and say so in the log: the site is deployed from GitHub's own
+build, which fetches fonts directly. Then commit the files under `data/` (feed, stories, overviews, decisions,
 security tools, tooling, catalogue, incidents, incident patterns) and the log, in one commit
 whose message names what was added, applied and proposed, and push to `main`. Never commit
 `src/data/generated/` or `public/data/feed/`: they are generated and ignored. If the build or the
