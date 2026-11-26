@@ -92,7 +92,7 @@ test("a pattern can be linked as built on a cloud, on any tab, and a cloud has i
 
 test("the feed moved to /feed/: the old address forwards there, keeping the filters and the item", () => {
   assert.equal(ROUTES.feed, "/feed");
-  assert.equal(feedHref({ category: "identity", evidence: "exploited" }, "some-item"), "/feed?category=identity&evidence=exploited#some-item");
+  assert.equal(feedHref({ kind: "incident" }, "some-item"), "/feed?kind=incident#some-item");
   // The old page is a path redirect to the feed, like the site's other retired addresses.
   const page = LegacyFeedPage() as React.ReactElement<{ children: React.ReactElement<{ kind: string; to: string }> }>;
   const redirect = page.props.children;

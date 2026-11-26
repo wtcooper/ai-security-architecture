@@ -15,7 +15,7 @@ import { archetypeById, atlasTechniques, controlName, frameworkEntries, incident
 import { FEED_ON_INCIDENT_PATTERN, feedForCategory } from "@/lib/feed";
 import { categoryColour } from "@/lib/incident-categories";
 import { THREAT_LISTS, type FeedItem, type IncidentPatternAuthored } from "@/lib/types";
-import { controlHref, feedHref, incidentHref, incidentPatternHref, patternHref, riskHref } from "@/lib/routes";
+import { controlHref, feedHref, incidentHref, incidentPatternHref, incidentReportsHref, patternHref, riskHref } from "@/lib/routes";
 import { CategoryDot, EvidenceTag, IncidentsBreadcrumb, plural } from "./chrome";
 import { formatDay, formatMonth } from "./model";
 
@@ -179,7 +179,7 @@ export function IncidentPatternPage({
                 {reports.slice(0, FEED_ON_INCIDENT_PATTERN).map((f) => (
                   <li key={f.id} data-feed-item={f.id}>
                     <Link
-                      href={feedHref({ category: pattern.id }, f.id)}
+                      href={feedHref({}, f.id)}
                       className="grid grid-cols-[72px_minmax(0,1fr)] items-baseline gap-x-4 gap-y-1 px-4 py-2.5 transition-colors hover:bg-mist/60 sm:grid-cols-[84px_minmax(0,1fr)_auto] sm:px-5"
                     >
                       <span className="ident whitespace-nowrap text-ink-3">{formatDay(f.date)}</span>
@@ -191,8 +191,8 @@ export function IncidentPatternPage({
                   </li>
                 ))}
               </ul>
-              <Link href={feedHref({ category: pattern.id })} className="mt-2.5 inline-block text-[13px] font-semibold text-introduced hover:underline">
-                All {total} in the feed →
+              <Link href={incidentReportsHref({ category: pattern.id })} className="mt-2.5 inline-block text-[13px] font-semibold text-introduced hover:underline">
+                All {total} incident reports →
               </Link>
             </Section>
           )}

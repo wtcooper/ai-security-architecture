@@ -2,12 +2,13 @@
 
 /**
  * The Incidents index (/incidents/): how AI systems are being attacked, as a catalogue of
- * incident patterns built like the patterns index. One card per incident pattern, then every
- * deep dive in one compact list. Each card says what the incident pattern is, how much evidence
- * sits under it (its deep dives, and its feed reports of the last 30 days), the newest report
- * and the patterns it lands on most. Old links that filtered the old list are forwarded: a
- * `?category=` (or `?type=`) to that incident pattern's page, an `?arch=` to that pattern's
- * Incidents tab.
+ * incident patterns built like the patterns index. One card per incident pattern, then the
+ * recent incident reports (the feed's incidents, with the incident pattern, pattern and evidence
+ * filters, all in the address), then every deep dive in one compact list. Each card says what the
+ * incident pattern is, how much evidence sits under it (its deep dives, and its feed reports of
+ * the last 30 days), the newest report and the patterns it lands on most. Old links that filtered
+ * the old list are forwarded: a `?type=` to that incident pattern's page, an `?arch=` to that
+ * pattern's Incidents tab. A `?category=` is the report list's own filter now.
  */
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -15,12 +16,13 @@ import { useEffect } from "react";
 
 import { PageHeader } from "@/components/Panel";
 import { archetypeById, incidentPatterns, incidentPatternView, incidents, meta } from "@/lib/data";
-import { incidentPatternCards, RECENT_DAYS, type IncidentPatternCardFeed } from "@/lib/feed";
+import { incidentItems, incidentPatternCards, RECENT_DAYS, toReport, type IncidentPatternCardFeed, type IncidentReport } from "@/lib/feed";
 import { categoryColour } from "@/lib/incident-categories";
 import { deepDivesNewestFirst } from "@/lib/incident-patterns";
-import { ROUTES, feedHref, incidentHref, incidentPatternHref, patternHref } from "@/lib/routes";
-import type { FeedItem, IncidentPattern, IncidentPatternAuthored } from "@/lib/types";
+import { ROUTES, feedHref, incidentHref, incidentPatternHref, patternHref, REPORTS_ANCHOR } from "@/lib/routes";
+import type { FeedItem, FeedMonthsIndex, IncidentPattern, IncidentPatternAuthored } from "@/lib/types";
 import { CategoryChip, plural } from "./chrome";
+import { IncidentReports } from "./IncidentReports";
 import { formatDay, formatMonth } from "./model";
 
 /** How many of the patterns an incident pattern lands on its card names. */
@@ -29,7 +31,7 @@ export { RECENT_DAYS };
 
 /** Where an old link to the incidents list goes now, or null when it names nothing to forward. Exported for the tests. */
 export function legacyIncidentsTarget(params: URLSearchParams): string | null {
-  const category = params.get("category") ?? params.get("type");
+  const category = params.get("type");
   if (category && incidentPatterns.some((p) => p.id === category)) return incidentPatternHref(category);
   const arch = params.get("arch");
   if (arch && archetypeById.has(arch)) return patternHref(arch, { tab: "incidents" });
@@ -42,6 +44,10 @@ export function IncidentPatternsIndex({
   cards: built = {},
   total = meta.counts.feed ?? 0,
   today = meta.generatedAt.slice(0, 10),
+  reports = [],
+  reportsFrom = "",
+  reportsIndex,
+  loadMonth,
 }: {
   /** The incident patterns; the dataset's unless a test passes its own. */
   patterns?: IncidentPatternAuthored[];
@@ -53,6 +59,13 @@ export function IncidentPatternsIndex({
   total?: number;
   /** The day "the last 30 days" ends on: the day the site was built. */
   today?: string;
+  /** The newest incident reports the page is built with: every one dated `reportsFrom` or later. */
+  reports?: IncidentReport[];
+  reportsFrom?: string;
+  /** The months and the counts the report filters start from. */
+  reportsIndex?: FeedMonthsIndex;
+  /** How the report list fetches a month, for a test. */
+  loadMonth?: (month: string) => Promise<FeedItem[]>;
 }) {
   const params = useSearchParams();
   const router = useRouter();
@@ -74,6 +87,9 @@ export function IncidentPatternsIndex({
         lead="How AI systems are being attacked, sorted into incident patterns. Each has an overview, the controls that stop it, and deep dives: real incidents told step by step."
       >
         <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
+          <a href={`#${REPORTS_ANCHOR}`} className="font-semibold text-introduced hover:underline">
+            Recent incident reports ↓
+          </a>
           <a href="#deep-dives" className="font-semibold text-introduced hover:underline">
             {plural(deepDives.length, "deep dive")} ↓
           </a>
@@ -92,6 +108,12 @@ export function IncidentPatternsIndex({
           </ul>
         ) : (
           <p className="rounded-xl border border-line bg-paper px-5 py-6 text-[13.5px] text-ink-2">No incident pattern is written yet.</p>
+        )}
+
+        {whole ? (
+          <IncidentReports reports={incidentItems(whole).map(toReport)} />
+        ) : (
+          <IncidentReports initial={reports} from={reportsFrom} index={reportsIndex} loadMonth={loadMonth} />
         )}
 
         <section id="deep-dives" aria-labelledby="deep-dives-title" className="mt-10 scroll-mt-20">
@@ -150,7 +172,7 @@ function IncidentPatternCard({ pattern, feed: { recent, latest } }: { pattern: I
         <p className="eyebrow">Latest</p>
         {latest ? (
           <p className="mt-1 text-[12.5px] leading-snug" data-card-latest={latest.id}>
-            <Link href={feedHref({ category: pattern.id }, latest.id)} className="relative z-10 font-medium text-ink hover:text-introduced hover:underline">
+            <Link href={feedHref({}, latest.id)} className="relative z-10 font-medium text-ink hover:text-introduced hover:underline">
               {latest.title}
             </Link>{" "}
             <time dateTime={latest.date} className="whitespace-nowrap text-ink-3">

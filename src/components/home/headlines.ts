@@ -8,6 +8,8 @@ import type { FeedItem } from "@/lib/types";
 export interface Headline {
   id: string;
   kind: string;
+  /** Headline, notable or brief. */
+  weight: string;
   date: string;
   title: string;
   /** Why it matters, or, for an incident (which has no `why`), the first sentence of what happened. */
@@ -22,6 +24,7 @@ const firstSentence = (text: string) => text.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? 
 export const toHeadline = (f: FeedItem): Headline => ({
   id: f.id,
   kind: f.kind,
+  weight: f.weight,
   date: f.date,
   title: f.title,
   line: f.why ?? firstSentence(f.summary),

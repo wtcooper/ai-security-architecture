@@ -17,7 +17,6 @@ export const rfc822 = (day: string) => new Date(`${day}T00:00:00Z`).toUTCString(
 function description(f: FeedItem): string {
   const parts = [`<p>${xmlEscape(f.summary)}</p>`];
   if (f.why) parts.push(`<p><strong>Why it matters:</strong> ${xmlEscape(f.why)}</p>`);
-  if (f.update) parts.push(`<p>Site update: ${xmlEscape(f.update.status)}. ${xmlEscape(f.update.note)}</p>`);
   const src = f.sources[0];
   if (src) parts.push(`<p><a href="${xmlEscape(src.url)}">Read more: ${xmlEscape(src.publisher ?? src.title)}</a></p>`);
   return parts.join("");
@@ -51,7 +50,7 @@ export function feedRss(items: FeedItem[], site: string, limit = RSS_ITEMS): str
     "    <title>Daily feed · AI Security Architecture</title>",
     `    <link>${xmlEscape(feedPage)}</link>`,
     `    <atom:link href="${xmlEscape(`${site}/feed.xml`)}" rel="self" type="application/rss+xml" />`,
-    "    <description>AI security incidents, product updates, security tools, launches and research, newest first, reviewed daily.</description>",
+    "    <description>AI security incidents, product updates, security tools, launches, guidance and research, newest first, reviewed daily.</description>",
     "    <language>en</language>",
     ...(newest[0] ? [`    <lastBuildDate>${rfc822(newest[0].date)}</lastBuildDate>`] : []),
     ...entries,

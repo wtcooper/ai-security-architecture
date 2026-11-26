@@ -2,9 +2,10 @@
 
 /**
  * "N new since your last visit" on the feed. The reader's last visit is remembered in this
- * browser only (localStorage): the ids of the reports the feed held then. A report is new when
- * it was not among them, whatever its date, so a report found late and filed under an older day
- * is still new to the reader. Reloading within an hour is the same visit and keeps the marks.
+ * browser only (localStorage): the ids of the items the feed held then, among those filed (their
+ * `added`) from a day on. An item is new when it was filed since then and was not among them,
+ * whatever its `date`, so an item found late and dated an older day is still new to the reader.
+ * Reloading within an hour is the same visit and keeps the marks.
  *
  * Every read and write is wrapped: with storage blocked, full or absent (a private window, a
  * test, the server), the feed simply marks nothing.
@@ -16,10 +17,10 @@ import type { FeedItem } from "@/lib/types";
 const KEY = "ai-security-architecture:feed-last-visit";
 /** Reloads within this long are one visit. */
 export const VISIT_MS = 60 * 60 * 1000;
-/** Only the reports dated within this many days of the newest are remembered; older ones are never new. */
+/** Only the items filed within this many days of the newest are remembered; older ones are never new. */
 export const REMEMBERED_DAYS = 60;
 
-/** One visit: when, and the reports the feed held then (those dated `from` or later). */
+/** One visit: when, and the items the feed held then (those filed, by `added`, on `from` or later). */
 export interface Visit {
   at: number;
   from: string;
@@ -64,20 +65,21 @@ export function previousVisit(stored: Stored | null, now: number): Visit | null 
   return now - stored.last.at < VISIT_MS ? stored.before : stored.last;
 }
 
-/** The reports that are new since a visit: not among those it saw, and not older than it remembered. */
-export function newSince(items: FeedItem[], previous: Visit | null): Set<string> {
+/** The items that are new since a visit: filed since what it remembered, and not among those it saw. */
+export function newSince(items: Pick<FeedItem, "id" | "added">[], previous: Visit | null): Set<string> {
   if (!previous) return new Set();
   const seen = new Set(previous.seen);
-  return new Set(items.filter((f) => f.date >= previous.from && !seen.has(f.id)).map((f) => f.id));
+  return new Set(items.filter((f) => f.added >= previous.from && !seen.has(f.id)).map((f) => f.id));
 }
 
 /**
- * This visit, as it will be remembered: the items dated within REMEMBERED_DAYS of the newest. The
- * feed loads its older months as the reader goes, so `loadedFrom` says from which day on every
- * item was in front of the reader; nothing older is remembered, so nothing older is new next time.
+ * This visit, as it will be remembered: the items filed within REMEMBERED_DAYS of the newest
+ * filing day. The page is built with the items filed in its newest days and loads older months as
+ * the reader goes, so `loadedFrom` says from which filing day on every item was in front of the
+ * reader; nothing filed earlier is remembered, so nothing filed earlier is new next time.
  */
-export function visitOf(items: FeedItem[], now: number, loadedFrom = ""): Visit {
-  const newest = items.reduce((d, f) => (f.date > d ? f.date : d), "");
+export function visitOf(items: Pick<FeedItem, "id" | "added">[], now: number, loadedFrom = ""): Visit {
+  const newest = items.reduce((d, f) => (f.added > d ? f.added : d), "");
   let from = "";
   if (newest) {
     const day = new Date(`${newest}T00:00:00Z`);
@@ -85,7 +87,7 @@ export function visitOf(items: FeedItem[], now: number, loadedFrom = ""): Visit 
     from = day.toISOString().slice(0, 10);
   }
   if (loadedFrom > from) from = loadedFrom;
-  return { at: now, from, seen: items.filter((f) => f.date >= from).map((f) => f.id) };
+  return { at: now, from, seen: items.filter((f) => f.added >= from).map((f) => f.id) };
 }
 
 // Asked once per page load, so a re-render or a return to the feed keeps the same marks.
@@ -105,7 +107,7 @@ export function useLastVisit(items: FeedItem[], loadedFrom = ""): VisitState {
       const now = Date.now();
       // While a visit is under way, the one before it is kept as what "new" is measured against.
       const before = stored && now - stored.last.at < VISIT_MS ? stored.before : (stored?.last ?? null);
-      // What this visit saw is what is loaded: a month loaded later widens it.
+      // What this visit saw is every item filed from `loadedFrom` on, which the page was built with.
       window.localStorage.setItem(KEY, JSON.stringify({ last: visitOf(items, now, loadedFrom), before } satisfies Stored));
     } catch {
       // No storage: nothing is remembered, and the next visit marks nothing.

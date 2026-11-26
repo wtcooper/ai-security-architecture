@@ -2,13 +2,13 @@
 
 /**
  * What the incident pages share: the filter chips, the chip that names an incident pattern, the
- * kind and evidence tags a feed item carries, and the breadcrumb under /incidents/.
+ * kind, weight and evidence tags a feed item carries, and the breadcrumb under /incidents/.
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { categoryById, categoryColour } from "@/lib/incident-categories";
-import { evidenceById, kindById } from "@/lib/feed-vocabulary";
+import { evidenceById, kindById, weightById } from "@/lib/feed-vocabulary";
 import { ROUTES, incidentPatternHref } from "@/lib/routes";
 
 /** A filter chip: ink when on, paper when off. */
@@ -55,8 +55,28 @@ export const KIND_HUE: Record<string, string> = {
   productUpdate: "var(--introduced)",
   tool: "var(--mitigated)",
   launch: "var(--band-data-rail)",
+  guidance: "var(--ink-2)",
   research: "var(--chip)",
 };
+
+/**
+ * How much an item weighs, shown quietly: a headline is marked in the accent colour, notable and
+ * brief in the muted ink, so the weight informs without shouting.
+ */
+export function WeightMark({ weight }: { weight: string }) {
+  const w = weightById.get(weight);
+  if (!w) return null;
+  const headline = weight === "headline";
+  return (
+    <span
+      data-weight={weight}
+      title={headline ? "Headline: worth knowing today" : weight === "notable" ? "Notable: worth reading this week" : "Brief: worth a line"}
+      className={`whitespace-nowrap text-[11px] tracking-wide ${headline ? "font-bold uppercase text-introduced" : "font-medium text-ink-3"}`}
+    >
+      {w.label}
+    </span>
+  );
+}
 
 export function KindTag({ kind }: { kind: string }) {
   const k = kindById.get(kind);

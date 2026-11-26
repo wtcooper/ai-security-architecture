@@ -72,35 +72,67 @@ export const incidentPatternHref = (id: string) => {
   return pattern ? `${ROUTES.incidents}/${pattern.slug}` : ROUTES.incidents;
 };
 
-/**
- * The feed's filters, as its address carries them: the kind of item, then the four that narrow
- * incidents only (incident pattern, pattern, evidence, and `incident`, the reports one deep dive tells).
- */
+/** The feed's one filter, as its address carries it: the kind of item. */
 export interface FeedFilters {
   kind?: string | null;
+}
+export const FEED_FILTERS = ["kind"] as const;
+
+/**
+ * The filters of the Incidents page's report list, as its address carries them: incident pattern,
+ * pattern and evidence, and `incident`, the reports one deep dive tells. They narrow incidents,
+ * so they live there and not on the feed.
+ */
+export interface IncidentReportFilters {
   category?: string | null;
   pattern?: string | null;
   evidence?: string | null;
   incident?: string | null;
 }
-export const FEED_FILTERS = ["kind", "category", "pattern", "evidence", "incident"] as const;
+export const INCIDENT_REPORT_FILTERS = ["category", "pattern", "evidence", "incident"] as const;
+/** The anchor of the report list on /incidents/. */
+export const REPORTS_ANCHOR = "reports";
 
 export { FEED_XML, fileHref, SITE_URL } from "./site";
 
-/** The feed's query string for these filters, in a fixed order; empty when none is set. */
-export function feedQuery(filters: FeedFilters = {}): string {
+/** A query string for these filters, in a fixed order; empty when none is set. */
+function queryOf<K extends string>(keys: readonly K[], filters: Partial<Record<K, string | null | undefined>>): string {
   const query = new URLSearchParams();
-  for (const key of FEED_FILTERS) {
+  for (const key of keys) {
     const value = filters[key];
     if (value) query.set(key, value);
   }
   return query.toString();
 }
 
-/** The feed, optionally filtered, optionally with one item in view. */
+/** The feed's query string for its filter; empty when none is set. */
+export const feedQuery = (filters: FeedFilters = {}): string => queryOf(FEED_FILTERS, filters);
+
+/** The feed, optionally of one kind, optionally with one item in view. */
 export function feedHref(filters: FeedFilters = {}, itemId?: string): string {
   const query = feedQuery(filters);
   return `${ROUTES.feed}${query ? `?${query}` : ""}${itemId ? `#${itemId}` : ""}`;
+}
+
+/** The report list's query string for these filters; empty when none is set. */
+export const incidentReportsQuery = (filters: IncidentReportFilters = {}): string => queryOf(INCIDENT_REPORT_FILTERS, filters);
+
+/** The Incidents page's "Recent incident reports", optionally filtered. */
+export function incidentReportsHref(filters: IncidentReportFilters = {}): string {
+  const query = incidentReportsQuery(filters);
+  return `${ROUTES.incidents}${query ? `?${query}` : ""}#${REPORTS_ANCHOR}`;
+}
+
+/**
+ * Where an old feed address that carried an incident filter goes now, or null when it carries
+ * none. With an item in view (`#<id>`) it stays on the feed at that item, the filter let go;
+ * otherwise it opens the Incidents page's report list with the same filters. Exported for the tests.
+ */
+export function legacyFeedTarget(params: URLSearchParams, hash = ""): string | null {
+  const filters: IncidentReportFilters = Object.fromEntries(INCIDENT_REPORT_FILTERS.map((k) => [k, params.get(k)]));
+  if (!INCIDENT_REPORT_FILTERS.some((k) => filters[k])) return null;
+  const item = hash.replace(/^#/, "");
+  return item ? feedHref({}, item) : incidentReportsHref(filters);
 }
 /** A cloud's page: the patterns built on it and its own control options. */
 export const cloudHref = (cloudId: string) => `${ROUTES.clouds}?cloud=${cloudSlug(cloudId)}`;

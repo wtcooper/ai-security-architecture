@@ -33,24 +33,8 @@ export const formatLongDay = (date: string) => {
   return `${d} ${MONTHS_LONG[m - 1]} ${y}`;
 };
 
-/** The Monday of the week a day falls in, "YYYY-MM-DD". Weeks run Monday to Sunday. */
-export function weekOf(date: string): string {
-  const day = new Date(`${date}T00:00:00Z`);
-  day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
-  return day.toISOString().slice(0, 10);
-}
-
-/** Items already newest first, gathered under the week each came to light in, newest week first. */
-export function byWeek<T extends { date: string }>(items: T[]): { week: string; items: T[] }[] {
-  const weeks: { week: string; items: T[] }[] = [];
-  for (const item of items) {
-    const week = weekOf(item.date);
-    const last = weeks.at(-1);
-    if (last?.week === week) last.items.push(item);
-    else weeks.push({ week, items: [item] });
-  }
-  return weeks;
-}
+/** The Monday of the week a day falls in, and items gathered by week: worked out with the feed, in src/lib/feed.ts. */
+export { byWeek, weekOf } from "@/lib/feed";
 
 /** The deep dives newest first; ties keep file order, so a deep dive's place is stable. */
 export const incidentsNewestFirst = (): Incident[] => deepDivesNewestFirst(incidents);

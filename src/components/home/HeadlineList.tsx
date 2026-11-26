@@ -1,11 +1,12 @@
 /**
- * The home page's "Today in AI security": the newest daily feed items in a box of fixed height
- * that scrolls on its own, each row its kind and day, its title and one line on why it matters,
+ * The home page's "Today in AI security": the newest headline and notable items of the daily feed
+ * (then its briefs, if there are not enough) in a box of fixed height that scrolls on its own,
+ * each row its kind, a headline's mark and its day, its title and one line on why it matters,
  * opening the item on the feed. A server component: the rows are rendered when the page is built.
  */
 import Link from "next/link";
 
-import { CategoryChip, KindTag } from "@/components/incidents/chrome";
+import { CategoryChip, KindTag, WeightMark } from "@/components/incidents/chrome";
 import { formatShortDay } from "@/components/incidents/model";
 import { feedHref } from "@/lib/routes";
 import type { Headline } from "./headlines";
@@ -16,6 +17,7 @@ function HeadlineRow({ item }: { item: Headline }) {
       <Link href={feedHref({}, item.id)} className="block px-4 py-3 transition-colors hover:bg-mist" data-headline={item.id}>
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <KindTag kind={item.kind} />
+          {item.weight === "headline" && <WeightMark weight={item.weight} />}
           <time dateTime={item.date} className="ident text-ink-3">
             {formatShortDay(item.date)}
           </time>
@@ -33,7 +35,7 @@ export function HeadlineList({ items, className = "" }: { items: Headline[]; cla
     <ul
       className={`h-[360px] divide-y divide-line overflow-y-auto overscroll-contain rounded-xl border border-line bg-paper ${className}`}
       tabIndex={0}
-      aria-label="Newest items in the daily feed"
+      aria-label="Newest headline and notable items in the daily feed"
       data-headlines
     >
       {items.map((f) => (

@@ -11,6 +11,7 @@ import { PatternFinder } from "../src/components/patterns/PatternFinder";
 import HomePage from "../src/app/page";
 import PatternsPage from "../src/app/patterns/page";
 import { toHeadline } from "../src/components/home/headlines";
+import { homeHeadlines } from "../src/lib/feed";
 import { feedItems } from "../src/lib/feed-server";
 import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { cloudOptionsForControl, cloudProductsFor, cloudSlug, optionsFor } from "../src/components/cloud/model";
@@ -326,12 +327,18 @@ test("the home page is a briefing: the headline, the site search, four cards int
   assert.doesNotMatch(home, /href="\/tools/, "there is no tools page");
 });
 
-test("the home page lists the 12 newest daily feed items, built in, each opening the item on the feed", () => {
+test("the home page lists twelve daily feed items, the latest feed's headline and notable ones first, built in, each opening the item on the feed", () => {
   const home = renderToStaticMarkup(<HomePage />);
-  const newest = feedItems.slice(0, 12);
+  const newest = homeHeadlines(feedItems);
   assert.equal(newest.length, 12, "the shipped feed has at least twelve items");
+  // Headline and notable items first, those filed on the newest day ahead of the rest; briefs only after them all.
+  const firstBrief = newest.findIndex((f) => f.weight === "brief");
+  if (firstBrief >= 0) assert.ok(newest.slice(firstBrief).every((f) => f.weight === "brief"), "no brief before a heavier item");
+  const lastAdded = feedItems.reduce((d, f) => (f.added > d ? f.added : d), "");
+  const todays = feedItems.filter((f) => f.added === lastAdded && f.weight !== "brief").length;
+  assert.ok(newest.slice(0, Math.min(12, todays)).every((f) => f.added === lastAdded), "the latest feed leads");
   const list = section(home, "data-headlines", "</ul>");
-  assert.deepEqual([...list.matchAll(/data-headline="([^"]+)"/g)].map((m) => m[1]), newest.map((f) => f.id), "newest first, twelve of them");
+  assert.deepEqual([...list.matchAll(/data-headline="([^"]+)"/g)].map((m) => m[1]), newest.map((f) => f.id), "twelve of them, in that order");
   for (const f of newest) {
     assert.ok(list.includes(`href="/feed#${f.id}"`), `${f.id} opens on the feed`);
     assert.ok(list.includes(`>${esc(f.title)}<`), `${f.id}: its title`);
@@ -339,7 +346,7 @@ test("the home page lists the 12 newest daily feed items, built in, each opening
   }
   assert.match(home, /<h2[^>]*>Today in AI security<\/h2>/);
   assert.match(home, /href="\/feed"[^>]*>The whole daily feed →</);
-  assert.match(home, /The 12 newest items in the daily feed/);
+  assert.match(home, /The headline and notable items of the latest daily feed first, then the newest before them\./);
   // An incident has no why: its line is the first sentence of what happened, and "gpt-5.4" does not end one.
   const incident = newest.find((f) => f.kind === "incident") ?? feedItems.find((f) => f.kind === "incident")!;
   assert.equal(toHeadline({ ...incident, why: undefined, summary: "An agent on gpt-5.4 leaked a key. Then more happened." }).line, "An agent on gpt-5.4 leaked a key.");

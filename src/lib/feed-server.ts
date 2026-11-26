@@ -10,13 +10,18 @@ import feedJson from "@/data/generated/feed.json";
 import securityToolsJson from "@/data/generated/security-tools.json";
 
 import { feedIndexOf } from "./feed";
-import type { FeedIndex, FeedItem, SecurityTool } from "./types";
+import type { FeedIndex, FeedItem, FeedOverviews, SecurityTool } from "./types";
 
-/** Every item, newest first, with its decision and the security tools it announced. */
-export const feedItems = feedJson as unknown as FeedItem[];
+const feed = feedJson as unknown as { items: FeedItem[]; overviews: FeedOverviews };
+
+/** Every item, newest first, with its story's title and the security tools it announced. */
+export const feedItems: FeedItem[] = feed.items;
+
+/** The day and week overviews (data/feed/overviews.yaml). */
+export const feedOverviews: FeedOverviews = feed.overviews;
 
 /** Every security tool, by name. */
 export const securityTools = securityToolsJson as unknown as SecurityTool[];
 
-/** The months, the counts the feed's filters start from, and every proposed site update. */
-export const feedIndex: FeedIndex = feedIndexOf(feedItems);
+/** The months, the Latest day and every week as /feed/'s sections, and the counts the filters start from. */
+export const feedIndex: FeedIndex = feedIndexOf(feedItems, feedOverviews);

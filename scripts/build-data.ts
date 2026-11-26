@@ -21,11 +21,11 @@ import { standIn } from "../src/components/drawing/crossings";
 import { checkSettings, loadClouds, loadProductStatus } from "./lib/products";
 import { loadSpecializations } from "./lib/specializations";
 import { loadThreatModels } from "./lib/threat-models";
-import { loadFeed } from "./lib/feed";
+import { loadFeed, publicFeed } from "./lib/feed";
 import { loadSecurityTools } from "./lib/security-tools";
 import { categoryProblem, loadIncidentPatterns } from "./lib/incident-patterns";
 import { deriveIncidentPatterns } from "../src/lib/incident-patterns";
-import { byMonth, feedIndexOf, feedTitles, incidentItems, withSecurityTools } from "../src/lib/feed";
+import { byMonth, feedIndexOf, feedTitles, incidentItems, withSecurityTools, withStories } from "../src/lib/feed";
 import { CROSSING_KINDS, THREAT_LISTS } from "../src/lib/types";
 
 import type {
@@ -37,6 +37,7 @@ import type {
   Control,
   Dataset,
   FeedItem,
+  FeedOverviews,
   Framework,
   FrameworkEntryInfo,
   FrameworkNote,
@@ -497,7 +498,7 @@ async function main() {
     }
   }
 
-  // --- The feed (data/feed/<YYYY-MM>.yaml and decisions.yaml); no files at all is an empty feed --------
+  // --- The feed (data/feed/<YYYY-MM>.yaml, stories.yaml, overviews.yaml and decisions.yaml); no files at all is an empty feed --
   const loadedFeed = await loadFeed(
     ROOT,
     {
@@ -519,7 +520,8 @@ async function main() {
     if (u?.action === "toolOption" && u.status === "applied" && !u.target.includes("/") && !securityToolIds.has(u.target))
       fail(`feed/${loadedFeed.fileOf.get(f.id)} item ${f.id}: update: applied, but its target "${u.target}" is not a security tool (data/security-tools/)`);
   }
-  const feed = withSecurityTools(loadedFeed.feed, securityTools);
+  // What the site has of an item: its story's title, the tools it announced, and none of the review material.
+  const feed = withSecurityTools(withStories(publicFeed(loadedFeed.feed), loadedFeed.stories), securityTools);
 
   // What each incident pattern's page derives: its deep dives, how many incidents, where it lands.
   const incidentPatterns = deriveIncidentPatterns(authoredIncidentPatterns, incidents, feed, archetypes.map((a) => a.id));
@@ -594,7 +596,7 @@ async function main() {
 
   await mkdir(OUT_DIR, { recursive: true });
   await writeFile(join(OUT_DIR, "dataset.json"), JSON.stringify(dataset) + "\n");
-  await writeFeed(feed, securityTools);
+  await writeFeed(feed, loadedFeed.overviews, securityTools);
 
   const authored = overlays.filter((o) => o.source === "authored").length;
   console.log(
@@ -610,16 +612,18 @@ async function main() {
 /**
  * The feed and the security tools, kept out of dataset.json so they never ride in the bundle every
  * page loads. Two files only the build reads (the pages that show a few items take them as props
- * when they are built, and /feed.xml is made from them), and public/data/feed/ for the browser:
- * one file per month, the index /feed/ starts from, and the titles site search finds. The public
+ * when they are built, and /feed.xml is made from them; feed.json holds the items and the
+ * overviews), and public/data/feed/ for the browser: one file per month, the index /feed/ starts
+ * from (its months, the Latest day and every week with its counts and overview), and the titles
+ * site search finds. None carries an item's site update or the owner's decision on it. The public
  * folder is emptied first, so a month that no longer has items leaves no file behind.
  */
-async function writeFeed(feed: FeedItem[], securityTools: SecurityTool[]) {
-  await writeFile(join(OUT_DIR, "feed.json"), JSON.stringify(feed) + "\n");
+async function writeFeed(feed: FeedItem[], overviews: FeedOverviews, securityTools: SecurityTool[]) {
+  await writeFile(join(OUT_DIR, "feed.json"), JSON.stringify({ items: feed, overviews }) + "\n");
   await writeFile(join(OUT_DIR, "security-tools.json"), JSON.stringify(securityTools) + "\n");
   await rm(PUBLIC_FEED_DIR, { recursive: true, force: true });
   await mkdir(PUBLIC_FEED_DIR, { recursive: true });
-  await writeFile(join(PUBLIC_FEED_DIR, "index.json"), JSON.stringify(feedIndexOf(feed)) + "\n");
+  await writeFile(join(PUBLIC_FEED_DIR, "index.json"), JSON.stringify(feedIndexOf(feed, overviews)) + "\n");
   await writeFile(join(PUBLIC_FEED_DIR, "titles.json"), JSON.stringify(feedTitles(feed)) + "\n");
   for (const { month, items } of byMonth(feed)) await writeFile(join(PUBLIC_FEED_DIR, `${month}.json`), JSON.stringify(items) + "\n");
 }

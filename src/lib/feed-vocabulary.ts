@@ -1,22 +1,24 @@
 /**
- * The fixed words a feed item and a deep dive are tagged with: what kind of item it is, how well
- * an incident is established, which side of the attack the AI system was on, whether it fits its
- * incident pattern well, the change to the site an item implies, the owner's decision on it, and
- * the words a security tool is described with. The incident patterns themselves are data
- * (data/incident-patterns/); these lists are not, so the build can check against them before
- * any dataset exists.
+ * The fixed words a feed item and a deep dive are tagged with: what kind of item it is, how much
+ * it weighs, how well an incident is established, which side of the attack the AI system was on,
+ * whether it fits its incident pattern well, and the words a security tool is described with.
+ * The incident patterns themselves are data (data/incident-patterns/); these lists are not, so
+ * the build can check against them before any dataset exists. The change to the site an item
+ * implies is review material: its words live with the loader (scripts/lib/feed.ts) and never
+ * reach the site.
  */
 
 /**
- * The five kinds of item the feed carries, in the order its chips show them. An item written
+ * The six kinds of item the feed carries, in the order its chips show them. An item written
  * before kinds existed is an incident. `label` is the tag on the item, `chip` the filter's name.
  */
 export const FEED_KINDS = [
-  { id: "incident", label: "Incident", chip: "Incidents", blurb: "A real attack on an AI system, or by one, filed under an incident pattern." },
+  { id: "incident", label: "Incident", chip: "Incidents", blurb: "A real attack on an AI system, or by one, filed under an incident pattern; reports of campaigns under way are incidents too." },
   { id: "productUpdate", label: "Product update", chip: "Product updates", blurb: "A vendor shipped or changed a security control in an AI product." },
   { id: "tool", label: "Tool", chip: "Tools", blurb: "A new open-source or commercial tool that protects AI systems." },
   { id: "launch", label: "Launch", chip: "Launches", blurb: "A new AI product or feature that changes where data goes or what an organisation can control." },
-  { id: "research", label: "Research", chip: "Research", blurb: "How leading teams secure AI, new standards and agency guidance." },
+  { id: "guidance", label: "Guidance", chip: "Guidance", blurb: "How to secure AI in practice: practice posts from labs and vendors, standards and agency guidance." },
+  { id: "research", label: "Research", chip: "Research", blurb: "Findings and results: studies, measured results and technical discoveries." },
 ] as const;
 
 export type FeedKind = (typeof FEED_KINDS)[number]["id"];
@@ -24,8 +26,32 @@ export type FeedKind = (typeof FEED_KINDS)[number]["id"];
 export const kindById = new Map<string, (typeof FEED_KINDS)[number]>(FEED_KINDS.map((k) => [k.id, k]));
 
 /**
- * How well a feed item is established, in the words the feed shows. The feed sorts on date
- * alone; this is a tag on each item and one of its filters, never a ranking. Incidents only.
+ * How much an item weighs, heaviest first. A headline is what a reader would be poorly served not
+ * knowing today (at most three a day); notable is worth reading this week; a brief is worth a line
+ * and is folded by default.
+ */
+export const FEED_WEIGHTS = [
+  { id: "headline", label: "Headline" },
+  { id: "notable", label: "Notable" },
+  { id: "brief", label: "Brief" },
+] as const;
+
+export type FeedWeight = (typeof FEED_WEIGHTS)[number]["id"];
+
+export const weightById = new Map<string, (typeof FEED_WEIGHTS)[number]>(FEED_WEIGHTS.map((w) => [w.id, w]));
+
+/** 0 for a headline, 1 for notable, 2 for a brief: the order a section lists them in. */
+export const weightRank = (weight: string): number => {
+  const i = FEED_WEIGHTS.findIndex((w) => w.id === weight);
+  return i < 0 ? FEED_WEIGHTS.length : i;
+};
+
+/** At most this many headlines a day. */
+export const HEADLINES_PER_DAY = 3;
+
+/**
+ * How well a feed item is established, in the words the feed shows. A tag on each item and one
+ * of the Incidents page's filters, never a ranking. Incidents only.
  */
 export const FEED_EVIDENCE = [
   { id: "exploited", label: "In the wild", blurb: "Exploited against real systems." },
@@ -49,33 +75,6 @@ export type IncidentPerspective = (typeof INCIDENT_PERSPECTIVES)[number];
  */
 export const FEED_FITS = ["loose"] as const;
 export type FeedFit = (typeof FEED_FITS)[number];
-
-/**
- * The change to the site an item implies, by what it changes. The daily run applies a product's
- * settings row and a security tool by itself; the rest wait for the owner (data/feed/decisions.yaml).
- */
-export const FEED_UPDATE_ACTIONS = [
-  { id: "settings", label: "Product settings", blurb: "A new or changed setting in a product already on the site." },
-  { id: "toolOption", label: "Security tool", blurb: "A security tool listed under a control it delivers (data/security-tools/)." },
-  { id: "onboard", label: "Onboard a product", blurb: "A new AI product that fits an existing pattern." },
-  { id: "newControl", label: "New control", blurb: "A control the catalogue lacks." },
-  { id: "newPattern", label: "New pattern", blurb: "A new kind of AI system." },
-  { id: "controlGuidance", label: "Control guidance", blurb: "A change to a control's recommended practice." },
-] as const;
-export type FeedUpdateAction = (typeof FEED_UPDATE_ACTIONS)[number]["id"];
-export const updateActionById = new Map<string, (typeof FEED_UPDATE_ACTIONS)[number]>(FEED_UPDATE_ACTIONS.map((a) => [a.id, a]));
-
-/** Where an implied change stands: made, waiting for the owner, or turned down. */
-export const FEED_UPDATE_STATUSES = [
-  { id: "applied", label: "applied" },
-  { id: "proposed", label: "proposed" },
-  { id: "declined", label: "declined" },
-] as const;
-export type FeedUpdateStatus = (typeof FEED_UPDATE_STATUSES)[number]["id"];
-
-/** The owner's answer to a proposed change, in data/feed/decisions.yaml. */
-export const FEED_DECISIONS = ["approve", "decline"] as const;
-export type FeedDecisionValue = (typeof FEED_DECISIONS)[number];
 
 /** A security tool (data/security-tools/): open source or commercial, and how far it has shipped. */
 export const SECURITY_TOOL_KINDS = [

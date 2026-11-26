@@ -12,7 +12,7 @@ import { CategoryChip } from "@/components/incidents/chrome";
 import { formatDay, formatMonth, incidentsNewestFirst } from "@/components/incidents/model";
 import { controlName, mitigationsForArchetype, riskCategories, riskCode, risksForArchetype } from "@/lib/data";
 import { FEED_ON_PATTERN, feedForPattern } from "@/lib/feed";
-import { ROUTES, feedHref, incidentHref, riskHref } from "@/lib/routes";
+import { ROUTES, feedHref, incidentHref, incidentReportsHref, riskHref } from "@/lib/routes";
 import type { Archetype, FeedItem } from "@/lib/types";
 
 export { FEED_ON_PATTERN };
@@ -168,7 +168,7 @@ export function PatternIncidents({
             {reports.slice(0, FEED_ON_PATTERN).map((f) => (
               <li key={f.id}>
                 <Link
-                  href={feedHref({ pattern: archetype.id }, f.id)}
+                  href={feedHref({}, f.id)}
                   className="grid grid-cols-[80px_minmax(0,1fr)] items-baseline gap-x-4 gap-y-1 px-5 py-2.5 transition-colors hover:bg-mist/60 sm:grid-cols-[84px_minmax(0,1fr)_auto]"
                 >
                   <span className="ident whitespace-nowrap text-ink-3">{formatDay(f.date)}</span>
@@ -180,8 +180,8 @@ export function PatternIncidents({
               </li>
             ))}
           </ul>
-          <Link href={feedHref({ pattern: archetype.id })} className="mt-2.5 inline-block text-[13px] font-semibold text-introduced hover:underline">
-            All {count} in the feed →
+          <Link href={incidentReportsHref({ pattern: archetype.id })} className="mt-2.5 inline-block text-[13px] font-semibold text-introduced hover:underline">
+            All {count} incident reports →
           </Link>
         </section>
       )}

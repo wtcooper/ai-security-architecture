@@ -185,7 +185,7 @@ test("a category that is no incident pattern fails, in the feed and for a deep d
   assert.equal(categoryProblem("identity", ["identity"]), null);
   assert.match(categoryProblem("bias", ["identity", "exposed"])!, /category "bias" is not an incident pattern \(data\/incident-patterns\/\): one of identity, exposed/);
   const feedCtx: FeedContext = { patternIds: new Set(dataset.archetypes.map((a) => a.id)), incidentIds: ctx.deepDiveIds, categoryIds: new Set(["identity"]), productIds: new Set(), controlIds: new Set() };
-  const item = { id: "x", date: "2026-11-07", title: "t", summary: "s", category: "exposed", perspective: "target", evidence: "confirmed", patterns: [], sources: [{ title: "a", url: "https://example.org", publisher: "p" }] };
+  const item = { id: "x", weight: "notable", date: "2026-11-07", added: "2026-11-07", title: "t", summary: "s", category: "exposed", perspective: "target", evidence: "confirmed", patterns: [], sources: [{ title: "a", url: "https://example.org", publisher: "p" }] };
   const { problems } = checkFeed([{ file: "2026-11.yaml", doc: { items: [item] } }], feedCtx);
   assert.ok(problems.some((p) => p.startsWith("feed/2026-11.yaml item x: category \"exposed\" is not an incident pattern")), problems.join("\n"));
 });
@@ -201,7 +201,9 @@ const FEED: FeedItem[] = [
   ...Array.from({ length: 10 }, (_, i): FeedItem => ({
     id: `pi-${i}`,
     kind: "incident",
+    weight: i ? "notable" : "headline",
     date: `2026-11-${String(24 - i * 2).padStart(2, "0")}`,
+    added: `2026-11-${String(24 - i * 2).padStart(2, "0")}`,
     title: `Report ${i}`,
     summary: "s",
     category: "promptInjection",
@@ -211,7 +213,7 @@ const FEED: FeedItem[] = [
     ...(i === 0 ? { incident: A.id } : {}),
     sources: [{ title: "a", url: `https://example.org/${i}`, publisher: "p" }],
   })),
-  { id: "elsewhere", kind: "incident", date: "2026-11-23", title: "Elsewhere", summary: "s", category: "identity", perspective: "target", evidence: "reported", patterns: [OTHER], sources: [{ title: "a", url: "https://example.org/e", publisher: "p" }] },
+  { id: "elsewhere", kind: "incident", weight: "brief", date: "2026-11-23", added: "2026-11-23", title: "Elsewhere", summary: "s", category: "identity", perspective: "target", evidence: "reported", patterns: [OTHER], sources: [{ title: "a", url: "https://example.org/e", publisher: "p" }] },
 ];
 
 test("an incident pattern derives its deep dives, its feed items and where it lands, counting each incident once", () => {
@@ -261,7 +263,7 @@ test("/incidents/ shows a card per incident pattern: name, one-liner, counts, la
   // Ten reports, the last 30 days ending 25 November: 24 Nov back to 6 Nov.
   assert.match(pi, new RegExp(`${PI_DEEP_DIVES.length} deep dives? · 10 in the feed, last 30 days`));
   assert.match(pi, /data-card-latest="pi-0"/);
-  assert.ok(pi.includes(`href="${feedHref({ category: "promptInjection" }, "pi-0")}"`) && pi.includes("Report 0") && pi.includes("24 Nov 2026"));
+  assert.ok(pi.includes(`href="${feedHref({}, "pi-0")}"`) && pi.includes("Report 0") && pi.includes("24 Nov 2026"));
   const lands = [...pi.matchAll(/data-card-lands="([^"]+)"/g)].map((m) => m[1]);
   assert.ok(lands.length >= 1 && lands.length <= LANDINGS_ON_CARD);
   assert.equal(lands[0], OTHER);
@@ -281,13 +283,85 @@ test("/incidents/ lists every deep dive below the cards, with date, title, incid
   assert.ok(row.includes(esc(categoryById.get(first.category)!.label)) && row.includes(esc(archetypeById.get(first.archetype)!.title)));
 });
 
-test("old links to the incidents list forward: a category to its incident pattern, a pattern to its Incidents tab", () => {
+test("old links to the incidents list forward: a type to its incident pattern, a pattern to its Incidents tab; a category is the report list's filter", () => {
   const q = (s: string) => new URLSearchParams(s);
-  assert.equal(legacyIncidentsTarget(q("category=promptInjection")), "/incidents/prompt-injection");
+  assert.equal(legacyIncidentsTarget(q("category=promptInjection")), null, "?category= filters the recent incident reports now");
   assert.equal(legacyIncidentsTarget(q("type=exposed")), `/incidents/${incidentPatternById.get("exposed")!.slug}`);
   assert.equal(legacyIncidentsTarget(q("arch=archChatAgent")), patternHref("archChatAgent", { tab: "incidents" }));
   assert.equal(legacyIncidentsTarget(q("")), null);
-  assert.equal(legacyIncidentsTarget(q("category=bias")), null);
+  assert.equal(legacyIncidentsTarget(q("type=bias")), null);
+});
+
+// --- The recent incident reports on /incidents/ ------------------------------------------------------
+
+/** The report rows, in order. */
+const reportRows = (html: string) => [...html.matchAll(/data-report="([^"]+)"/g)].map((m) => m[1]);
+const reportsOf = (html: string) => html.slice(html.indexOf("data-incident-reports"), html.indexOf('id="deep-dives"'));
+
+test("/incidents/ lists the recent incident reports, newest first, between the cards and the deep dives, each opening its item on the feed", () => {
+  const html = render("/incidents", "", <IncidentPatternsIndex feed={FEED} today="2026-11-25" />);
+  assert.ok(html.indexOf("data-incident-reports") > html.lastIndexOf("data-incident-pattern-card=") && html.indexOf("data-incident-reports") < html.indexOf('id="deep-dives"'));
+  assert.match(html, /<a href="#reports"[^>]*>Recent incident reports ↓<\/a>/);
+  const reports = reportsOf(html);
+  assert.match(html, /<section id="reports"[^>]*data-incident-reports="true"><h2 id="reports-title"[^>]*>Recent incident reports <span[^>]*data-reports-count="11">11<\/span>/);
+  const newest = [...FEED].sort((a, b) => b.date.localeCompare(a.date)).map((f) => f.id);
+  assert.deepEqual(reportRows(reports), newest);
+  const row = reports.slice(reports.indexOf('data-report="pi-0"'), reports.indexOf("</li>", reports.indexOf('data-report="pi-0"')));
+  assert.match(row, /<a [^>]*href="\/feed#pi-0"/);
+  assert.match(row, /<time dateTime="2026-11-24"[^>]*>24 Nov 2026<\/time>/);
+  assert.ok(row.includes(`Replays on ${archetypeById.get(A.archetype)!.title} · ${archetypeById.get(OTHER)!.title}`.replace(/&/g, "&amp;")));
+  assert.match(row, /data-incident-pattern="promptInjection"/);
+  assert.match(row, />In the wild</);
+  // The three filters are here, not on the feed.
+  for (const marker of ['aria-label="Incident pattern"', "data-pattern-filter", "data-evidence-filter"]) assert.ok(reports.includes(marker), marker);
+});
+
+test("the report list's filters narrow it from the address, alone and together, and count what the others leave", () => {
+  const page = (query: string) => reportsOf(render("/incidents", query, <IncidentPatternsIndex feed={FEED} today="2026-11-25" />));
+  const pis = FEED.filter((f) => f.category === "promptInjection").map((f) => f.id);
+  const cases: [string, string[]][] = [
+    ["category=promptInjection", pis],
+    ["category=identity", ["elsewhere"]],
+    [`pattern=${A.archetype}`, ["pi-0"]],
+    ["evidence=exploited", ["pi-0", "pi-2", "pi-4", "pi-6", "pi-8"]],
+    ["evidence=reported", ["elsewhere"]],
+    ["category=promptInjection&evidence=confirmed", ["pi-1", "pi-3", "pi-5", "pi-7", "pi-9"]],
+    [`category=promptInjection&pattern=${OTHER}&evidence=exploited`, ["pi-0", "pi-2", "pi-4", "pi-6", "pi-8"]],
+    [`incident=${A.id}`, ["pi-0"]],
+    // An unknown value is ignored rather than emptying the list.
+    ["category=bias&pattern=archNope&evidence=rumoured", [...FEED].sort((a, b) => b.date.localeCompare(a.date)).map((f) => f.id)],
+  ];
+  for (const [query, want] of cases) assert.deepEqual(reportRows(page(query)), want, query);
+  // Each filter shows what is chosen and counts what the others leave.
+  const exploited = page("evidence=exploited");
+  assert.match(exploited, /<option value="exploited" selected="">In the wild \(5\)/);
+  assert.match(exploited, /data-category-chip="promptInjection"[^>]*>[\s\S]*?<span[^>]*>5<\/span>/);
+  assert.match(exploited, /data-category-chip="identity" aria-pressed="false" disabled=""/, "no exploited identity report: its chip is off");
+  assert.match(exploited, /data-reports-count="5">5</);
+  const pi = page("category=promptInjection");
+  assert.match(pi, /data-category-chip="promptInjection" aria-pressed="true"/);
+  assert.match(pi, /About this incident pattern →/);
+  assert.ok(pi.includes(`href="${incidentPatternHref("promptInjection")}"`));
+  assert.match(pi, new RegExp(`<option value="${OTHER}">[^<]+\\(10\\)`));
+  assert.match(page(`incident=${A.id}`), /data-told="[^"]+"[^>]*>Showing the reports told step by step in the deep dive/);
+  const none = page("category=identity&evidence=exploited");
+  assert.deepEqual(reportRows(none), []);
+  assert.match(none, /Nothing matches these filters\.[\s\S]*?Clear them/);
+});
+
+test("the report list is built with the last month of reports and loads older months for a filter or on request", () => {
+  const index = { months: [{ month: "2026-11", count: 11 }, { month: "2026-10", count: 4 }], incidents: { category: { promptInjection: 12, identity: 3 }, evidence: {}, pattern: {} } };
+  const built = reportsOf(render("/incidents", "", <IncidentPatternsIndex cards={{}} reports={FEED.slice(0, 3).map((f) => ({ id: f.id, date: f.date, title: f.title, weight: f.weight, category: f.category, evidence: f.evidence, patterns: f.patterns }))} reportsFrom="2026-11-20" reportsIndex={index} today="2026-11-25" />));
+  assert.deepEqual(reportRows(built), ["pi-0", "pi-1", "pi-2"]);
+  assert.match(built, /data-reports-count="15">15</, "the whole feed's count, from the index");
+  assert.match(built, /data-reports-older="2026-11"[^>]*>Older reports \(Nov 2026\) →/);
+  // A filter wants every month: it says what it is loading, and counts from the index meanwhile.
+  const filtering = reportsOf(
+    render("/incidents", "category=identity", <IncidentPatternsIndex cards={{}} reports={[]} reportsFrom="2026-11-20" reportsIndex={index} today="2026-11-25" loadMonth={() => new Promise(() => {})} />),
+  );
+  assert.match(filtering, /Loading Nov 2026…/);
+  assert.match(filtering, /data-category-chip="identity"[^>]*>[\s\S]*?<span[^>]*>3<\/span>/);
+  assert.doesNotMatch(filtering, /Nothing matches/, "not before the months are in");
 });
 
 /** The page's sections, in the order they appear. */
@@ -319,7 +393,7 @@ test("an incident pattern page shows every section in order, its exemplars and t
   const listed = [...html.matchAll(/data-feed-item="([^"]+)"/g)].map((m) => m[1]);
   assert.equal(listed.length, FEED_ON_INCIDENT_PATTERN);
   assert.deepEqual(listed, FEED.filter((f) => f.category === "promptInjection").slice(0, 8).map((f) => f.id));
-  assert.ok(html.includes(`href="/feed?category=promptInjection"`) && html.includes("All 10 in the feed →"));
+  assert.ok(html.includes(`href="/incidents?category=promptInjection#reports"`) && html.includes("All 10 incident reports →"));
   // Risks and frameworks, and the line to its nearest incident pattern.
   assert.ok(html.includes(`href="/reference/risks?risk=riskPromptInjection"`) && html.includes(esc(riskTitle("riskPromptInjection"))));
   assert.match(html, /data-owasp="LLM01:2026"[^>]*><span[^>]*>LLM01:2026<\/span> <span[^>]*>Prompt Injection</);

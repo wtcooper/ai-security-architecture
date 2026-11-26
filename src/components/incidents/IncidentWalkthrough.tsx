@@ -20,7 +20,7 @@ import { categoryById } from "@/lib/incident-categories";
 import type { FeedItem, Incident, IncidentSource, Phase } from "@/lib/types";
 import { CategoryChip, IncidentsBreadcrumb } from "./chrome";
 import { stepOverlay } from "./model";
-import { feedHref, incidentPatternHref, patternHref, riskHref } from "@/lib/routes";
+import { feedHref, incidentPatternHref, incidentReportsHref, patternHref, riskHref } from "@/lib/routes";
 
 /** Authored text marks file names and settings with backticks; show them as code, not as ticks. */
 function Text({ children }: { children: string }) {
@@ -103,7 +103,7 @@ export function IncidentWalkthrough({ id, feed: items = [] }: { id: string; /** 
         {reports.length > 0 && (
           <p className="mt-2 text-[12.5px] text-ink-3">
             In the feed:{" "}
-            <Link href={reports.length === 1 ? feedHref({}, reports[0].id) : feedHref({ incident: id })} className="font-semibold text-introduced hover:underline">
+            <Link href={reports.length === 1 ? feedHref({}, reports[0].id) : incidentReportsHref({ incident: id })} className="font-semibold text-introduced hover:underline">
               {reports.length === 1 ? "1 report" : `${reports.length} reports`}
             </Link>
           </p>

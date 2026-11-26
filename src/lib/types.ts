@@ -6,17 +6,7 @@
  * (one entry per paragraph); the build step normalises them to Paragraph[].
  */
 
-import type {
-  FeedDecisionValue,
-  FeedEvidence,
-  FeedFit,
-  FeedKind,
-  FeedUpdateAction,
-  FeedUpdateStatus,
-  IncidentPerspective,
-  SecurityToolKind,
-  SecurityToolStatus,
-} from "./feed-vocabulary";
+import type { FeedEvidence, FeedFit, FeedKind, FeedWeight, IncidentPerspective, SecurityToolKind, SecurityToolStatus } from "./feed-vocabulary";
 
 /** An incident pattern's id (data/incident-patterns/): the `category` every deep dive and feed item carries. */
 export type IncidentCategory = string;
@@ -1443,32 +1433,16 @@ export interface Incident {
  * ------------------------------------------------------------------ The feed
  *
  * The AI security daily (data/feed/<YYYY-MM>.yaml): every real AI security incident tracked, and
- * the product updates, security tools, launches and research that change how AI is secured, in
- * two or three lines each. The incident files above are the deep dives: the few incidents that
- * teach something new, told step by step. An incident points at the deep dive that tells it,
- * when there is one. The feed is not in the dataset every page loads: the build writes it apart
- * (src/data/generated/feed.json, read at build time by the pages that show a few items, and one
- * file per month under public/data/feed/, which /feed/ loads as the reader goes back in time).
+ * the product updates, security tools, launches, guidance and research that change how AI is
+ * secured, in two or three lines each, each weighed (headline, notable or brief) and, where it
+ * belongs to one, under a story (data/feed/stories.yaml). The incident files above are the deep
+ * dives: the few incidents that teach something new, told step by step. An incident points at
+ * the deep dive that tells it, when there is one. The feed is not in the dataset every page
+ * loads: the build writes it apart (src/data/generated/feed.json, read at build time by the pages
+ * that show a few items, and one file per month under public/data/feed/, which /feed/ loads as the
+ * reader opens older weeks). The change to the site an item implies (its `update` in the YAML) is
+ * review material and is not part of an item as the site has it.
  */
-
-/** The change to the site an item implies, and where it stands. */
-export interface FeedUpdate {
-  action: FeedUpdateAction;
-  status: FeedUpdateStatus;
-  /** The file it changes ("data/tooling/anthropic/claude-code.yaml") or the id it names. */
-  target: string;
-  /** At most 200 characters: what changes. */
-  note: string;
-}
-
-/** The owner's answer to a proposed change (data/feed/decisions.yaml). */
-export interface FeedDecision {
-  /** The feed item whose `update` it answers. */
-  id: string;
-  decision: FeedDecisionValue;
-  /** At most 200 characters. */
-  note?: string;
-}
 
 /** A security tool as the item that announced it shows it. */
 export interface SecurityToolRef {
@@ -1485,13 +1459,17 @@ export interface FeedItem {
   id: string;
   /** What kind of item it is. An item written before kinds existed is an incident. */
   kind: FeedKind;
-  /** "YYYY-MM-DD": the day it came to light (its first announcement). Inside the month its file is named for. */
+  /** How much it weighs: a headline (at most three a day), notable, or a brief (folded by default). */
+  weight: FeedWeight;
+  /** "YYYY-MM-DD": the day it came to light (its first announcement). Inside the month its file is named for; the weeks group by it. */
   date: string;
-  /** At most 120 characters. */
+  /** "YYYY-MM-DD": the day the daily run filed it. Latest is the newest of these days, and "new since your last visit" counts by it. */
+  added: string;
+  /** At most 90 characters. */
   title: string;
-  /** At most 420 characters: the TL;DR, one to three plain sentences. */
+  /** At most 280 characters: the TL;DR, one to three plain sentences. */
   summary: string;
-  /** At most 200 characters: why it matters for security, in one line. Every kind but an incident has one. */
+  /** At most 160 characters: why it matters for security, in one line. Every kind but an incident has one. */
   why?: string;
   /** Who announced it. */
   vendor?: string;
@@ -1499,6 +1477,12 @@ export interface FeedItem {
   products?: string[];
   /** Controls it delivers or changes: catalogue ids (a MITRE mitigation or a cap-* specialisation). */
   controls?: string[];
+  /** The story it belongs to (data/feed/stories.yaml): its items are shown together, newest first. */
+  story?: string;
+  /** Derived: the story's title. */
+  storyTitle?: string;
+  /** Derived: the deep dive the story belongs to, when it has one. */
+  storyIncident?: string;
   /** Incidents only: the incident pattern it is filed under, an id in data/incident-patterns/. */
   category?: IncidentCategory;
   /** Incidents only. */
@@ -1514,10 +1498,6 @@ export interface FeedItem {
   /** Incidents only: the deep dive that tells it, as its own file or as one of its "also seen" entries. */
   incident?: string;
   cves?: string[];
-  /** The change to the site it implies. */
-  update?: FeedUpdate;
-  /** Derived: the owner's answer to `update`, from data/feed/decisions.yaml. */
-  decision?: Omit<FeedDecision, "id">;
   /** Derived: the security tools (data/security-tools/) that name this item as their announcement. */
   securityTools?: SecurityToolRef[];
   /** One to three, the primary first. */
@@ -1529,6 +1509,24 @@ export type IncidentFeedItem = FeedItem & { kind: "incident"; category: Incident
 
 export const isIncidentItem = (f: FeedItem): f is IncidentFeedItem => f.kind === "incident";
 
+/** A story (data/feed/stories.yaml): items shown together under one title. */
+export interface FeedStory {
+  /** Kebab-case; a settings roll-up is `settings-<toolId>-<YYYY>-w<NN>`. */
+  id: string;
+  /** At most 90 characters. */
+  title: string;
+  /** The deep dive it belongs to (data/incidents/), when it has one. */
+  incident?: string;
+}
+
+/** The overviews (data/feed/overviews.yaml): a day's and a week's major events, in plain sentences. */
+export interface FeedOverviews {
+  /** A day the run filed items on (their `added`); at most 400 characters each. */
+  days: { date: string; overview: string }[];
+  /** `week` is the Monday the ISO week starts on; at most 600 characters each. */
+  weeks: { week: string; overview: string }[];
+}
+
 /** An item as site search reads it: its title, kind and day, and its incident pattern if it is an incident. */
 export interface FeedTitle {
   id: string;
@@ -1539,24 +1537,43 @@ export interface FeedTitle {
 }
 
 /**
+ * A section of /feed/ before its items are loaded: how many items it holds, of each kind, and
+ * what it says when folded (its overview, or the titles of its headlines when it has none).
+ */
+export interface FeedSpan {
+  count: number;
+  /** Items of each kind, so the section's count follows the kind chips. */
+  kinds: Record<string, number>;
+  /** From data/feed/overviews.yaml. */
+  overview?: string;
+  /** Without an overview: the titles of its headlines (or, with none, of its first notable items). */
+  headlines?: string[];
+}
+
+/**
  * What /feed/ knows before it has loaded a month: the months there are and how many items each
- * holds, the counts its filters start from, and every proposed site update (the panel lists them
- * all). Written by the build as public/data/feed/index.json.
+ * holds, the newest day and every week as sections, and the counts the filters start from.
+ * Written by the build as public/data/feed/index.json.
  */
 export interface FeedIndex {
   /** Every item, of every kind. */
   total: number;
-  /** The newest item's day; empty for an empty feed. */
+  /** The newest day the run filed items on (their `added`); empty for an empty feed. */
   latest: string;
   /** Newest first: "YYYY-MM" and how many items it holds. */
   months: { month: string; count: number }[];
   /** Items of each kind. */
   kinds: Record<string, number>;
-  /** Incidents under each incident pattern, of each evidence, and naming each pattern. */
+  /** Incidents under each incident pattern, of each evidence, and naming each pattern: the Incidents page's filters. */
   incidents: { category: Record<string, number>; evidence: Record<string, number>; pattern: Record<string, number> };
-  /** The items whose update is proposed, newest first. */
-  proposed: FeedItem[];
+  /** The items filed on the newest `added` day, as the Latest section. Absent for an empty feed. */
+  day?: FeedSpan & { date: string };
+  /** Every week that has items, newest first, each by the Monday it starts on. */
+  weeks: (FeedSpan & { week: string })[];
 }
+
+/** What the Incidents page's report list knows before it has loaded a month. */
+export type FeedMonthsIndex = Pick<FeedIndex, "months" | "incidents">;
 
 /**
  * ------------------------------------------------------------------ Security tools

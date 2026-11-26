@@ -6,6 +6,7 @@ import { ReferenceLinks } from "@/components/home/ReferenceLinks";
 import { SectionCards } from "@/components/home/SectionCards";
 import { SiteSearchBox } from "@/components/home/SiteSearchBox";
 import { archetypes, incidentPatterns, incidents, meta, mitigations } from "@/lib/data";
+import { homeHeadlines } from "@/lib/feed";
 import { feedItems, securityTools } from "@/lib/feed-server";
 import { within } from "@/lib/incident-patterns";
 import { ROUTES } from "@/lib/routes";
@@ -16,18 +17,17 @@ export const metadata = {
     "Enabling AI securely: a pattern for each kind of AI tool or application with the controls it needs, how AI systems are being attacked, and a daily feed of what changed in AI security.",
 };
 
-/** How many of the newest daily feed items the home page lists. */
-const HOME_HEADLINES = 12;
-
 /**
- * The home page, a briefing: the site search under a one-line headline, then the newest items of
- * the daily feed in a short list that scrolls on its own, beside four cards into the main parts of
- * the site, and a row of Reference links. The items are cut down here, when the page is built, so
- * the feed stays out of the JavaScript every page loads. The pattern finder is on /patterns/.
+ * The home page, a briefing: the site search under a one-line headline, then the headline and
+ * notable items the daily run filed on its newest day, then the newest by date before them (up to
+ * twelve, briefs only to fill) in a short list that
+ * scrolls on its own, beside four cards into the main parts of the site, and a row of Reference
+ * links. The items are cut down here, when the page is built, so the feed stays out of the
+ * JavaScript every page loads. The pattern finder is on /patterns/.
  */
 export default function HomePage() {
   const today = meta.generatedAt.slice(0, 10);
-  const items = feedItems.slice(0, HOME_HEADLINES).map(toHeadline);
+  const items = homeHeadlines(feedItems).map(toHeadline);
   const counts = {
     patterns: archetypes.length,
     deepDives: incidents.length,
@@ -60,7 +60,7 @@ export default function HomePage() {
               The whole daily feed →
             </Link>
           </div>
-          <p className="mt-0.5 text-[12.5px] text-ink-3">The {items.length} newest items in the daily feed, reviewed every day.</p>
+          <p className="mt-0.5 text-[12.5px] text-ink-3">The headline and notable items of the latest daily feed first, then the newest before them.</p>
           <HeadlineList items={items} className="mt-3" />
         </section>
 

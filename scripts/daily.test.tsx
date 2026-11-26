@@ -171,7 +171,9 @@ function xmlProblems(xml: string): string[] {
 const RSS_FIXTURE: FeedItem[] = Array.from({ length: RSS_ITEMS + 5 }, (_, i) => ({
   id: `item-${i}`,
   kind: i % 2 ? "research" : "incident",
+  weight: i % 3 ? "notable" : "brief",
   date: `2026-11-${String(28 - Math.floor(i / 4)).padStart(2, "0")}`,
+  added: "2026-11-28",
   title: `Item ${i}: <script> & "quotes" in a title`,
   summary: "A summary with an ampersand & a tag <b>.",
   ...(i % 2 ? { why: "Why it matters, with 'quotes'.", vendor: "Example & Co" } : { category: "identity", perspective: "target", evidence: "confirmed" }),
@@ -268,7 +270,7 @@ test("the build writes the feed apart: one file per month, an index, the titles,
 });
 
 /** How the build writes an item, as far as its kind: what would show if the feed crept back into a bundle. */
-const serialised = (f: FeedItem) => `{"id":${JSON.stringify(f.id)},"kind":${JSON.stringify(f.kind)},"date":${JSON.stringify(f.date)}`;
+const serialised = (f: FeedItem) => `{"id":${JSON.stringify(f.id)},"kind":${JSON.stringify(f.kind)},"weight":${JSON.stringify(f.weight)},"date":${JSON.stringify(f.date)}`;
 
 const OUT = join(ROOT, "out");
 test("in the built site no JavaScript chunk carries a feed item, and the months and feed.xml are served", { skip: !existsSync(join(OUT, "_next")) && "no out/: npm run build first" }, () => {
@@ -290,5 +292,54 @@ test("in the built site no JavaScript chunk carries a feed item, and the months 
     const link = readFileSync(join(OUT, page), "utf8").match(/<link rel="alternate" type="application\/rss\+xml"[^>]*>/)?.[0] ?? "";
     assert.match(link, /href="[^"]*\/feed\.xml"/, page);
     assert.match(link, /title="Daily feed · AI Security Architecture"/, page);
+  }
+});
+
+// --- Review material stays in the repository ------------------------------------------------------------
+
+/** The words of the review: what the proposed-updates panel, the "Site update" lines and the approve lines said. */
+const REVIEW_WORDS = /Proposed site updates|Site update|decisions\.yaml|data-proposed|data-approve-line|data-decision|data-site-update|decision: approve/;
+
+test("no source file of the site speaks of proposals, site updates, approving or decisions.yaml", () => {
+  const sources = walk(SRC).filter((f) => /\.(ts|tsx|css)$/.test(f) && !f.startsWith(join(SRC, "data")));
+  assert.ok(sources.length > 50);
+  for (const f of sources) assert.doesNotMatch(readFileSync(f, "utf8"), /Proposed site update|Site update|site update|decisions\.yaml|data-approve-line|proposedUpdates|FEED_DECISIONS/, relative(ROOT, f));
+});
+
+test("the generated feed files carry no item's site update and no decision", () => {
+  const dir = join(ROOT, "public", "data", "feed");
+  assert.ok(existsSync(join(dir, "index.json")), "run npm run data");
+  for (const f of feedItems) assert.ok(!("update" in f) && !("decision" in f), `${f.id} in feed.json`);
+  const files = [join(SRC, "data", "generated", "feed.json"), ...readdirSync(dir).map((n) => join(dir, n))];
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    assert.doesNotMatch(text, /"update":|"decision":/, relative(ROOT, file));
+    assert.doesNotMatch(text, REVIEW_WORDS, relative(ROOT, file));
+  }
+});
+
+test("no built page and no feed.xml shows a proposal, a site update or an approve line", { skip: !existsSync(join(OUT, "_next")) && "no out/: npm run build first" }, async () => {
+  // The notes the updates carry in the YAML, as the loader reads them: none may reach a reader.
+  const { loadFeed } = await import("./lib/feed");
+  const loaded = await loadFeed(
+    ROOT,
+    {
+      patternIds: new Set(dataset.archetypes.map((a) => a.id)),
+      incidentIds: new Set(dataset.incidents.map((i) => i.id)),
+      categoryIds: new Set(dataset.incidentPatterns.map((p) => p.id)),
+      productIds: new Set(dataset.tools.map((t) => t.id)),
+      controlIds: new Set(dataset.mitigations.map((m) => m.id)),
+    },
+    () => {},
+  );
+  const notes = loaded.feed.flatMap((f) => (f.update ? [f.update.note] : [])).filter((n) => n.length >= 24);
+  const html = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+  const pages = walk(OUT).filter((f) => /\.(html|txt|xml|json|rsc)$/.test(f));
+  assert.ok(pages.some((f) => f.endsWith(join("feed", "index.html"))) && pages.some((f) => f.endsWith("feed.xml")), "the feed and feed.xml are built");
+  for (const file of pages) {
+    const text = readFileSync(file, "utf8");
+    const where = relative(OUT, file);
+    assert.doesNotMatch(text, REVIEW_WORDS, where);
+    for (const note of notes) assert.ok(!text.includes(note) && !text.includes(html(note)) && !text.includes(JSON.stringify(note).slice(1, -1)), `${where} carries an update note: ${note.slice(0, 60)}`);
   }
 });
