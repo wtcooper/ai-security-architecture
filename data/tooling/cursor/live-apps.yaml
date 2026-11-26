@@ -1,0 +1,696 @@
+# Cursor Apps (live apps) — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Scope: web apps a Cursor cloud agent builds, hosts and publishes (launched 2026-11-05 as "live apps"; the docs
+# call the feature Apps): the publish checks, the Apps dashboard's team-admin settings, each app's access, secrets
+# and API-key access, and the team identity and audit settings that decide who builds and opens an app.
+# Exclusions: the cloud agent that builds the app is toolCursorCloudAgents (archHostedAgentSessions) and its own
+# settings stay there; Origin Apps (third-party integrations installed on Cursor Origin repositories, and the Origin
+# App Marketplace) are a different thing with the same name; agents deployed with the Agent SDK and cloud agent
+# canvases are not app hosting.
+# 2026-11-26: onboarded against the hosted app builder pins (feed item cursor-live-apps). Read that day, all 200:
+# cursor.com/changelog (Nov 5 entry), cursor.com/llms.txt and the .md variants of docs/cloud-agent/apps,
+# cloud-agent, cloud-agent/security, cloud-agent/settings, enterprise/security-hardening,
+# enterprise/compliance-and-monitoring, enterprise/opentelemetry-export, enterprise/privacy-and-data-governance,
+# enterprise/identity-and-access-management, enterprise/tenancy-restriction, account/teams/sso, account/teams/scim,
+# security/api-keys, security/sessions, origin, origin/apps; cursor.com/security and cursor.com/acceptable-use-policy.
+# trust.cursor.com renders client-side (no text to an automated read). cursor.com/dashboard/apps redirects to sign-in,
+# so dashboard section names come from the Apps page's own links (#secrets, #security, #danger-zone) and every step
+# cites that page. docs/cloud-agent/apps is the only page about Apps: no page documents a separate preview database,
+# rollback to an earlier published version, a database backup, an export or API for the list of apps, audit events
+# for an app's publish or visibility change, or a dependency check before publish; those rows say so. No advisory
+# specific to Cursor Apps was found (web search, 2026-11-26).
+vendor: cursor
+family: Cursor Apps
+tools:
+  - id: toolCursorApps
+    name: Cursor Apps (live apps)
+    surfaceClasses:
+      - saasAgentPlatform
+    variants:
+      - name: Apps built by a Cursor cloud agent, managed in the Apps dashboard
+        class: saasAgentPlatform
+        url: https://cursor.com/docs/cloud-agent/apps
+        note: >-
+          Built only from a cloud agent ("this feature is not supported locally"), from a new Cursor Origin
+          repository or an existing GitHub one; GitLab and other git providers are announced, not available.
+    architecture: archHostedAppBuilder
+    status: ga
+    asOf: "2026-11"
+    summary:
+      - >-
+        Cursor's hosted app builder. A member tells a cloud agent to build an app; Cursor scaffolds it, provisions a
+        Postgres database if needed, puts it behind Cursor sign-in, asks for the secrets it needs to reach other
+        systems (the agent never sees the values) and, when the maker publishes to a URL they pick, deploys it in a
+        dedicated hosting account Cursor creates for the team. Private and team apps open only to people signed in
+        to Cursor; individual plans can also share apps publicly.
+      - >-
+        Every publish runs four checks that are always on (secrets in app files, credential files, .env files,
+        source maps) and an AI security review that blocks serious issues. Team admins see every app and secret,
+        add rules to the review, approve publishes it blocked (never for malicious code, hardcoded secrets or
+        exposed credentials), allow or disallow public apps and API-key access, and unpublish any app. Record-level
+        access inside an app is the code the agent writes.
+    facts:
+      - label: Plans
+        value: >-
+          Every paid plan with cloud agents: Premium and higher, Teams, Enterprise or a legacy paid plan (not Free or
+          Plus). Public sharing is disabled by default on Teams and Enterprise and available on individual plans; the
+          app retention period is Enterprise.
+        url: https://cursor.com/docs/cloud-agent/apps
+      - label: Inference & routing
+        value: >-
+          A Cursor cloud agent builds the app in a Cursor-hosted VM on the models the team allows. Cursor deploys each
+          app, with its Postgres database, in a dedicated hosting account it creates for the team (or for the person
+          on an individual plan), isolated from every other team's and user's; the page does not name the cloud.
+        url: https://cursor.com/docs/cloud-agent/apps
+      - label: Data leaving the device
+        value: >-
+          All vendor-hosted: the app's code sits in a Cursor Origin or GitHub repository, the cloud agent's VM holds it
+          while it builds, and the live app, its database and its secrets are in Cursor's hosting. Visitors sign in
+          through Cursor; scripts and bots send a Cursor API key.
+        url: https://cursor.com/docs/cloud-agent/apps
+      - label: Retention & training
+        value: >-
+          Cloud agents run in Privacy Mode (on by default for Enterprise), under which Cursor does not train on code or
+          prompts; cloud agent conversations are kept indefinitely by default. Enterprise can set an app retention
+          period of 60 to 365 days, after which inactive apps are unpublished; an unpublished app's secrets and
+          database can't be recovered.
+        url: https://cursor.com/docs/cloud-agent/security
+      - label: Docs index
+        value: cursor.com/docs/cloud-agent/apps, with the cloud agent, security-hardening and enterprise pages listed in cursor.com/llms.txt
+        url: https://cursor.com/llms.txt
+    items:
+      - title: Where each control lives
+        body:
+          - >-
+            Apps dashboard (cursor.com/dashboard/apps), for team admins: Apps on or off for the team, public apps
+            (Danger zone), API keys opening apps, Security (instructions added to the review, approval of blocked
+            publishes, API keys tied to apps), Secrets (team secrets, limited to named apps), Data retention
+            (Enterprise) and unpublish for any app. Per app, its owner: Access › Who can access (People you invite,
+            Team, Public where allowed) and Add people or groups as Viewer or Editor; Secrets › Add secret. Team
+            settings: SSO, SCIM and the audit log.
+        links:
+          - title: "Apps: Security and controls"
+            url: https://cursor.com/docs/cloud-agent/apps
+          - title: Security and Privacy Hardening
+            url: https://cursor.com/docs/enterprise/security-hardening
+      - title: What Editors and API keys can do
+        body:
+          - >-
+            Editors open an app and republish it from their own agents, including code that uses the app's secrets
+            and API keys; only the owner changes the app's settings. A Cursor API key in the x-cursor-app-token header
+            opens apps for Grok Bot, scripts and CI: a personal key the apps its owner can open, a team key only the
+            team apps it was given; requests made with a key are marked automated and name the key.
+        links:
+          - title: "Apps: Sharing, and API keys for Grok Bot and scripts"
+            url: https://cursor.com/docs/cloud-agent/apps
+    riskNotes:
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Team visibility opens an app to everyone on the Cursor team, and a public app on an individual plan to anyone
+          with the link; the publish checks strip .env files and source maps but do not judge what records an app shows.
+      - risk: riskInsecureModelOutput
+        note: >-
+          Who may read which record is code the agent writes; the AI review blocks "serious issues", and no page says it
+          checks access per visitor.
+      - risk: riskRogueActions
+        note: >-
+          Unpublishing, by an admin or by the retention period, leaves the app's secrets and database unrecoverable, and
+          an Editor's agent can republish to the live address.
+      - risk: riskCrossTenantCredentialPropagation
+        note: >-
+          Each team's apps run in their own hosting account, but every app relies on the same Cursor sign-in, and a
+          Cursor API key opens apps the way a signed-in user would.
+      - risk: riskShadowAndUnknownAgents
+        note: >-
+          Any paid plan with cloud agents can build apps, and individual plans publish them publicly, outside any team.
+      - risk: riskPromptInjection
+        note: >-
+          Files, repositories and pages the cloud agent reads while building steer the app it writes; the agent never
+          sees secret values, but the code it writes uses them.
+      - risk: riskInsecureIntegratedComponent
+        note: The agent chooses the app's packages, and no page documents a dependency check before publish.
+      - risk: riskAgenticDelegationConfusedDeputy
+        note: >-
+          A team secret acts with its owner's access for every visitor, and Grok Bot or a script with an API key uses an
+          app as a signed-in user.
+    controls:
+      - mitigation: D3-APA
+        coverage: native
+        mechanism: >-
+          Apps on or off for the team; public apps disallowed by default on Teams and Enterprise (allowing them is a team
+          admin's setting, and disallowing them moves existing public apps back to team visibility); every private and
+          team app behind Cursor sign-in, with People you invite or Team visibility and Viewer or Editor roles set per app
+          by its owner
+        steps:
+          - title: Keep public apps disallowed
+            body:
+              - >-
+                In the Apps dashboard leave public apps disallowed (the Teams and Enterprise default); disallowing them
+                later moves apps already public back to team visibility.
+            url: https://cursor.com/docs/cloud-agent/apps
+          - title: Share by person or group
+            body:
+              - >-
+                On each app's page open Access › Who can access, choose People you invite and add people or groups as
+                Viewer; use Team only for apps that hold no confidential data.
+            url: https://cursor.com/docs/cloud-agent/apps
+          - title: Hold Apps until the rules are set
+            body:
+              - >-
+                Team admins turn Apps on or off for the team in the Apps dashboard; keep it off until the review rules,
+                secrets and API-key setting below are in place.
+            url: https://cursor.com/docs/cloud-agent/apps
+        note: >-
+          Native on the rule applied to every builder on this drawing: an administrator keeps every app's audience inside
+          the team and the platform enforces it at sign-in. Unlike most builders, disallowing public apps also changes
+          apps already published. Gaps: the page does not state the visibility a new app starts with, or let an admin set
+          it; any member can share an app with the whole team; the Apps switch is team-wide, with no group-level limit on
+          who may build; individual plans publish public apps outside any team; and Cursor API keys open apps as a
+          signed-in user would unless an admin disallows them. Who may build is whoever has cloud agents (the
+          maker-to-builder pin).
+        verified: "2026-11-26"
+      - mitigation: D3-AVE
+        coverage: native
+        mechanism: >-
+          Four checks before every publish that are always on (block secrets written in app files, block credential
+          files, never publish .env files, never publish source maps); an AI security review that reads the app's files
+          and blocks serious issues, with team admins' own rules added to its prompt; approval of a blocked publish
+          reserved to team admins, and refused for malicious code, hardcoded secrets or exposed credentials
+        steps:
+          - title: Add the firm's rules to the review
+            body:
+              - >-
+                In the Apps dashboard's Security section add instructions to the review prompt (records checked against
+                the signed-in visitor, no administrator credentials in an app); they add rules and cannot remove Cursor's
+                built-in checks.
+            url: https://cursor.com/docs/cloud-agent/apps
+          - title: Confirm the review is on
+            body:
+              - >-
+                Check in the Apps dashboard's Security section that the AI security review is running for the team; the
+                page says the built-in checks run even when it is off.
+            url: https://cursor.com/docs/cloud-agent/apps
+        note: >-
+          Native on the rule applied to every builder on this drawing: findings block the publish, only someone other
+          than the maker (a team admin) can clear one, and three classes cannot be cleared at all. Boundaries: the review
+          that finds code flaws is a model's judgement, and no page documents a dependency or package vulnerability check;
+          the page says the four checks run "even when the security review is off" without saying who can switch the
+          review off or its default, and if a maker can, the rating falls to partial on the toolCopilotStudioApps rule (a
+          blocking scan for credentials only); a team admin who builds an app is not stopped from approving its blocked
+          publish; individual plans have no admin.
+        verified: "2026-11-26"
+      - mitigation: cap-data-access-governance
+        coverage: none
+        mechanism: >-
+          No setting: which records of the app's Postgres database a visitor reads is the code the agent writes, and an
+          app reaches other systems with the secrets it is given, which act the same for every visitor; secrets can be
+          limited to named apps
+        evidence:
+          - title: "Apps: How it works (database, auth, secrets)"
+            url: https://cursor.com/docs/cloud-agent/apps
+          - title: "Build Live Apps in Cursor (changelog, 2026-11-05): secrets to reach a data warehouse"
+            url: https://cursor.com/changelog
+        note: >-
+          None on the rule for this drawing, which needs rules limiting rows to the visitor and connectors that read as
+          the visitor (the rule that rated toolReplit none). Private and team apps sit behind Cursor sign-in, but the
+          pages describe no per-row rule, no check of an app's access logic before publish and no connector that acts as
+          the visitor: a warehouse secret gives every visitor the access of whoever's credential it is. Stand-in: give
+          each app a read-only credential scoped to what its audience may see and limited to that app; add a rule to the
+          security review to block code that returns records without checking the signed-in user; test with two
+          ordinary accounts before publishing.
+        verified: "2026-11-26"
+      - mitigation: D3-CH
+        coverage: native
+        mechanism: >-
+          Secrets entered when the agent asks or in the Apps dashboard's Secrets section, never shown to the agent and
+          limitable to named apps; the always-on publish checks that block secrets written in app files and credential
+          files and leave .env files out, which no admin can approve past; Cursor API keys for app access with an owner,
+          permissions and an expiry
+        steps:
+          - title: Keep every key in Apps secrets
+            body:
+              - >-
+                Add each credential apps need as a team secret in the Apps dashboard's Secrets section, limited to the
+                apps that use it, and give a published app one from its page's Secrets section with Add secret.
+            url: https://cursor.com/docs/cloud-agent/apps
+          - title: Give app keys an owner and an end date
+            body:
+              - >-
+                Let scripts and Grok Bot open apps only with fine-grained team API keys that carry an expiry, and review
+                them on the Apps dashboard's API keys page.
+            url: https://cursor.com/docs/security/api-keys
+        note: >-
+          Native on the rule applied to every builder on this drawing: secrets stay server-side and the platform refuses
+          an app that carries one (the rule that rated toolCopilotStudioApps native). Boundaries: Editors can change code
+          that uses the app's secrets and republish it; adding a secret to a published app starts a new deployment at
+          once; Widen and add extends a secret limited to other apps; the page does not cover a key pasted into the
+          agent's chat, so rotate it, or say whether admins, who "can see every app and secret", see values or names; a
+          key's expiry can be set to never.
+        verified: "2026-11-26"
+      - mitigation: cap-staged-rollout-gate
+        coverage: partial
+        mechanism: >-
+          A tray to preview the app before publishing, nothing live until the maker publishes, and the app's code in a
+          Cursor Origin or GitHub repository
+        steps:
+          - title: Preview, then publish
+            body:
+              - >-
+                Open the app in the preview tray and test it with ordinary accounts before choosing Publish; nothing goes
+                live before you publish.
+            url: https://cursor.com/docs/cloud-agent/apps
+        note: >-
+          Partial on the rule for this drawing: native where the agent cannot change the live app's data and live data
+          can be restored apart from code. The page describes a preview and an explicit publish, but no separate preview
+          database, no rollback to an earlier published version and no backup of the app's database; code history is the
+          repository's, and an Editor republishes from their own agent to the live address. An unpublished app's secrets
+          and database can't be recovered, so export data before any change that might need undoing.
+        verified: "2026-11-26"
+      - mitigation: D3-MFA
+        coverage: native
+        mechanism: >-
+          SAML SSO on Teams and Enterprise: once the connection and a verified domain are active, users on that domain
+          must sign in with SSO; private and team apps sit behind Cursor sign-in, so their visitors come through the same
+          IdP and its MFA; SCIM on Enterprise
+        steps:
+          - title: Require SSO with MFA
+            body:
+              - >-
+                Activate the SSO connection in Team Settings › Single Sign-On (SSO) (Enterprise: the Organization's
+                Settings), verify every company domain, and enforce MFA on the Cursor app in the IdP.
+            url: https://cursor.com/docs/account/teams/sso
+          - title: Keep keys from bypassing sign-in
+            body:
+              - >-
+                In the Apps dashboard disallow API keys opening apps unless a named script or bot needs it.
+            url: https://cursor.com/docs/cloud-agent/apps
+        note: >-
+          Native on this drawing's rule: the admin can make the identity provider the only sign-in for makers and for
+          visitors of team apps, the second factor being the IdP's as the pin states (toolCursor is partial on the
+          third-party coding drawing under that drawing's own rule). Boundaries: a Cursor API key in the
+          x-cursor-app-token header opens apps without the IdP, unless an admin disallows API keys opening apps; public
+          apps on individual plans need no sign-in; members outside the verified domains sign in another way; Cursor has
+          no second-factor requirement of its own.
+        verified: "2026-11-26"
+      - mitigation: AML.M0029
+        coverage: partial
+        mechanism: >-
+          A team admin approves a publish the AI security review blocked; a publish the checks pass goes live when the
+          maker publishes
+        steps:
+          - title: Have an admin who did not build it decide
+            body:
+              - >-
+                Keep the team-admin role, which approves publishes the review blocked, to a few people, and have one who
+                is not the app's maker decide after reading the finding.
+            url: https://cursor.com/docs/cloud-agent/apps
+        note: >-
+          Partial on the rule for this drawing: native where an admin's approval is required for each publish beyond the
+          workspace and the maker cannot approve their own. Here publishing beyond the team is switched off rather than
+          approved, and an admin decides only on a publish the review blocked: one the checks pass, to the whole team,
+          needs nobody else, and Editors republish to the live address without the owner. Nothing stops an admin
+          approving their own app's blocked publish.
+        verified: "2026-11-26"
+      - mitigation: AML.M0028
+        coverage: partial
+        mechanism: >-
+          Team secrets created by an admin and limited to named apps decide which systems an app can authenticate to;
+          members add personal secrets only "if you have access"; no list of approved connectors or APIs
+        steps:
+          - title: Hold the keys centrally
+            body:
+              - >-
+                Create team secrets for the systems apps may reach in the Apps dashboard's Secrets section, and limit each
+                to the apps approved to use it.
+            url: https://cursor.com/docs/cloud-agent/apps
+        note: >-
+          Partial on the rule applied to every builder on this drawing: native where an admin allows or blocks each
+          connector and the platform enforces it (the rule that rated toolVercelV0 partial). Apps has no connector
+          catalogue: an app reaches a system with whatever secret it holds, and its server code can call any API that
+          secret opens. The page says members can add personal secrets if they have access, without naming the setting
+          that grants it.
+        verified: "2026-11-26"
+      - mitigation: D3-AI
+        coverage: partial
+        mechanism: >-
+          The Apps dashboard, where team admins see every app and secret on the team and the API keys tied to apps; no
+          export or API for the list is documented
+        steps:
+          - title: Review the team's apps monthly
+            body:
+              - >-
+                As a team admin, go through the Apps dashboard's list of every app on the team with its secrets and the API
+                keys tied to apps, and unpublish what has no owner.
+            url: https://cursor.com/docs/cloud-agent/apps
+        note: >-
+          Partial on the rule applied to every builder on this drawing: native where the admin console lists every app
+          with its owner, audience and connectors and exports the list. Admins see every app and secret, but the page
+          does not say the list shows each app's visibility, Viewers and Editors together, and documents no export or
+          API; apps on members' individual plans are not listed. Enterprise's retention period unpublishes apps nobody
+          uses.
+        verified: "2026-11-26"
+      - mitigation: cap-shadow-ai-discovery
+        coverage: external
+        mechanism: >-
+          Nothing in Cursor lists apps made on individual plans; the organisation's SSE or CASB finds cursor.com use with
+          corporate identities; the tenancy restriction header and MDM AllowedTeamId are prevention
+        evidence:
+          - title: "Apps: Sharing (individual plans can share apps publicly)"
+            url: https://cursor.com/docs/cloud-agent/apps
+          - title: Tenancy Restriction (x-cursor-allowed-tenants)
+            url: https://cursor.com/docs/enterprise/tenancy-restriction
+        note: >-
+          External by the rule applied to every vendor: the product lists no accounts or apps made outside the team.
+          Prevention, credited here only: x-cursor-allowed-tenants on a TLS-terminating proxy limits cursor.com and
+          api2.cursor.sh to the organisation's teams on the corporate network, and AllowedTeamId (MDM) logs personal
+          accounts out of the desktop app; neither reaches personal devices. The page does not name the domain apps are
+          served from, so confirm it before searching certificate-transparency logs.
+        verified: "2026-11-26"
+      - mitigation: cap-agent-kill-switch
+        coverage: native
+        mechanism: >-
+          Team admins unpublish any app on the team; disallowing public apps moves every public app back to team
+          visibility; disallowing API keys stops scripts and bots opening apps; Enterprise's retention period unpublishes
+          inactive apps
+        steps:
+          - title: Unpublish, after copying what you need
+            body:
+              - >-
+                As a team admin unpublish the app from the Apps dashboard, first copying what the investigation needs:
+                an unpublished app's secrets and database can't be recovered.
+            url: https://cursor.com/docs/cloud-agent/apps
+          - title: Revoke at the source
+            body:
+              - >-
+                Rotate each secret the app held at the system that issued it, and revoke the API keys tied to the app.
+            url: https://cursor.com/docs/security/api-keys
+        note: >-
+          Native on the rule for this drawing: one admin action outside the agent takes any team app offline, and the page
+          says an unpublished app's secrets and database can't be recovered, so its data path goes with it. Boundaries:
+          the stop is also a deletion, and no admin action keeps an app offline with its data for investigation (narrowing
+          access is the owner's setting); no delay is stated, nor whether open sessions end; the page does not say whether
+          turning Apps off for the team unpublishes existing apps; a credential the app used stays valid at its source
+          until rotated; an app on an individual plan can only be reported to Cursor under its Acceptable Use Policy.
+        verified: "2026-11-26"
+      - mitigation: AML.M0024
+        coverage: partial
+        mechanism: >-
+          Changes to the Apps team settings recorded in the team audit log (Enterprise), streamed to a SIEM on request;
+          OpenTelemetry Export of the cloud agent conversations and tool calls that build apps; requests made with an API
+          key marked as automated and naming the key
+        steps:
+          - title: Stream the audit log
+            body:
+              - >-
+                Ask Cursor (hi@cursor.com) to stream the team's audit events to the SIEM through Splunk HEC, Sumo Logic, an
+                HTTPS webhook or S3.
+            url: https://cursor.com/docs/enterprise/compliance-and-monitoring
+          - title: Export the build sessions
+            body:
+              - >-
+                Turn on OpenTelemetry Export so the cloud agent conversations and tool calls that build apps reach your
+                collector.
+            url: https://cursor.com/docs/enterprise/opentelemetry-export
+        note: >-
+          Partial on the rule applied to every builder on this drawing: native where publishes, audience changes and
+          connector events reach the organisation's store. Settings changes do, but the audit log's event list names no
+          event for an app's publish, unpublish, visibility change, Editor grant or secret attachment, and the page does
+          not say where the requests an app receives are logged. Audit logs and OpenTelemetry Export are Enterprise.
+        verified: "2026-11-26"
+      - mitigation: cap-ai-vendor-assessment
+        coverage: external
+        mechanism: >-
+          The organisation's TPRM platform, consuming Cursor's security page, Trust Center and terms, and the hosting
+          terms on the Apps page
+        evidence:
+          - title: "Apps: Availability (hosting is separate from Cursor's services, provided as is)"
+            url: https://cursor.com/docs/cloud-agent/apps
+          - title: Cursor Security
+            url: https://cursor.com/security
+          - title: Cursor Trust Center
+            url: https://trust.cursor.com/
+        note: >-
+          External on the rule applied to every product: the assessment is the organisation's. Questions only Cursor can
+          answer: the Apps page says hosting "is separate from, and is not part of, our services" and is provided "as is"
+          and "as available", so ask whether the MSA, the DPA and the SOC 2 scope cover app hosting and the apps'
+          databases; which cloud runs the dedicated hosting accounts and how they are kept apart; how the Cursor sign-in
+          in front of every app is tested; and what the AI review covers. cursor.com/security states AIUC-1, ISO/IEC
+          27001:2022, ISO/IEC 42001:2023 and SOC 2 Type II; trust.cursor.com renders client-side and was not read on
+          2026-11-26.
+        verified: "2026-11-26"
+    settings:
+      - id: appsForTeam
+        name: Turn Apps on or off for the team
+        where: Apps dashboard (cursor.com/dashboard/apps), team admins
+        setVia: [adminConsole]
+        area: tools
+        default: "Not stated; Apps is available wherever the team has cloud agents"
+        recommended: Off until the review rules, team secrets and API-key setting are in place, then on
+        value: "On only after the rules are set"
+        why: Any member with cloud agents can otherwise host an app with company data before the team's rules exist.
+        mitigations: [D3-APA]
+        requires: A paid plan with cloud agents
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: publicApps
+        name: Allow or disallow public apps
+        where: Apps dashboard › Danger zone
+        setVia: [adminConsole]
+        area: sharing
+        default: "Disallowed on Teams and Enterprise"
+        recommended: Disallowed
+        value: "Disallowed"
+        why: No app opens to anyone with the link, and disallowing moves apps already public back to team visibility.
+        mitigations: [D3-APA]
+        requires: Teams or Enterprise (individual plans can always share publicly)
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: apiKeysOpenApps
+        name: Allow or disallow API keys opening apps
+        where: Apps dashboard, team admins
+        setVia: [adminConsole]
+        area: identity
+        recommended: Disallowed unless a named script or bot needs it, then team keys given only the apps they use
+        value: "Disallowed unless a named integration needs it"
+        why: A key opens private and team apps as a signed-in user would, without the IdP's sign-in or second factor.
+        mitigations: [D3-MFA, D3-APA]
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: whoCanAccess
+        name: Who can access (Access)
+        where: Apps dashboard › (app) › Access › Who can access (People you invite, Team, Public where allowed) and Add people or groups
+        setVia: [adminConsole]
+        area: sharing
+        recommended: People you invite, by group; Team only for apps that hold no confidential data
+        value: "People you invite, by group"
+        why: Team visibility opens the app to everyone on the Cursor team; naming groups keeps it to the people the data is for.
+        mitigations: [D3-APA]
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: editorRole
+        name: Editor (app role)
+        where: Apps dashboard › (app) › Access › Add people or groups › Editor
+        setVia: [adminConsole]
+        area: sharing
+        default: "Viewer or Editor chosen per person or group"
+        recommended: Only colleagues trusted with the app's secrets and API keys
+        value: "Trusted collaborators only"
+        why: Editors change code that uses the app's secrets and republish it to the app's address.
+        mitigations: [D3-APA, D3-CH]
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: reviewInstructions
+        name: Security review instructions
+        where: Apps dashboard › Security
+        setVia: [adminConsole]
+        area: tools
+        default: "Cursor's built-in review only"
+        recommended: The review confirmed on, with the firm's rules added (records checked against the signed-in visitor, no administrator credentials in an app)
+        value: "On, with the firm's rules added"
+        why: Added rules make the AI review block what the firm cares about; they cannot remove Cursor's built-in checks.
+        mitigations: [D3-AVE]
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: approveBlockedPublishes
+        name: Approve publishes the review blocked
+        where: Apps dashboard, team admins
+        setVia: [adminConsole]
+        area: tools
+        default: "A blocked publish waits for a team admin; malicious code, hardcoded secrets and exposed credentials cannot be approved"
+        recommended: Approved only by an admin who is not the app's maker, after reading the finding
+        value: "An admin other than the maker"
+        why: The approval is the only point where a person other than the maker decides whether an app goes live.
+        mitigations: [AML.M0029, D3-AVE]
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: previewThenPublish
+        name: Preview and Publish (the app tray)
+        where: The tray Cursor shows when the app is prepared (preview, then Publish and pick the URL)
+        setVia: [adminConsole]
+        area: tools
+        default: "Nothing goes live until the maker publishes"
+        recommended: Every change previewed and tested with ordinary accounts before Publish
+        value: "Preview and test, then publish"
+        why: The preview is the only place to see a change before visitors do; there is no documented rollback.
+        mitigations: [cap-staged-rollout-gate]
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: teamSecrets
+        name: Secrets (team secrets)
+        where: Apps dashboard › Secrets; Apps dashboard › (app) › Secrets › Add secret (Widen and add)
+        setVia: [adminConsole]
+        area: data
+        recommended: Created by an admin, each limited to the apps that need it and a least-privileged, read-only credential where the system allows
+        value: "Admin-created, limited to named apps"
+        why: The agent never sees the value, and a secret limited to named apps is out of reach of every other app's code.
+        mitigations: [D3-CH, AML.M0028]
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: appApiKeys
+        name: API keys tied to apps
+        where: Apps dashboard › Security › API keys
+        setVia: [adminConsole]
+        area: identity
+        recommended: Fine-grained team keys with an expiry, given only the apps they use, reviewed monthly
+        value: "Team keys with an expiry, reviewed monthly"
+        why: Each key is standing access to apps from outside the IdP; a team key outlives the admin who made it.
+        mitigations: [D3-CH]
+        url: https://cursor.com/docs/security/api-keys
+        verified: "2026-11-26"
+      - id: appsDashboardReview
+        name: Apps dashboard (every app and secret on the team)
+        where: Apps dashboard, team admins
+        setVia: [adminConsole]
+        area: audit
+        recommended: Reviewed monthly by a team admin; apps without an owner unpublished
+        value: "Reviewed monthly"
+        why: It is the only documented list of the team's apps; there is no export.
+        mitigations: [D3-AI]
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: unpublishApp
+        name: Unpublish (any app, team admins)
+        where: Apps dashboard › (app)
+        setVia: [adminConsole]
+        area: sharing
+        recommended: In the incident runbook, after copying what the investigation needs, with the app's secrets rotated at their source
+        value: "The stop, after copying evidence"
+        why: It takes the app offline at once from outside the agent; its secrets and database can't be recovered afterwards.
+        mitigations: [cap-agent-kill-switch]
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: appRetention
+        name: Data retention (app retention period)
+        where: Apps dashboard › Data retention
+        setVia: [adminConsole]
+        area: data
+        recommended: 90 days
+        value: "90 days"
+        why: Apps nobody uses are unpublished with their secrets and database, after an email to the owner 30 days before, instead of running on.
+        mitigations: []
+        requires: Enterprise
+        url: https://cursor.com/docs/cloud-agent/apps
+        verified: "2026-11-26"
+      - id: sso
+        name: Single Sign-On (SSO)
+        where: Team Settings › Single Sign-On (SSO) › SSO-Provider Connection Settings and Domain Verification Settings (Enterprise orgs › Organization's Settings)
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Once the connection and domain are active, users on that domain must use SSO; no separate toggle"
+        recommended: Active with every company domain verified, and MFA enforced on the Cursor app in your IdP
+        value: "Active, all domains verified, MFA enforced"
+        why: Makers and visitors of private and team apps all sign in through Cursor, so the IdP's MFA covers both.
+        mitigations: [D3-MFA, D3-APA]
+        requires: Teams or Enterprise
+        url: https://cursor.com/docs/account/teams/sso
+        verified: "2026-11-26"
+      - id: scim
+        name: SCIM
+        where: Dashboard › Members & Groups › Directory Groups (Active Directory Management), after SSO, with the Cursor SCIM app in your IdP
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Manual membership"
+        recommended: SCIM, driven by the IdP group that grants Cursor
+        value: "On, driven by IdP groups"
+        why: A leaver unassigned in the IdP loses Cursor sign-in, and with it every private and team app they could open or edit.
+        mitigations: [D3-MFA, D3-APA]
+        requires: Enterprise
+        url: https://cursor.com/docs/account/teams/scim
+        verified: "2026-11-26"
+      - id: tenancyRestriction
+        name: x-cursor-allowed-tenants
+        where: TLS-terminating proxy › header on requests to api2.cursor.sh and cursor.com
+        setVia: [configFile]
+        area: identity
+        default: "Unset (no restriction)"
+        recommended: v1.orgs=<your organization id>
+        value: "Your organisation only"
+        why: From the corporate network nobody can build or publish apps in a personal or other organisation's Cursor account.
+        mitigations: [cap-shadow-ai-discovery]
+        url: https://cursor.com/docs/enterprise/tenancy-restriction
+        verified: "2026-11-26"
+      - id: auditLogStreaming
+        name: Streaming audit logs
+        where: "Arranged with hi@cursor.com: Splunk HEC, Sumo Logic, HTTPS webhook or S3"
+        setVia: [adminConsole]
+        area: audit
+        default: "Dashboard and Admin API only"
+        recommended: On, to your SIEM
+        value: "On, to the SIEM"
+        why: Changes to the Apps settings, sign-ins and API keys land in the SIEM rather than only on the dashboard page.
+        mitigations: [AML.M0024]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/compliance-and-monitoring
+        verified: "2026-11-26"
+      - id: openTelemetryExport
+        name: OpenTelemetry Export
+        where: Team Settings › OpenTelemetry Export (one team-managed destination)
+        setVia: [adminConsole]
+        area: audit
+        recommended: On, to your collector, with conversation content as your logging policy allows
+        value: "On, to your collector"
+        why: The cloud agent conversations and tool calls that build each app reach the organisation's own store.
+        mitigations: [AML.M0024]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/opentelemetry-export
+        verified: "2026-11-26"
+      - id: privacyMode
+        name: Privacy Mode
+        where: Team dashboard › Settings (enable Privacy Mode for the team, then enforce it)
+        setVia: [adminConsole]
+        area: data
+        default: "On for Enterprise teams, not enforced"
+        recommended: On and enforced
+        value: "On and enforced"
+        why: The cloud agents that build apps run in Privacy Mode; enforcing it stops members switching off no-training and zero data retention.
+        mitigations: []
+        url: https://cursor.com/docs/enterprise/privacy-and-data-governance
+        verified: "2026-11-26"
+    advisories: []
+    sources:
+      - title: "Cursor docs: Apps"
+        url: https://cursor.com/docs/cloud-agent/apps
+      - title: "Cursor changelog: Build Live Apps in Cursor (2026-11-05)"
+        url: https://cursor.com/changelog
+      - title: "Cursor docs: Cloud Agents"
+        url: https://cursor.com/docs/cloud-agent
+      - title: "Cursor docs: Cloud Agents security overview"
+        url: https://cursor.com/docs/cloud-agent/security
+      - title: "Cursor docs: Security and Privacy Hardening"
+        url: https://cursor.com/docs/enterprise/security-hardening
+      - title: "Cursor docs: Compliance and Monitoring (audit logs)"
+        url: https://cursor.com/docs/enterprise/compliance-and-monitoring
+      - title: "Cursor docs: OpenTelemetry Export"
+        url: https://cursor.com/docs/enterprise/opentelemetry-export
+      - title: "Cursor docs: SSO"
+        url: https://cursor.com/docs/account/teams/sso
+      - title: "Cursor docs: SCIM provisioning"
+        url: https://cursor.com/docs/account/teams/scim
+      - title: "Cursor docs: API keys"
+        url: https://cursor.com/docs/security/api-keys
+      - title: "Cursor docs: Tenancy Restriction"
+        url: https://cursor.com/docs/enterprise/tenancy-restriction
+      - title: "Cursor docs: Privacy and Data Governance"
+        url: https://cursor.com/docs/enterprise/privacy-and-data-governance
+      - title: Cursor Security
+        url: https://cursor.com/security

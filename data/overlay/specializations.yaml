@@ -15,7 +15,9 @@ specializations:
       enters the model's context: user prompts and uploads at the application or gateway input boundary,
       retrieved documents and tool results on the path back into the harness. A pass admits the text
       unchanged; a fail blocks, strips or quarantines the block and raises an event, so the model never
-      reasons over the flagged content.
+      reasons over the flagged content. A screen with less reasoning, compute or tool access than the model
+      behind it will miss payloads that model can decode, so plan for the screen being passed: back it with
+      checks on the actions the model then takes.
     features:
       - Direct-injection and jailbreak classification of user turns
       - Indirect-injection screening of retrieved content and tool results before context assembly
@@ -27,6 +29,18 @@ specializations:
       - indirect injection screening of retrieved content
       - invisible-character and encoding sanitization
     risks: [riskPromptInjection, riskModelEvasion, riskRogueActions]
+    # Setting sources here replaces the parent's (scripts/lib/specializations.ts), so the parent's are repeated.
+    sources:
+      - title: Gartner, Market Guide for AI Trust, Risk and Security Management (DLP named in the
+          information-governance layer)
+        url: https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb
+      - title: Five Eyes joint guidance, Careful adoption of agentic AI services (2026) — DLP tuned to agent
+          behaviours
+        url: https://www.ncsc.govt.nz/assets/guidance/Documents/Careful-adoption-of-agentic-AI-services_FINAL.pdf
+      - title: "Check Point Research, 30 Years of Gatekeeper Asymmetry Doom (2026) — a guard weaker than the model it
+          protects is bypassed (PuzzleMask passes a quick LLM check and reaches the stronger target); plan the
+          defence in depth for when it is breached"
+        url: https://research.checkpoint.com/2026/30-years-of-gatekeeper-asymmetry-doom-the-paradox-that-makes-powerful-llms-more-vulnerable/
 
   - id: cap-output-guardrails
     parent: AML.M0020
@@ -402,7 +416,12 @@ specializations:
       workloads actually execute: the device sandbox and network stack for local agents, the subnet,
       firewall and egress proxy for hosted inference and agent runtimes. It sits on the network path out
       of the execution environment; a compromised or injected agent that tries to reach an unlisted host
-      to exfiltrate data or fetch instructions is blocked at that boundary and the attempt is logged.
+      to exfiltrate data or fetch instructions is blocked at that boundary and the attempt is logged. A
+      domain allow-list cannot tell the organisation's account from an attacker's on the same domain
+      (allowing github.com admits a push to the attacker's repository), so narrow entries to the
+      organisation or path where the proxy can, attach secrets outside the workload only to requests for
+      the sites named, route DNS through a resolver that filters and logs, and use DLP to flag secrets and
+      sensitive data leaving in uploads.
     features:
       - Outbound domain and IP allow-lists enforced at the execution location
       - Network segmentation of inference and agent workloads from general workloads
@@ -412,6 +431,23 @@ specializations:
       - workload network segmentation
       - egress proxies for agent traffic
     risks: [riskModelExfiltration, riskRogueActions, riskSensitiveDataDisclosure]
+    # Setting sources here replaces the parent's (scripts/lib/specializations.ts), so the parent's are repeated.
+    sources:
+      - title: CISA/NSA, Deploying AI Systems Securely — harden deployment environment configurations,
+          firewalls with allow lists
+        url: https://www.cisa.gov/news-events/alerts/2024/04/15/joint-guidance-deploying-ai-systems-securely
+      - title: OWASP Top 10 for Agentic Applications 2026 — ASI02 Execution Sandboxes and Egress Controls
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+      - title: Gartner, Market Guide for AI Trust, Risk and Security Management (network, endpoint and cloud
+          security as the base layer beneath AI TRiSM)
+        url: https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb
+      - title: OWASP AI Security Solutions Landscape — LLM-enabled web application firewall, secure API
+          access
+        url: https://genai.owasp.org/ai-security-solutions-landscape/
+      - title: Anthropic, The enterprise guide to securing coding agents (2026) — a domain allowlist can't tell your
+          account from an attacker's; per-agent entries down to organisation or path, a filtered and logged DNS
+          resolver, DLP on uploads, network secrets added only to requests for named sites
+        url: https://claude.com/resources/articles/enterprise-guide-to-securing-coding-agents
 
   - id: cap-agent-kill-switch
     parent: D3-PT
@@ -423,7 +459,9 @@ specializations:
       tokens it held, quarantine it from peer agents and queued work, and decommission it with secure
       deletion of what it stored. The stop is enforced from outside the agent, at the runtime, identity
       provider and orchestrator, so the agent cannot suppress its own termination, and cancellation of
-      delegated and queued work is verified rather than assumed. This is an authored composite: only the
+      delegated and queued work is verified rather than assumed. It fails closed: if monitoring, logging
+      or the stop channel itself is lost or degraded beyond a declared tolerance, the agent suspends until
+      oversight is restored rather than carrying on. This is an authored composite: only the
       stop is process termination (its MITRE parent); revocation, quarantine and deletion are separate
       steps, each verified on its own (cleanup of what the agent created is AI Agent External
       Resource Lifecycle Management), and a pin that does only one of them claims only that one.
@@ -446,6 +484,23 @@ specializations:
         note: >-
           The stop, revocation and quarantine path is exercised on a schedule and after each runtime
           change, and the time to full stop is recorded.
+    # Setting sources here replaces the parent's (scripts/lib/specializations.ts), so the parent's are repeated.
+    sources:
+      - title: NIST AI RMF 1.0 — MANAGE 2.4 (supersede, disengage, or deactivate), GOVERN 1.7
+          (decommissioning)
+        url: https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf
+      - title: OWASP Top 10 for Agentic Applications 2026 — ASI04 Supply chain kill switch, ASI10
+          Containment & Response
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+      - title: CSA AI Controls Matrix v1.1 — Universal Endpoint Management domain
+        url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1
+      - title: OWASP AI Security Solutions Landscape — LLM incident detection and response, user activity
+          monitoring
+        url: https://genai.owasp.org/ai-security-solutions-landscape/
+      - title: Cloud Security Alliance, Autonomous Pentest Assurance Standard (2026) — APAS-CORE-10.2.2 stop
+          mechanism out-of-band from the agent's decision loop; 10.2.3 loss of oversight or the stop channel
+          suspends activity and does not default to continued autonomous operation
+        url: https://cloudsecurityalliance.org/artifacts/autonomous-pentest-assurance-standard-apas
 
   - id: cap-staged-rollout-gate
     parent: AML.M0008

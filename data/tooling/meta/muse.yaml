@@ -20,6 +20,10 @@
 # (introducing.muse.ai now redirects there with 301); the two meta.com help articles returned no article
 # text to an automated read.
 # 2026-11-21: D3-EI row (none) after the pattern pinned it, from the about.fb.com Muse announcement (read that day).
+# 2026-11-26: cap-agent-egress-control row corrected from NebuSec's two posts of 2026-11-20 (nebusec.ai/research/
+# inside-meta-muse and meta-muse-credential-exposure, both 200): Sentinel governs the runtime container's traffic,
+# not the whole VM. research.meta.ai/blog/security-and-safety-for-ai-agents-our-approach-with-muse now redirects to
+# muse.ai/blog/ (same path, 200); only the corrected row was moved to the new URL.
 vendor: meta
 family: Muse
 tools:
@@ -50,8 +54,9 @@ tools:
         schedule and on events after the app is closed, and messages the person when something changes or
         an approval is needed.
       - >-
-        A separate host-side agent, Sentinel, is the sole permission authority for connector actions and all
-        network egress; Muse proposes, Sentinel allows, denies or asks the person. Credentials live on the VM
+        Meta describes a separate host-side agent, Sentinel, as the sole permission authority for connector
+        actions and all network egress (NebuSec found it covers the runtime container's traffic, not the whole
+        VM); Muse proposes, Sentinel allows, denies or asks the person. Credentials live on the VM
         and the agent sees only surrogate tokens. It is a consumer product with no organisation plan.
     facts:
       - label: Plans
@@ -100,7 +105,7 @@ tools:
       - risk: riskShadowAndUnknownAgents
         note: A personal Muse with standing access to a work mailbox or ad account is invisible to every admin console.
       - risk: riskPromptInjection
-        note: Pages, mail and files it reads on schedule can steer later work; Sentinel's tainted-egress rule limits what leaves afterwards.
+        note: Pages, mail and files it reads on schedule can steer later work; Sentinel's tainted-egress rule limits what leaves afterwards, though NebuSec moved chats and memories out with no prompt.
       - risk: riskInsecureIntegratedComponent
         note: Custom connectors that Muse writes itself are not reviewed by Meta.
       - risk: riskSensitiveDataDisclosure
@@ -217,16 +222,32 @@ tools:
       - mitigation: cap-agent-egress-control
         coverage: partial
         mechanism: >-
-          Sentinel checks all egress at layers 4 and 7 (host, resolved and final IP, port, method, path), blocks
-          SSRF to private addresses and known malicious sites, and removes auto-allow once a process has read
-          user data.
+          Sentinel, outside the runtime container, takes that container's traffic through a forward proxy and an
+          eBPF redirect on its cgroup and checks it at layers 4 and 7 (host, resolved and final IP, port, method,
+          path, decoded content), with SSRF blocks, sensitive-data and entropy screening, a model review of
+          suspicious requests and outbound volume budgets. Writes need approval unless a rule allows them; the
+          tainted-egress rule takes auto-allow from processes that read user data, but body-less reads may still
+          leave without a prompt under the default Ask for some actions setting.
         evidence:
-          - title: Sentinel egress control
-            url: https://research.meta.ai/blog/security-and-safety-for-ai-agents-our-approach-with-muse
+          - title: Meta, How we built safety into Muse (Sentinel egress control)
+            url: https://muse.ai/blog/security-and-safety-for-ai-agents-our-approach-with-muse
+          - title: "NebuSec, Inside Meta Muse: Browser, Sentinel and the Shared-Kernel Boundary (2026-11-20)"
+            url: https://nebusec.ai/research/inside-meta-muse/
+          - title: "NebuSec, Hacking Muse: Stealing Private Chats Through Browser Use (2026-11-20)"
+            url: https://nebusec.ai/research/meta-muse-credential-exposure/
         note: >-
-          Partial: the enforcement point is real and covers the whole VM, but the policy is Meta's plus the
-          person's approvals; there is no destination allowlist an organisation writes or sees.
-        verified: "2026-10-22"
+          Partial on the consumer rule: the approvals are the person's, and there is no destination allowlist an
+          organisation writes or sees. The enforcement point does not cover the whole VM. Meta's post says Sentinel
+          governs all network egress; NebuSec found it governs the runtime container's traffic. Of Muse's four
+          browser backends only the bundled Chromium goes through Sentinel: the local browser container egresses by
+          direct IPv4 (internal ranges and IPv6 denied), and the browser VM and the remote page-fetching service
+          have their own policies. Processes running in the user VM itself are not redirected, so after a kernel
+          escape from the container NebuSec's traffic left through the VM's own interface, which has a public IPv6
+          address. Inside the container, keeping within Sentinel's rules, NebuSec sent the user's conversation
+          history and memories out with no prompt. NebuSec says Meta had patched every exploit described by
+          publication; neither post says the boundary itself changed. Treat Sentinel as one layer, not the VM's
+          egress control.
+        verified: "2026-11-26"
       - mitigation: cap-input-guardrails
         coverage: none
         mechanism: >-
@@ -389,7 +410,10 @@ tools:
         mitigations: [cap-agent-kill-switch]
         url: https://www.meta.com/help/superintelligence/2225571704857152/
         verified: "2026-10-30"
-    advisories: []
+    advisories:
+      - title: "NebuSec: a saved web page leads to code execution in Muse's runtime container, unprompted egress past Sentinel and root in the user's VM (research; patched by publication; no CVE)"
+        url: https://nebusec.ai/research/inside-meta-muse/
+        date: "2026-11"
     sources:
       - title: "Introducing Muse: The World's First Personal AI Agent Built for Everyone"
         url: https://about.fb.com/news/2026/09/introducing-muse-personal-ai-agent/
