@@ -66,8 +66,11 @@ if (argv.includes("--digest")) {
   const base = baseRef(argv);
   const then = loadFeed(base);
   const stories = loadStories(null);
-  const added = feed.items.filter((f) => !then.byId.has(f.id));
-  const changed = feed.items.filter((f) => then.byId.has(f.id) && !same({ ...f, file: 0 }, { ...then.byId.get(f.id), file: 0 }));
+  // The digest's items are the ones this run filed: `added` is today.
+  const added = feed.items.filter((f) => str(f.added) === today);
+  const changed = feed.items.filter((f) => !added.includes(f) && then.byId.has(f.id) && !same({ ...f, file: 0 }, { ...then.byId.get(f.id), file: 0 }));
+  const unfiled = feed.items.filter((f) => !then.byId.has(f.id) && !added.includes(f));
+  if (unfiled.length) console.error(`Not in the digest: new since the base but not added today (${unfiled.map((f) => f.id).join(", ")}); feed-lint should have stopped them.`);
   const overview = loadOverviews(null).days.get(today);
   const out = [`AI security daily · ${longDay(today)}`, "", overview || "(No overview for today: nothing new was published.)", ""];
   const line = (f) => {
@@ -136,11 +139,12 @@ for (const k of KINDS) {
 }
 
 const inWindow = feed.items.filter((f) => f.date >= from);
-console.log(`\nALREADY IN THE WINDOW (${inWindow.length})  (date · kind · weight · story · id · title)`);
-for (const f of inWindow) console.log(`  ${f.date}  ${f.kind.padEnd(14)} ${(str(f.weight) || "-").padEnd(9)} ${(str(f.story) || "-").padEnd(30)} ${f.id.padEnd(40)} ${str(f.title)}`);
+console.log(`\nALREADY IN THE WINDOW (${inWindow.length})  (date · added · kind · weight · story · id · title)`);
+for (const f of inWindow) console.log(`  ${f.date}  ${(str(f.added) || "-").padEnd(10)}  ${f.kind.padEnd(14)} ${(str(f.weight) || "-").padEnd(9)} ${(str(f.story) || "-").padEnd(30)} ${f.id.padEnd(40)} ${str(f.title)}`);
 const headlines = new Map();
-for (const f of inWindow) if (str(f.weight) === "headline") headlines.set(f.date, (headlines.get(f.date) ?? 0) + 1);
-if (headlines.size) console.log(`  headlines per day: ${[...headlines].map(([d, n]) => `${d} ${n}`).join(", ")} (at most 3)`);
+for (const f of inWindow) if (str(f.weight) === "headline") headlines.set(str(f.added) || f.date, (headlines.get(str(f.added) || f.date) ?? 0) + 1);
+if (headlines.size) console.log(`  headlines per day filed: ${[...headlines].map(([d, n]) => `${d} ${n}`).join(", ")} (at most 3)`);
+console.log(`  every new item gets added: ${today}; an existing item's added never changes`);
 
 const stories = loadStories(null);
 const recent = [...stories.values()].map((s) => ({ s, items: feed.items.filter((f) => str(f.story) === s.id) })).filter(({ items }) => items.some((f) => f.date >= shift(today, -30)));

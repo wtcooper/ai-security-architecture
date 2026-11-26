@@ -114,12 +114,11 @@ says whose reading it is). An incident item gets a `why` too: what a defender sh
 
 In `data/feed/overviews.yaml`. Each run writes or updates:
 
-- **today's day overview** (`days: - date: <today>`): the day's main events, in two or three
-  plain sentences, most important first: what came to the feed today, whatever day each came to
-  light. It opens the digest;
-- **this week's overview** (`weeks: - week: <Monday>`): the week's main events so far, most
-  important first, rewritten each day as the week grows;
-- the overview of an earlier day the run filed items under, when those items belong among that
-  day's main events.
+- **today's day overview** (`days: - date: <today>`), keyed by `added`: what this run filed
+  today, whatever day each came to light, in two or three plain sentences, most important first.
+  The page shows it over **Latest** (the items with today's `added`), and it opens the digest;
+- **this week's overview** (`weeks: - week: <Monday>`), keyed by the Monday of the items' `date`:
+  the week's main events so far, most important first, rewritten each day as the week grows.
+  A late find dated in an earlier week belongs to that week's overview, if it changes it.
 
-An overview says only what its items say. A day with no new items gets no day overview.
+An overview says only what its items say. A day the run filed nothing gets no day overview.

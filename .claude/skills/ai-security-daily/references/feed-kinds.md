@@ -15,7 +15,8 @@ items:
     kind: productUpdate                     # incident | productUpdate | tool | launch | guidance | research; left out, incident
     weight: brief                           # headline | notable | brief; required; at most 3 headlines a day (lint)
     story: settings-toolClaudeCode-2026-w47 # optional: a story id in data/feed/stories.yaml
-    date: 2026-11-20                        # its first announcement, inside the file's month
+    date: 2026-11-20                        # its first announcement, inside the file's month; weeks group by it
+    added: 2026-11-21                       # the day the run filed it (today, UTC); never changed; not before date (lint)
     title: "Claude Code lets administrators pin where its traces go"   # <= 90; aim for ~70
     summary: >                              # <= 280; aim for ~200: the TL;DR
       One to three plain sentences: what was announced or happened, and the result.
@@ -52,6 +53,9 @@ only. `cves` may go on any kind. No other field is accepted.
 
 ## The fields that need judgment
 
+- **`added`** is the day the run filed the item: today (UTC) for every new item, set once and
+  never changed, never before `date`. The page's **Latest** shows the items with the newest
+  `added`, and today's day overview describes them; a week groups its items by `date`.
 - **`date`** is the first announcement: the vendor's post, the release, the advisory, whichever
   came first. A changelog entry dated earlier than the post that announced it takes the
   changelog's date. A tool's item is dated by its announcement; its first release must be in the
@@ -95,11 +99,11 @@ A roll-up holds only product updates for its product, dated in its week (lint).
 
 ```yaml
 days:
-  - date: 2026-11-26
+  - date: 2026-11-26     # an added day: what that day's run filed
     overview: >     # <= 400: the day's main events in two or three plain sentences
       ...
 weeks:
-  - week: 2026-11-23     # the Monday that starts the ISO week
+  - week: 2026-11-23     # the Monday that starts the ISO week of the items' date
     overview: >     # <= 600: the week's main events, most important first; rewritten each day
       ...
 ```

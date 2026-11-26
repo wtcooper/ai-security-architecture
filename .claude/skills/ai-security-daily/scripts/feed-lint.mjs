@@ -55,10 +55,12 @@ export function lint({ base, today, all = false, standalone = new Set() }) {
   if (!all && !containsBase(base)) add("errors", "files", "base", behindMessage(base));
   const nm = names();
 
-  const isNew = (f) => !then.byId.has(f.id);
+  // New: not on main yet, or filed today (`added`), even if an earlier run today already pushed it.
+  const fresh = (f) => !then.byId.has(f.id);
+  const isNew = (f) => fresh(f) || f.added === today;
   const scoped = now.items.filter((f) => all || isNew(f) || !same({ ...f, file: 0 }, { ...then.byId.get(f.id), file: 0 }));
   const inScope = new Set(scoped.map((f) => f.id));
-  const added = scoped.filter(isNew);
+  const newItems = scoped.filter(isNew);
 
   // --- Each item ------------------------------------------------------------------------------
   for (const f of scoped) {
@@ -67,6 +69,18 @@ export function lint({ base, today, all = false, standalone = new Set() }) {
     const weight = str(f.weight);
     if (!weight) add("errors", ref, "weight", "needs a weight: headline, notable or brief");
     else if (!WEIGHTS.includes(weight)) add("errors", ref, "weight", `weight "${weight}" is not one of ${WEIGHTS.join(", ")}`);
+
+    // added: the day the run filed it. Today for a new item; never changed afterwards; never before `date`.
+    const filed = str(f.added);
+    const filedBefore = str(then.byId.get(f.id)?.added);
+    if (!filed) add("errors", ref, "added", `needs added: the day the run filed it (${today}, UTC, for a new item)`);
+    else if (!isDay(filed)) add("errors", ref, "added", `added "${filed}" is not a day, YYYY-MM-DD`);
+    else {
+      if (!all && fresh(f) && filed !== today) add("errors", ref, "added", `a new item is added ${today} (today, UTC), not ${filed}`);
+      if (!all && filedBefore && filedBefore !== filed) add("errors", ref, "added", `added changed from ${filedBefore} to ${filed}: an existing item's added never changes`);
+      if (filed > today) add("errors", ref, "added", `added ${filed} is after today (${today})`);
+      if (isDay(f.date) && filed < f.date) add("errors", ref, "added", `added ${filed} is before its date ${f.date}: an item is filed on or after the day it came to light`);
+    }
 
     for (const [field, limit] of [["title", LIMITS.title], ["summary", LIMITS.summary], ["why", LIMITS.why], ["fitNote", LIMITS.fitNote]]) {
       const n = len(str(f[field]));
@@ -105,7 +119,7 @@ export function lint({ base, today, all = false, standalone = new Set() }) {
     });
 
     if (isDay(f.date) && f.date > today) add("errors", ref, "date", `date ${f.date} is after today (${today})`);
-    else if (!all && isNew(f) && isDay(f.date) && f.date < from && f.kind !== "tool")
+    else if (!all && fresh(f) && isDay(f.date) && f.date < from && f.kind !== "tool")
       add("checks", ref, "late", `dated ${f.date}, before the window (${from}): a late find; confirm nobody filed it, and the log marks it late`);
 
     // Stories: the one named exists, and a settings roll-up holds one product's updates from one week.
@@ -203,14 +217,15 @@ export function lint({ base, today, all = false, standalone = new Set() }) {
     }
   }
 
-  // Headlines: at most three a day. Notables: worth a look when a day has many.
-  const daysTouched = new Set(all ? now.items.map((f) => f.date) : scoped.map((f) => f.date));
+  // Headlines: at most three a day, the day being the run that filed them (`added`; `date` for an item without one).
+  const filedOn = (f) => str(f.added) || f.date;
+  const daysTouched = new Set((all ? now.items : scoped).map(filedOn));
   for (const d of daysTouched) {
-    const onDay = now.items.filter((f) => f.date === d);
+    const onDay = now.items.filter((f) => filedOn(f) === d);
     const headlines = onDay.filter((f) => str(f.weight) === "headline");
-    if (headlines.length > HEADLINES_PER_DAY) add("errors", `day:${d}`, "headlines", `${headlines.length} headlines on ${d} (${headlines.map((f) => f.id).join(", ")}); at most ${HEADLINES_PER_DAY}`);
+    if (headlines.length > HEADLINES_PER_DAY) add("errors", `day:${d}`, "headlines", `${headlines.length} headlines filed on ${d} (${headlines.map((f) => f.id).join(", ")}); at most ${HEADLINES_PER_DAY}`);
     const notables = onDay.filter((f) => str(f.weight) === "notable");
-    if (notables.length > 6) add("notes", `day:${d}`, "notables", `${notables.length} notables on ${d}: is each worth reading this week, or a brief?`);
+    if (notables.length > 6) add("notes", `day:${d}`, "notables", `${notables.length} notables filed on ${d}: is each worth reading this week, or a brief?`);
   }
 
   // Single-setting product updates: one product, one ISO week, more than one without a story.
@@ -231,14 +246,18 @@ export function lint({ base, today, all = false, standalone = new Set() }) {
       `${list.length} product updates for ${product} in ${week} with no story (${list.map((f) => f.id).join(", ")}): roll the single-setting ones into ${`settings-${product}-${week}`}; one that stands alone (a default flips, or a new way for code to run or data to leave) is named with --standalone`);
   }
 
-  // Overviews: today's and this week's whenever the run adds items; every day with items should have one.
+  // Overviews: today's (keyed by added: what this run filed) and this week's (the Monday of the items' date)
+  // whenever the run adds items; every day items were filed on should have one.
   const monday = mondayOf(today);
-  if (added.length || all) {
+  if (newItems.length || all) {
     if (!overviews.days.has(today)) add("errors", `day:${today}`, "overview", `no overview for today (${today}) in data/feed/overviews.yaml`);
     if (!overviews.weeks.has(monday)) add("errors", `week:${monday}`, "overview", `no overview for this week (week: ${monday}) in data/feed/overviews.yaml`);
   }
-  for (const d of new Set((all ? now.items : added).map((f) => f.date)))
-    if (isDay(d) && !overviews.days.has(d) && d !== today) add("checks", `day:${d}`, "overview", `items dated ${d} and no overview for that day: write one, or say why the page's fallback will do`);
+  for (const d of new Set((all ? now.items : newItems).map((f) => str(f.added)).filter(Boolean)))
+    if (isDay(d) && !overviews.days.has(d) && d !== today) add("checks", `day:${d}`, "overview", `items filed on ${d} and no overview for that day: write one, or say why the page's fallback will do`);
+  for (const f of newItems)
+    if (isDay(f.date) && mondayOf(f.date) !== monday && !overviews.weeks.has(mondayOf(f.date)))
+      add("checks", `week:${mondayOf(f.date)}`, "overview", `items dated in the week of ${mondayOf(f.date)} and no overview for it: write one, or say why the fallback will do`);
   for (const [d, text] of overviews.days)
     if ((all || overviewsThen.days.get(d) !== text) && len(text) > LIMITS.dayOverview) add("errors", `day:${d}`, "length", `day overview is ${len(text)} characters; at most ${LIMITS.dayOverview}`);
   for (const [w, text] of overviews.weeks) {
@@ -274,7 +293,7 @@ export function lint({ base, today, all = false, standalone = new Set() }) {
     const others = otherChangedPaths(base);
     if (others.length) add("notes", "files", "scope", `changes outside data/ and the log, which the run does not commit: ${others.join(", ")}`);
   }
-  return { ...out, scope: { all, base, today, from, items: scoped.length, added: added.length, newTools: newTools.length } };
+  return { ...out, scope: { all, base, today, from, items: scoped.length, added: newItems.length, newTools: newTools.length } };
 }
 
 const squash = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/^tool/, "");

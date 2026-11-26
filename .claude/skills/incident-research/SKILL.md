@@ -318,7 +318,8 @@ dives and the incident patterns current. It is the steps above, narrowed:
 4. **Add feed items** for every lead that meets the four tests, each filed under its incident
    pattern (section 4), with `fit: loose` and a `fitNote` when the fit is loose; one event per
    item; a follow-up in its thread's story; attributed as the source attributes it; with a
-   `weight` and a one-line `why` (section 7).
+   `weight`, a one-line `why`, and `added: <today, UTC>` (never changed afterwards; see
+   [references/feed-item.md](references/feed-item.md)).
 5. **Write deep dives only when the deep-dive test holds** (section 3), at most two deep dives
    and `alsoSeen` entries a run, every source read; candidates from the last run's log come
    first. An `alsoSeen` entry goes on the deep dive its source ties it to, and no other. Most

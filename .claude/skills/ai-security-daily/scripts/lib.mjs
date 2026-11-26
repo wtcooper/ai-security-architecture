@@ -136,7 +136,7 @@ export function loadFeed(ref) {
     const doc = yamlAt(ref, `data/feed/${file}`);
     for (const raw of doc?.items ?? []) {
       if (!isRecord(raw)) continue;
-      items.push({ ...raw, id: str(raw.id), kind: raw.kind == null ? "incident" : str(raw.kind), date: str(raw.date), file: `data/feed/${file}` });
+      items.push({ ...raw, id: str(raw.id), kind: raw.kind == null ? "incident" : str(raw.kind), date: str(raw.date), added: str(raw.added), file: `data/feed/${file}` });
     }
   }
   items.sort((a, b) => b.date.localeCompare(a.date));

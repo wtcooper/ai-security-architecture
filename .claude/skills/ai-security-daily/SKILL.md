@@ -135,16 +135,19 @@ summary, which can miss an entry that is there.
 
 - **Items** follow [references/feed-kinds.md](references/feed-kinds.md): one event, one item;
   attributed as the source attributes it; `weight` on every item; a `story` when it continues
-  one; title, summary and why well under their limits.
+  one; title, summary and why well under their limits. Every new item gets **`added: <today,
+  UTC>`**, the day the run filed it, beside `date`, the day it came to light. Never change an
+  existing item's `added`.
 - **Settings rows and security tools** the run applies follow
   [references/site-updates.md](references/site-updates.md), with `tooling-onboard`'s format and
   checks for a row. A single new setting is a row plus a brief item in its product's weekly
   roll-up story; it stands alone only when a default flips or the change opens a new way for code
   to run or data to leave.
 - **Stories**: add or extend the story a follow-up belongs to in `data/feed/stories.yaml`.
-- **Overviews**: write or update **today's day overview** and **this week's overview** in
-  `data/feed/overviews.yaml`, and the overview of any earlier day the run filed items under when
-  they belong among its main events ([references/bar.md](references/bar.md) says what each says).
+- **Overviews**: write or update **today's day overview**, keyed by `added` (what this run filed
+  today, which the page shows under **Latest**), and **this week's overview**, keyed by the Monday
+  of the items' `date`, in `data/feed/overviews.yaml` ([references/bar.md](references/bar.md) says
+  what each says).
 - **Incidents**: by `incident-research`'s Daily run.
 
 Run `npm run data` as often as you like while drafting; fix what it names before linting.
@@ -159,7 +162,7 @@ It compares the working tree with origin/main and fails on: duplicate source pag
 feed, a title too close to an existing one, single-setting product updates for one product in
 one week without their roll-up story, more than three headlines on a day, no overview for today
 or this week, a tool whose first release is outside the window, text over its limit, a missing
-kind or weight, a lead cited as the source, an update marked applied with nothing behind it, and
+kind, weight or `added` (a new item's must be today, and no item's may be before its `date`), a lead cited as the source, an update marked applied with nothing behind it, and
 more than three new security tools. Fix every **error** and run it again; the verifier starts
 only on lint-clean work. Its **checks** are judgements it cannot make (a possible follow-up, a
 shared changelog, a product update filed standalone); they go to the verifier with their
@@ -252,8 +255,9 @@ skeleton comes from what passed the gate, compared with the base commit:
 node .claude/skills/ai-security-daily/scripts/daily-index.mjs --digest --base <the base commit>
 ```
 
-Print it once the gate has passed (the log takes its numbered list) and again after the push,
-then fill in **Problems** and tighten the lines. The order is fixed: the date line; today's
+Its headlines and notables are the items whose `added` is today. Print it once the gate has
+passed (the log takes its numbered list) and again after the push, then fill in **Problems** and
+tighten the lines. The order is fixed: the date line; today's
 overview; headlines, then notables, by kind, one line each with its link; **On the site**;
 **Waiting for you**, numbered; **Problems**; and the closing line. It reports only what passed
 the gate. [references/digest.md](references/digest.md) has the format.

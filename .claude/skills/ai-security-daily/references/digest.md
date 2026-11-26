@@ -10,8 +10,8 @@ lines must stand alone, and every line after is one the owner can act on or skip
 node .claude/skills/ai-security-daily/scripts/daily-index.mjs --digest --base <the base commit from §1>
 ```
 
-prints the skeleton from what changed since the base: today's overview, the new headline and
-notable items with their links, what went on the site, and the waiting proposals, numbered. Then:
+prints the skeleton: today's overview, the headline and notable items **added today** (their
+`added` is today) with their links, what went on the site, and the waiting proposals, numbered. Then:
 
 - fill in **Problems**;
 - turn the **Corrected** line into a line per correction (what was wrong, what it says now);

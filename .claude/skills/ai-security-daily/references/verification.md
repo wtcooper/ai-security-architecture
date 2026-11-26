@@ -36,7 +36,8 @@ Every title, summary, why, note and row field matches the source:
 - **Figures**: the number and its unit as the source gives them ("more than 100 weakened
   assertions", not "100+ weakened tests"; "at least two sectors", not "two sectors"); whose figure
   it is (the vendor's own, an attacker's leaked logs, the researcher's telemetry).
-- **Dates**: the announcement or release date from the page. "In a future release, on or after
+- **Dates**: `date` is the announcement or release date from the page (`added` is only the day
+  the run filed it). "In a future release, on or after
   30 November" is not "from 30 November"; "expected by 8 December" is not "due 8 December".
 - **Versions**: the version the docs give, and the changelog's if it differs; where they differ
   the text says both.
@@ -171,7 +172,9 @@ attributes it; dates and counts match.
 **Story** (`story:<id>`): the title is true of all its items and within 90 characters; every item
 belongs; no follow-up in the brief's items is left outside it.
 
-**Overview** (`day:<date>`, `week:<Monday>`): every claim is in one of the items listed under it,
+**Overview** (`day:<added day>`, `week:<Monday>`): a day overview describes the items filed that
+day (their `added`); a week overview the items dated in that week. Every claim is in one of the
+items listed under it,
 as they stand now; the most important come first; nothing from an item that is not in the feed;
 no inference stated as fact; within its limit.
 

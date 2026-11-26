@@ -79,7 +79,7 @@ function itemEntry(f, status, { old, checks = [] } = {}) {
   const story = str(f.story);
   const stories = loadStoriesCached();
   const lines = [
-    `${f.kind} · ${weight} · ${f.date} · ${story ? `story ${story} "${stories.get(story)?.title ?? "NOT in stories.yaml"}"` : "no story (stands alone)"}`,
+    `${f.kind} · ${weight} · date ${f.date} · added ${str(f.added) || "(none)"} · ${story ? `story ${story} "${stories.get(story)?.title ?? "NOT in stories.yaml"}"` : "no story (stands alone)"}`,
     `file: ${f.file}`,
     `title (${len(str(f.title))}/${LIMITS.title}): ${str(f.title)}`,
     `summary (${len(str(f.summary))}/${LIMITS.summary}): ${str(f.summary)}`,
@@ -193,17 +193,16 @@ function storyEntry(s, status, feed) {
 }
 const rank = (f) => ((i) => (i < 0 ? 3 : i))(["headline", "notable", "brief"].indexOf(str(f.weight)));
 function overviewEntry(kind, key, text, status, feed, added) {
-  const inScope = kind === "day" ? feed.items.filter((f) => f.date === key) : feed.items.filter((f) => isDay(f.date) && mondayOf(f.date) === key);
-  const runItems = kind === "day" && key === today ? added.filter((f) => f.date !== key) : [];
+  // A day overview is keyed by `added` (what that day's run filed); a week overview by the Monday of `date`.
+  const inScope = kind === "day" ? feed.items.filter((f) => str(f.added) === key) : feed.items.filter((f) => isDay(f.date) && mondayOf(f.date) === key);
   const line = (f) => `  - ${str(f.weight) || "?"} · ${f.kind} · ${f.date} · ${f.id}${added.includes(f) ? " (new today)" : ""}: ${str(f.title)}`;
   const limit = kind === "day" ? LIMITS.dayOverview : LIMITS.weekOverview;
   const lines = [
     `${kind === "day" ? "day" : `week of ${dayMonth(key)} (${isoWeek(key).label})`} overview (${len(text)}/${limit}): ${text}`,
     `Its sources are the items below. Check every claim is in one of them, as it stands now, the most important come first, and no inference is stated as fact.`,
-    `items ${kind === "day" ? `dated ${key}` : "of the week"} (${inScope.length}):`,
+    `items ${kind === "day" ? `filed on ${key} (added)` : "dated in the week"} (${inScope.length}):`,
     ...[...inScope].sort((a, b) => rank(a) - rank(b)).map(line),
   ];
-  if (runItems.length) lines.push(`filed by today's run under earlier days (${runItems.length}):`, ...runItems.map(line));
   return { ref: `${kind}:${key}`, type: "overview", status, file: "data/feed/overviews.yaml", priority: P.overview, hash: hashOf(text), label: `${kind} ${key}`, lines, checks: [] };
 }
 
@@ -218,11 +217,12 @@ function diffEntries() {
     checksOf.get(c.ref).push(`${c.rule}: ${c.msg}`);
   }
   const entries = [];
-  const added = now.items.filter((f) => !then.byId.has(f.id));
+  // New: not on main yet, or filed today (`added` is today), even if an earlier push today carried it.
+  const added = now.items.filter((f) => !then.byId.has(f.id) || str(f.added) === today);
   for (const f of now.items) {
     const old = then.byId.get(f.id);
     const strip = (x) => ({ ...x, file: 0 });
-    if (!old) entries.push(itemEntry(f, "new", { checks: checksOf.get(`item:${f.id}`) }));
+    if (!old || added.includes(f)) entries.push(itemEntry(f, "new", { old: old && !same(strip(old), strip(f)) ? old : undefined, checks: checksOf.get(`item:${f.id}`) }));
     else if (!same(strip(old), strip(f))) entries.push(itemEntry(f, "changed", { old, checks: checksOf.get(`item:${f.id}`) }));
   }
   for (const f of then.items) if (!now.byId.has(f.id)) entries.push({ ref: `item:${f.id}`, type: "item", status: "removed", file: f.file, priority: P.other, hash: hashOf(null), label: str(f.title), lines: [`removed from the feed: ${f.kind} · ${f.date} · ${str(f.title)}`, "confirm the removal is right (a duplicate, or filed in error) and that the log says why"], checks: [] });

@@ -15,7 +15,8 @@ items:
   - id: mittwald-mcp-server             # unique across all feed files; kebab-case; its anchor /feed/#<id>
     weight: notable                     # headline | notable | brief; required; at most 3 headlines a day, all kinds (lint)
     story: mittwald-mcp                 # optional: the thread's story in data/feed/stories.yaml, for a follow-up
-    date: 2026-11-07                    # the day it came to light, inside the file's month
+    date: 2026-11-07                    # the day it came to light, inside the file's month; weeks group by it
+    added: 2026-11-08                   # the day the run filed it (today, UTC); never changed; not before date (lint)
     title: "Mittwald's own MCP server breached: session tokens read, 56 projects taken"   # <= 90; aim for ~70
     summary: >                          # <= 280; aim for ~200
       One to three plain past-tense sentences: who, what, the result.
@@ -44,6 +45,8 @@ other field is accepted.
 
 ## The fields that need judgment
 
+- **`added`** is the day the run filed the item: today (UTC) for a new item, set once and never
+  changed, never before `date`. A late find has an old `date` and today's `added`.
 - **`date`** is the day it came to light: the first public account, the vendor's notice or the
   agency's advisory, whichever came first. Not the day the attack began. A November disclosure
   of a September attack goes in `2026-11.yaml`.
