@@ -6,6 +6,14 @@
 # 2026-10-30: added the settings table (25 rows) from secure-deployment and the pages it links (all 200, read as .md). Corrected: limited networking's allowed_hosts now also bounds web_search and web_fetch, and allow_mcp_servers false refuses a session whose MCP host is unlisted; the Console's organisation web search / web fetch settings now apply in sessions; the Compliance API is enabled at claude.ai Organization settings › API or the Console's Compliance page; the vendor's permission guidance is now auto on bash / write / edit / web_fetch; Claude Models on Google Cloud (Anthropic managed) added as a platform.
 # 2026-10-30 (controls): added the D3-APA and AML.M0036 rows the managed-runtime drawing pins, from workspaces, budgets, workload-identity-federation and cloud-sandboxes-reference (.md, 200) and the two support.claude.com SSO articles (200); both are delivered by existing settings rows.
 # 2026-11-25 (daily feed): added the ipAllowlist setting (Console IP allowlist, beta) from platform.claude.com/docs/en/manage-claude/ip-allowlist and the Claude Platform release notes of 2026-11-05 (both 200).
+# 2026-11-26 (feed item claude-managed-agents-self-hosted): added the self-hosted deployment as a variant (surface class
+# selfHostedServer), an item listing what exists only on the hosted service and only on the customer's server, self-hosted
+# lines in the facts and summary, twelve settings rows marked "requires: Self-hosted Claude Managed Agents" and a dated
+# self-hosted sentence in six control notes (their verified dates are unchanged). Read that day as .md, all 200:
+# managed-agents/self-hosted and its differences, inference-provider, configure (single sign-on), console,
+# agent-identity, configuration-reference, kubernetes, quickstart, upgrade and call-the-api pages,
+# self-hosted-data-and-access, choosing-an-environment and the release notes (2026-11-12 entry). Every self-hosted page
+# opens with an access-by-request note but was readable without signing in.
 vendor: anthropic
 family: Claude Managed Agents
 tools:
@@ -13,6 +21,7 @@ tools:
     name: Claude Managed Agents
     surfaceClasses:
       - managedRuntime
+      - selfHostedServer
     variants:
       - name: Managed Agents API (agents, environments, sessions, vaults) on api.anthropic.com
         class: managedRuntime
@@ -23,6 +32,17 @@ tools:
         note: >-
           Control plane stays with Anthropic; sandbox image, egress, service-key custody and session-content
           retention are yours. Environment-variable vault credentials are not yet supported here.
+      - name: Self-hosted Claude Managed Agents (your server, database and sandboxes; model at Anthropic or a provider you choose)
+        class: selfHostedServer
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted
+        note: >-
+          Access by request through the Anthropic account team (launched 2026-11-12), under the Software License
+          Agreement: Claude Managed Agents Server. The customer runs the service (cma-server: the API, the agent loop and
+          the store of agents, sessions and history, on PostgreSQL 16 or later), the sandboxes and their workers, in its
+          own cloud account or data centre, and installs each release itself. inference.provider sends model calls to the
+          Claude API (the default), Amazon Bedrock, Claude Models on Google Cloud (Google managed), Microsoft Foundry or
+          the customer's own model gateway. Same API as the hosted service apart from the features listed under
+          "Self-hosted: what differs from the hosted service"; each tenant or trust level needs its own deployment.
     architecture: archManagedAgentRuntime
     status: beta
     asOf: "2026-10"
@@ -44,34 +64,74 @@ tools:
         definitions, memory stores with immutable version history and redaction, signed webhooks and a
         persisted event stream. Also available on Claude Platform on AWS and Claude Models on Google Cloud
         (Anthropic managed) with differences.
+      - >-
+        Self-hosted Claude Managed Agents (by request since 2026-11-12) moves the service too: the customer runs
+        cma-server, its PostgreSQL database and the sandboxes' workers on its own infrastructure, and the server sends
+        model calls to the Claude API or to the provider the customer configures. Agents, sessions and history then stay
+        in the customer's database; securing and patching the server, its database and its log, and isolating each
+        session's shell, move to the customer, and some hosted features (cloud environments, webhooks, the Files API,
+        mcp_oauth credentials, scheduled deployments, dreams) are not on the server.
     facts:
       - label: Plans
         value: >-
           Any Claude API organisation (beta, on by default); MCP tunnels and dreaming are a limited research
           preview. Billed per model token, $10 per 1,000 web searches and $0.08 per session hour at list
-          rates.
+          rates. Self-hosted Claude Managed Agents: by request through the Anthropic account team, under the Software
+          License Agreement: Claude Managed Agents Server.
         url: https://platform.claude.com/docs/en/managed-agents/budgets
       - label: Inference & routing
         value: >-
           Anthropic API, Claude Platform on AWS and Claude Models on Google Cloud (Anthropic managed); model pinned per agent with optional inference_geo
           "us" or "global", validated against the workspace's allowed_inference_geos when the agent is saved,
-          when a session is created and on every turn.
+          when a session is created and on every turn. Self-hosted: the server's inference.provider is anthropic (the
+          default), bedrock, vertex (Claude Models on Google Cloud, Google managed), foundry or gateway; agents keep Claude
+          API model IDs, and inference_geo works only with anthropic.
         url: https://platform.claude.com/docs/en/managed-agents/agent-setup
       - label: Data leaving the device
         value: >-
           Everything runs on Anthropic infrastructure: conversation, tool inputs/outputs, files and sandbox
           state; self-hosted sandboxes keep tool execution and files on your side while the transcript still
-          passes through Anthropic.
+          passes through Anthropic. Self-hosted Managed Agents: only model calls leave (the conversation so far, tool
+          inputs and results) to the provider you configure; calls to the Claude API also carry the session, agent and
+          environment IDs in headers that no setting turns off.
         url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes-security
       - label: Retention & training
         value: >-
           Commercial terms (no training). Session transcripts persist until you delete the session; sandbox
           checkpoints 30 days; memory versions retained 30 days (recent versions longer); not eligible for ZDR
-          or HIPAA BAA.
+          or HIPAA BAA. Self-hosted: agents, sessions and history stay in your database until you delete them (the
+          server never deletes by age), model calls fall under your agreement with the provider, and an Anthropic ZDR
+          arrangement covers calls to the Claude API.
         url: https://platform.claude.com/docs/en/manage-claude/api-and-data-retention
       - label: Docs index
         value: platform.claude.com/docs/en/managed-agents (overview through reference)
         url: https://platform.claude.com/docs/en/managed-agents/overview
+    items:
+      - title: "Self-hosted: what differs from the hosted service"
+        body:
+          - >-
+            Hosted only, not on a self-hosted server: cloud environments (only self_hosted environments exist), the
+            rest of the Claude API such as the Messages and Models APIs, file session resources and the Files API,
+            mcp_oauth vault credentials (store a static_bearer token and replace it before it expires), the prebuilt
+            docx, pdf, pptx and xlsx skills, scheduled deployments, dreams and webhooks. Different: platform.claude.com's
+            Console does not show the server, which serves its own console; agents delegate only to listed subagents
+            (multiagent type coordinator, no advisor); MCP hosts, Git hosts and pushable branches are refused until
+            listed in the server's settings, and the web tools stay off until turned on there; environment_variable
+            credentials need the egress gateway; web_search works only with the anthropic, vertex or foundry provider and
+            web_fetch only with anthropic or foundry.
+          - >-
+            Self-hosted only: a choice of inference provider, single sign-on that gives callers a role from their
+            identity-provider groups, your own secret manager for vault secrets, and short-lived signed agent identity
+            tokens sent with MCP calls. Anthropic issues none of the credentials the server accepts and has no remote
+            access to the server or its log; nothing is copied from the hosted service, so agents, skills, vault
+            credentials and memory stores are created again on the server.
+        links:
+          - title: Differences from the hosted service
+            url: https://platform.claude.com/docs/en/managed-agents/self-hosted/differences
+          - title: Data and access in self-hosted Claude Managed Agents
+            url: https://platform.claude.com/docs/en/managed-agents/self-hosted-data-and-access
+          - title: Self-hosted Claude Managed Agents
+            url: https://platform.claude.com/docs/en/managed-agents/self-hosted
     riskNotes:
       - risk: riskAgenticDelegationConfusedDeputy
         note: >-
@@ -148,7 +208,11 @@ tools:
           inside the sandbox leaves the returned token there unredacted. Tunnel (research preview, request
           access): rotating the token does not sever established cloudflared connections, so cutting a
           compromised host means stopping the stack or archiving the tunnel; the tunnel token and TLS private
-          key sit on the organisation's host and in its secrets manager.
+          key sit on the organisation's host and in its secrets manager. Self-hosted deployment (read 2026-11-26):
+          Anthropic issues and holds none of the credentials the server accepts; vault secrets are encrypted in the
+          database with store.credentials_encryption_key or kept in your secret manager (secret_store); mcp_oauth is
+          refused, so static_bearer tokens are rotated by you; the egress gateway's listener returns stored credential
+          values over plain HTTP and must be reachable only by the gateway.
         verified: "2026-09-25"
         migration:
           from:
@@ -360,7 +424,9 @@ tools:
           created with agent_with_overrides replaces tools and mcp_servers wholesale, and an idle session's
           tools can be updated mid-session. Custom tools are the application's to permit. The gateway half of
           this pin (which servers, which tools, whose grant) is the organisation's MCP gateway on the tunnel
-          path.
+          path. Self-hosted deployment (read 2026-11-26): the server connects only to MCP hosts listed in
+          mcp.allowed_hostnames (empty by default) and lets agents push only to the refs in git.allowed_push_refs,
+          without refusing force pushes; an admin can start a session with any user's vault.
         verified: "2026-09-25"
         migration:
           from:
@@ -599,6 +665,9 @@ tools:
           included: thinking content (agent.thinking is a progress signal) and event deltas. There is no OTLP
           export or log sink: the stream is pulled, and any workspace key can delete a session and its
           history, so tamper resistance is the organisation's archive. Detection runs in the consumer.
+          Self-hosted deployment (read 2026-11-26): no webhooks; the event stream and event list remain, the server
+          writes its log to standard error and records traces and metrics only when the OpenTelemetry environment
+          variables are set, and retention is your log pipeline's.
         verified: "2026-09-25"
         migration:
           from:
@@ -794,7 +863,10 @@ tools:
           Anthropic's side. The container technology and its escape testing are not documented beyond
           "isolated Linux containers". In a multiagent session every agent shares the one sandbox and
           filesystem. A self-hosted sandbox moves the boundary to the deployer, including how tools are
-          isolated from each other inside it.
+          isolated from each other inside it. Self-hosted deployment (read 2026-11-26): the worker does not isolate the
+          bash tool, so isolation is whatever the worker runs in; the Docker Compose stack and the cma-sandboxes chart
+          start each session's worker in a container or pod of its own, the chart on gVisor or another sandboxed
+          RuntimeClass.
         verified: "2026-09-25"
         migration:
           from:
@@ -863,7 +935,11 @@ tools:
           from Anthropic's side (allowed_hosts gates which MCP hosts a session may declare while
           allow_mcp_servers is false), and inference is outside it. API-created environments start
           unrestricted, are not versioned, and can be updated by any workspace key, so the least-privilege
-          posture is set and re-checked deliberately.
+          posture is set and re-checked deliberately. Self-hosted deployment (read 2026-11-26): workers have the
+          network of the container or VM they run in; the cma-sandboxes chart's egress.mode is closed by default
+          (servers and dispatcher only), and in gateway mode the egress gateway connects only to egress.allowed_hostnames;
+          the server itself connects only to a documented list (provider, database, allowed MCP and Git hosts, collector,
+          identity providers, secret manager).
         verified: "2026-09-25"
         migration:
           from:
@@ -1085,6 +1161,9 @@ tools:
           agent and attach any vault in that workspace, and separate trust boundaries need separate workspaces.
           Workspace Limited Developer limits only the Console, not the API; organisation admins hold Workspace
           Admin in every workspace. Which end user a session acts for is the application's to authorise.
+          Self-hosted deployment (read 2026-11-26): workspaces do not apply; the server API key reaches every
+          environment, single sign-on (auth.issuers) maps identity-provider groups to admin, developer or user (developer
+          and user see only what they created), and each tenant or trust level needs its own deployment.
         verified: "2026-10-30"
       - mitigation: AML.M0036
         coverage: native
@@ -1425,6 +1504,162 @@ tools:
         requires: Enterprise, or an eligible standalone Console organisation
         url: https://platform.claude.com/docs/en/manage-claude/compliance-api-access
         verified: "2026-10-30"
+      - id: shInferenceProvider
+        name: inference.provider
+        where: Self-hosted server settings file › inference.provider (or CMA_INFERENCE__PROVIDER)
+        setVia: [configFile]
+        area: data
+        default: anthropic (the Claude API)
+        recommended: The provider your data agreements cover (anthropic, bedrock, vertex or foundry), or gateway through your own AI gateway, with the server's credential from your cloud's workload identity
+        value: "Self-hosted: your approved provider"
+        why: Every model call carries the conversation so far with tool inputs and results, so it goes only where your agreements cover it.
+        mitigations: []
+        requires: Self-hosted Claude Managed Agents (by request)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/inference-provider
+        verified: "2026-11-26"
+      - id: shMcpAllowedHostnames
+        name: mcp.allowed_hostnames
+        where: Self-hosted server settings file › mcp.allowed_hostnames (and mcp.private_hostnames)
+        setVia: [configFile]
+        area: tools
+        default: None (the server connects to no MCP server and refuses to save an agent that names one)
+        recommended: Your MCP gateway's hostname, or the approved servers', listed exactly
+        value: "Self-hosted: your MCP gateway only"
+        why: An agent definition cannot point the server at an MCP host nobody approved; hosts match exactly, with no wildcards or subdomains.
+        mitigations: [AML.M0028, cap-agent-egress-control]
+        requires: Self-hosted Claude Managed Agents (by request)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/differences#mcp-servers-need-an-allowlist-entry
+        verified: "2026-11-26"
+      - id: shGitPushRefs
+        name: git.allowed_hostnames and git.allowed_push_refs
+        where: Self-hosted server settings file › git
+        setVia: [configFile]
+        area: tools
+        default: None (github_repository resources are refused and agents cannot push)
+        recommended: Your Git host, and a branch prefix such as refs/heads/agent/ in allowed_push_refs, with force pushes refused by branch protection on the host
+        value: "Self-hosted: your host, agent/ branches only"
+        why: Agents push only to the branches you list and the token stays on the server, never in the sandbox; the server itself does not refuse force pushes.
+        mitigations: [AML.M0028, D3-CTS]
+        requires: Self-hosted Claude Managed Agents (by request)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/differences#git-repositories-need-an-allowlist-entry
+        verified: "2026-11-26"
+      - id: shWebTools
+        name: web_tools (enabled, allowed_domains)
+        where: Self-hosted server settings file › web_tools
+        setVia: [configFile]
+        area: network
+        default: Off (web_search and web_fetch unavailable to every agent)
+        recommended: web_tools.allowed_domains listing the sites agents need, which also turns the tools on; left off where no agent reads the web
+        value: "Self-hosted: allowed_domains, the sites agents need"
+        why: The server refuses to save an agent that asks for more than these settings allow, so one list bounds every agent's web reads.
+        mitigations: [cap-agent-egress-control, AML.M0028]
+        requires: Self-hosted Claude Managed Agents (by request)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/differences#web-tools-need-a-server-setting
+        verified: "2026-11-26"
+      - id: shEgressGateway
+        name: egress.gateway_enabled and egress.allowed_hostnames
+        where: Self-hosted server settings file › egress (Docker Compose uses CMA_EGRESS__ALLOWED_HOSTNAMES with docker-compose.egress.yml)
+        setVia: [configFile]
+        area: network
+        default: "false (no gateway; environment_variable credentials are refused)"
+        recommended: true, with the exact public hostnames agents' commands need, package hosts included
+        value: "Self-hosted: on, exact hostnames"
+        why: Sandboxes reach the internet only through the gateway, which connects only to listed hosts and puts credential values into requests, so the sandbox holds a placeholder.
+        mitigations: [cap-agent-egress-control, D3-CTS, D3-CH]
+        requires: Self-hosted Claude Managed Agents (by request); the sandbox chart does not offer the gateway on AKS
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/agent-identity#environment-variable-credentials
+        verified: "2026-11-26"
+      - id: shSandboxEgressMode
+        name: egress.mode (cma-sandboxes chart)
+        where: cma-values.yaml › egress.mode
+        setVia: [configFile]
+        area: network
+        default: closed (your servers and the dispatcher only, no DNS server)
+        recommended: closed, or gateway where commands need listed hosts; never publicInternet
+        value: "Self-hosted: closed or gateway"
+        why: A session's shell cannot reach the internet, or reaches only the gateway's listed hosts.
+        mitigations: [cap-agent-egress-control]
+        requires: Self-hosted Claude Managed Agents (by request); on AKS the chart accepts only publicInternet
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/kubernetes#what-sandboxes-can-reach
+        verified: "2026-11-26"
+      - id: shSandboxRuntimeClass
+        name: runtimeClass.name (cma-sandboxes chart)
+        where: cma-values.yaml › platform and runtimeClass.name
+        setVia: [configFile]
+        area: tools
+        default: A sandboxed runtime is a prerequisite (GKE Sandbox on GKE, the chart's gvisor RuntimeClass on Amazon EKS, Pod Sandboxing on AKS); on other clusters, the one you name
+        recommended: gVisor or another sandboxed runtime on every cluster, never the default container runtime
+        value: "Self-hosted: gVisor or another sandboxed runtime"
+        why: The agent's bash tool is a real shell with the worker's permissions, so the sandboxed runtime is the wall between it and the node.
+        mitigations: [D3-EI]
+        requires: Self-hosted Claude Managed Agents (by request)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/kubernetes
+        verified: "2026-11-26"
+      - id: shAuthIssuers
+        name: auth.issuers (roles)
+        where: Self-hosted server settings file › auth.issuers
+        setVia: [configFile, identityProvider]
+        area: identity
+        default: None (only the shared server API key)
+        recommended: Your OIDC issuer, exact group names mapped to admin, developer and user, an audience no other deployment lists, and no default_role on a restricted deployment
+        value: "Self-hosted: your IdP, groups mapped to roles"
+        why: Each person calls the server as themselves and sees only what they created; admin, which can use any user's vault, goes only to the groups trusted with that.
+        mitigations: [D3-APA]
+        requires: Self-hosted Claude Managed Agents (by request)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/configure
+        verified: "2026-11-26"
+      - id: shSecretStore
+        name: secret_store (type, prefix)
+        where: Self-hosted server settings file › secret_store
+        setVia: [configFile, cloudPolicy]
+        area: data
+        default: None (vault secrets in the server's database, encrypted with store.credentials_encryption_key)
+        recommended: Your secret manager (AWS Secrets Manager, Google Cloud Secret Manager, Azure Key Vault or HashiCorp Vault), a prefix reserved for this deployment and one identity confined to it, checked with validate-store
+        value: "Self-hosted: your secret manager"
+        why: Tool credentials live in the store your security team already governs, and the database keeps only references.
+        mitigations: [D3-CH]
+        requires: Self-hosted Claude Managed Agents (by request)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/agent-identity#secret-manager
+        verified: "2026-11-26"
+      - id: shAllowUnencryptedCredentials
+        name: store.allow_unencrypted_credentials
+        where: Self-hosted server settings file › store (with CMA_STORE__CREDENTIALS_ENCRYPTION_KEY in the environment)
+        setVia: [configFile]
+        area: data
+        default: "false"
+        recommended: false, with store.credentials_encryption_key supplied from a secret
+        value: "Self-hosted: false"
+        why: The server refuses to start rather than keep credentials in plain text in its database.
+        mitigations: [D3-CH]
+        requires: Self-hosted Claude Managed Agents (by request)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/configuration-reference#database
+        verified: "2026-11-26"
+      - id: shAgentIdentity
+        name: agent_identity (issuer, direct.audiences, token_lifetime)
+        where: Self-hosted server settings file › agent_identity; the agent's MCP server entry › auth type agent_token
+        setVia: [configFile, apiCli]
+        area: identity
+        default: "Off"
+        recommended: On for MCP servers behind your gateway, token_lifetime left at 5m, the signing key in your secret manager or KMS
+        value: "Self-hosted: on, 5-minute tokens"
+        why: Each MCP call carries a short-lived signed token naming the agent and the caller who started the session, so the gateway can grant per agent; a sent token stays valid until it expires.
+        mitigations: [D3-CTS, AML.M0028]
+        requires: Self-hosted Claude Managed Agents (by request)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/agent-identity#agent-identity
+        verified: "2026-11-26"
+      - id: shOpenTelemetry
+        name: OpenTelemetry environment variables
+        where: The self-hosted server's environment (the standard OTEL_* variables; OTEL_METRICS_EXPORTER for a Prometheus endpoint)
+        setVia: [configFile]
+        area: audit
+        default: None (the server logs to standard error and records no traces or metrics)
+        recommended: Traces and metrics exported to your collector, and the standard-error log shipped to your SIEM
+        value: "Self-hosted: export to your collector"
+        why: Anthropic has no access to the server's log, so your pipeline holds the only record of what agents did, for as long as it keeps it.
+        mitigations: [cap-agent-tracing]
+        requires: Self-hosted Claude Managed Agents (by request)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted-data-and-access#where-the-log-traces-and-metrics-go
+        verified: "2026-11-26"
     sources:
       - title: Claude Managed Agents overview
         url: https://platform.claude.com/docs/en/managed-agents/overview
@@ -1470,3 +1705,21 @@ tools:
         url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes
       - title: Set up single sign-on (Require SSO for Console)
         url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
+      - title: Self-hosted Claude Managed Agents
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted
+      - title: Differences from the hosted service (self-hosted)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/differences
+      - title: Inference provider (self-hosted)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/inference-provider
+      - title: Data and access in self-hosted Claude Managed Agents
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted-data-and-access
+      - title: Single sign-on (self-hosted)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/configure
+      - title: Agent identity and credentials (self-hosted)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/agent-identity
+      - title: Configuration reference (self-hosted)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/configuration-reference
+      - title: Deploy on Kubernetes (self-hosted)
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted/kubernetes
+      - title: Claude Platform release notes (2026-11-12, self-hosted launch)
+        url: https://platform.claude.com/docs/en/release-notes/overview
