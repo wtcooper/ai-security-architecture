@@ -606,11 +606,11 @@ test("the feed page: Latest, then this week and the weeks before it, each with i
   assert.match(feedPage("", { today: "2026-12-01" }), /<span class="display[^"]*">Week of 23 November 2026<\/span>/);
 });
 
-test("Latest is always open and the weeks are folded, each with an expander", () => {
+test("Latest starts open and the weeks are folded, each with an expander", () => {
   const html = feedPage();
   const latest = sectionOf(html, "latest");
   assert.match(latest, /data-section-items="true"/);
-  assert.doesNotMatch(latest, /data-expander/, "Latest has nothing to fold");
+  assert.match(latest, /<button type="button" aria-expanded="true" aria-controls="latest-items" data-expander="true"[^>]*>[\s\S]*?Hide the items<\/button>/, "Latest starts open and folds like a week");
   for (const w of ["2026-11-23", "2026-11-16", "2026-11-09", "2026-11-02", "2026-10-26"]) {
     const week = sectionOf(html, `week-${w}`);
     assert.doesNotMatch(week, /data-section-items|data-item=/, `${w} is folded`);

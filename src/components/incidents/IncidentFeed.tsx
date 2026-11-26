@@ -9,7 +9,7 @@
  * heading, its count (after the chips) and its overview, always visible:
  *   Latest     the items the daily run filed on its newest day (their `added`), whatever day
  *              each came to light: "Today's feed" when that is today, "Latest feed · <day>"
- *              otherwise; always open;
+ *              otherwise; open until the reader closes it for the day;
  *   This week  the current week by `date` (when things happened), every item in it, folded
  *              until opened;
  *   the weeks before it, newest first, each folded.
@@ -58,6 +58,47 @@ const localDay = () => {
 };
 const subscribeNever = () => () => {};
 const useToday = (built: string) => useSyncExternalStore(subscribeNever, localDay, () => built);
+
+/**
+ * The day whose Latest section the reader closed, kept in this browser so it stays closed for the
+ * rest of that day and opens again when a newer day's items arrive. Open on the server, so
+ * hydration agrees; a browser without storage keeps it for the visit only.
+ */
+const LATEST_CLOSED_KEY = "feed.latestClosed";
+const LATEST_EVENT = "feed-latest-closed";
+const readLatestClosed = () => {
+  try {
+    return window.localStorage.getItem(LATEST_CLOSED_KEY);
+  } catch {
+    return null;
+  }
+};
+const subscribeLatestClosed = (onChange: () => void) => {
+  window.addEventListener(LATEST_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(LATEST_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+};
+function useLatestOpen(latestDate: string) {
+  const stored = useSyncExternalStore(subscribeLatestClosed, readLatestClosed, () => null);
+  const [closedThisVisit, setClosedThisVisit] = useState<string | null>(null);
+  const closedDay = stored ?? closedThisVisit;
+  const open = !latestDate || closedDay !== latestDate;
+  const toggle = () => {
+    const close = open;
+    setClosedThisVisit(close ? latestDate : null);
+    try {
+      if (close) window.localStorage.setItem(LATEST_CLOSED_KEY, latestDate);
+      else window.localStorage.removeItem(LATEST_CLOSED_KEY);
+    } catch {
+      // No storage: the choice lasts for this visit.
+    }
+    window.dispatchEvent(new Event(LATEST_EVENT));
+  };
+  return { open, toggle };
+}
 
 const toolKindLabel = new Map<string, string>(SECURITY_TOOL_KINDS.map((k) => [k.id, k.label]));
 const toolStatusLabel = new Map<string, string>(SECURITY_TOOL_STATUSES.map((s) => [s.id, s.label]));
@@ -136,8 +177,9 @@ export function IncidentFeed({
 }) {
   const index = useMemo(() => givenIndex ?? feedIndexOf(whole ?? initial, overviews), [givenIndex, whole, initial, overviews]);
   const today = useToday(builtToday ?? index.latest);
-  // Latest is the items filed on the newest `added` day.
+  // Latest is the items filed on the newest `added` day; it starts open and folds like a week.
   const latestDate = index.day?.date ?? "";
+  const latest = useLatestOpen(latestDate);
 
   const params = useSearchParams();
   const router = useRouter();
@@ -292,7 +334,9 @@ export function IncidentFeed({
               count={countOf(index.day)}
               fresh={newIn(latestItems)}
               span={index.day}
-              open
+              open={latest.open}
+              onToggle={latest.toggle}
+              saysWhenEmpty
             >
               {latestItems.length ? (
                 body(LATEST, latestItems, () => true)
@@ -367,8 +411,8 @@ function MonthLoading({ next, loading, failed, retry }: { next: string | null; l
 
 /**
  * One section: its heading, its count after the chips (and how many are new), its overview (or,
- * with none written, its headlines' titles), and its items when open. A section that folds has
- * an expander; Latest does not.
+ * with none written, its headlines' titles), and its items when open. Every section folds with
+ * its expander; Latest starts open, the weeks folded.
  */
 function FeedSection({
   id,
@@ -379,6 +423,7 @@ function FeedSection({
   span,
   open,
   onToggle,
+  saysWhenEmpty = false,
   children,
 }: {
   id: string;
@@ -389,6 +434,8 @@ function FeedSection({
   span: FeedSpan;
   open: boolean;
   onToggle?: () => void;
+  /** With no items to show (a kind chip left none), say so instead of folding to nothing: Latest does. */
+  saysWhenEmpty?: boolean;
   children: React.ReactNode;
 }) {
   const folds = Boolean(onToggle);
@@ -430,7 +477,7 @@ function FeedSection({
           </button>
         )}
       </div>
-      {open && (!folds || count > 0) && (
+      {open && (!folds || count > 0 || saysWhenEmpty) && (
         <div id={`${id}-items`} className="border-t border-line" data-section-items>
           {children}
         </div>
